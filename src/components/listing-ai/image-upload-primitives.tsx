@@ -9,21 +9,26 @@ export function MiniUploader({
   images,
   onUpload,
   label = "Upload",
+  disabled = false,
+  status,
 }: {
   images: ImagePreview[];
   onUpload: (files: FileList | null) => void;
   label?: string;
+  disabled?: boolean;
+  status?: string;
 }) {
   return (
     <label className="inline-flex min-w-28 cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-white px-3 py-2 text-xs font-bold text-muted hover:bg-surface-muted">
       <Upload className="h-4 w-4" />
-      {images.length ? `${images.length} Images` : label}
+      {status || (images.filter(image => image?.url).length ? `${images.filter(image => image?.url).length} Images` : label)}
       <input
         className="hidden"
         type="file"
         accept="image/*"
         multiple
-        onChange={(event) => onUpload(event.target.files)}
+        disabled={disabled}
+        onChange={(event) => { onUpload(event.target.files); event.target.value = ""; }}
       />
     </label>
   );

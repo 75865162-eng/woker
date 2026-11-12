@@ -1,3 +1,5 @@
+// Cloud role for injected offline task fixtures; no real Amazon calls.
+process.env.AMAZON_API_EXECUTION_ROLE = "cloud";
 import { automaticMarketplaces } from "@/lib/amazon-sync/automatic-schedule";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";

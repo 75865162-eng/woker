@@ -1,0 +1,117 @@
+import assert from 'node:assert/strict';
+import { prisma } from '../../src/lib/db/prisma';
+import { previewFinanceSource, importFinanceSource } from '../../src/lib/finance/source-service';
+import { mutateFinanceLedger } from '../../src/lib/finance/ledger-service';
+import { consumeInventoryValuation } from '../../src/lib/wms/valuation-service';
+import type { WmsScope } from '../../src/lib/wms/contracts';
+import { createSession } from '../../src/lib/auth/session';
+import * as sourceRoute from '../../src/app/api/operations/finance-ledger/sources/route';
+import {json} from '../../src/lib/wms/access';
+import { object } from '../../src/lib/fba-local/rules';
+
+export async function verifyFinanceSourceHandoff(scope: WmsScope, fbaDraftId: string) {
+  const identity = { organizationId: scope.organizationId, workspaceId: scope.workspaceId };
+  const reviewer = { ...scope, actorUserId: 'supervisor' };
+  const originalRoles=await prisma.organizationRosterRole.findMany({where:{organizationId:scope.organizationId,id:{in:['owner','warehouse_supervisor']}}});
+  for(const role of originalRoles)await prisma.organizationRosterRole.update({where:{organizationId_id:{organizationId:scope.organizationId,id:role.id}},data:{permissions:json({...object(role.permissions),operations:['view','create','approve']})}});
+  // All data lives in the disposable, guarded fixture created by the parent runner.
+  const createdBook = await mutateFinanceLedger(scope, { action: 'create-book', code: 'HANDOFF', name: 'Synthetic handoff book', currency: 'USD' });
+  assert.ok('book' in createdBook); const book = createdBook.book;
+  const createdPeriod = await mutateFinanceLedger(scope, { action: 'create-period', bookId: book.id, code: '2026', start: '2026-01-01', end: '2026-12-31' });
+  assert.ok('period' in createdPeriod); const period = createdPeriod.period;
+  await mutateFinanceLedger(scope, { action: 'open-period', periodId: period.id, revision: 1 });
+  const createdCost = await mutateFinanceLedger(scope, { action: 'create-subject', bookId: book.id, code: '1001', name: 'Synthetic inventory', normalSide: 'DEBIT' });
+  assert.ok('subject' in createdCost); const cost = createdCost.subject;
+  const createdPayable = await mutateFinanceLedger(scope, { action: 'create-subject', bookId: book.id, code: '2001', name: 'Synthetic payable', normalSide: 'CREDIT' });
+  assert.ok('subject' in createdPayable); const payable = createdPayable.subject;
+  const preview = await previewFinanceSource(scope, new URLSearchParams({ kind: 'FBA_ADJUSTMENT', id: fbaDraftId }));
+  const accounts = [...new Set(preview.lines.map(line => line.account))];
+  const body = { kind: preview.kind, id: preview.id, fingerprint: preview.fingerprint, periodId: period.id, date: '2026-11-12', accountMapping: accounts.map((sourceAccount, index) => ({ sourceAccount, subjectId: index === 0 ? cost.id : payable.id })) };
+  await assert.rejects(importFinanceSource(scope, { ...body, fingerprint: 'stale' }));
+  await assert.rejects(importFinanceSource({ ...scope, workspaceId: 'other-workspace' }, body));
+  await prisma.amazonDataAccessGrant.update({ where: { id: 'grant-operator' }, data: { enabled: false } });
+  await assert.rejects(importFinanceSource(scope, body));
+  await prisma.amazonDataAccessGrant.update({ where: { id: 'grant-operator' }, data: { enabled: true } });
+  // Audit failure must roll back BOTH the new voucher and its source claim.
+  await prisma.$executeRawUnsafe(`CREATE FUNCTION fixture_source_fail() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='finance.source.import' THEN RAISE EXCEPTION 'synthetic source failure'; END IF; RETURN NEW; END $$`);
+  await prisma.$executeRawUnsafe(`CREATE TRIGGER fixture_source_failure BEFORE INSERT ON "AuditLog" FOR EACH ROW EXECUTE FUNCTION fixture_source_fail()`);
+  await assert.rejects(importFinanceSource(scope, body));
+  assert.equal(await prisma.financeVoucher.count({ where: { ...identity, sourceKey: preview.sourceKey } }), 0);
+  await prisma.$executeRawUnsafe(`DROP TRIGGER fixture_source_failure ON "AuditLog"`);
+  await prisma.$executeRawUnsafe(`DROP FUNCTION fixture_source_fail()`);
+  const results = await Promise.all(Array.from({ length: 8 }, () => importFinanceSource(scope, body)));
+  const voucher = results[0].voucher;
+  assert.equal(results.every(row => row.voucher.id === voucher.id && row.postingExecuted === false), true);
+  assert.equal(voucher.status, 'DRAFT');
+  assert.equal(await prisma.financeVoucher.count({ where: { ...identity, sourceKey: preview.sourceKey } }), 1);
+  assert.equal(await prisma.auditLog.count({ where: { entityId: voucher.id, action: 'finance.source.import' } }), 1);
+  const sourceAudit = await prisma.auditLog.findFirstOrThrow({ where: { entityId: voucher.id, action: 'finance.source.import' } });
+  assert.equal(object(sourceAudit.metadata).fingerprint, preview.fingerprint);
+  assert.equal(Array.isArray(object(sourceAudit.metadata).accountMapping), true);
+  const otherBookResult = await mutateFinanceLedger(scope, { action: 'create-book', code: 'OTHER-HANDOFF', name: 'Synthetic other book', currency: 'USD' });
+  assert.ok('book' in otherBookResult);
+  const otherPeriodResult = await mutateFinanceLedger(scope, { action: 'create-period', bookId: otherBookResult.book.id, code: '2026', start: '2026-01-01', end: '2026-12-31' });
+  assert.ok('period' in otherPeriodResult);
+  await mutateFinanceLedger(scope, { action: 'open-period', periodId: otherPeriodResult.period.id, revision: 1 });
+  await assert.rejects(importFinanceSource(scope, { ...body, periodId: otherPeriodResult.period.id }), /其他账套/);
+
+  await assert.rejects(importFinanceSource(scope, { ...body, date: '2026-11-13' }));
+  await assert.rejects(importFinanceSource(reviewer, body));
+  await assert.rejects(mutateFinanceLedger(scope, { action: 'create-voucher', periodId: period.id, sourceKey: preview.sourceKey, idempotencyKey: 'spoof', date: '2026-11-12', lines: [] }));
+  await assert.rejects(mutateFinanceLedger(scope, { action: 'review-voucher', voucherId: voucher.id, revision: 1 }));
+  const reviewResult = await mutateFinanceLedger(reviewer, { action: 'review-voucher', voucherId: voucher.id, revision: 1 });
+  assert.ok('voucher' in reviewResult); const reviewed = reviewResult.voucher;
+  await mutateFinanceLedger(reviewer, { action: 'post-voucher', voucherId: voucher.id, revision: reviewed.revision });
+  assert.equal((await importFinanceSource(scope, body)).reused, true);
+  const reversalBody = { action: 'reverse-voucher', voucherId: voucher.id, periodId: period.id, sourceKey: 'SYNTHETIC-REVERSAL', date: '2026-11-13', idempotencyKey: 'synthetic-reversal' };
+  const reversal = await mutateFinanceLedger(scope, reversalBody);
+  const reversalReplay = await mutateFinanceLedger(scope, reversalBody);
+  assert.ok('voucher' in reversalReplay && 'voucher' in reversal);
+  assert.equal(reversalReplay.voucher.id, reversal.voucher.id);
+  for (const patch of [{ date: '2026-11-14' }, { sourceKey: 'OTHER' }]) await assert.rejects(mutateFinanceLedger(scope, { ...reversalBody, ...patch }));
+  await assert.rejects(mutateFinanceLedger(reviewer, reversalBody));
+
+  // Exercise WMS's real event consumer into a valued draft before handing it to Finance.
+  const movement = await prisma.wmsMovement.findFirstOrThrow({ where: { ...identity, deltaOnHand: { gt: 0 } }, orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }], include: { balance: true } });
+  await prisma.wmsCostRule.create({ data: { ...identity, id: 'handoff-cost-rule', lotId: movement.balance.lotId, unitCost: '2.123456', currency: 'USD', inventoryAccount: 'inventory', offsetAccounts: { [movement.action]: 'offset' }, reference: 'Synthetic approved cost', createdBy: scope.actorUserId, status: 'ACTIVE', revision: 2, activatedAt: new Date(movement.occurredAt.getTime() - 1000) } });
+  const event = await prisma.wmsDomainEvent.findFirstOrThrow({ where: { ...identity, commandId: movement.commandId } });
+  await prisma.$transaction(tx => consumeInventoryValuation(tx, event));
+  await prisma.$transaction(tx => consumeInventoryValuation(tx, event));
+  const wmsDraft = await prisma.wmsFinanceDraft.findFirstOrThrow({ where: { ...identity, commandId: movement.commandId } });
+  assert.equal(wmsDraft.status, 'DRAFT');
+  const wmsPreview = await previewFinanceSource(scope, new URLSearchParams({ kind: 'WMS_COMMAND', id: wmsDraft.id }));
+  const wmsInput = { kind: wmsPreview.kind, id: wmsPreview.id, fingerprint: wmsPreview.fingerprint, periodId: period.id, date: '2026-11-12', accountMapping: [{ sourceAccount: 'inventory', subjectId: cost.id }, { sourceAccount: 'offset', subjectId: payable.id }] };
+  const wmsVoucher = await importFinanceSource(scope, wmsInput);
+  assert.equal(wmsVoucher.voucher.status, 'DRAFT');
+  assert.equal((await importFinanceSource(scope, wmsInput)).reused, true);
+  assert.equal(await prisma.wmsCostEntry.count({ where: { ...identity, draftId: wmsDraft.id } }), await prisma.wmsMovement.count({ where: { ...identity, commandId: movement.commandId, deltaOnHand: { not: 0 } } }));
+  const reviewedReversal = await mutateFinanceLedger(reviewer, { action: 'review-voucher', voucherId: reversalReplay.voucher.id, revision: reversalReplay.voucher.revision });
+  assert.ok('voucher' in reviewedReversal);
+  await mutateFinanceLedger(reviewer, { action: 'post-voucher', voucherId: reviewedReversal.voucher.id, revision: reviewedReversal.voucher.revision });
+  const reviewedWms = await mutateFinanceLedger(reviewer, { action: 'review-voucher', voucherId: wmsVoucher.voucher.id, revision: wmsVoucher.voucher.revision });
+  assert.ok('voucher' in reviewedWms);
+  await mutateFinanceLedger(reviewer, { action: 'post-voucher', voucherId: reviewedWms.voucher.id, revision: reviewedWms.voucher.revision });
+  const currentPeriod = await prisma.financePeriod.findUniqueOrThrow({ where: { id: period.id } });
+  const closed = await mutateFinanceLedger(reviewer, { action: 'close-period', periodId: period.id, revision: currentPeriod.revision });
+  const closeEvidence = object(object(closed).closeEvidence);
+  assert.equal(closeEvidence.coverage, 'REGISTERED_LEDGER_ONLY');
+  assert.equal(closeEvidence.businessReconciliationVerified, false);
+  await assert.rejects(mutateFinanceLedger(scope, { action: 'create-voucher', periodId: period.id, sourceKey: 'CLOSED-NEW', idempotencyKey: 'closed-new', date: '2026-11-12', lines: [{ subjectId: cost.id, debit: '1', credit: '0' }, { subjectId: payable.id, debit: '0', credit: '1' }] }));
+  assert.equal((await importFinanceSource(scope, body)).reused, true);
+  const repeatedReversal = await mutateFinanceLedger(scope, reversalBody);
+  assert.ok('voucher' in repeatedReversal); assert.equal(repeatedReversal.voucher.id, reversalReplay.voucher.id);
+  const closedPeriod = await prisma.financePeriod.findUniqueOrThrow({ where: { id: period.id } });
+  await mutateFinanceLedger(reviewer, { action: 'reopen-period', periodId: period.id, revision: closedPeriod.revision });
+  for(const role of originalRoles)await prisma.organizationRosterRole.update({where:{organizationId_id:{organizationId:scope.organizationId,id:role.id}},data:{permissions:json(role.permissions)}});
+  // Route-level permissions and authentication apply independently of source access.
+  const session = await createSession(scope.actorUserId);
+  const cookie = `${session.sessionCookie.name}=${session.sessionCookie.value}`;
+  const request = () => new Request('http://127.0.0.1/api/operations/finance-ledger/sources', { method: 'POST', headers: { cookie, 'content-type': 'application/json', 'x-workspace-id': scope.workspaceId }, body: JSON.stringify(wmsInput) });
+  assert.equal((await sourceRoute.POST(request())).status, 403); // fixture has view-only operations permission
+  await prisma.organizationRosterRole.update({ where: { organizationId_id: { organizationId: scope.organizationId, id: 'owner' } }, data: { permissions: { operations: ['view', 'create'], wms: ['view', 'create', 'edit', 'approve'], products: ['view'] } } });
+  const http = await sourceRoute.POST(request());
+  assert.equal(http.status, 200, JSON.stringify(await http.clone().json()));
+  assert.equal(object(await http.json()).postingExecuted, false);
+  await prisma.organizationRosterRole.update({ where: { organizationId_id: { organizationId: scope.organizationId, id: 'owner' } }, data: { permissions: { operations: ['view'], wms: ['view', 'create', 'edit', 'approve'], products: ['view'] } } });
+  console.log('PASS: FBA/WMS source handoff, immutable server amounts, formal subjects, concurrent deduplication, revocation/isolation, audit rollback, independent review/posting, reversal conflicts and HTTP permission checks');
+}

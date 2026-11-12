@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, ArrowUpRight, CheckCircle2, ChevronLeft, ChevronRight, CloudCog, LockKeyhole, PackageSearch, RefreshCw, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { WorkbenchDialog } from "@/components/ui/workbench-dialog";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
 import { amazonReadDomains, type AmazonReadDomain, type AmazonSyncResource, type DomainFreshnessSummary, type OperationsDailyMetric, type OperationsReadiness, type OperationsSyncRun } from "@/lib/operations/types";
 
@@ -15,6 +16,9 @@ import { AmazonProductsPanel } from "./amazon-products-panel";
 type BadgeTone = "blue" | "green" | "amber" | "red" | "gray";
 type InventorySnapshot = {
   id: string;
+  sellerAccountId: string | null;
+  marketplaceId: string;
+  syncRunId: string | null;
   sellerSku: string;
   asin: string;
   fnSku: string;
@@ -121,6 +125,8 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true }: 
     return () => window.removeEventListener("popstate", update);
   }, [embeddedTab]);
   const [readiness, setReadiness] = useState<OperationsReadiness | null>(null);
+  const [selectedInventory, setSelectedInventory] = useState<InventorySnapshot | null>(null);
+  const [inventoryError, setInventoryError] = useState("");
   const [inventory, setInventory] = useState<InventoryResponse | null>(null);
   const [metrics, setMetrics] = useState<MetricsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -159,7 +165,7 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true }: 
   const loadInventory = useCallback(async () => {
     const sequence = ++requests.current.inventory;
     const scopeKey = workspaceHeaders().get("x-workspace-id");
-    setInventoryLoading(true);
+    setInventoryLoading(true); setInventory(null); setSelectedInventory(null); setInventoryError("");
     try {
       const params = new URLSearchParams({ page: String(inventoryPage), pageSize: "20" });
       if (inventorySku) params.set("sku", inventorySku);
@@ -170,7 +176,7 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true }: 
       setInventory(payload);
     } catch (error) {
       if (sequence === requests.current.inventory && scopeKey === workspaceHeaders().get("x-workspace-id")) {
-        setNotice(error instanceof Error ? error.message : "库存快照读取失败。");
+        setInventory(null); setSelectedInventory(null); setInventoryError(error instanceof Error ? error.message : "库存快照读取失败。");
       }
     } finally {
       if (sequence === requests.current.inventory && scopeKey === workspaceHeaders().get("x-workspace-id")) setInventoryLoading(false);
@@ -223,7 +229,7 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true }: 
     const reload = () => {
       requests.current.readiness++; requests.current.inventory++; requests.current.metrics++; requests.current.scope++;
       setRequesting(false); setValidating(false);
-      setReadiness(null); setInventory(null); setMetrics(null); setNotice("");
+      setReadiness(null); setInventory(null); setSelectedInventory(null); setInventoryError(""); setMetrics(null); setNotice("");
       setInventoryPage(1); setMetricPage(1); setScopeRevision((current) => current + 1);
     };
     window.addEventListener(workspaceScopeChangedEventName, reload);
@@ -286,7 +292,7 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true }: 
       {tab === "sync" && <SyncSchedulesPanel />}
       {tab === "replenishment" && <ReplenishmentPanel key={scopeRevision} headers={workspaceHeaders} />}
       {tab === "catalog" && <AmazonProductsPanel key={scopeRevision} headers={workspaceHeaders} />}
-      {tab === "orders" && <section className="border border-border p-5"><h3 className="text-sm font-bold">订单 · NOT_SYNCED</h3><p title="赛狐有、API/本地无" className="mt-2 text-sm text-muted">赛狐有、API/本地无 · 订单明细尚未接入，不以销量件数冒充订单量。</p></section>}
+      {tab === "orders" && <section className="border border-border p-5"><h3 className="text-sm font-bold">Amazon 订单</h3><p className="mt-2 text-sm text-muted">订单列表、商品明细和同步进度统一在订单管理查看。</p><a className="mt-3 inline-block text-sm text-brand hover:underline" href="/operations?view=orders">打开订单管理</a></section>}
 
       {notice ? (
         <div className="flex items-start gap-3 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
@@ -352,7 +358,7 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true }: 
       {tab === "inventory" && <section className="border-b border-border pb-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div><div className="flex items-center gap-2"><PackageSearch className="h-4 w-4 text-brand" /><h3 className="text-sm font-bold text-foreground">Amazon 库存快照</h3><Badge tone={freshnessBadge(readiness?.inventory.status === "FRESH" ? "FRESH" : readiness?.inventory.status === "STALE" ? "STALE" : "NOT_SYNCED").tone}>{readiness?.inventory.status === "FRESH" ? "新鲜" : readiness?.inventory.status === "STALE" ? "已过期" : "未同步"}</Badge></div>
-            <p className="mt-1 text-xs text-muted">可售 {inventoryQuantity(readiness?.inventory.fulfillableQuantity)} · 在途 {inventoryQuantity(readiness?.inventory.inboundQuantity)} · 预留 {inventoryQuantity(readiness?.inventory.reservedQuantity)} · 不可售 {inventoryQuantity(readiness?.inventory.unfulfillableQuantity)}</p>
+            <p className="mt-1 text-xs text-muted">可售 {inventoryQuantity(readiness?.inventory.fulfillableQuantity)} · 入库合计 {inventoryQuantity(readiness?.inventory.inboundQuantity)} · 预留 {inventoryQuantity(readiness?.inventory.reservedQuantity)} · 不可售 {inventoryQuantity(readiness?.inventory.unfulfillableQuantity)}</p>
             <p className="mt-1 text-xs text-muted">Amazon 快照时间：{formatDateTime(readiness?.inventory.capturedAt ?? null)} · 新鲜度沿用服务端阈值 · {readiness?.inventory.snapshotCount.toLocaleString("zh-CN") ?? 0} 个 SKU</p>
             {readiness?.domains.inventory.reason ? <p className="mt-1 text-xs text-amber-800">{readiness.domains.inventory.reason} {readiness.domains.inventory.recommendedAction}</p> : null}
             {readiness?.domains.inventory.lastAttemptError ? <p className="mt-1 text-xs text-red-700">最近同步失败：{readiness.domains.inventory.lastAttemptError}</p> : null}
@@ -363,14 +369,21 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true }: 
             <Button size="sm" variant="secondary" type="submit"><PackageSearch className="h-4 w-4" />查询</Button>
           </form>
         </div>
+        {inventoryError && <p role="alert" className="mt-3 text-sm text-red-700">{inventoryError}</p>}
         <div className="mt-4 overflow-x-auto border border-border">
-          <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="border-b border-border bg-surface-muted text-xs text-muted"><tr><th className="px-3 py-2.5">Seller SKU</th><th className="px-3 py-2.5">ASIN / FNSKU</th><th className="px-3 py-2.5 text-right">可售</th><th className="px-3 py-2.5 text-right">在途</th><th className="px-3 py-2.5 text-right">预留</th><th className="px-3 py-2.5 text-right">不可售</th><th className="px-3 py-2.5">快照时间</th></tr></thead>
-            <tbody>{inventory?.rows.length ? inventory.rows.map((row) => <tr key={row.id} className="border-b border-border last:border-0"><td className="px-3 py-2.5 font-medium text-foreground">{row.sellerSku}</td><td className="px-3 py-2.5 text-muted">{row.asin || "—"}<span className="block text-xs">{row.fnSku || row.condition || ""}</span></td><td className="px-3 py-2.5 text-right tabular-nums">{row.fulfillableQuantity.toLocaleString("zh-CN")}</td><td className="px-3 py-2.5 text-right tabular-nums">{(row.inboundWorkingQuantity + row.inboundShippedQuantity + row.inboundReceivingQuantity).toLocaleString("zh-CN")}</td><td className="px-3 py-2.5 text-right tabular-nums">{row.reservedQuantity.toLocaleString("zh-CN")}</td><td className="px-3 py-2.5 text-right tabular-nums">{row.unfulfillableQuantity.toLocaleString("zh-CN")}</td><td className="px-3 py-2.5 text-xs text-muted">{formatDateTime(row.capturedAt)}</td></tr>) : <tr><td colSpan={7} className="px-3 py-8 text-center text-sm text-muted">{inventoryLoading ? "读取库存快照中..." : inventorySku ? "当前成功快照中没有匹配 SKU。" : "当前工作区暂无成功库存快照。"}</td></tr>}</tbody>
+          <table aria-label="Amazon 库存快照" className="w-full min-w-[760px] text-left text-sm">
+            <thead className="border-b border-border bg-surface-muted text-xs text-muted"><tr><th className="px-3 py-2.5">Seller SKU</th><th className="px-3 py-2.5">ASIN / FNSKU</th><th className="px-3 py-2.5 text-right">可售</th><th className="px-3 py-2.5 text-right">入库合计</th><th className="px-3 py-2.5 text-right">预留</th><th className="px-3 py-2.5 text-right">不可售</th><th className="px-3 py-2.5">快照时间</th><th className="px-3 py-2.5">操作</th></tr></thead>
+            <tbody>{inventory?.rows.length ? inventory.rows.map((row) => <tr key={row.id} className="border-b border-border last:border-0"><td className="px-3 py-2.5 font-medium text-foreground">{row.sellerSku}</td><td className="px-3 py-2.5 text-muted">{row.asin || "—"}<span className="block text-xs">{row.fnSku || row.condition || ""}</span></td><td className="px-3 py-2.5 text-right tabular-nums">{row.fulfillableQuantity.toLocaleString("zh-CN")}</td><td className="px-3 py-2.5 text-right tabular-nums">{(row.inboundWorkingQuantity + row.inboundShippedQuantity + row.inboundReceivingQuantity).toLocaleString("zh-CN")}</td><td className="px-3 py-2.5 text-right tabular-nums">{row.reservedQuantity.toLocaleString("zh-CN")}</td><td className="px-3 py-2.5 text-right tabular-nums">{row.unfulfillableQuantity.toLocaleString("zh-CN")}</td><td className="px-3 py-2.5 text-xs text-muted">{formatDateTime(row.capturedAt)}</td><td className="px-3 py-2.5"><Button size="sm" variant="secondary" onClick={() => setSelectedInventory(row)}>库存详情</Button></td></tr>) : <tr><td colSpan={8} className="px-3 py-8 text-center text-sm text-muted">{inventoryLoading ? "读取库存快照中..." : inventorySku ? "当前成功快照中没有匹配 SKU。" : "当前工作区暂无成功库存快照。"}</td></tr>}</tbody>
           </table>
         </div>
         <div className="mt-3 flex items-center justify-end gap-2 text-xs text-muted"><span>{inventory?.pagination.total ?? 0} 条 · 第 {inventory?.pagination.page ?? inventoryPage} / {Math.max(inventory?.pagination.pageCount ?? 0, 1)} 页</span><Button variant="secondary" size="sm" aria-label="上一页库存" onClick={() => setInventoryPage((page) => Math.max(1, page - 1))} disabled={inventoryPage <= 1 || inventoryLoading}><ChevronLeft className="h-4 w-4" /></Button><Button variant="secondary" size="sm" aria-label="下一页库存" onClick={() => setInventoryPage((page) => page + 1)} disabled={inventoryLoading || (inventory?.pagination.pageCount ?? 0) <= inventoryPage}><ChevronRight className="h-4 w-4" /></Button></div>
       </section>}
+
+      <WorkbenchDialog open={tab === "inventory" && !!selectedInventory} drawer title="Amazon 库存详情" onClose={() => setSelectedInventory(null)}>{selectedInventory && <div className="space-y-4">
+        <dl className="grid grid-cols-2 gap-4 rounded border border-border p-3 text-xs">{[["Seller SKU", selectedInventory.sellerSku], ["ASIN", selectedInventory.asin], ["FNSKU", selectedInventory.fnSku], ["商品状况", selectedInventory.condition], ["站点", selectedInventory.marketplaceId], ["可售", selectedInventory.fulfillableQuantity], ["入库待发货", selectedInventory.inboundWorkingQuantity], ["入库已发货", selectedInventory.inboundShippedQuantity], ["入库接收中", selectedInventory.inboundReceivingQuantity], ["预留", selectedInventory.reservedQuantity], ["不可售", selectedInventory.unfulfillableQuantity], ["采集时间", formatDateTime(selectedInventory.capturedAt)], ["来源批次", selectedInventory.syncRunId]].map(([label, value]) => <div key={label}><dt className="text-muted">{label}</dt><dd className="mt-1 break-all">{value ?? "未返回"}</dd></div>)}</dl>
+        <p className="text-xs text-muted">Amazon 外部库存快照；待发货、已发货和接收中分别保留，不作为公司仓库存或实际运输事件。</p>
+        {selectedInventory.sellerAccountId && <a className="text-xs text-brand hover:underline" href={`/operations?${new URLSearchParams({ view: "catalog", sku: selectedInventory.sellerSku, sellerAccountId: selectedInventory.sellerAccountId, marketplaceId: selectedInventory.marketplaceId })}`}>查看在线商品</a>}
+      </div>}</WorkbenchDialog>
 
       {tab === "ads" && <section className="border-b border-border pb-5">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">

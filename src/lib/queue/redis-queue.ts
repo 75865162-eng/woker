@@ -5,6 +5,7 @@ import { amazonWorkerPolicy } from "@/lib/amazon-sync/worker-policy";
 export const importJobQueueName = "import-jobs";
 export const imageUpscaleJobQueueName = "image-upscale-jobs";
 export const productOutboxQueueName = "product-outbox-jobs";
+export const wmsEventQueueName = "wms-domain-events";
 export const amazonSyncQueueName = "amazon-data-center-jobs";
 export function getAmazonSyncQueueName() {
   const policy = amazonWorkerPolicy();
@@ -32,6 +33,7 @@ export function createRedisProducerConnectionOptions() {
 let importJobQueue: Queue<{ jobId: string }> | undefined;
 let imageUpscaleJobQueue: Queue<{ jobId: string }> | undefined;
 let productOutboxQueue: Queue<{ eventId: string }> | undefined;
+let wmsEventQueue: Queue<{ deliveryId: string }> | undefined;
 export type AmazonSyncQueueJob = { runId: string; dispatchVersion?: number; exportId?: string; fence?: number; adsTaskId?: string; adsDispatchVersion?: number };
 let amazonSyncQueue: Queue<AmazonSyncQueueJob> | undefined;
 let sellfoxSyncQueue: Queue<{ runId: string }> | undefined;
@@ -58,6 +60,13 @@ export function getProductOutboxQueue() {
   });
 
   return productOutboxQueue;
+}
+
+export function getWmsEventQueue() {
+  wmsEventQueue ??= new Queue<{ deliveryId: string }>(wmsEventQueueName, {
+    connection: createRedisProducerConnectionOptions(),
+  });
+  return wmsEventQueue;
 }
 
 export function getAmazonSyncQueue() {

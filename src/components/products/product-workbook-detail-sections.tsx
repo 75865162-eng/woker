@@ -238,7 +238,7 @@ export function ProductWorkbookDetailSections({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="h-fit self-start">
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle>区域 2：竞品分析</CardTitle>
           <div className="flex gap-2">
@@ -250,7 +250,7 @@ export function ProductWorkbookDetailSections({
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="thin-scrollbar overflow-auto">
+        <CardContent className="thin-scrollbar h-fit overflow-x-auto overflow-y-hidden">
           <table className="w-[1960px] table-fixed text-left text-xs">
             <colgroup>
               {[146, 60, 76, 110, 110, 110, 110, 110, 110, 76, 40, 120, 120, 120, 120, 120, 136, 166].map((width, index) => (

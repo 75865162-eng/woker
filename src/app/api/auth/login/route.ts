@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getAuthDriver } from "@/lib/auth/constants";
 import { createLocalSession, createSession, isSecureRequest } from "@/lib/auth/session";
-import { verifyPassword } from "@/lib/auth/password";
+import { verifyPasswordAsync } from "@/lib/auth/password";
+import { measureServerOperation } from "@/lib/server/performance";
 import { getOrganizationRolePermissionsSnapshot } from "@/lib/accounts/role-permissions-server";
 import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
 import { prisma } from "@/lib/db/prisma";
@@ -50,19 +51,20 @@ export async function POST(request: Request) {
     }
 
     try {
-      const user = await prisma.user.findFirst({
+      const user = await measureServerOperation("login.user", () => prisma.user.findFirst({
         where: {
           email: {
             equals: email,
             mode: "insensitive",
           },
         },
-        include: {
-          memberships: true,
+        select: {
+          id: true, email: true, name: true, status: true, passwordHash: true,
+          memberships: { select: { organizationId: true, role: true } },
         },
-      });
+      }));
 
-      if (!user || user.status !== "active" || !verifyPassword(password, user.passwordHash)) {
+      if (!user || user.status !== "active" || !await measureServerOperation("login.password", () => verifyPasswordAsync(password, user.passwordHash))) {
         return NextResponse.json({ error: "账号或密码不正确。" }, { status: 401 });
       }
 
@@ -71,7 +73,7 @@ export async function POST(request: Request) {
       }
 
       const membership = user.memberships[0];
-      const rolePermissionsSnapshot = await getOrganizationRolePermissionsSnapshot(membership.organizationId);
+      const rolePermissionsSnapshotPromise = getOrganizationRolePermissionsSnapshot(membership.organizationId);
       const loginAt = new Date();
       const loginAtText = loginAt.toLocaleString("zh-CN", { hour12: false });
       const clientIp = getClientIp(request);
@@ -87,13 +89,13 @@ export async function POST(request: Request) {
           organizationName: "",
         },
         isSecureRequest(request),
-        rolePermissionsSnapshot,
+        rolePermissionsSnapshotPromise,
       );
-      await prisma.user.update({
+      const rolePermissionsSnapshot = await rolePermissionsSnapshotPromise;
+      await Promise.all([prisma.user.update({
         where: { id: user.id },
         data: { lastLoginAt: loginAt },
-      });
-      await prisma.teamRosterMember.updateMany({
+      }), prisma.teamRosterMember.updateMany({
         where: {
           organizationId: membership.organizationId,
           id: user.id,
@@ -103,7 +105,7 @@ export async function POST(request: Request) {
           lastLoginAt: loginAtText,
           ...(clientIp ? { lastLoginIp: clientIp } : {}),
         },
-      });
+      })]);
 
       const response = NextResponse.json({
         user: {

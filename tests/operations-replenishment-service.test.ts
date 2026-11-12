@@ -24,6 +24,7 @@ test("plan persistence keeps exact inventory provenance, newer results and new-p
   const olderGate = new Promise<void>((resolve) => { releaseOlder = resolve; });
   let delayNextInventoryRead = false;
   const database = {
+    amazonDataAccessGrant: { findMany: async () => [{ sellerAccountId: "store" }] },
     organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) },
     organizationRosterRole: { findMany: async () => [] },
     workspaceScope: { findUnique: async () => ({ id: "ws" }) },
@@ -38,7 +39,7 @@ test("plan persistence keeps exact inventory provenance, newer results and new-p
     amazonSyncRun: {
       findMany: async () => { taskListReads += 1; return []; },
     },
-    amazonSyncDataSource: { findFirst: async () => ({ id: "source" }), findMany: async ({ where }: { where: { resource: string } }) => where.resource === "inventory" ? [{ activeRunId: "inventory-run-actually-read", sellerAccountId: "store", marketplaceId: "market", lastSuccessAt: newer, freshnessMinutes: 360 }] : [] },
+    amazonSyncDataSource: { findFirst: async () => ({ id: "source" }), findMany: async ({ where }: { where: { resource: string } }) => !where.resource ? [{ authorization: { status: "CONFIGURED", identityVerifiedAt: newer } }] : where.resource === "inventory" ? [{ activeRunId: "inventory-run-actually-read", sellerAccountId: "store", marketplaceId: "market", lastSuccessAt: newer, freshnessMinutes: 360 }] : [] },
     amazonCatalogSnapshot: { findMany: async () => [] },
     amazonInventorySnapshot: { findMany: async () => {
       if (delayNextInventoryRead) { delayNextInventoryRead = false; notifyStarted(); await olderGate; }

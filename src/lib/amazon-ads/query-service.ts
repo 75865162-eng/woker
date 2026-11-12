@@ -1,3 +1,5 @@
+import { amazonAdsAccountReadAccess } from "./read-access";
+import { amazonBusinessData } from "@/lib/amazon-sync/business-data";
 import { queryPublishedAdsReports } from "./report-query";
 import { Prisma, type AmazonAdsEntityRecord } from "@prisma/client";
 import { amazonDataAccess, type AmazonDataAccess } from "@/lib/amazon-sync/data-access";
@@ -26,7 +28,7 @@ export interface AdsQueryRepository {
 
 export interface AdsQueryServiceDependencies {
   repository: AdsQueryRepository;
-  resolveAccess(scope: SyncScope, actor: string): Promise<AmazonDataAccess>;
+  resolveAccess(scope: SyncScope, actor: string, input?: AdsQueryInput): Promise<AmazonDataAccess>;
   audit(scope: SyncScope, actor: string, kind: AdsQueryInput["kind"]): Promise<void>;
   readSnapshot?<T>(read: (dependencies: Pick<AdsQueryServiceDependencies, "repository" | "resolveAccess">) => Promise<T>): Promise<T>;
 }
@@ -36,13 +38,13 @@ export async function withAdsQueryReadSnapshot<T>(read: (dependencies: Pick<AdsQ
   return prisma.$transaction(async tx => {
     await tx.$executeRaw`SET TRANSACTION READ ONLY`;
     await tx.$executeRaw`SET LOCAL statement_timeout = '8000ms'`;
-    return read({ repository: createAmazonAdsRepository(tx), resolveAccess: (scope, actor) => amazonDataAccess(scope, actor, tx, "view") });
+    return read({ repository: createAmazonAdsRepository(tx), resolveAccess: (scope, actor, input) => input ? amazonAdsAccountReadAccess(scope, actor, input, tx) : amazonDataAccess(scope, actor, tx, "view") });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 20000 });
 }
 
 const defaultDependencies: AdsQueryServiceDependencies = {
   repository: amazonAdsRepository,
-  resolveAccess: (scope, actor) => amazonDataAccess(scope, actor, prisma, "view"),
+  resolveAccess: (scope, actor, input) => input ? amazonAdsAccountReadAccess(scope, actor, input) : amazonDataAccess(scope, actor, prisma, "view"),
   audit: (scope, actor, kind) => auditAmazonDataRead(scope, actor, `amazon-ads-${kind}`),
   readSnapshot: withAdsQueryReadSnapshot,
 };
@@ -123,7 +125,7 @@ export async function queryAmazonAdsData(
   if (input.kind === "reports") return queryPublishedAdsReports(scope, actor, input);
   if (input.kind === "entities") {
     const read = async (reader: Pick<AdsQueryServiceDependencies, "repository" | "resolveAccess">) => {
-      const access = await reader.resolveAccess(scope, actor);
+      const access = await reader.resolveAccess(scope, actor, input);
       const initialProfileWhere = buildAdsProfileWhere(scope, access, input);
       const profiles = (await reader.repository.listProfiles(scope, initialProfileWhere)).filter(profile => profile.authorization.status === "CONNECTED" && profile.seller);
       const profileWhere: AdsProfileWhere = { AND: [initialProfileWhere, { id: { in: profiles.map(profile => profile.id) } }] };
@@ -141,7 +143,7 @@ export async function queryAmazonAdsData(
     };
     const { profiles, profileRecordIds, data, total, freshness } = await (dependencies.readSnapshot ? dependencies.readSnapshot(read) : read(dependencies));
     // Do not release rows, counts or metadata using grants/bindings read before the query.
-    const currentAccess = await dependencies.resolveAccess(scope, actor);
+    const currentAccess = await dependencies.resolveAccess(scope, actor, input);
     if (profiles.length) {
       const currentProfiles = (await dependencies.repository.listProfiles(scope, {
         AND: [buildAdsProfileWhere(scope, currentAccess, input), { id: { in: profileRecordIds } }],
@@ -184,7 +186,7 @@ function serializeEntity(row: AdsEntityQueryRow) {
     startDate: row.startDate?.toISOString().slice(0, 10) ?? null, endDate: row.endDate?.toISOString().slice(0, 10) ?? null,
     targetingType: row.targetingType, budgetAmount: row.budgetAmount?.toString() ?? null, budgetType: row.budgetType,
     bid: row.bid?.toString() ?? null, keywordText: row.keywordText, matchType: row.matchType, expressionType: row.expressionType,
-    targetingExpression: row.targetingExpression, payload: row.payload, sourceTaskId: row.sourceTaskId,
+    targetingExpression: row.targetingExpression, payload: amazonBusinessData(row.payload), sourceTaskId: row.sourceTaskId,
     sourceTaskStatus: row.sourceTask.status, sourceTaskFinishedAt: row.sourceTask.finishedAt?.toISOString() ?? null,
     sourceUpdatedAt: row.sourceUpdatedAt?.toISOString() ?? null, syncedAt: row.syncedAt.toISOString(),
   };

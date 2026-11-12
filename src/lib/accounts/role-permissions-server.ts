@@ -1,6 +1,7 @@
 import { defaultRolePermissionMap, type RolePermissionMap } from "@/lib/accounts/permissions";
 import { getOrganizationRoleCatalogSnapshot, saveOrganizationRoleCatalog } from "@/lib/accounts/role-catalog-server";
 import { cloneRolePermissionMap, normalizeRolePermissionMap } from "@/lib/accounts/role-permissions-utils";
+import { cache } from "react";
 
 export type RolePermissionsSnapshot = {
   permissions: RolePermissionMap;
@@ -15,7 +16,8 @@ function buildDefaultSnapshot() {
   return buildRolePermissionsSnapshot(cloneRolePermissionMap(defaultRolePermissionMap), "local-default");
 }
 
-export async function getOrganizationRolePermissionsSnapshot(organizationId: string): Promise<RolePermissionsSnapshot> {
+// No cross-request permission cache: the organization revision is read afresh per render.
+export const getOrganizationRolePermissionsSnapshot = cache(async (organizationId: string): Promise<RolePermissionsSnapshot> => {
   if (!process.env.DATABASE_URL) return buildDefaultSnapshot();
 
   const snapshot = await getOrganizationRoleCatalogSnapshot(organizationId);
@@ -24,7 +26,7 @@ export async function getOrganizationRolePermissionsSnapshot(organizationId: str
     Object.fromEntries(snapshot.roles.map((role) => [role.id, role.permissions])) as RolePermissionMap,
     snapshot.revision,
   );
-}
+});
 
 export async function getOrganizationRolePermissions(organizationId: string): Promise<RolePermissionMap> {
   const snapshot = await getOrganizationRolePermissionsSnapshot(organizationId);

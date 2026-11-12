@@ -113,6 +113,7 @@ export async function projectProductCenter(
 ) {
   const product = input.product;
   const sourceUpdatedAt = input.sourceUpdatedAt ?? null;
+  const brand = product.management?.brandId ? await tx.productCatalogEntry.findFirst({ where: { id: product.management.brandId, organizationId: input.organizationId, workspaceId: input.workspaceId, kind: "BRAND" }, select: { name: true } }) : null;
   const masterId = stableId("master", input.product.id);
   const variantId = stableId("variant", input.product.id);
   const marketplace = marketplaceCode(input.marketplace);
@@ -182,6 +183,7 @@ export async function projectProductCenter(
       sku: product.sku,
       chineseName: product.chineseName,
       englishName: product.englishName,
+      brand: brand?.name ?? "",
       status: product.status,
       source: getProductRecordSource(),
       currentOwner: getProductRecordCurrentOwner(product),
@@ -194,6 +196,7 @@ export async function projectProductCenter(
       sku: product.sku,
       chineseName: product.chineseName,
       englishName: product.englishName,
+      brand: brand?.name ?? "",
       status: product.status,
       source: getProductRecordSource(),
       currentOwner: getProductRecordCurrentOwner(product),
@@ -299,6 +302,17 @@ export async function projectProductCenter(
     },
   });
 
+  if (product.management && (product.management.suppliers.length || !product.supplierName.trim())) {
+    const relations = product.management.suppliers;
+    await tx.productSupplier.deleteMany({ where: { organizationId: input.organizationId, workspaceId: input.workspaceId, productMasterId: masterId, supplierId: { notIn: relations.map(row => row.supplierId) } } });
+    for (const relation of relations) {
+      const data = { supplierSku: relation.supplierSku, productUrl: relation.productUrl, isPrimary: relation.isPrimary, purchaseLeadTime: relation.purchaseLeadTime, moq: relation.moq, notes: relation.notes, sourceRevision: input.sourceRevision, sourceUpdatedAt };
+      await tx.productSupplier.upsert({
+        where: { organizationId_workspaceId_productMasterId_supplierId: { organizationId: input.organizationId, workspaceId: input.workspaceId, productMasterId: masterId, supplierId: relation.supplierId } },
+        create: { id: stableId("ps", `${masterId}:${relation.supplierId}`), productMasterId: masterId, supplierId: relation.supplierId, organizationId: input.organizationId, workspaceId: input.workspaceId, ...data }, update: data,
+      });
+    }
+  } else {
   const currentSupplierId = product.supplierName.trim()
     ? stableId(
         "supplier",
@@ -365,6 +379,8 @@ export async function projectProductCenter(
         sourceUpdatedAt,
       },
     });
+  }
+
   }
 
   await tx.productCost.upsert({

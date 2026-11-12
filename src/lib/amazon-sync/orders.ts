@@ -1,5 +1,10 @@
 import { assertOrderAccessEvidence, type OrderAccessContext } from "./order-access-evidence";
+import { createHash } from "node:crypto";
 import { SyncInputError } from "./policy";
+
+/** Executable non-PII parser versions, independent of the upstream API version. */
+export const orderParserVersion = "orders.2026-01-01.v2";
+export const orderFactSchemaVersion = "orders.non-pii.v2";
 
 /** Orders v2026-01-01 dataset/role contracts. P2 deliberately supports only
  * these reviewed datasets; missing PII is not proof of a missing role.
@@ -29,6 +34,11 @@ export type OrderSyncPolicy = {
 };
 
 export type OrderWindow = { from: string; to: string };
+
+export function orderCursorDigest(cursor: { id: string; activeRunId: string | null; status: string; watermarkFrom: Date; watermarkTo: Date; nextTokenCiphertext: string | null; listComplete: boolean; detailPolicyDigest: string | null }) {
+  const frozen = [cursor.id, cursor.activeRunId, cursor.status, cursor.watermarkFrom.toISOString(), cursor.watermarkTo.toISOString(), cursor.nextTokenCiphertext, cursor.listComplete, cursor.detailPolicyDigest];
+  return createHash("sha256").update(JSON.stringify(frozen)).digest("hex");
+}
 
 function utc(value: unknown): string {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value) || !Number.isFinite(Date.parse(value))) throw new SyncInputError("订单时间须为有效 UTC 时间。");
@@ -123,7 +133,7 @@ export function assertOrderRoles(auth: { approvedRoles: string[]; rolesAttestedA
   // No manual API-role registry. Preserve verification of explicitly supplied
   // operation evidence; it is never a substitute for account data permissions.
   void auth; void automaticRead;
-  if (context && (context.currentEvidence || policy.details?.accessEvidence)) assertOrderAccessEvidence(context.currentEvidence ?? policy.details!.accessEvidence!, context);
+  if (context && (context.currentEvidence || policy.details?.accessEvidence)) assertOrderAccessEvidence(context.currentEvidence ?? policy.details!.accessEvidence!, { ...context, includedData: policy.details?.includedData ?? [] });
 }
 
 export type OrderMoney = { original: string; currency: string };
@@ -171,5 +181,6 @@ export function parseOrderDetail(value: unknown, expectedId: string, marketplace
     seen.add(itemId);
     return { orderItemId: itemId, asin: optionalCode(product.asin), sellerSku: optionalCode(product.sellerSku), quantityOrdered: item.quantityOrdered, proceeds: item.proceeds == null ? null : parseOrderMoney(record(item.proceeds).proceedsTotal) };
   });
-  return { ...base, grandTotal: order.proceeds == null ? null : parseOrderMoney(record(order.proceeds).grandTotal), items };
+  const fulfillment = order.fulfillment == null ? {} : record(order.fulfillment);
+  return { ...base, fulfilledBy: optionalCode(fulfillment.fulfilledBy), fulfillmentServiceLevel: optionalCode(fulfillment.fulfillmentServiceLevel), grandTotal: order.proceeds == null ? null : parseOrderMoney(record(order.proceeds).grandTotal), items };
 }

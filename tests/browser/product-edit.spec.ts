@@ -53,12 +53,32 @@ async function setup(page: Page, mode = "", imageAssets?: Product["imageAssets"]
     return route.fulfill({ status: 404, body: "" });
   });
   await page.goto(`http://127.0.0.1:43219/${mode ? `?mode=${mode}` : ""}`);
-  await expect(nameInput(page)).toBeEditable();
+  if (mode === "list") await expect(page.getByRole("button", { name: "复制 SKU SKU-1", exact: true })).toBeVisible();
+  else await expect(nameInput(page)).toBeEditable();
   return state;
 }
 
 function nameInput(page: Page) { return page.locator("label").filter({ hasText: "中文名（必填）" }).locator("input"); }
 async function savedLocally(page: Page) { await expect(page.getByRole("status")).toContainText("草稿已暂存"); }
+
+test("商品表格复制 SKU 有成功与失败反馈", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (value: string) => {
+      if ((window as Window & { failClipboard?: boolean }).failClipboard) throw new Error("clipboard denied");
+      (window as Window & { copiedSku?: string }).copiedSku = value;
+    } } });
+  });
+  await setup(page, "list");
+  await page.getByRole("button", { name: "复制 SKU SKU-1", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("已复制 SKU：SKU-1");
+  expect(await page.evaluate(() => (window as Window & { copiedSku?: string }).copiedSku)).toBe("SKU-1");
+  await page.screenshot({ path: "docs/wimoor-integration/ui/screenshots/product-sku-copy.png", fullPage: true });
+  await page.evaluate(() => { (window as Window & { failClipboard?: boolean }).failClipboard = true; });
+  await page.getByRole("button", { name: "复制 SKU SKU-1", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveText("SKU SKU-1 复制失败，请检查浏览器剪贴板权限。");
+  await page.getByRole("button", { name: "打开商品详情 SKU-1", exact: true }).click();
+  expect(await page.evaluate(() => (window as Window & { openedSku?: string }).openedSku)).toBe("SKU-1");
+});
 
 test("reopening a product image preview reuses its signed URL without another signing request", async ({ page }) => {
   let previewRequests = 0;

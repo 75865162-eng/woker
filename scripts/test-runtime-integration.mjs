@@ -1,6 +1,6 @@
 // Disposable Docker fixtures only. Never loads .env or inherits credentials.
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, writeFileSync, readFileSync, rmSync, openSync, closeSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, rmSync, openSync, closeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 import { randomUUID, scryptSync } from "node:crypto";
@@ -80,9 +80,9 @@ try {
   const passwordHash = `scrypt:fixture:${scryptSync("fixture_password", "fixture", 64).toString("base64url")}`;
   await sql(env.DATABASE_URL, `INSERT INTO "Organization" (id,name,slug,"updatedAt") VALUES ('fixture-org','Fixture','runtime-fixture',now());
     INSERT INTO "WorkspaceScope" ("organizationId",id,name,"isDefault","updatedAt") VALUES ('fixture-org','default','Fixture',true,now());
-    INSERT INTO "User" (id,email,name,"passwordHash","updatedAt") VALUES ('fixture-user','fixture@example.invalid','Fixture','placeholder',now());
-    INSERT INTO "OrganizationMember" (id,"organizationId","userId",role,"updatedAt") VALUES ('fixture-member','fixture-org','fixture-user','owner',now());`);
-  await sql(env.DATABASE_URL, `UPDATE "User" SET "passwordHash"=$1 WHERE id='fixture-user'`, [passwordHash]);
+    INSERT INTO "User" (id,email,name,"passwordHash","updatedAt") VALUES ('fixture-user','fixture@example.invalid','Fixture','placeholder',now()), ('fixture-operations-user','operations@example.invalid','Fixture Operations','placeholder',now());
+    INSERT INTO "OrganizationMember" (id,"organizationId","userId",role,"updatedAt") VALUES ('fixture-member','fixture-org','fixture-user','owner',now()), ('fixture-operations-member','fixture-org','fixture-operations-user','operations',now());`);
+  await sql(env.DATABASE_URL, `UPDATE "User" SET "passwordHash"=$1 WHERE id IN ('fixture-user','fixture-operations-user')`, [passwordHash]);
   execFileSync(process.execPath, ["node_modules/tsx/dist/cli.mjs", "--test", "--test-concurrency=1", "tests/integration/runtime-execution.integration.ts"], { cwd: root, env: { ...env, ERP_RUNTIME_EXECUTION_FIXTURE: "1" }, stdio: ["ignore", logFd, logFd] });
   results.push("durable execution claims, expiry fencing, bounded recovery and mock success publications");
   results.push("import stale publication rejected; final audit failure rolls back file/export/job/success versions");
@@ -129,6 +129,65 @@ try {
   await page.reload();
   await page.getByText("文件导入与商品 Outbox", { exact: true }).waitFor();
   results.push("health fetch failure clears stale online cards; successful refresh restores current state");
+
+  const routePage = await context.newPage();
+  const routeMutations = [];
+  routePage.on("request", request => {
+    if (request.url().startsWith(base + "/api/") && request.method() !== "GET" && request.method() !== "HEAD") routeMutations.push(`${request.method()} ${new URL(request.url()).pathname}`);
+  });
+  await routePage.setViewportSize({ width: 1440, height: 1000 });
+  await routePage.goto(base + "/operations");
+  const navigation = routePage.getByRole("navigation", { name: "业务导航" });
+  await navigation.getByRole("link", { name: "采购订单", exact: true }).click();
+  await routePage.waitForURL(/view=purchase-orders/);
+  assert.equal(new URL(routePage.url()).searchParams.get("view"), "purchase-orders");
+  await routePage.reload();
+  await routePage.getByRole("heading", { name: "经营中台" }).waitFor();
+  await navigation.getByRole("link", { name: "供应商档案", exact: true }).click();
+  await routePage.waitForURL(/view=suppliers/);
+  assert.equal(new URL(routePage.url()).searchParams.get("view"), "suppliers");
+  await navigation.getByRole("link", { name: "Amazon 订单", exact: true }).click();
+  await routePage.waitForURL(/view=orders/);
+  assert.equal(new URL(routePage.url()).searchParams.get("view"), "orders");
+  await navigation.getByRole("link", { name: "仓库档案", exact: true }).click();
+  await routePage.waitForURL(/\/logistics\/warehouse\?tab=warehouses/);
+  assert.equal(new URL(routePage.url()).pathname, "/logistics/warehouse");
+  assert.equal(new URL(routePage.url()).searchParams.get("tab"), "warehouses");
+  await routePage.getByRole("heading", { name: "公司仓库存" }).waitFor();
+  await routePage.reload();
+  await navigation.getByRole("link", { name: "仓库入库", exact: true }).click();
+  await routePage.waitForURL(/tab=receipts/);
+  assert.equal(new URL(routePage.url()).searchParams.get("tab"), "receipts");
+  await routePage.goBack();
+  await routePage.waitForURL(/tab=warehouses/);
+  for (const [label, view] of [["FBA 装箱", "fba-boxing"], ["头程物流", "first-mile"], ["ERP 费用单", "expense-management"]]) {
+    await navigation.getByRole("link", { name: label, exact: true }).click();
+    await routePage.waitForURL(new RegExp(`view=${view}`));
+    assert.equal(new URL(routePage.url()).searchParams.get("view"), view);
+    if (view === "fba-boxing") await routePage.screenshot({ path: path.join(directory, "fba-boxing-route-debug.png") });
+    await routePage.getByRole("heading", { name: view === "fba-boxing" ? "FBA 装箱与箱规" : label, exact: true, level: 1 }).waitFor();
+    await routePage.getByRole("status").filter({ hasText: "布局预览" }).waitFor();
+  }
+  await mkdirSync(path.join(root, "docs/wimoor-integration/ui/screenshots"), { recursive: true });
+  await routePage.screenshot({ path: path.join(root, "docs/wimoor-integration/ui/screenshots/app-shell-isolated-routes.png") });
+  assert.deepEqual(routeMutations, [], "route coverage must remain read-only");
+  results.push("real Next App Router: procurement, suppliers, orders, WMS deep links, refresh/back, and all three unconnected layouts; no API writes");
+  results.push("real AppShell screenshot captured against disposable fixture database");
+
+  const operationsLogin = await fetch(base + "/api/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "operations@example.invalid", password: "fixture_password" }) });
+  assert.equal(operationsLogin.status, 200);
+  const operationsContext = await browser.newContext();
+  await operationsContext.route("**/*", route => new URL(route.request().url()).origin === base ? route.continue() : route.abort());
+  await operationsContext.addCookies(operationsLogin.headers.getSetCookie().filter(value => value.startsWith("amazon_bulk_ad_session=")).map(value => { const pair = value.split(";")[0]; const i = pair.indexOf("="); return { name: pair.slice(0,i), value: pair.slice(i+1), domain: "127.0.0.1", path: "/", httpOnly: true, secure: false }; }));
+  const operationsPage = await operationsContext.newPage();
+  await operationsPage.goto(base + "/");
+  const operationsNavigation = operationsPage.getByRole("navigation", { name: "业务导航" });
+  await operationsNavigation.getByRole("link", { name: "采购订单", exact: true }).waitFor();
+  assert.equal(await operationsNavigation.getByRole("link", { name: "仓库档案", exact: true }).count(), 0);
+  await operationsPage.goto(base + "/logistics/warehouse?tab=warehouses");
+  await operationsPage.waitForURL(/\/forbidden\?from=/);
+  await operationsContext.close();
+  results.push("real permission snapshot filters WMS navigation for operations role and route guard denies direct WMS access");
 
   // Submit synthetic invalid bulk through the real upload API. It must be consumed
   // and persist a parse failure, without calling Amazon/Sellfox/AI providers.

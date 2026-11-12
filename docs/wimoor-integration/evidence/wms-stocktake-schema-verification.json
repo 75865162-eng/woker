@@ -1,0 +1,87 @@
+{
+  "date": "2026-11-11",
+  "scope": "WMS stocktake schema foundation only",
+  "status": "VERIFIED_ISOLATED",
+  "addedModels": [
+    "WmsStocktake",
+    "WmsStocktakeLocation",
+    "WmsStocktakeLine"
+  ],
+  "checks": [
+    {
+      "command": "env -i PATH=\"$PATH\" node node_modules/prisma/build/index.js validate --config /tmp/wms-stocktake-prisma.config.ts",
+      "result": "PASS",
+      "configuration": "Temporary config points at repository schema; does not load root .env"
+    },
+    {
+      "command": "env -i PATH=\"$PATH\" node node_modules/prisma/build/index.js generate --config /tmp/wms-stocktake-prisma.config.ts",
+      "result": "PASS"
+    },
+    {
+      "command": "env -i PATH=\"$PATH\" npm run typecheck",
+      "result": "PASS"
+    },
+    {
+      "command": "env -i PATH=\"$PATH\" node scripts/test-wms-schema-offline.mjs",
+      "result": "PASS",
+      "coverage": [
+        "non-WMS baseline -> 11 WMS tables -> 14 WMS tables",
+        "25 invalid stocktake writes rejected; positive baseline/count/metadata writes verified",
+        "existing WMS and procurement integration; actual Next HTTP and two-session Chromium regression",
+        "complete empty PostgreSQL migration chain"
+      ],
+      "resources": "Disposable PostgreSQL16 Docker fixture; identity-checked cleanup completed"
+    },
+    {
+      "command": "env -i PATH=\"$PATH\" node node_modules/eslint/bin/eslint.js scripts/test-wms-schema-offline.mjs tests/integration/wms-stocktake-schema.mjs",
+      "result": "PASS"
+    },
+    {
+      "command": "git diff --check -- prisma/schema.prisma; targeted new-file whitespace and migration-scope assertions",
+      "result": "PASS"
+    }
+  ],
+  "recoveredIssues": [
+    {
+      "error": "Prisma schema composite FK name collision P1012",
+      "correction": "Explicit WmsStocktakeLocation FK names"
+    },
+    {
+      "error": "Schema engine requires --datasource <JSON> for migrate diff",
+      "correction": "Add inert loopback datasource to temporary config; schema-to-schema diff makes no database connection"
+    },
+    {
+      "error": "relation WmsWarehouse does not exist in initial runner attempt",
+      "correction": "Apply new migration after existing WMS migration"
+    },
+    {
+      "error": "Baseline schema retained FbaLocalPlanLine relations to stripped WMS models (P1012)",
+      "correction": "Remove external WMS relation fields in synthetic pre-WMS baseline, retaining original repository schema"
+    }
+  ],
+  "notRun": [
+    "existing-business-database migration",
+    "production/real warehouse acceptance",
+    "stocktake service/API/posting/freeze operations (not implemented)",
+    "capacity mode and full application build/check (no operational service/build-chain changes)"
+  ],
+  "git": {
+    "committed": false,
+    "pushed": false,
+    "deployed": false
+  },
+  "files": [
+    {
+      "path": "prisma/migrations/20261117010000_wms_stocktake_foundation/migration.sql",
+      "sha256": "9eeeb92939094811dbb770851060f19454c0d3248f047a6975ed3710f93e4705"
+    },
+    {
+      "path": "scripts/test-wms-schema-offline.mjs",
+      "sha256": "56a76a29662470b35f5efc9e95c2325ccb4bcc66b367bea7e1f8187ae57c4e1a"
+    },
+    {
+      "path": "tests/integration/wms-stocktake-schema.mjs",
+      "sha256": "f750f50f34e2599f7b5e8334c671de81389c3bf0b09dec7859a558e0c7abb1ad"
+    }
+  ]
+}

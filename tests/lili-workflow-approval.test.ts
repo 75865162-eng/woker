@@ -43,6 +43,26 @@ test("unmapped catalog execution explicitly stays in chat and never reports succ
  assert.equal(r.status,501);assert.equal(r.body.ok,false);assert.equal(r.body.nextAction?.browserRequired,false);
 });
 
+test("chat confirmation supports one scoped first-batch recovery, never other task controls", async () => {
+ const retry = { operation: "control-task", targetId: "failed-order-task", afterSummary: { id: "failed-order-task", control: "retry" }, domains: ["orders"], sourceIds: ["source"], marketplaceIds: ["US"] };
+ const f = setup(); f.set(retry);
+ await executeSyncChat("workflow_sync_confirm", args, f.deps);
+ assert.equal(f.get().applications, 1);
+ const paused = setup(); paused.set({ ...retry, afterSummary: { id: retry.targetId, control: "resume" } });
+ await executeSyncChat("workflow_sync_confirm", args, paused.deps);
+ assert.equal(paused.get().applications, 1);
+ for (const resource of ["finance", "returns", "reimbursements", "inventory_events", "fulfillment", "catalog_items", "listing_details"]) {
+  const supported = setup(); supported.set({ ...retry, domains: [resource] });
+  await executeSyncChat("workflow_sync_confirm", args, supported.deps);
+  assert.equal(supported.get().applications, 1);
+ }
+ for (const patch of [{ afterSummary: { id: "other", control: "retry" } }, { afterSummary: { id: "failed-order-task", control: "cancel" } }, { domains: ["pricing"] }, { sourceIds: ["a", "b"] }, { marketplaceIds: ["US", "CA"] }]) {
+  const rejected = setup(); rejected.set({ ...retry, ...patch });
+  await assert.rejects(executeSyncChat("workflow_sync_confirm", args, rejected.deps), /UNSUPPORTED/);
+  assert.equal(rejected.get().approvals, 0); assert.equal(rejected.get().applications, 0);
+ }
+});
+
 test("sync execution requires the intersection of explicit credential and current sync grants",()=>{
  const sources=[{id:"source-1",sellerAccountId:"seller-a",marketplaceId:"US"}];
  const scopes=[{sellerAccountId:"seller-a",marketplaceIds:["US"]}];

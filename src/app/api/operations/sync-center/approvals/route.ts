@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { AmazonCloudRelayError } from "@/lib/amazon/cloud-relay-protocol";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { decideChange, applyChange } from "@/lib/amazon-sync/change-approval";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
@@ -20,5 +21,5 @@ export async function POST(request: Request) {
     if (!["APPROVED", "REJECTED", "REVOKED"].includes(String(input.decision))) throw new SyncInputError("审批操作无效。");
     const reason = input.reason === undefined ? "" : requiredText(input.reason, "原因", 200);
     return json({ request: await decideChange(scope, permission.user.id, id, input.decision as "APPROVED" | "REJECTED" | "REVOKED", reason) });
-  } catch (error) { return json({ error: error instanceof SyncInputError ? error.message : "审批操作失败，未返回内部错误。" }, error instanceof SyncInputError ? error.status : 500); }
+  } catch (error) { return json({ error: error instanceof SyncInputError ? error.message : "审批操作失败，未返回内部错误。", ...(error instanceof AmazonCloudRelayError ? { code: error.code } : {}) }, error instanceof SyncInputError ? error.status : 500); }
 }

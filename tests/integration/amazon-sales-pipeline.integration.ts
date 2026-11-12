@@ -1,3 +1,5 @@
+// Cloud role for injected offline task fixtures; no real Amazon calls.
+process.env.AMAZON_API_EXECUTION_ROLE = "cloud";
 import assert from "node:assert/strict";
 import test, { before, after } from "node:test";
 import { randomUUID } from "node:crypto";
@@ -85,6 +87,7 @@ before(async () => {
     const session = await createSession(id); cookies.set(id, `${session.sessionCookie.name}=${session.sessionCookie.value}`);
   }
   await prisma.sellerAccount.create({ data: { ...scope, id: sellerId, accountKey: "fixture", displayName: "Fixture Seller", marketplaceCode: "US" } });
+  await prisma.amazonDataAccessGrant.createMany({ data: [actor, approver].map(userId => ({ ...scope, id: randomUUID(), userId, sellerAccountId: sellerId })) });
   globalThis.fetch = async (input, init) => {
     const url = new URL(String(input)); apiCalls++;
     if (url.hostname === "api.amazon.com" && url.pathname === "/auth/o2/token") return Response.json({ access_token: "fixture-token", expires_in: 3600 });
@@ -107,6 +110,9 @@ before(async () => {
   process.env.AMAZON_SYNC_CENTER_SCOPES = "[]";
   try { await configure({ action: "validate-authorization", id: auth.targetId }); }
   finally { process.env.AMAZON_SYNC_CENTER_SCOPES = enabledScopes; }
+  // The mocked participation probe does not prove Seller identity; explicitly
+  // seed that evidence only in this disposable fixture, as OAuth would do.
+  await prisma.amazonSpApiAuthorization.update({ where: { id: auth.targetId }, data: { identityVerifiedAt: new Date(), identityEvidence: "OFFLINE_FIXTURE" } });
   const src = await configure({ action: "save-source", authorizationId: auth.targetId, sellerAccountId: sellerId, marketplaceId: site, resource: "sales_traffic", enabled: true }); sourceId = src.targetId;
   worker = new Worker<Payload>(amazonSyncQueueName, async job => {
     if (job.name === "export-amazon-sales") { assert.ok(job.data.exportId); assert.ok(Number.isInteger(job.data.fence)); await processSalesExport(job.data.exportId, job.data.fence!); }
@@ -122,7 +128,7 @@ test("approval to real BullMQ report worker to filtered API and stored export re
   assert.equal(completedReport.status, "SUCCEEDED", completedReport.error ?? ""); assert.equal(reportRequests.length, 1);
   assert.equal(await prisma.amazonSalesTrafficSnapshot.count({ where: { ...scope, syncRunId: task.id } }), 1);
   const params = new URLSearchParams({ section: "sales-traffic", from: range.from, to: range.to, sellerAccountId: sellerId, marketplaceId: site, direction: "asc" });
-  const response = await GET(request(`/api/operations/sync-center?${params}`)); assert.equal(response.status, 200);
+  const response = await GET(request(`/api/operations/sync-center?${params}`)); assert.equal(response.status, 200, await response.clone().text());
   const page = await response.json(); assert.equal(page.rows.length, 1); assert.equal(page.rows[0].syncRunId, task.id); assert.equal(page.rows[0].amazonSellerId, "fixture-seller");
   const filters = Object.fromEntries([...params].filter(([key]) => key !== "section"));
   const body = { filters, asOf: page.asOf, idempotencyKey: "export-once" };
@@ -135,10 +141,11 @@ test("approval to real BullMQ report worker to filtered API and stored export re
   const download = await getExport(request(`/api/operations/sync-center/exports?id=${job.id}&download=1`)); assert.equal(download.status, 200);
   const lines = (await download.text()).trim().split("\n").map(line => JSON.parse(line));
   assert.equal(lines[0].asOf, page.asOf); assert.equal(lines[0].filters.from, range.from);
+  assert.deepEqual(lines[1].metrics, { unitsOrdered: "2", totalOrderItems: "1", sessions: "10", pageViews: "15", orderedProductSales: { amount: "20", currencyCode: "USD" } });
   assert.deepEqual(lines.slice(1).map(line => { assert.equal(line.type, "data"); const row = { ...line }; delete row.type; return row; }), page.rows);
   assert.equal(await prisma.productRecord.count({ where: scope }), 0, "sync and export cannot create ERP products");
   assert.equal((await getExport(request(`/api/operations/sync-center/exports?id=${job.id}&download=1`, approver))).status, 404, "same tenant nonrequester cannot download");
-  assert.equal((await getExport(request(`/api/operations/sync-center/exports?id=${job.id}&download=1`, foreignActor))).status, 404);
+  assert.equal((await getExport(request(`/api/operations/sync-center/exports?id=${job.id}&download=1`, foreignActor))).status, 403, "foreign actor has no account assignment");
   assert.equal((await GET(request(`/api/operations/sync-center?${params}`, actor, undefined, "missing-workspace"))).status, 403);
   const actions = (await prisma.auditLog.findMany({ where: { entityId: job.id } })).map(row => row.action);
   for (const action of ["requested", "succeeded", "downloaded"]) assert.ok(actions.includes(`amazon.data.export.${action}`));
@@ -150,13 +157,23 @@ test("approval to real BullMQ report worker to filtered API and stored export re
   await processSyncCenterTask(task.id, task.dispatchVersion); assert.equal(reportRequests.length, 2, "stale queue replay cannot create another report");
 
   partial = false;
+  const archivedPartial = await prisma.amazonSyncRawPage.findUniqueOrThrow({ where: { taskId_page: { taskId: incomplete.id, page: 1 } } });
+  const callsBeforeReparse = apiCalls;
   const retry = await configure({ action: "control-task", id: incomplete.id, control: "retry" });
-  assert.equal((await finishReport(incomplete.id)).status, "SUCCEEDED");
+  assert.equal((await finishReport(incomplete.id)).status, "PARTIAL_SUCCESS", "reparse uses the saved incomplete report rather than a different remote result");
+  assert.equal(apiCalls, callsBeforeReparse, "archived report retry makes no Amazon or download requests");
+  assert.equal(reportRequests.length, 2, "reparse must not create another report");
+  assert.equal((await prisma.amazonSyncRawPage.findUniqueOrThrow({ where: { taskId_page: { taskId: incomplete.id, page: 1 } } })).bodySha256, archivedPartial.bodySha256);
   const retried = await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: incomplete.id } });
   assert.equal(retried.executionApprovalId, retry.id); const { executionExpiresAt: renewedDeadline, ...renewedScope } = retried.frozenScope as Record<string, unknown>;
   const { executionExpiresAt: priorDeadline, ...priorScope } = incomplete.frozenScope as Record<string, unknown>;
   assert.deepEqual(renewedScope, priorScope); assert.ok(String(renewedDeadline) >= String(priorDeadline));
-  assert.equal(await prisma.amazonSalesTrafficSnapshot.count({ where: { ...scope, syncRunId: incomplete.id } }), 1);
+  assert.ok(retried.checkpointCiphertext, "partial result retains report identity for another reparse");
+  assert.equal(await prisma.amazonSalesTrafficSnapshot.count({ where: { ...scope, syncRunId: incomplete.id } }), 0);
+  const replacement = await requestedTask();
+  assert.equal((await finishReport(replacement.id)).status, "SUCCEEDED", "new collection is a separately approved task");
+  assert.equal(reportRequests.length, 3);
+  assert.equal(await prisma.amazonSalesTrafficSnapshot.count({ where: { ...scope, syncRunId: replacement.id } }), 1);
   const frozenDownload = await getExport(request(`/api/operations/sync-center/exports?id=${job.id}&download=1`)); assert.equal(frozenDownload.status, 200);
   assert.deepEqual((await frozenDownload.text()).trim().split("\n").map(line => JSON.parse(line)), lines, "new publication cannot change an already frozen export");
 
@@ -164,6 +181,8 @@ test("approval to real BullMQ report worker to filtered API and stored export re
   assert.equal(pendingExport.status, 202); const pendingId = (await pendingExport.json()).id;
 
   await prisma.organizationMember.update({ where: { organizationId_userId: { organizationId: scope.organizationId, userId: actor } }, data: { role: "viewer" } });
+  assert.equal((await getExport(request(`/api/operations/sync-center/exports?id=${job.id}&download=1`))).status, 200, "account assignment grants export without module permissions");
+  await prisma.amazonDataAccessGrant.updateMany({ where: { ...scope, userId: actor, sellerAccountId: sellerId }, data: { enabled: false } });
   await consume(pendingId, true);
   const rejectedExport = await prisma.amazonDataExport.findUniqueOrThrow({ where: { id: pendingId } });
   assert.equal(rejectedExport.status, "FAILED"); assert.equal(rejectedExport.fileId, null);
@@ -171,6 +190,7 @@ test("approval to real BullMQ report worker to filtered API and stored export re
   assert.equal((await postExport(request("/api/operations/sync-center/exports", actor, { ...body, idempotencyKey: "denied" }))).status, 403);
   const beforeBlocked = apiCalls;
   await prisma.organizationMember.update({ where: { organizationId_userId: { organizationId: scope.organizationId, userId: actor } }, data: { role: "owner" } });
+  await prisma.amazonDataAccessGrant.updateMany({ where: { ...scope, userId: actor, sellerAccountId: sellerId }, data: { enabled: true } });
   const blocked = await requestedTask();
   await decideChange(scope, approver, blocked.executionApprovalId!, "REVOKED", "fixture revocation");
   await processSyncCenterTask(blocked.id, blocked.dispatchVersion);

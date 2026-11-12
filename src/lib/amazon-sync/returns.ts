@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { digest } from "./approval-policy";
 import { SyncInputError } from "./policy";
 import { financeWindowFromFrozen, type FinanceWindow } from "./finance";
 
@@ -49,6 +50,9 @@ export function assertReturnRoles(auth: { approvedRoles: string[]; rolesAttested
   void auth; void automaticRead;
 }
 export const returnWindowFromFrozen = financeWindowFromFrozen;
+export function returnCursorDigest(cursor: { id: string; activeRunId: string | null; status: string; watermarkFrom: Date; watermarkTo: Date; reportStateCiphertext: string | null; detailPolicyDigest: string | null }) {
+  return digest({ id: cursor.id, activeRunId: cursor.activeRunId, status: cursor.status, watermarkFrom: cursor.watermarkFrom.toISOString(), watermarkTo: cursor.watermarkTo.toISOString(), reportStateCiphertext: cursor.reportStateCiphertext, detailPolicyDigest: cursor.detailPolicyDigest });
+}
 /** Amazon metadata can truncate request milliseconds to whole seconds. */
 export function reportTimestampMatches(value: unknown, expected: string): boolean {
   if (typeof value !== "string") return false;
@@ -63,7 +67,7 @@ export function nextReturnWindow(policy: ReturnPolicy, cursor: { watermarkFrom: 
   if (to <= from || (cursor && to <= cursor.watermarkTo.getTime())) throw new SyncInputError("退货窗口尚无可推进的新时间。", 409);
   return returnWindowFromFrozen({ from: new Date(from).toISOString(), to: new Date(to).toISOString() });
 }
-export type ReturnState = { creating?: boolean; reportId?: string; documentId?: string; requestedAt?: string; polls: number; archiveTaskId?: string; offset: number };
+export type ReturnState = { creating?: boolean; reportId?: string; documentId?: string; requestedAt?: string; polls: number; archiveTaskId?: string; offset: number; terminalStatus?: "FATAL" | "CANCELLED" };
 export function parseReturnState(text?: string): ReturnState {
   if (!text) return { polls: 0, offset: 0 };
   let p: Record<string, unknown>; try { p = object(JSON.parse(text)); } catch { return bad(); }
@@ -71,7 +75,15 @@ export function parseReturnState(text?: string): ReturnState {
   if (p.requestedAt !== undefined) returnTimestamp(String(p.requestedAt));
   if (p.creating !== undefined && typeof p.creating !== "boolean") return bad();
   integer(p.polls, 0, 100); integer(p.offset, 0, 50000);
+  if (p.terminalStatus !== undefined && (!["FATAL", "CANCELLED"].includes(String(p.terminalStatus)) || !p.reportId || p.creating === true || p.documentId !== undefined || p.archiveTaskId !== undefined || p.offset !== 0)) return bad();
   return p as ReturnState;
+}
+/** Only an explicit approved retry may reset a definitively failed report.
+ * Pending, ambiguous-create and downloaded archives must retain their identity. */
+export function restartTerminalReturnReport(state: ReturnState): ReturnState {
+  const validated = parseReturnState(JSON.stringify(state));
+  if (!validated.terminalStatus) throw new SyncInputError("退货报告没有已确认的失败终态，不能重新创建。", 409);
+  return { polls: 0, offset: 0 };
 }
 export function returnPollDelay(policy: ReturnPolicy, attempt: number, random = Math.random) { return Math.ceil(Math.min(policy.pollMaxSeconds, policy.pollBaseSeconds * 2 ** Math.min(attempt, 12)) * (1 + random() * .25) * 1000); }
 

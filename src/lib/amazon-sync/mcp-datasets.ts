@@ -1,4 +1,5 @@
 import { SyncInputError } from "./policy";
+import { financeQueryRange } from "./finance-query-range";
 import { spApiDataTables, spApiDatasetContracts } from "./sp-api-datasets";
 
 export type SkillTable = {
@@ -37,7 +38,8 @@ export const skillDataTables: SkillTable[] = [
       { name: "sellerAccountId", type: "string" }, { name: "marketplaceId", type: "string" },
       { name: "sellerSku", type: "string" }, { name: "asin", type: "string" },
       { name: "listingStatus", type: "string", nullable: true }, { name: "fulfillmentType", type: "string", nullable: true },
-      { name: "listingAttributes", type: "object", nullable: true, description: "已白名单化的 GET_MERCHANT_LISTINGS_ALL_DATA 商品字段；金额与数量为 Amazon 源文本。" },
+      { name: "listingAttributes", type: "object", nullable: true, description: "全部已保存的商品属性；保留未知字段、嵌套结构和 null，JSON 数值以精确字符串返回。字段缺失不代表属性完整，也不补造默认值。" },
+      { name: "fieldSources", type: "object", description: "已保存的字段来源信息；保留未知字段，排除秘密凭证。" },
       { name: "sourceUpdatedAt", type: "datetime", nullable: true }, { name: "capturedAt", type: "datetime" },
       { name: "sourceRunId", type: "string" },
     ],
@@ -49,14 +51,13 @@ export const skillDataTables: SkillTable[] = [
     grain: ["sellerAccountId", "marketplaceId", "businessDate", "syncRunId"],
     fields: [
       { name: "sellerAccountId", type: "string" }, { name: "marketplaceId", type: "string" },
-      { name: "businessDate", type: "date" }, { name: "metrics.unitsOrdered", type: "integer", nullable: true },
-      { name: "metrics.totalOrderItems", type: "integer", nullable: true }, { name: "metrics.sessions", type: "integer", nullable: true },
-      { name: "metrics.pageViews", type: "integer", nullable: true }, { name: "metrics.orderedProductSales.amount", type: "decimal", nullable: true },
+      { name: "businessDate", type: "date" },
+      { name: "metrics", type: "object", description: "全部已保存的销售指标；保留未知字段、嵌套结构和 null，JSON 数值以精确字符串返回。" },
+      { name: "metrics.unitsOrdered", type: "string", nullable: true },
+      { name: "metrics.totalOrderItems", type: "string", nullable: true }, { name: "metrics.sessions", type: "string", nullable: true },
+      { name: "metrics.pageViews", type: "string", nullable: true }, { name: "metrics.orderedProductSales.amount", type: "string", nullable: true },
       { name: "metrics.orderedProductSales.currencyCode", type: "string", nullable: true },
       { name: "quality", type: "string" }, { name: "capturedAt", type: "datetime" }, { name: "syncRunId", type: "string" },
-      ...["unitsOrdered", "totalOrderItems", "sessions", "pageViews"].map(name => ({ name: `exactMetrics.${name}`, type: "string", nullable: true, description: "Exact numeric text from stored PostgreSQL JSON; legacy metrics remains unchanged." })),
-      { name: "exactMetrics.orderedProductSales.amount", type: "string", nullable: true, description: "Exact stored amount text; does not recover precision lost before storage." },
-      { name: "exactMetrics.orderedProductSales.currencyCode", type: "string", nullable: true },
     ],
     warnings: ["店铺逐日粒度，不含 ASIN/SKU 拆分。", "金额按行保留原币种，不得跨币种合计。"],
   },
@@ -82,6 +83,7 @@ export const skillDataTables: SkillTable[] = [
       { name: "roas", type: "decimal", nullable: true, description: "sales / spend；分母缺失或为 0 时为 null。" },
       { name: "currencyCode", type: "string", nullable: true, description: "当前查询按 Ads Profile 提供；真实报表逐行币种仍待样本核验。" }, { name: "attributionWindow", type: "string", nullable: true },
       { name: "apiVersion", type: "string" }, { name: "versionId", type: "string" },
+      { name: "rawDimensions", type: "json", nullable: true, description: "Collected source dimensions, including unknown fields; credentials excluded." },
     ],
     warnings: ["仅展示完整成功任务的已发布报表版本。", "广告金额币种来自 Profile 配置；按行返回，不跨币种汇总。", "Amazon 报表真实样本仍待核验。"],
   },
@@ -90,8 +92,8 @@ export const skillDataTables: SkillTable[] = [
 const knownLogicalTables = new Set([
   "ads_campaign_daily", "ads_advertised_product_daily", "ads_targeting_daily", "ads_search_term_daily", "ads_placement_daily", "ads_budget_usage",
   "sales_traffic_asin", "sales_traffic_daily", "inventory", "inventory_age", "inventory_ledger_daily", "inbound_shipments", "sales_rank_daily", "sku_mapping",
-  "listings", "orders", "returns", "finance_events", "finance_transactions", "settlements_v2", "reimbursements", "storage_fees_monthly", "fee_preview",
-  "ads_report_daily",
+  "listings", "orders", "returns", "finance_events", "finance_transactions", "settlements_v2", "reimbursements", "storage_fees_monthly",
+  "ads_report_daily", "fba_overage_fees",
   "pricing_daily", "search_terms_weekly", "economics_daily", "economics_fees", "restock_plan", "restock_stockout", "restock_clearance",
 ]);
 
@@ -173,15 +175,19 @@ export function datasetForTable(name: string): McpDataset {
   throw new McpDatasetError("TABLE_NOT_ALLOWED", "TABLE_NOT_ALLOWED: 逻辑表不在允许清单中。", 403);
 }
 export function resolveMcpDataset(input: Record<string, unknown>): McpDataset {
-  const hasTable = input.table !== undefined;
+  const hasTable = input.table !== undefined || input.tableName !== undefined;
   const hasLocator = input.module !== undefined || input.dataType !== undefined;
   const boundedText = (value: unknown) => typeof value === "string" && value.length > 0 && value.length <= 100;
-  if ((!hasTable && !hasLocator) || (hasTable && !boundedText(input.table)) || (hasLocator && (!boundedText(input.module) || !boundedText(input.dataType)))) {
+  if ((!hasTable && !hasLocator)
+    || (input.table !== undefined && !boundedText(input.table))
+    || (input.tableName !== undefined && !boundedText(input.tableName))
+    || (input.table !== undefined && input.tableName !== undefined && input.table !== input.tableName)
+    || (hasLocator && (!boundedText(input.module) || !boundedText(input.dataType)))) {
     throw new McpDatasetError("DATASET_LOCATOR_INVALID", "数据集须提供table或完整module/dataType。");
   }
   const located = hasLocator ? mcpDatasets.find(item => item.module === input.module && item.dataType === input.dataType) : undefined;
   if (hasLocator && !located) throw new McpDatasetError("TABLE_NOT_ALLOWED", "TABLE_NOT_ALLOWED: 数据集不在允许清单中。", 403);
-  const legacy = hasTable ? datasetForTable(String(input.table)) : undefined;
+  const legacy = hasTable ? datasetForTable(String(input.tableName ?? input.table)) : undefined;
   if (legacy && located && legacy.name !== located.name) throw new McpDatasetError("DATASET_LOCATOR_CONFLICT", "数据集定位参数冲突。");
   return located ?? legacy!;
 }
@@ -194,17 +200,20 @@ export const datasetScopeProperties = {
   marketplaceId: { type: "string", minLength: 1, maxLength: 200 },
 };
 export function datasetInputSchema(query: boolean) {
-  const locators = { table: { type: "string", minLength: 1, maxLength: 100 }, module: { type: "string", minLength: 1, maxLength: 100 }, dataType: { type: "string", minLength: 1, maxLength: 100 } };
+  const locators = { table: { type: "string", minLength: 1, maxLength: 100 }, tableName: { type: "string", minLength: 1, maxLength: 100, description: "Alias of table; conflicts are rejected." }, module: { type: "string", minLength: 1, maxLength: 100 }, dataType: { type: "string", minLength: 1, maxLength: 100 } };
   const union = Object.fromEntries(datasetFilterNames.map(name => [name, { type: "string", maxLength: 200 }]));
   return {
     type: "object", additionalProperties: false,
-    anyOf: [{ required: ["table"] }, { required: ["module", "dataType"] }],
+    anyOf: [{ required: ["table"] }, { required: ["tableName"] }, { required: ["module", "dataType"] }],
     dependentRequired: { module: ["dataType"], dataType: ["module"] },
     properties: { ...datasetScopeProperties, ...locators, ...(query ? { ...union, filters: { type: "object", additionalProperties: false, properties: union }, page: { type: "integer", minimum: 1, maximum: 10000 }, pageSize: { type: "integer", minimum: 1, maximum: 1000 } } : {}) },
     ...(query ? { allOf: mcpDatasets.map(dataset => {
       const locator = { properties: { module: { const: dataset.module }, dataType: { const: dataset.dataType } }, required: ["module", "dataType"] };
       const supported = datasetFilterProperties(dataset);
-      return { if: { anyOf: [locator, ...(dataset.legacyTable ? [{ properties: { table: { const: dataset.legacyTable } }, required: ["table"] }] : [])] },
+      return { if: { anyOf: [locator, ...(dataset.legacyTable ? [
+        { properties: { table: { const: dataset.legacyTable } }, required: ["table"] },
+        { properties: { tableName: { const: dataset.legacyTable } }, required: ["tableName"] },
+      ] : [])] },
         then: { properties: { pageSize: { maximum: dataset.maxPageSize }, ...Object.fromEntries(datasetFilterNames.map(name => [name, supported[name] ?? false])), filters: { type: "object", additionalProperties: false, properties: supported } } } };
     }) } : {}),
   };
@@ -219,7 +228,7 @@ export function describeMcpDataset(dataset: McpDataset) {
 
 /** Pure bounded normalization; never uses client scope fields as authorization. */
 export function normalizeDatasetQuery(dataset: McpDataset, input: Record<string, unknown>, now = new Date()) {
-  const allowed = new Set([...Object.keys(datasetScopeProperties), "table", "module", "dataType", "filters", "page", "pageSize", ...datasetFilterNames]);
+  const allowed = new Set([...Object.keys(datasetScopeProperties), "table", "tableName", "module", "dataType", "filters", "page", "pageSize", ...datasetFilterNames]);
   if (Object.keys(input).some(key => !allowed.has(key))) throw new McpDatasetError("FIELD_NOT_MAPPED", "FIELD_NOT_MAPPED: 查询参数不属于此数据集协议。");
   const properties = datasetFilterProperties(dataset);
   const rawFilters = input.filters ?? {};
@@ -239,6 +248,12 @@ export function normalizeDatasetQuery(dataset: McpDataset, input: Record<string,
   }
   filters.sortBy ??= dataset.defaultSort;
   filters.sortDirection ??= dataset.defaultDirection;
+  if (dataset.name === "finance_transactions" && (filters.fromTimestamp || filters.toTimestamp)) {
+    try {
+      const range = financeQueryRange(new URLSearchParams(filters));
+      if (range.gte && range.lt && range.lt.getTime() - range.gte.getTime() > 367 * 86400000) throw new Error("range");
+    } catch { throw new McpDatasetError("DATE_RANGE_INVALID", "财务精确时间须为有效 UTC 起止范围，不能混用日期筛选，最长 367 天。"); }
+  }
   const integer = (value: unknown, fallback: number, max: number) => {
     const actual = value === undefined ? fallback : value;
     if (typeof actual !== "number" || !Number.isSafeInteger(actual) || actual < 1 || actual > max) throw new McpDatasetError("PAGINATION_INVALID", "分页参数超过数据集允许范围。");
@@ -285,8 +300,52 @@ export function enrichDatasetResult(result: { data: { items: unknown[]; total: n
   const previous = result.meta.page as { page: number; pageSize: number; hasNext: boolean };
   const pagination = { ...previous, total: result.data.total, pageCount: Math.ceil(result.data.total / previous.pageSize) };
   const warnings = Array.isArray(result.meta.warnings) ? result.meta.warnings : input.dataset.warnings ?? [];
-  return { ...result, pagination, warnings,
+  const reportCoverage = result.meta.reportCoverage as { coverageStatus?: string } | undefined;
+  const sources = Array.isArray(result.meta.sources) ? result.meta.sources as Array<Record<string, unknown>> : [];
+  const sourceRefs = sources.flatMap(source => typeof source.sourceId === "string" ? [{ sourceId: source.sourceId,
+    syncRunId: typeof source.syncRunId === "string" ? source.syncRunId : null }] : []);
+  const reportRefs = result.data.items.flatMap(item => {
+    if (!item || typeof item !== "object" || !("reportId" in item) || typeof item.reportId !== "string"
+      || !("document" in item) || !item.document || typeof item.document !== "object") return [];
+    const document = item.document as Record<string, unknown>;
+    return typeof document.sourceRunId === "string" && sources.length === 1 && typeof sources[0].sourceId === "string"
+      ? [{ sourceId: sources[0].sourceId, syncRunId: document.sourceRunId, reportId: item.reportId,
+        ...(typeof document.id === "string" ? { reportDocumentId: document.id } : {}) }] : [];
+  });
+  // Orders and finance commit pages before their window succeeds. The published
+  // source head may therefore differ from the task that actually wrote a row.
+  const pageCommittedRecords = ["orders", "order_items", "finance_transactions"].includes(input.dataset.name);
+  const rowRefs = pageCommittedRecords ? result.data.items.flatMap(item => {
+    if (!item || typeof item !== "object") return [];
+    const row = item as Record<string, unknown>;
+    if (typeof row.sourceId !== "string" || typeof row.sourceRunId !== "string"
+      || !sources.some(source => source.sourceId === row.sourceId && source.sellerAccountId === row.sellerAccountId && source.marketplaceId === row.marketplaceId)
+      || !pairs.some(pair => pair.sellerAccountId === row.sellerAccountId && pair.marketplaceId === row.marketplaceId)) return [];
+    return [{ sourceId: row.sourceId, syncRunId: row.sourceRunId }];
+  }) : [];
+  // Observation readers may return a selected historical version or several
+  // daily versions. The current source head is not evidence for those rows.
+  const observationRecords = input.dataset.source === "AmazonDomainObservation";
+  const observationSource = sources.length === 1 && typeof sources[0].sourceId === "string"
+    && pairs.some(pair => pair.sellerAccountId === sources[0].sellerAccountId && pair.marketplaceId === sources[0].marketplaceId) ? sources[0] : null;
+  const observationRefs = observationRecords && observationSource ? result.data.items.flatMap(item => {
+    if (!item || typeof item !== "object" || !("sourceRunId" in item) || typeof item.sourceRunId !== "string") return [];
+    return [{ sourceId: observationSource.sourceId as string, syncRunId: item.sourceRunId }];
+  }) : [];
+  const refs = pageCommittedRecords ? rowRefs : observationRecords ? observationRefs : [...sourceRefs, ...reportRefs];
+  const evidenceRefs = [...new Map(refs.map(ref => [JSON.stringify(ref), ref])).values()].slice(0, 100);
+  const dataRange = input.filters.fromTimestamp || input.filters.toTimestamp
+    ? { from: input.filters.fromTimestamp ?? null, to: input.filters.toTimestamp ?? null, dateSemantics: input.dataset.dateSemantics, basis: "REQUESTED_RANGE_ONLY", bounds: "INCLUSIVE_FROM_EXCLUSIVE_TO" }
+    : input.filters.from ? { from: input.filters.from, to: input.filters.to, dateSemantics: input.dataset.dateSemantics, basis: "REQUESTED_RANGE_ONLY" } : null;
+  const coverageStatus = reportCoverage?.coverageStatus ?? (result.meta.freshness === "missing" ? "NOT_RETURNED" : "HISTORY_INCOMPLETE");
+  const fieldQuality = result.meta.fieldQuality as { status: string; missingFields: Array<{ field: string; missingRows: number }>; observedRange: { from: string; to: string; basis: string; datedRows: number } | null } | undefined;
+  return { ...result, pagination, warnings, records: result.data.items, total: result.data.total, hasMore: pagination.hasNext,
+    source: result.meta.source ?? input.dataset.source, dataRange, observedDataRange: fieldQuality?.observedRange ?? null, lastSyncedAt: result.meta.lastSyncAt ?? null,
+    coverageStatus, missingFields: fieldQuality ? fieldQuality.missingFields.map(check => check.field) : null, evidenceRefs,
+    dataCompleteness: { status: coverageStatus, fieldValuesChecked: !!fieldQuality, fieldCheckBasis: fieldQuality ? "RETURNED_PAGE_ONLY" : null,
+      fieldStatus: fieldQuality?.status ?? null, historicalUniverseComplete: false, emptyMeansNoBusinessEvents: false },
     meta: { ...result.meta, requestId: input.requestId, toolVersion: input.toolVersion,
+      ...(pageCommittedRecords ? { evidenceRefScope: "RETURNED_PAGE_COMMITTED_RECORDS" } : observationRecords ? { evidenceRefScope: "RETURNED_PUBLISHED_OBSERVATIONS" } : {}),
       dataset: { id: input.dataset.name, module: input.dataset.module, dataType: input.dataset.dataType, legacyTable: input.dataset.legacyTable },
       scope: { pairs }, dateSemantics: input.dataset.dateSemantics,
       dateRange: input.filters.from ? { from: input.filters.from, to: input.filters.to } : null,

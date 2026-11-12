@@ -1,10 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { hasCompleteReportAttributionProof, recoveredReportAttributionProof, resolveReportRowAttribution } from "@/lib/amazon-sync/report-row-attribution";
+import { hasCompleteReportAttributionProof, hasReadableReportAttributionProof, recoveredReportAttributionProof, resolveReportRowAttribution } from "@/lib/amazon-sync/report-row-attribution";
 import { normalizeCommand } from "@/lib/amazon-sync/approval-policy";
 import type { Prisma } from "@prisma/client";
 import { previewReportAttribution } from "@/lib/amazon-sync/report-attribution-recovery";
 const us = "ATVPDKIKX0DER", ca = "A2EUQ1WTGCTBG2", sites = [us, ca];
+test("partial row proof permits verified-row reads without certifying document completeness", () => {
+  const proof = { status: "PARTIAL", version: "verified-site-rows.v1", complete: false, verifiedRows: 7, parsedRows: 76 };
+  assert.equal(hasReadableReportAttributionProof(proof), true);
+  assert.equal(hasCompleteReportAttributionProof(proof), false);
+  for (const patch of [{ verifiedRows: 0 }, { parsedRows: 6 }, { complete: true }, { version: "old" }]) assert.equal(hasReadableReportAttributionProof({ ...proof, ...patch }), false);
+});
 test("reconciliation only opens the source gate for complete verified report evidence", () => {
   assert.equal(hasCompleteReportAttributionProof(recoveredReportAttributionProof(1, 90, 0)), true);
   assert.equal(hasCompleteReportAttributionProof(recoveredReportAttributionProof(1, 89, 1)), false);
@@ -38,6 +44,8 @@ test("report attribution never infers a sales site from warehouse country, SKU o
 test("explicit store identity or verified same-scope order evidence can confirm attribution", () => {
   assert.deepEqual(resolveReportRowAttribution({ fields: { store: "Amazon.ca", country: "US" }, orderId: null }, sites), { status: "VERIFIED", marketplaceId: ca });
   assert.deepEqual(resolveReportRowAttribution({ fields: {}, orderId: "fixture-order" }, sites, [us, us]), { status: "VERIFIED", marketplaceId: us });
+  assert.deepEqual(resolveReportRowAttribution({ fields: {}, orderId: "fixture-order", sellerSku: "sku-a" }, sites, [us], false), { status: "CONFLICTING_EVIDENCE" });
+  assert.deepEqual(resolveReportRowAttribution({ fields: {}, orderId: "fixture-order", sellerSku: "sku-a", asin: "asin-a" }, sites, [us], true), { status: "VERIFIED", marketplaceId: us });
   assert.deepEqual(resolveReportRowAttribution({ fields: {}, orderId: null }, sites, [us]), { status: "MISSING_EVIDENCE" });
 });
 test("conflicting store and order evidence, unknown stores and unapproved sites remain isolated", () => {

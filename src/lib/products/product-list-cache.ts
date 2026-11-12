@@ -2,6 +2,7 @@ import { addProductListSummaries, getProductListSummarySourceContribution, subtr
 import { prisma } from "@/lib/db/prisma";
 import type { Product, ProductListSummary } from "@/lib/products/types";
 import type { ProductListSource } from "@/lib/products/list-query";
+import type { ProductListSort } from "@/lib/products/list-sort";
 import { Prisma } from "@prisma/client";
 
 type CachedValue<T> = {
@@ -39,6 +40,7 @@ export function createProductListResponseCacheKey(input: {
   createdByUserId?: string;
   minPrice?: number;
   maxPrice?: number;
+  sort?: ProductListSort;
   detail: boolean;
   includeSummary: boolean;
 }) {
@@ -58,6 +60,8 @@ export function createProductListResponseCacheKey(input: {
     input.createdByMe ? input.createdByUserId ?? "" : "",
     Number.isFinite(input.minPrice) ? input.minPrice : "",
     Number.isFinite(input.maxPrice) ? input.maxPrice : "",
+    input.sort?.field ?? "createdAt",
+    input.sort?.direction ?? "desc",
     input.detail ? "full" : "list",
     input.includeSummary ? "with-summary" : "no-summary",
   ].join("|");

@@ -1,3 +1,4 @@
+import { assertAmazonCloudExecution } from "@/lib/amazon/execution-role";
 import { AdsSyncError } from "./sync-policy";
 
 export type AdsRegion = "NA" | "EU" | "FE";
@@ -89,6 +90,7 @@ function retryAfter(value: string | null): number {
 export function createAmazonAdsOAuthTransport(fetcher: typeof fetch = fetch): AmazonAdsOAuthTransport {
   async function request(operation: OAuthOperation, region: AdsRegion, url: string, init: RequestInit): Promise<unknown> {
     if (!Object.hasOwn(adsRegionHosts, region)) throw new AdsSyncError("ADS_REGION_INVALID");
+    assertAmazonCloudExecution();
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;

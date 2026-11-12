@@ -1,8 +1,25 @@
+// Cloud role for injected offline HTTP fixtures; no real Amazon calls.
+process.env.AMAZON_API_EXECUTION_ROLE = "cloud";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { gzipSync } from "node:zlib";
-import { reportTimestampMatches, parseReturnPolicy, parseReturnReport, nextReturnWindow, assertReturnRoles, returnPollDelay, returnWindowFromFrozen, returnReportTypes } from "@/lib/amazon-sync/returns";
+import { reportTimestampMatches, parseReturnPolicy, parseReturnReport, nextReturnWindow, assertReturnRoles, returnPollDelay, returnWindowFromFrozen, returnReportTypes, parseReturnState, restartTerminalReturnReport } from "@/lib/amazon-sync/returns";
+
+test("only confirmed failed reports can reset; pending, uncertain or archived evidence remains", () => {
+  for (const terminalStatus of ["FATAL", "CANCELLED"] as const) {
+    const state = { reportId: "fixture-failed-report", terminalStatus, polls: 4, offset: 0 };
+    assert.deepEqual(restartTerminalReturnReport(state), { polls: 0, offset: 0 });
+    assert.equal(state.reportId, "fixture-failed-report");
+    for (const extra of [{ creating: true }, { documentId: "fixture-doc" }, { archiveTaskId: "fixture-archive" }, { offset: 1 }, { reportId: undefined }]) {
+      assert.throws(() => parseReturnState(JSON.stringify({ ...state, ...extra })));
+    }
+  }
+  for (const state of [{ polls: 0, offset: 0 }, { polls: 1, offset: 0, creating: true }, { polls: 1, offset: 0, reportId: "pending" }, { polls: 1, offset: 0, reportId: "downloaded", archiveTaskId: "raw" }]) {
+    assert.throws(() => restartTerminalReturnReport(state));
+  }
+  assert.throws(() => parseReturnState(JSON.stringify({ reportId: "pending", terminalStatus: "IN_PROGRESS", polls: 0, offset: 0 })));
+});
 
 test("report time matches exact time or whole-second truncation only", () => {
   assert.equal(reportTimestampMatches("2026-11-01T00:00:00+00:00", "2026-11-01T00:00:00.189Z"), true);

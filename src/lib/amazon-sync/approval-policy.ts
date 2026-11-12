@@ -41,16 +41,25 @@ const allowed: Record<ChangeOperation, string[]> = {
   "disable-authorization": ["id", "revision"], "validate-authorization": ["id", "revision"],
   "adopt-identity": ["id", "revision", "amazonSellerId", "reviewedAt", "manifestDigest"],
   "recover-finance-window": ["id", "revision", "reviewedAt", "recoveryDigest", "sameWindowReplay"],
-  "recover-report": ["id", "revision", "recoveryDigest", "reportWindow", "settlementPolicy", "attributionOnly"],
+  "recover-report": ["id", "revision", "recoveryDigest", "reportWindow", "settlementPolicy", "attributionOnly", "currencyOnly", "reportDocumentIds", "fieldScanOnly", "listingAttributesOnly", "orderFulfillmentOnly", "inboundItemsOnly", "archiveOnly", "productAccessOnly", "reportDocumentId", "taskId", "rawPages"],
   "save-source": ["id", "proposedId", "revision", "authorizationId", "sellerAccountId", "marketplaceId", "resource", "freshnessMinutes", "enabled", "orderPolicy", "financePolicy", "returnsPolicy", "domainPolicy", "settlementPolicy"],
   "save-plan": ["id", "proposedId", "revision", "name", "resource", "enabled", "mode", "intervalMinutes", "priority", "maxAttempts", "retentionDays", "sourceIds"],
-  "run": ["sourceIds", "planId", "datePreset", "dateFrom", "dateTo", "eventType", "reportWindows"], "control-task": ["id", "control"],
+  "run": ["sourceIds", "planId", "datePreset", "dateFrom", "dateTo", "eventType", "reportWindows"], "control-task": ["id", "control", "quarantineOutsideFinanceScope"],
 };
 export function normalizeCommand(body: Record<string, unknown>) {
   const action = operation(body.action);
   if (body.importLegacy) throw new SyncInputError("旧凭证导入入口已关闭。", 410);
   const command: Record<string, unknown> = { action };
   for (const field of allowed[action]) if (body[field] !== undefined && body[field] !== "") command[field] = body[field];
+  if (command.quarantineOutsideFinanceScope !== undefined && (typeof command.quarantineOutsideFinanceScope !== "boolean" || command.quarantineOutsideFinanceScope && command.control !== "retry")) throw new SyncInputError("财务越界隔离仅适用于明确批准的失败任务重试。");
+  for (const flag of ["currencyOnly", "fieldScanOnly", "listingAttributesOnly", "orderFulfillmentOnly", "inboundItemsOnly", "archiveOnly", "productAccessOnly"] as const) if (command[flag] !== undefined && typeof command[flag] !== "boolean") throw new SyncInputError("报告恢复模式无效。");
+  const modes = [command.currencyOnly, command.attributionOnly, command.fieldScanOnly, command.listingAttributesOnly, command.orderFulfillmentOnly, command.inboundItemsOnly, command.archiveOnly, command.productAccessOnly].filter(flag => flag === true);
+  if (modes.length > 1 || modes.length && (command.reportWindow !== undefined || command.settlementPolicy !== undefined)) throw new SyncInputError("报告恢复模式不可混用或同时修改窗口策略。");
+  if (command.rawPages !== undefined) {
+    const pages = command.rawPages;
+    if (!Array.isArray(pages) || !pages.length || pages.length > 10 || pages.some(page => !Number.isSafeInteger(page) || page === 0) || new Set(pages).size !== pages.length) throw new SyncInputError("原件页范围无效。");
+    command.rawPages = [...pages as number[]].sort((a, b) => a - b);
+  }
   if (command.sameWindowReplay !== undefined && typeof command.sameWindowReplay !== "boolean") throw new SyncInputError("财务重放标识无效。");
   if (command.attributionOnly !== undefined && (typeof command.attributionOnly !== "boolean" || command.attributionOnly && (command.reportWindow !== undefined || command.settlementPolicy !== undefined))) throw new SyncInputError("归属复核不得同时改写报告窗口或结算策略。");
   if (command.settlementPolicy !== undefined) { if (command.resource !== "settlements" && action !== "recover-report") throw new SyncInputError("结算采集策略仅适用于结算域。"); command.settlementPolicy = parseSettlementPolicy(command.settlementPolicy); }
@@ -67,6 +76,11 @@ export function normalizeCommand(body: Record<string, unknown>) {
   if (command.sourceIds !== undefined) {
     if (!Array.isArray(command.sourceIds) || command.sourceIds.length < 1 || command.sourceIds.length > 100 || command.sourceIds.some(v => typeof v !== "string" || !v || v.length > 200)) throw new SyncInputError("请选择 1–100 个数据源。");
     command.sourceIds = [...new Set(command.sourceIds as string[])].sort();
+  }
+  if (command.reportDocumentIds !== undefined) {
+    const ids = command.reportDocumentIds;
+    if (!Array.isArray(ids) || !ids.length || ids.length > 10 || ids.some(id => typeof id !== "string" || !id || id.length > 200) || new Set(ids).size !== ids.length) throw new SyncInputError("报告档案范围无效。");
+    command.reportDocumentIds = [...ids].sort();
   }
   if (Buffer.byteLength(JSON.stringify(command)) > 64000) throw new SyncInputError("请求超出安全长度限制。", 413);
   return command;
@@ -85,7 +99,7 @@ export function summary(command: Record<string, unknown>) {
     else if (k === "returnsPolicy") result[k] = parseReturnPolicy(v);
     else if (k === "financePolicy") result[k] = parseFinancePolicy(v);
     else if (k === "orderPolicy") result[k] = parseOrderSyncPolicy(v);
-    else if (["sourceIds", "marketplaceIds", "actions", "approvedRoles"].includes(k) && Array.isArray(v)) result[k] = v;
+    else if (["sourceIds", "reportDocumentIds", "rawPages", "marketplaceIds", "actions", "approvedRoles"].includes(k) && Array.isArray(v)) result[k] = v;
     else throw new SyncInputError("配置字段格式无效。");
   }
   return result;

@@ -36,7 +36,7 @@ export function registeredWorkerHealth(heartbeats: Heartbeat[], now = new Date()
       connectionMatches, mismatchedConnections,
       recoveryReady,
       recovery: item.id === "amazon-sync" && recovery ? { lastSuccessAt: recovery.lastSuccessAt ?? null, lastErrorAt: recovery.lastErrorAt ?? null, inProgress: recovery.inProgress === true, adsHealthy: recovery.adsHealthy ?? null,
-        examined: spApi?.examined ?? null, dispatched: spApi?.dispatched ?? null, dispatchFailures: spApi?.dispatchFailures ?? null, expiredLeases: spApi?.expiredLeases ?? null, maintenanceFailures: spApi?.maintenanceFailures ?? null } : null,
+        examined: spApi?.examined ?? null, dispatched: spApi?.dispatched ?? null, dispatchFailures: spApi?.dispatchFailures ?? null, expiredLeases: spApi?.expiredLeases ?? null, automaticRecoveries: spApi?.automaticRecoveries ?? null, authorizationRecoveries: spApi?.authorizationRecoveries ?? null, maintenanceFailures: spApi?.maintenanceFailures ?? null } : null,
     };
   });
 }

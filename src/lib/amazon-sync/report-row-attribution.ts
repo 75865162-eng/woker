@@ -11,7 +11,8 @@ const storeSites: Readonly<Record<string, string>> = {
  * orderMarketplaceIds must come from verified same-seller/scope order records,
  * never an order-number prefix, SKU, currency or fulfillment-center country.
  */
-export function resolveReportRowAttribution(row: Pick<NormalizedDomainReportRow, "fields" | "orderId">, allowedMarketplaceIds: readonly string[], orderMarketplaceIds: readonly string[] = []): ReportRowAttribution {
+export function resolveReportRowAttribution(row: Pick<NormalizedDomainReportRow, "fields" | "orderId"> & Partial<Pick<NormalizedDomainReportRow, "sellerSku" | "asin">>, allowedMarketplaceIds: readonly string[], orderMarketplaceIds: readonly string[] = [], orderItemMatched?: boolean): ReportRowAttribution {
+  if (row.orderId && (row.sellerSku || row.asin) && orderItemMatched === false) return { status: "CONFLICTING_EVIDENCE" };
   const evidence: string[] = [];
   const explicit = row.fields["marketplace-id"]?.trim();
   if (explicit) evidence.push(explicit);
@@ -30,7 +31,7 @@ export function resolveReportRowAttribution(row: Pick<NormalizedDomainReportRow,
   return { status: "VERIFIED", marketplaceId: unique[0] };
 }
 
-export const reportAttributionVersion = "verified-site-v1";
+export const reportAttributionVersion = "verified-site-v2";
 export function recoveredReportAttributionProof(documentCount: number, verifiedRows: number, isolatedRows: number) {
   const complete = documentCount > 0 && isolatedRows === 0;
   return { status: complete ? "VERIFIED" : "PENDING_VERIFICATION", version: "explicit-report-row.v1", verifiedRows, parsedRows: verifiedRows + isolatedRows, complete };
@@ -41,18 +42,35 @@ export function hasCompleteReportAttributionProof(proof: unknown) {
     "version" in proof && proof.version === "explicit-report-row.v1" &&
     "complete" in proof && proof.complete === true;
 }
+/** Partial publication exposes only rows carrying the independent site marker.
+ * It never certifies the rest of the document or historical coverage. */
+export function hasReadableReportAttributionProof(proof: unknown) {
+  if (hasCompleteReportAttributionProof(proof)) return true;
+  if (!proof || typeof proof !== "object" || Array.isArray(proof)) return false;
+  const p = proof as Record<string, unknown>;
+  return p.status === "PARTIAL" && p.version === "verified-site-rows.v1" && p.complete === false
+    && Number.isSafeInteger(p.verifiedRows) && Number(p.verifiedRows) > 0
+    && Number.isSafeInteger(p.parsedRows) && Number(p.parsedRows) >= Number(p.verifiedRows);
+}
 export async function markReportRowAttribution(tx: Prisma.TransactionClient, scope: SyncScope, source: { authorizationId: string; sellerAccountId: string; marketplaceId: string; authorization: { amazonSellerId: string; revision: number } }, rows: NormalizedDomainReportRow[]) {
   const orderIds = [...new Set(rows.flatMap(r => r.orderId ? [r.orderId] : []))];
-  const orders = orderIds.length ? await tx.amazonOrderRecord.findMany({ where: { ...scope, sellerAccountId: source.sellerAccountId, amazonSellerId: source.authorization.amazonSellerId, amazonOrderId: { in: orderIds }, source: { authorizationId: source.authorizationId, authorization: { identityVerifiedAt: { not: null } } }, task: { authorizationRevision: source.authorization.revision, executionVersion: 2, status: "SUCCEEDED", frozenScope: { path: ["amazonSellerId"], equals: source.authorization.amazonSellerId } } }, select: { amazonOrderId: true, marketplaceId: true } }) : [];
+  // Orders are committed facts per page, including detail work in an unfinished
+  // window. Window completion is not a prerequisite for their identity evidence.
+  // Keep the same seller, authorization revision and authenticated run fences.
+  const orders = orderIds.length ? await tx.amazonOrderRecord.findMany({ where: { ...scope, sellerAccountId: source.sellerAccountId, amazonSellerId: source.authorization.amazonSellerId, amazonOrderId: { in: orderIds }, source: { resource: "orders", authorizationId: source.authorizationId, authorization: { identityVerifiedAt: { not: null } } }, task: { resource: "orders", authorizationRevision: source.authorization.revision, executionVersion: 2, stage: { not: "PURGED" }, frozenScope: { path: ["amazonSellerId"], equals: source.authorization.amazonSellerId } } }, select: { amazonOrderId: true, marketplaceId: true, items: { select: { sellerSku: true, asin: true } } } }) : [];
   return rows.map(row => {
-    const decision = resolveReportRowAttribution(row, [source.marketplaceId], orders.filter(o => o.amazonOrderId === row.orderId).map(o => o.marketplaceId));
-    return { ...row, fields: { ...row.fields, __siteEvidenceVersion: reportAttributionVersion, __siteEvidenceStatus: decision.status, __verifiedMarketplaceId: decision.status === "VERIFIED" ? decision.marketplaceId : "" } };
+    const matchingOrders = orders.filter(o => o.amazonOrderId === row.orderId);
+    const hasItemIdentity = !!(row.sellerSku || row.asin);
+    const orderItemMatched = !hasItemIdentity || matchingOrders.some(order => order.items.some(item => (!row.sellerSku || item.sellerSku === row.sellerSku) && (!row.asin || item.asin === row.asin)));
+    const decision = resolveReportRowAttribution(row, [source.marketplaceId], matchingOrders.map(o => o.marketplaceId), orderItemMatched);
+    const itemEvidence = !hasItemIdentity ? "NOT_PROVIDED" : matchingOrders.length === 0 ? "NO_VERIFIED_ORDER" : orderItemMatched ? "MATCHED" : "MISMATCHED";
+    return { ...row, fields: { ...row.fields, __siteEvidenceVersion: reportAttributionVersion, __siteEvidenceStatus: decision.status, __verifiedMarketplaceId: decision.status === "VERIFIED" ? decision.marketplaceId : "", __orderItemEvidenceStatus: itemEvidence } };
   });
 }
 
 export async function persistReportAttributionMarkers(tx: Prisma.TransactionClient, scope: SyncScope, sourceId: string, documentId: string, rows: Array<{ rowNumber: number; rowHash: string; fields: Record<string, string> }>) {
   if (!rows.length) return;
-  const patch = rows.map(r => ({ rowNumber: r.rowNumber, rowHash: r.rowHash, marker: { __siteEvidenceVersion: r.fields.__siteEvidenceVersion, __siteEvidenceStatus: r.fields.__siteEvidenceStatus, __verifiedMarketplaceId: r.fields.__verifiedMarketplaceId } }));
+  const patch = rows.map(r => ({ rowNumber: r.rowNumber, rowHash: r.rowHash, marker: { __siteEvidenceVersion: r.fields.__siteEvidenceVersion, __siteEvidenceStatus: r.fields.__siteEvidenceStatus, __verifiedMarketplaceId: r.fields.__verifiedMarketplaceId, __orderItemEvidenceStatus: r.fields.__orderItemEvidenceStatus } }));
   await tx.$executeRaw(Prisma.sql`UPDATE "AmazonSyncReportRow" r SET fields = r.fields || p.marker FROM jsonb_to_recordset(${JSON.stringify(patch)}::jsonb) AS p("rowNumber" integer, "rowHash" text, marker jsonb) WHERE r."organizationId"=${scope.organizationId} AND r."workspaceId"=${scope.workspaceId} AND r."sourceId"=${sourceId} AND r."reportDocumentId"=${documentId} AND r."rowNumber"=p."rowNumber" AND r."rowHash"=p."rowHash"`);
 }
 

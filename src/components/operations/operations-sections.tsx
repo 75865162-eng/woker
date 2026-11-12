@@ -1,6 +1,6 @@
 "use client";
 
-export type OperationsEntry = { view: string; label: string; pending?: { source: string; fields: string; requirement: string } };
+export type OperationsEntry = { view: string; label: string; href?: string; pending?: { source: string; fields: string; requirement: string } };
 type OperationsSection = { id: string; label: string; fields: string; source: string; boundary: string; entries: OperationsEntry[] };
 
 // Presentation only: keep the existing view keys, data readers and approval boundaries.
@@ -26,17 +26,33 @@ export const operationsSections: OperationsSection[] = [
   {
     id: "stock", label: "库存与仓储",
     fields: "SKU、ASIN、FNSKU、可售、预留、不可售、入库在途 / 接收数量；库存流水、库龄与库存规划报告字段",
-    source: "FBA Inventory、库存报告；AWD 待接入",
+    source: "Amazon FBA 库存 / 报告；公司仓库复用 WMS API 与库存账，AWD 待接入",
     boundary: "库存快照、Ledger 库存事件、库龄报告分别保留来源与日期口径；不把申报货件数量当成实际在途，不用当前库龄推断历史。",
     entries: [{ view: "inventory", label: "库存浏览" }, { view: "inventory_age", label: "库龄" }, { view: "inventory_events", label: "FBA 库存事件" }, { view: "replenishment", label: "补货计划" },
+      { view: "warehouses", label: "仓库档案", href: "/logistics/warehouse?tab=warehouses" },
+      { view: "warehouse-inbound", label: "仓库入库", href: "/logistics/warehouse?tab=receipts" },
+      { view: "warehouse-outbound", label: "仓库出库", href: "/logistics/warehouse?tab=reservations" },
+      { view: "warehouse-transfers", label: "库存与调拨", href: "/logistics/warehouse?tab=balances" },
       { view: "awd", label: "AWD 库存", pending: { source: "Amazon Warehousing and Distribution（AWD）", fields: "AWD 商品标识、库存与入库相关数量", requirement: "需核验 AWD 服务资格并接入独立库存查询；现有 FBA 库存不能代替 AWD 库存。" } }],
+  },
+  {
+    id: "procurement", label: "采购与供应商",
+    fields: "采购单、供应商、SKU、单价/币种、交期、计划/实收数量、付款与对账状态",
+    source: "ERP 采购订单、供应商主档与 WMS 收货",
+    boundary: "补货建议、商品资料中的供应商文本和选品研究证据都不能代替采购单、供应商主档或应付事实源。",
+    entries: [
+      { view: "purchase-orders", label: "采购订单" },
+      { view: "suppliers", label: "供应商档案" },
+    ],
   },
   {
     id: "logistics", label: "物流与履约",
     fields: "入库计划号、货件号、计划 / 货件商品、目的仓、申报数量及返回状态",
     source: "Fulfillment Inbound；Fulfillment Outbound、Shipping、Easy Ship 待接入",
-    boundary: "现有入口仅查询审批 planIds 范围内的计划与货件观察；装箱、运输选项、追踪及实际接收数量是否可用，以已发布业务字段为准。",
+    boundary: "Amazon 货件观察按审批 planIds 范围读取；本地计划、装箱资料、货代委托和人工物流节点沿用 ERP 本地流程。Amazon 方案生成、标签和确认提交尚未接入。",
     entries: [{ view: "fulfillment", label: "FBA 在途货件" },
+      { view: "fba-boxing", label: "FBA 装箱与箱规" },
+      { view: "first-mile", label: "头程物流" },
       { view: "merchant-shipping", label: "自配送运费与面单", pending: { source: "Shipping、Easy Ship", fields: "运费报价、面单、追踪信息、配送状态", requirement: "需按站点核验服务资格并接入。购买运输和生成面单属于写操作，须独立审批；此入口不创建货件或面单。" } },
       { view: "mcf", label: "MCF 履约单与包裹", pending: { source: "Fulfillment Outbound", fields: "MCF 履约单、商品、包裹、配送状态", requirement: "需接入 MCF 履约查询并明确订单范围；此入口不创建、修改或取消履约单。" } }],
   },
@@ -54,7 +70,8 @@ export const operationsSections: OperationsSection[] = [
     fields: "交易编号、关联订单、入账时间、状态、收入、退款、佣金、履约费、调整、赔偿与币种；结算报告明细",
     source: "Finances、结算报告、赔偿报告；税务报告与适用发票接口待接入",
     boundary: "财务沿用服务端管理员和范围校验；结算只展示已确认站点归属的行，未知归属隔离。不同来源金额不直接相加，报告发现窗口不等于结算周期。",
-    entries: [{ view: "finance", label: "财务交易" }, { view: "settlements", label: "结算报告" }, { view: "reimbursements", label: "赔偿" },
+    entries: [{ view: "finance", label: "财务交易" }, { view: "settlements", label: "结算报告" }, { view: "reimbursements", label: "赔偿" }, { view: "finance-ledger", label: "ERP 总账", href: "/operations/finance-ledger" },
+      { view: "expense-management", label: "ERP 费用单", href: "/operations/expenses" },
       { view: "tax-invoices", label: "税务与发票", pending: { source: "适用税务报告 / 发票接口", fields: "符合站点及权限条件的税务、发票数据", requirement: "需核验站点、税务身份及接口资格后接入；此入口不申请发票或执行税务动作。" } }],
   },
   {
@@ -81,7 +98,7 @@ export const operationsEntries = operationsSections.flatMap(section => section.e
 export const operationsAdminNav = [["overview", "数据总览"], ["approvals", "变更审批"], ["plans", "同步计划"], ["tasks", "同步任务"], ["domains", "数据域管理"], ["quality", "数据质量"], ["connections", "店铺与授权"], ["settings", "同步设置"]] as const;
 
 export function OperationsSectionCards({ navigate }: { navigate: (view: string) => void }) {
-  return <section aria-label="经营中台八大板块" className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+  return <section aria-label="经营中台业务板块" className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
     {operationsSections.map((section, index) => <article key={section.id} className="min-w-0 rounded-lg border border-border bg-surface p-4">
       <p className="text-[10px] font-medium text-muted">板块 {String(index + 1).padStart(2, "0")}</p>
       <h2 className="mt-1 text-sm font-semibold">{section.label}</h2>

@@ -3,15 +3,18 @@
 import Image from "next/image";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import { Bot, Boxes, ChartNoAxesCombined, History, Home, ListChecks, LogOut, PackageSearch, SearchCheck, Settings, Sparkles, Store, UploadCloud, UsersRound } from "lucide-react";
+import { useEffect, useLayoutEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { LogOut } from "lucide-react";
+import { accountMenuItems, navigationGroups } from "./business-navigation";
 import { Button } from "@/components/ui/button";
 import { getModuleIdForPath, roleCanAccessModule, type RolePermissionMap } from "@/lib/accounts/permissions";
 import { cn } from "@/lib/utils";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
 import { AppShellUserProvider } from "./app-shell-context";
+import { BusinessNavigationDrawer } from "./business-navigation-drawer";
 import { WorkspaceScopeSelector } from "./workspace-scope-selector";
+import { setWorkspaceApiCacheScope } from "@/lib/workspace/workspace-api-cache";
 
 const UserNotificationCenter = dynamic(
   () => import("@/components/notifications/user-notification-center").then((module) => module.UserNotificationCenter),
@@ -26,26 +29,6 @@ const WeComNotificationRunner = dynamic(
   { ssr: false, loading: () => null },
 );
 
-const navItems = [
-  { href: "/", label: "工作台首页", icon: Home, moduleId: null },
-  { href: "/dashboard", label: "产品管理", icon: Boxes, moduleId: "products" },
-  { href: "/sellfox", label: "Sellfox", icon: Store, moduleId: "sellfox" },
-  { href: "/workspace", label: "PPC 优化", icon: UploadCloud, moduleId: "workspace" },
-  { href: "/saihu-search-merge", label: "赛狐搜词合并", icon: SearchCheck },
-  { href: "/listing-ai", label: "Listing AI", icon: Sparkles, moduleId: "listingAi" },
-  { href: "/agents", label: "Amazon AI Agent Platform", icon: Bot, moduleId: "agents" },
-  { href: "/lili", label: "粒粒 Lili 技能中心", icon: Sparkles, moduleId: "agents" },
-  { href: "/operations", label: "经营中台", icon: ChartNoAxesCombined, moduleId: "operations" },
-  { href: "/logistics", label: "物流处理", icon: PackageSearch, moduleId: "logistics" },
-];
-
-const accountMenuItems = [
-  { href: "/tasks", label: "任务中心", icon: ListChecks, moduleId: "tasks" },
-  { href: "/versions", label: "版本审计", icon: History, moduleId: "versions" },
-  { href: "/accounts", label: "账号权限", icon: UsersRound, moduleId: "accounts" },
-  { href: "/settings", label: "系统设置", icon: Settings, moduleId: "settings" },
-];
-
 export function AppShellClient({
   children,
   title,
@@ -58,6 +41,7 @@ export function AppShellClient({
   userRole,
   rolePermissions,
   appVersionLabel,
+  authorizationRevision,
 }: {
   children: React.ReactNode;
   title: string;
@@ -70,17 +54,26 @@ export function AppShellClient({
   userRole?: string;
   rolePermissions?: RolePermissionMap | null;
   appVersionLabel: string;
+  authorizationRevision?: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [contentRevision, setContentRevision] = useState(0);
   const [enableShellEnhancements, setEnableShellEnhancements] = useState(false);
+  useLayoutEffect(() => {
+    setWorkspaceApiCacheScope(`${organizationId ?? ""}:${userId ?? ""}:${userRole ?? ""}:${authorizationRevision ?? ""}`);
+  }, [organizationId, userId, userRole, authorizationRevision]);
   const accountMenu = accountMenuItems.filter((item) => roleCanAccessModule(userRole, item.moduleId, rolePermissions));
-  const visibleNavItems = navItems.filter((item) => {
-    if (item.href === "/") return true;
+  const visibleNavigationGroups = navigationGroups.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => roleCanAccessModule(userRole, item.moduleId ?? getModuleIdForPath(item.href.split("?")[0]), rolePermissions)),
+  })).filter((group) => group.items.length > 0);
 
-    return roleCanAccessModule(userRole, item.moduleId ?? getModuleIdForPath(item.href), rolePermissions);
-  });
+  function isNavigationActive(href: string) {
+    const [itemPath, itemQuery] = href.split("?");
+    return pathname === itemPath && (itemQuery ? [...new URLSearchParams(itemQuery)].every(([key, value]) => searchParams.get(key) === value || (key === "tab" && value === "warehouses" && !searchParams.has(key))) : !href.startsWith("/operations") || !searchParams.has("view"));
+  }
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -149,34 +142,41 @@ export function AppShellClient({
     <AppShellUserProvider value={{ organizationId, userId, userInitials, userName, userRole, rolePermissions }}>
       <div className="min-h-screen bg-background">
       {enableShellEnhancements ? <WeComNotificationRunner /> : null}
-      <aside className="fixed inset-y-0 left-0 z-20 flex w-[76px] flex-col items-center border-r border-border bg-white">
-        <div className="flex h-16 w-full items-center justify-center border-b border-border">
-          <div className="overflow-hidden rounded-lg">
-            <Image src="/brand-logo.png" alt="品牌图标" width={40} height={40} className="h-10 w-10 object-cover" />
-          </div>
+      <aside className="fixed inset-y-0 left-0 z-20 flex w-[76px] flex-col border-r border-border bg-white">
+        <div className="flex h-16 w-full items-center justify-center border-b border-border px-1">
+          <Link href="/" aria-label="工作台首页" title="工作台首页" className="overflow-hidden rounded-lg transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">
+            <Image src="/brand-logo.png" alt="品牌图标" width={34} height={34} className="h-[34px] w-[34px] object-cover" />
+          </Link>
         </div>
-        <nav className="flex flex-1 flex-col items-center gap-2 py-4">
-          {visibleNavItems.map((item) => {
+        <nav aria-label="业务导航" className="min-h-0 flex-1 overflow-y-auto px-1 py-2">
+          {visibleNavigationGroups.map((group) => <section key={group.label} className="mb-3">
+            <h2 className="mb-1 cursor-default select-none border-y border-border bg-surface-muted px-0.5 py-1.5 text-center text-[10px] font-semibold leading-3 text-muted">{group.label}</h2>
+            <div className="space-y-0.5">
+          {group.items.map((item) => {
+            const active = isNavigationActive(item.href);
             const Icon = item.icon;
-            const active = pathname === item.href;
 
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 prefetch={false}
+                aria-current={active ? "page" : undefined}
+                aria-label={item.label}
                 title={item.label}
                 onMouseEnter={() => router.prefetch(item.href)}
                 onFocus={() => router.prefetch(item.href)}
                 className={cn(
-                  "flex h-11 w-11 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-muted hover:text-foreground",
+                  "flex h-10 w-10 cursor-pointer items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand",
                   active && "bg-brand text-white hover:bg-brand hover:text-white",
                 )}
               >
-                <Icon className="h-5 w-5" />
+                <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
               </Link>
             );
           })}
+            </div>
+          </section>)}
         </nav>
       </aside>
       <main className="pl-[76px]">
@@ -186,6 +186,7 @@ export function AppShellClient({
             <p className="text-xs font-medium text-muted">{subtitle}</p>
           </div>
           <div className="flex items-center gap-3">
+            <BusinessNavigationDrawer groups={visibleNavigationGroups} isActive={isNavigationActive} />
             {actions}
             <WorkspaceScopeSelector />
             {enableShellEnhancements ? <UserNotificationCenter /> : <div className="h-9 w-9 rounded-md border border-border bg-white" aria-hidden="true" />}

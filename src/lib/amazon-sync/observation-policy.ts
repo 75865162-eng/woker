@@ -4,7 +4,7 @@ import { assertProductAccessEvidence, type ProductAccessContext } from "./produc
 import { reportTimeZone } from "./date-range";
 import { SyncInputError } from "./policy";
 
-export const observationResources = ["fulfillment", "pricing", "brand_analytics", "buy_box_history", "listing_details", "catalog_items", "notifications"] as const;
+export const observationResources = ["fulfillment", "pricing", "brand_analytics", "buy_box_history", "listing_details", "catalog_items", "notifications", "promotions"] as const;
 export type ObservationResource = typeof observationResources[number];
 export const brandReportTypes = {
   search_terms: "GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT",
@@ -25,7 +25,8 @@ type ProductOptions = { discovery?: ProductDiscovery; accessEvidence?: string };
 export type ListingDetailPolicy = CommonPolicy & ProductOptions & { resource: "listing_details"; sellerSkus: string[] };
 export type CatalogDetailPolicy = CommonPolicy & ProductOptions & { resource: "catalog_items"; asins: string[] };
 export type NotificationPolicy = CommonPolicy & { resource: "notifications"; notificationTypes: string[] };
-export type ObservationPolicy = NotificationPolicy | ListingDetailPolicy | CatalogDetailPolicy | InboundPolicy | PricingPolicy | AnalyticsPolicy | BuyBoxHistoryPolicy;
+export type PromotionsPolicy = CommonPolicy & { resource: "promotions" };
+export type ObservationPolicy = PromotionsPolicy | NotificationPolicy | ListingDetailPolicy | CatalogDetailPolicy | InboundPolicy | PricingPolicy | AnalyticsPolicy | BuyBoxHistoryPolicy;
 export const isObservationResource = (value: string): value is ObservationResource => (observationResources as readonly string[]).includes(value);
 export function observationInvalid(message = "数据域策略、响应或范围校验失败；未发布新版本。"): never { throw new SyncInputError(message, 422); }
 export function observationObject(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : observationInvalid(); }
@@ -46,9 +47,10 @@ export function parseObservationPolicy(value: unknown, resource?: string): Obser
   if (!/^[A-Za-z0-9][A-Za-z0-9_.:-]*$/.test(applicationId)) return observationInvalid();
   const integer = (value: unknown, max: number) => typeof value === "number" && Number.isSafeInteger(value) && value >= 1 && value <= max ? value : observationInvalid();
   const rate = p.requestsPerSecond;
-  const ceiling = ["listing_details", "catalog_items", "notifications"].includes(p.resource) ? 1 : p.resource === "fulfillment" ? .5 : p.resource === "pricing" ? .03 : .0167;
+  const ceiling = p.resource === "promotions" ? .1 : ["listing_details", "catalog_items", "notifications"].includes(p.resource) ? 1 : p.resource === "fulfillment" ? .5 : p.resource === "pricing" ? .03 : .0167;
   if (typeof rate !== "number" || !Number.isFinite(rate) || rate <= 0 || rate > ceiling) return observationInvalid();
   const base: CommonPolicy = { resource: p.resource, applicationId, maxRequests: integer(p.maxRequests, 1000), maxRows: integer(p.maxRows, 50_000), requestsPerSecond: rate };
+  if (p.resource === "promotions") return { ...base, resource: "promotions" };
   if (p.resource === "notifications") {
     const types = list(p.notificationTypes, /^[A-Z][A-Z0-9_]{1,100}$/, 100);
     if (types.some(type => !(notificationTypes as readonly string[]).includes(type))) return observationInvalid();
@@ -94,6 +96,7 @@ export function parseObservationPolicy(value: unknown, resource?: string): Obser
   return { ...base, resource: p.resource, reportKind, reportPeriod, asins, from, to, marketplaceTimeZone, brandEligibilityAttested: p.brandEligibilityAttested === true, ...(p.automaticDiscovery === true ? { automaticDiscovery: true } : {}), ...(p.collection === undefined ? {} : { collection: parseBrandCollection(p.collection) }) };
 }
 export function assertObservationRoles(policy: ObservationPolicy, auth: { approvedRoles: readonly string[]; rolesAttestedAt: Date | null }, context?: Omit<ProductAccessContext, "resource"> & { currentEvidence?: string }): void {
+  if (policy.resource === "promotions" && (!auth.rolesAttestedAt || !auth.approvedRoles.some(role => ["Pricing", "Product Listing"].includes(role)))) throw new SyncInputError("Promotions 需要已核验的 Pricing 或 Product Listing 角色；实际资格由 Amazon 响应确认。", 403);
   if ((policy.resource === "listing_details" || policy.resource === "catalog_items") && context && (context.currentEvidence || policy.accessEvidence)) { assertProductAccessEvidence(context.currentEvidence ?? policy.accessEvidence!, { ...context, resource: policy.resource }); return; }
   // Account RBAC and source/identity checks are enforced by callers; Amazon enforces API roles.
   void auth;

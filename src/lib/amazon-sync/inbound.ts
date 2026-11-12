@@ -4,6 +4,8 @@
  * verification. The receiver verifies returned marketplaceIds before child reads.
  */
 export const inboundApiVersion = "2024-03-20";
+// Match the existing traversal bound; request/row budgets remain independent.
+export const maxDiscoveredInboundPlans = 1000;
 export const inboundReadOperations = ["listInboundPlans", "getInboundPlan", "listInboundPlanItems", "getShipment", "listShipmentItems"] as const;
 export type InboundReadOperation = typeof inboundReadOperations[number];
 
@@ -57,8 +59,9 @@ export type InboundShipmentObservation = InboundShipmentReference & {
   name: string | null; shipmentConfirmationId: string | null; amazonReferenceId: string | null;
   sourceStatus: string | null; destinationType: string | null; destinationWarehouseId: string | null;
 };
-export type InboundItemContext = { inboundPlanId: string; shipmentId?: string };
+export type InboundItemContext = { inboundPlanId: string; shipmentId?: string; rawPage?: number };
 export type InboundItemObservation = {
+  sourceRawPage?: number; sourceRowNumber?: number;
   inboundPlanId: string; shipmentId: string | null; sellerSku: string; asin: string | null; fnsku: string | null;
   expiration: string | null; manufacturingLotCode: string | null;
   declaredQuantity: number; quantitySemantics: "PLAN_DECLARED" | "SHIPMENT_DECLARED";
@@ -113,18 +116,22 @@ export function parseInboundShipment(value: unknown, context: InboundShipmentRef
     sourceStatus: optionalText(root.status), destinationType: destination ? optionalText(destination.destinationType) : null, destinationWarehouseId: destination ? optionalText(destination.warehouseId) : null };
 }
 
-export function inboundItemKey(row: Pick<InboundItemObservation, "inboundPlanId" | "shipmentId" | "sellerSku" | "fnsku" | "expiration" | "manufacturingLotCode">): string {
-  return JSON.stringify([row.inboundPlanId, row.shipmentId, row.sellerSku, row.fnsku, row.expiration, row.manufacturingLotCode]);
+export function inboundItemKey(row: Pick<InboundItemObservation, "inboundPlanId" | "shipmentId" | "sellerSku" | "fnsku" | "expiration" | "manufacturingLotCode" | "sourceRawPage" | "sourceRowNumber">): string {
+  const key = [row.inboundPlanId, row.shipmentId, row.sellerSku, row.fnsku, row.expiration, row.manufacturingLotCode];
+  // Amazon's Item array has no unique row identifier or SKU uniqueness guarantee.
+  // Preserve source occurrences rather than guessing whether quantities add up.
+  return JSON.stringify(row.sourceRawPage === undefined ? key : [...key, row.sourceRawPage, row.sourceRowNumber]);
 }
 export function inboundShipmentKey(row: InboundShipmentReference): string { return JSON.stringify([row.inboundPlanId, row.shipmentId]); }
 
 export function parseInboundItemsPage(value: unknown, context: InboundItemContext): { items: InboundItemObservation[]; nextToken?: string } {
   const root = object(value), inboundPlanId = inboundIdentifier(context.inboundPlanId);
   const shipmentId = context.shipmentId === undefined ? null : inboundIdentifier(context.shipmentId);
-  const items = rows(root.items).map((raw): InboundItemObservation => {
+  if (context.rawPage !== undefined && (!Number.isSafeInteger(context.rawPage) || context.rawPage < 1)) return invalid();
+  const items = rows(root.items).map((raw, index): InboundItemObservation => {
     const row = object(raw);
     const expiration = row.expiration === undefined || row.expiration === null ? null : typeof row.expiration === "string" && row.expiration.length === 10 ? date(row.expiration) : timestamp(row.expiration);
-    return { inboundPlanId, shipmentId, sellerSku: text(row.msku, 255), asin: optionalText(row.asin), fnsku: optionalText(row.fnsku), expiration, manufacturingLotCode: optionalText(row.manufacturingLotCode),
+    return { ...(context.rawPage === undefined ? {} : { sourceRawPage: context.rawPage, sourceRowNumber: index + 1 }), inboundPlanId, shipmentId, sellerSku: text(row.msku, 255), asin: optionalText(row.asin), fnsku: optionalText(row.fnsku), expiration, manufacturingLotCode: optionalText(row.manufacturingLotCode),
       declaredQuantity: quantity(row.quantity), quantitySemantics: shipmentId === null ? "PLAN_DECLARED" : "SHIPMENT_DECLARED", shippedQuantity: null, receivedQuantity: null, inTransitQuantity: null };
   });
   return { items: mergeInboundRows([], items, inboundItemKey), nextToken: nextToken(root) };

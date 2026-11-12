@@ -1,6 +1,6 @@
+import { requireAmazonReadSession } from "@/lib/auth/amazon-read-session";
 import { boundedJsonObject } from "@/lib/amazon-sync/request-body";
 import { NextResponse } from "next/server";
-import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { listMcpScopeOptions, listMcpSkillTableOptions, listMcpCredentials, manageMcpCredential, amazonMcpTools, amazonMcpToolCatalog, getMcpSettingsSnapshot, mcpCallLogFailureClasses } from "@/lib/amazon-sync/mcp";
 import { SyncInputError } from "@/lib/amazon-sync/policy";
@@ -9,7 +9,7 @@ const json = (value: unknown, status = 200) => NextResponse.json(value, { status
 async function handle(request: Request, write: boolean) {
   try {
     const body = write ? await boundedJsonObject(request, 16000) : undefined;
-    const permission = await requireApiPermission("operations", "view", request);
+    const permission = await requireAmazonReadSession(request);
     if (!permission.ok) return permission.response;
     const scope = { organizationId: permission.user.organizationId, workspaceId: workspaceScopeFromRequest(request).workspaceId };
     if (!write) {

@@ -15,7 +15,7 @@ test("sync chat server pins actor/workspace/request and refuses missing grants o
   organizationRosterRole:{findMany:async()=>[]},workspaceScope:{findUnique:async()=>({id:"workspace"})},
   amazonDataAccessGrant:{findMany:async()=>[{sellerAccountId:"seller",marketplaceIds:["US"],actions}]},amazonRoleDataAccessGrant:{findMany:async()=>[]},
   amazonDataCenterChangeRequest:{findFirst:async({where}:{where:Record<string,unknown>})=>{
-   reads++;assert.equal(where.organizationId,"org");assert.equal(where.workspaceId,"workspace");assert.equal(where.requestedByUserId,"owner");assert.equal(where.operation,"run");
+   reads++;assert.equal(where.organizationId,"org");assert.equal(where.workspaceId,"workspace");assert.equal(where.requestedByUserId,"owner");assert.deepEqual(where.operation,{in:["run","control-task"]});
    return where.id==="owned"&&operation==="run"?row:null;
   }},
   amazonSyncDataSource:{findMany:async()=>[{id:"source",sellerAccountId:"seller",marketplaceId}]},

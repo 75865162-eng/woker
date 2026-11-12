@@ -88,7 +88,7 @@ test("research validator accepts actual ERP conditional dataset schema and enfor
   const { validate } = await import("@/lib/selection-research/schema");
   const { amazonMcpToolDefinitions } = await import("@/lib/amazon-sync/mcp-tool-registry");
   const inputSchema = amazonMcpToolDefinitions.find(tool => tool.name === "data_query")!.inputSchema;
-  validate(inputSchema as never, { table: "inventory", pageSize: 3 });
+  validate(inputSchema as never, { table: "inventory", sellerAccountId: "fixture-seller", marketplaceId: "fixture-site", pageSize: 3 });
   assert.throws(() => validate(inputSchema as never, { module: "inventory" }));
   assert.throws(() => validate(inputSchema as never, { table: "inventory", pageSize: 10000 }));
   assert.throws(() => validate(inputSchema as never, { table: "inventory", sql: "select *" }));

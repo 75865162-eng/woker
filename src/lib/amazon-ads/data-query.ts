@@ -1,6 +1,8 @@
+import { amazonAdsAccountReadAccess } from "./read-access";
+import { amazonBusinessData } from "@/lib/amazon-sync/business-data";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { amazonDataAccess, sellerAccessWhere } from "@/lib/amazon-sync/data-access";
+import { sellerAccessWhere } from "@/lib/amazon-sync/data-access";
 import { SyncInputError } from "@/lib/amazon-sync/policy";
 import type { AdsAuthScope } from "./authorization";
 import { buildAdsEntityWhere, freshnessEnvelope } from "./query-service";
@@ -38,7 +40,7 @@ export async function queryAdsEntities(scope: AdsAuthScope, actor: string, param
   return prisma.$transaction(async tx => {
     await tx.$executeRaw`SET TRANSACTION READ ONLY`;
     await tx.$executeRaw`SET LOCAL statement_timeout = '8000ms'`;
-    const access = await amazonDataAccess(scope, actor, tx);
+    const access = await amazonAdsAccountReadAccess(scope, actor, query, tx);
     const sellers = await tx.sellerAccount.findMany({ where: { ...scope, status: "active" }, select: { id: true, displayName: true } });
     const profileWhere: Prisma.AmazonAdsProfileWhereInput = { ...scope, ...sellerAccessWhere(access), AND: [{ sellerAccountId: { in: sellers.map(seller => seller.id) } }, ...(sourceScopes ? [{ OR: sourceScopes }] : [])], authorization: { status: "CONNECTED" },
       ...(query.internalProfileId ? { id: query.internalProfileId } : {}), ...(query.sellerAccountId ? { sellerAccountId: query.sellerAccountId } : {}), ...(query.authorizationId ? { authorizationId: query.authorizationId } : {}) };
@@ -54,7 +56,7 @@ export async function queryAdsEntities(scope: AdsAuthScope, actor: string, param
     if (profiles.length > 500) throw new SyncInputError("Ads Profile 范围超过 500，请缩小筛选范围。");
     const states = await createAmazonAdsRepository(tx).listFreshness(scope, profiles.map(profile => profile.id), "entities");
     const freshness = freshnessEnvelope(states, profiles.map(profile => profile.id));
-    return { rows: rows.map(row => ({ ...row, internalProfileId: row.profileId, amazonProfileId: row.profile.profileId, apiVersion: row.sourceTask.stage === "COMPLETED_SP_STRUCTURE" ? "sp-v3" : null })), total, page: query.page, pageSize: query.pageSize,
+    return { rows: rows.map(row => ({ ...row, payload: amazonBusinessData(row.payload), internalProfileId: row.profileId, amazonProfileId: row.profile.profileId, apiVersion: row.sourceTask.stage === "COMPLETED_SP_STRUCTURE" ? "sp-v3" : null })), total, page: query.page, pageSize: query.pageSize,
       meta: { source: "AmazonAdsEntityRecord", isDemo: false, dataDomain: "SP_STRUCTURE", dateWindow: null, lastSyncAt: aggregate._max.syncedAt, profilesTruncated: false,
         coverage: freshness.status, freshness, profiles: profiles.map(profile => ({ ...profile, seller: sellers.find(seller => seller.id === profile.sellerAccountId), internalProfileId: profile.id, amazonProfileId: profile.profileId,
           freshness: freshnessEnvelope(states.filter(state => state.profileId === profile.id), [profile.id]).status })) } };

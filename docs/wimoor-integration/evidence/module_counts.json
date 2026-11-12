@@ -1,0 +1,20 @@
+[
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "candidate_tables": 32,
+    "identities": "see Module membership sheet / module_membership.json",
+    "ownership": "INFERRED; source selection only, not exclusive ownership or shared-table census"
+  },
+  {
+    "scope": "FBA: Amazon inbound annotations only",
+    "candidate_tables": 15,
+    "identities": "see Module membership sheet / module_membership.json",
+    "ownership": "INFERRED; source selection only, not exclusive ownership or shared-table census"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "candidate_tables": 31,
+    "identities": "see Module membership sheet / module_membership.json",
+    "ownership": "INFERRED; source selection only, not exclusive ownership or shared-table census"
+  }
+]

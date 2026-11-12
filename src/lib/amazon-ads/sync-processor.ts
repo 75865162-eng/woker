@@ -1,3 +1,4 @@
+import { assertAmazonCloudExecution } from "@/lib/amazon/execution-role";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -38,6 +39,7 @@ function normalizeAdsEntity(payload: Record<string, unknown>) {
 }
 
 export async function processAmazonAdsSyncTask(taskId: string, dispatchVersion: number, transport: { adapter?: AdsReadAdapter; oauth?: AmazonAdsOAuthTransport } = {}) {
+  assertAmazonCloudExecution();
   const adapter = transport.adapter ?? amazonAdsReadAdapter;
   const initial = await prisma.amazonAdsSyncTask.findFirst({ where: { ...adsStructureTaskWhere(), id: taskId, dispatchVersion }, include: { plan: true, profile: { include: { authorization: true } } } });
   if (!initial || !["WAITING", "QUEUED", "RETRY_WAIT"].includes(initial.status) || initial.nextAttemptAt > new Date()) return;

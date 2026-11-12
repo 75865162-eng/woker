@@ -18,6 +18,12 @@ test("all shipped Lili definitions, translations and full skill procedures are r
   assert.equal(listWorkflows().length, 12);
   for (const rows of [listSkills(), listWorkflows()]) assert.equal(new Set(rows.map((row) => row.slug)).size, rows.length);
   for (const skill of listSkills()) { assert.ok(skill.promptZh); assert.ok(skill.promptEn); assert.ok((await skillMarkdown(skill.slug))!.length > 500); }
+  const recovery = await skillMarkdown("reimbursement-recovery");
+  assert.ok(recovery?.includes("用 `data_query` 分别分页读取"));
+  assert.ok(recovery?.includes("data_sync_status` 核对报告发布、失败及覆盖状态"));
+  assert.ok(recovery?.includes("不要重复请求相同报告"));
+  assert.ok(recovery?.includes("ARCHIVED_SITE_PENDING"));
+  assert.ok(!recovery?.includes("用售价、采购、头程、佣金、FBA 和广告费拆每个 SKU"));
   const missing = new Set<string>();
   for (const workflow of listWorkflows()) {
     assert.ok(workflow.promptZh); assert.ok(workflow.promptEn); assert.ok(workflow.steps.length);

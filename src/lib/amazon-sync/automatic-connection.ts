@@ -1,5 +1,3 @@
-import { notificationTypes } from "./notification-types";
-import { latestClosedBrandWindow } from "./automatic-brand";
 import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -7,15 +5,13 @@ import { decryptAmazonSpApiCredentials } from "@/lib/amazon/integration-secrets"
 import { extractMarketplaceParticipations } from "@/lib/operations/readiness";
 import { assertAmazonAction, assertAmazonScopeAdmin } from "./data-access";
 import { automaticBackfillStart, automaticMarketplaces } from "./automatic-schedule";
-import { localDate, shiftDate, reportTimeZone } from "./date-range";
-import { parseOrderSyncPolicy } from "./orders";
-import { newFinanceRetentionStart, parseFinancePolicy } from "./finance";
-import { parseReturnPolicy, returnReportTypes } from "./returns";
-import { parseObservationPolicy } from "./observation-policy";
+import { automaticAdapterFreshnessMinutes, automaticAdapterHasRequiredPolicy, automaticAdapterHasRequiredRoles, automaticSourcePolicyFields, marketplaceAutomaticAdapters, sellerAutomaticAdapters } from "./automatic-adapters";
+import { reportTimeZone } from "./date-range";
 import { scopeLock } from "./service";
+import { assignNewAutomaticAccount } from "./automatic-account-access";
 import { SyncInputError, type SyncScope } from "./policy";
 
-const domains = ["catalog", "inventory", "orders", "sales_traffic", "returns", "settlements", "reimbursements", "inventory_age", "inventory_events", "listing_details", "catalog_items", "pricing", "fulfillment", "buy_box_history", "brand_analytics"] as const;
+const domains = marketplaceAutomaticAdapters.map(adapter => adapter.resource);
 const json = (v: unknown) => v as Prisma.InputJsonValue;
 
 /** Existing validated credentials are sufficient for token-scoped read APIs.
@@ -39,9 +35,8 @@ export async function ensureAutomaticConnections(scopes: SyncScope[], now: Date,
         if (!sites.length) return;
         const old = await tx.amazonSyncDataSource.findMany({ where: { ...scope, authorizationId: auth.id }, select: { id: true, sellerAccountId: true, marketplaceId: true, resource: true, orderPolicy: true, financePolicy: true, returnsPolicy: true } });
         const missing = sites.flatMap(site => domains.filter(resource => !old.some(s => s.marketplaceId === site.marketplaceId && s.resource === resource)));
-        const needsFinance = !old.some(s => s.resource === "finance");
-        const needsNotifications = !old.some(s => s.resource === "notifications");
-        if (!missing.length && !needsFinance && !needsNotifications) return;
+        const missingSellerAdapters = sellerAutomaticAdapters.filter(adapter => !old.some(s => s.resource === adapter.resource));
+        if (!missing.length && !missingSellerAdapters.length) return;
         const credentials = decryptAmazonSpApiCredentials(auth.credentialsCiphertext, { ...scope, authorizationId: auth.id });
         const peerApp = old.flatMap(s => [s.orderPolicy, s.financePolicy, s.returnsPolicy]).find(v => v && typeof v === "object" && !Array.isArray(v) && typeof v.applicationId === "string") as { applicationId: string } | undefined;
         const applicationId = peerApp?.applicationId ?? `lwa-${createHash("sha256").update(credentials.lwaClientId).digest("hex")}`;
@@ -50,9 +45,14 @@ export async function ensureAutomaticConnections(scopes: SyncScope[], now: Date,
         // Preserve legacy per-site identity mappings. New token accounts use one regional store.
         const accountKey = `amazon-authorization:${auth.id}`;
         const regionCode = auth.awsRegion === "us-east-1" ? "NA" : auth.awsRegion === "eu-west-1" ? "EU" : "FE";
-        const account = known.length === 1 ? await tx.sellerAccount.findFirst({ where: { ...scope, id: known[0] } }) : known.length === 0 ? await tx.sellerAccount.upsert({ where: { organizationId_workspaceId_accountKey_marketplaceCode: { ...scope, accountKey, marketplaceCode: regionCode } }, create: { ...scope, id: randomUUID(), accountKey, displayName: auth.name, marketplaceCode: regionCode }, update: {} }) : null;
+        let account = known.length === 1 ? await tx.sellerAccount.findFirst({ where: { ...scope, id: known[0] } }) : known.length === 0 ? await tx.sellerAccount.findUnique({ where: { organizationId_workspaceId_accountKey_marketplaceCode: { ...scope, accountKey, marketplaceCode: regionCode } } }) : null;
+        if (!known.length && !account) {
+          account = await tx.sellerAccount.create({ data: { ...scope, id: randomUUID(), accountKey, displayName: auth.name, marketplaceCode: regionCode } });
+          await assignNewAutomaticAccount(tx, scope, auth.updatedByUserId, account.id);
+        }
         const bindings: Array<{ marketplaceId: string; sellerAccountId: string }> = [];
         let created = 0;
+        const capacityDeferred: string[] = [];
         let count = await tx.amazonSyncDataSource.count({ where: scope });
         for (const site of sites) {
           const ids = [...new Set([...old, ...identities].filter(s => s.marketplaceId === site.marketplaceId).map(s => s.sellerAccountId))];
@@ -63,36 +63,45 @@ export async function ensureAutomaticConnections(scopes: SyncScope[], now: Date,
           bindings.push({ marketplaceId: site.marketplaceId, sellerAccountId });
           for (const resource of domains) {
             if (old.some(s => s.marketplaceId === site.marketplaceId && s.resource === resource)) continue;
-            const productDetails = resource === "listing_details" || resource === "catalog_items" || resource === "pricing";
-            if (productDetails && (!auth.amazonSellerId || !auth.identityVerifiedAt)) continue;
-            if (++count > 200) throw new SyncInputError("自动数据源超过当前工作区200个容量上限。", 409);
-            const common = { initialFrom: automaticBackfillStart(now), applicationId, marketplaceTimeZone: reportTimeZone(site.marketplaceId), windowMinutes: 1440, overlapSeconds: 60, safetyLagSeconds: 180 };
-            const orderPolicy = resource === "orders" ? parseOrderSyncPolicy({ ...common, requiredRoles: ["Inventory and Order Tracking"], requestsPerSecond: .0056, burst: 1, statusMapping: {}, details: { includedData: [], requiredRoles: [], purpose: "operations_order_items", requestsPerSecond: .2, burst: 1, maxOrders: 5000, backfillExisting: true } }) : undefined;
-            const returnsPolicy = resource === "returns" ? parseReturnPolicy({ ...common, windowMinutes: 43200, safetyLagSeconds: 86400, reportType: returnReportTypes.FBA_RECEIVED, batchSize: 250, maxRows: 50000, pollMaxAttempts: 60, pollDeadlineMinutes: 1440, pollBaseSeconds: 60, pollMaxSeconds: 600, budgets: { createReport: { requestsPerSecond: .01, burst: 1 }, getReport: { requestsPerSecond: 1, burst: 1 }, getReportDocument: { requestsPerSecond: .01, burst: 1 } } }) : undefined;
-            const catalog = productDetails ? await tx.amazonSyncDataSource.findFirst({ where: { ...scope, authorizationId: auth.id, sellerAccountId, marketplaceId: site.marketplaceId, resource: "catalog" }, select: { id: true } }) : null;
-            const firstBuyBoxDay = shiftDate(localDate(now, reportTimeZone(site.marketplaceId)), -730);
-            const domainPolicy = resource === "brand_analytics" ? parseObservationPolicy({ resource, applicationId, requestsPerSecond: .01, maxRequests: 500, maxRows: 50000, asins: [], automaticDiscovery: true, reportKind: "search_terms", reportPeriod: "DAY", from: latestClosedBrandWindow(localDate(now, reportTimeZone(site.marketplaceId)), "QUARTER").from, to: latestClosedBrandWindow(localDate(now, reportTimeZone(site.marketplaceId)), "QUARTER").from, marketplaceTimeZone: reportTimeZone(site.marketplaceId), brandEligibilityAttested: false }) : resource === "buy_box_history" ? parseObservationPolicy({ resource, applicationId, requestsPerSecond: .01, maxRequests: 500, maxRows: 50000, asins: [], allAsins: true, from: firstBuyBoxDay, to: firstBuyBoxDay, marketplaceTimeZone: reportTimeZone(site.marketplaceId) }) : resource === "fulfillment" ? parseObservationPolicy({ resource, applicationId, requestsPerSecond: .2, maxRequests: 1000, maxRows: 50000, planIds: [], discoverPlans: true }) : productDetails && catalog ? parseObservationPolicy({ resource, applicationId, requestsPerSecond: resource === "pricing" ? .03 : .2, maxRequests: 500, maxRows: 50000, discovery: { mode: "catalog_snapshot", sourceId: catalog.id, maxObjects: resource === "pricing" ? 1000 : 500, batchSize: 100 }, ...(resource === "listing_details" ? { sellerSkus: [] } : { asins: [] }) }) : undefined;
-            if (productDetails && !domainPolicy) continue;
-            await tx.amazonSyncDataSource.create({ data: { ...scope, id: randomUUID(), authorizationId: auth.id, sellerAccountId, marketplaceId: site.marketplaceId, resource, enabled: true, freshnessMinutes: resource === "inventory" ? 360 : 2880, ...(orderPolicy ? { orderPolicy: json(orderPolicy) } : {}), ...(returnsPolicy ? { returnsPolicy: json(returnsPolicy) } : {}), ...(domainPolicy ? { domainPolicy: json(domainPolicy) } : {}) } });
+            const adapter = marketplaceAutomaticAdapters.find(candidate => candidate.resource === resource);
+            if (!adapter) continue;
+            if (adapter.supportedMarketplaceIds && !adapter.supportedMarketplaceIds.includes(site.marketplaceId)) continue;
+            if (adapter.requiresVerifiedSeller && (!auth.amazonSellerId || !auth.identityVerifiedAt)) continue;
+            const catalog = adapter.requiresMarketplaceCatalogSource ? await tx.amazonSyncDataSource.findFirst({ where: { ...scope, authorizationId: auth.id, sellerAccountId, marketplaceId: site.marketplaceId, resource: "catalog" }, select: { id: true } }) : null;
+            if (adapter.requiresMarketplaceCatalogSource && !catalog) continue;
+            if (!automaticAdapterHasRequiredRoles(adapter, !!auth.rolesAttestedAt, auth.approvedRoles)) continue;
+            const policies = adapter.createMarketplacePolicy?.({ now, initialFrom: automaticBackfillStart(now), applicationId, marketplaceId: site.marketplaceId, marketplaceTimeZone: reportTimeZone(site.marketplaceId), ...(catalog ? { catalogSourceId: catalog.id } : {}) }) ?? {};
+            if (!automaticAdapterHasRequiredPolicy(adapter, policies)) continue;
+            if (count >= 200) { capacityDeferred.push(`${site.marketplaceId}:${resource}`); continue; }
+            count++;
+            await tx.amazonSyncDataSource.create({ data: { ...scope, id: randomUUID(), authorizationId: auth.id, sellerAccountId, marketplaceId: site.marketplaceId, resource, enabled: true, freshnessMinutes: automaticAdapterFreshnessMinutes(adapter),
+              ...Object.fromEntries(Object.entries(automaticSourcePolicyFields(policies)).map(([key, value]) => [key, json(value)])) } });
             created++;
           }
         }
         // Finance is seller-wide: one source, all verified sales sites, same internal account.
         // A legacy split mapping remains untouched and requires explicit reconciliation.
         const allSites = extractMarketplaceParticipations({ payload: auth.marketplaceParticipations }).filter(s => automaticMarketplaces.has(s.marketplaceId));
-        if (needsFinance && bindings.length === allSites.length && bindings.length && new Set(bindings.map(s => s.sellerAccountId)).size === 1) {
-          if (++count > 200) throw new SyncInputError("自动数据源超过当前工作区200个容量上限。", 409);
-          const start = newFinanceRetentionStart(automaticBackfillStart(now), now);
-          const policy = parseFinancePolicy({ initialFrom: start.initialFrom, applicationId, windowMinutes: 43200, overlapSeconds: 60, safetyLagSeconds: 180, requestsPerSecond: .5, burst: 1, sellerWide: true, collectUnattributed: true, marketplaces: bindings.map(s => ({ marketplaceId: s.marketplaceId, marketplaceTimeZone: reportTimeZone(s.marketplaceId) })) });
-          await tx.amazonSyncDataSource.create({ data: { ...scope, id: randomUUID(), authorizationId: auth.id, sellerAccountId: bindings[0].sellerAccountId, marketplaceId: bindings[0].marketplaceId, resource: "finance", enabled: true, freshnessMinutes: 2880, financePolicy: json(policy), ...(start.retentionGap ? { coverage: json({ retentionGaps: [start.retentionGap], historicalComplete: false }) } : {}) } });
+        if (bindings.length === allSites.length && bindings.length && new Set(bindings.map(s => s.sellerAccountId)).size === 1) for (const adapter of missingSellerAdapters) {
+          if (!adapter.createSellerPolicy) continue;
+          if (adapter.requiresVerifiedSeller && (!auth.amazonSellerId || !auth.identityVerifiedAt)) continue;
+          if (!automaticAdapterHasRequiredRoles(adapter, !!auth.rolesAttestedAt, auth.approvedRoles)) continue;
+          const policies = adapter.createSellerPolicy({ now, initialFrom: automaticBackfillStart(now), applicationId, marketplaces: bindings.map(binding => ({ ...binding, marketplaceTimeZone: reportTimeZone(binding.marketplaceId) })) });
+          if (!automaticAdapterHasRequiredPolicy(adapter, policies)) continue;
+          if (count >= 200) { capacityDeferred.push(`seller:${adapter.resource}`); continue; }
+          count++;
+          // Seller-level sources anchor to one marketplace only for local ownership.
+          await tx.amazonSyncDataSource.create({ data: { ...scope, id: randomUUID(), authorizationId: auth.id, sellerAccountId: bindings[0].sellerAccountId, marketplaceId: bindings[0].marketplaceId, resource: adapter.resource, enabled: true, freshnessMinutes: automaticAdapterFreshnessMinutes(adapter),
+            ...Object.fromEntries(Object.entries(automaticSourcePolicyFields(policies)).map(([key, value]) => [key, json(value)])) } });
           created++;
         }
-        if (needsNotifications && bindings.length === allSites.length && bindings.length && new Set(bindings.map(s => s.sellerAccountId)).size === 1) {
-          if (++count > 200) throw new SyncInputError("自动数据源超过当前工作区200个容量上限。", 409);
-          const domainPolicy = parseObservationPolicy({ resource: "notifications", applicationId, notificationTypes: [...notificationTypes], maxRequests: 500, maxRows: 50000, requestsPerSecond: .2 });
-          // marketplaceId anchors local ownership only; payload remains explicitly seller-wide.
-          await tx.amazonSyncDataSource.create({ data: { ...scope, id: randomUUID(), authorizationId: auth.id, sellerAccountId: bindings[0].sellerAccountId, marketplaceId: bindings[0].marketplaceId, resource: "notifications", enabled: true, freshnessMinutes: 2880, domainPolicy: json(domainPolicy) } });
-          created++;
+        if (capacityDeferred.length) {
+          const signature = createHash("sha256").update(JSON.stringify([auth.revision, count, capacityDeferred])).digest("hex");
+          const previous = await tx.auditLog.findFirst({ where: { organizationId: scope.organizationId, entityId: auth.id, action: "amazon.sync.connection.capacity-deferred" }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { metadata: true } });
+          if ((previous?.metadata as { signature?: string } | null)?.signature !== signature) await tx.auditLog.create({ data: {
+            organizationId: scope.organizationId, userId: auth.updatedByUserId, action: "amazon.sync.connection.capacity-deferred", entityType: "AmazonSpApiAuthorization", entityId: auth.id,
+            metadata: { workspaceId: scope.workspaceId, authorizationRevision: auth.revision, code: "SOURCE_CAPACITY", limit: 200, sourceCount: count, deferredResources: capacityDeferred, signature, retry: "AUTOMATIC_NEXT_DISCOVERY" },
+          } });
         }
         if (created) await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: auth.updatedByUserId, action: "amazon.sync.connection.automatic_bound", entityType: "AmazonSpApiAuthorization", entityId: auth.id, metadata: { workspaceId: scope.workspaceId, sourceCount: created, marketplaceIds: bindings.map(s => s.marketplaceId), sellerIdentityKnown: !!auth.amazonSellerId, roleEvidence: "UPSTREAM_ENFORCED_READ_ONLY", initialFrom: automaticBackfillStart(now) } } });
       }, { timeout: 15000 });

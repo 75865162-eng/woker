@@ -1,5 +1,5 @@
 [
-  { "id": "import", "label": "文件导入与商品 Outbox", "entry": "scripts/import-worker.ts", "queues": ["import-jobs", "product-outbox-jobs"], "heartbeatQueue": "import-jobs", "service": "amazon-worker" },
+  { "id": "import", "label": "文件导入与商品 / WMS 事件", "entry": "scripts/import-worker.ts", "queues": ["import-jobs", "product-outbox-jobs", "wms-domain-events"], "heartbeatQueue": "import-jobs", "service": "amazon-worker" },
   { "id": "image-upscale", "label": "AI 图片处理", "entry": "scripts/image-upscale-worker.ts", "queues": ["image-upscale-jobs"], "heartbeatQueue": "image-upscale-jobs", "service": "amazon-image-upscale-worker" },
   { "id": "amazon-sync", "label": "Amazon SP-API / Ads", "entry": "scripts/amazon-sync-worker.ts", "queues": ["amazon-data-center-jobs"], "heartbeatQueue": "amazon-data-center-jobs", "service": "amazon-sync-worker" },
   { "id": "sellfox-sync", "label": "Sellfox 同步", "entry": "scripts/sellfox-sync-worker.ts", "queues": ["sellfox-sync-jobs"], "heartbeatQueue": "sellfox-sync-jobs", "service": "amazon-sellfox-sync-worker" }

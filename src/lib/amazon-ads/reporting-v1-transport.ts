@@ -1,3 +1,4 @@
+import { assertAmazonCloudExecution } from "@/lib/amazon/execution-role";
 import { AdsQueryError } from "./query-contract";
 import { parseReportingV1Envelope, type ReportingV1ReportEnvelope, type ReportingV1RequestError } from "./reporting-contract";
 import type { AdsRegion } from "./oauth-contract";
@@ -170,6 +171,7 @@ export function createReportingV1Transport(fetcher: typeof fetch, configuredDown
   if (configuredDownloadHosts.some(host => !/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i.test(host))) throw new AdsQueryError("ADS_REPORT_DOWNLOAD_ALLOWLIST_INVALID");
   async function post(input: { region: AdsRegion; clientId: string; accessToken: string; body: unknown; signal?: AbortSignal }, path: string) {
     validateCredentials(input);
+    assertAmazonCloudExecution();
     const signal = operationSignal(input.signal);
     let response: Response;
     try {
@@ -214,6 +216,7 @@ export function createReportingV1Transport(fetcher: typeof fetch, configuredDown
       let url: URL;
       try { url = new URL(input.url); } catch { throw new AdsQueryError("ADS_REPORT_DOWNLOAD_URL_REJECTED"); }
       if (!input.url.startsWith("https://") || url.protocol !== "https:" || url.username || url.password || url.port || url.hash || !downloadHosts.has(url.hostname.toLowerCase()) || url.hostname === "localhost" || url.hostname.endsWith(".localhost")) throw new AdsQueryError("ADS_REPORT_DOWNLOAD_URL_REJECTED");
+      assertAmazonCloudExecution();
       const signal = operationSignal(input.signal);
       let response: Response;
       try { response = await fetchWithAbort(fetcher, url, { method: "GET", cache: "no-store", redirect: "error", signal }); }

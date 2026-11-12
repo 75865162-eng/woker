@@ -1,6 +1,8 @@
 export type SalesDay = { date: string; units: number };
+export type MatureDemandModel = "COMPLETE_28_DAY" | "WIMOOR_7_15_30";
 export type ReplenishmentInputs = {
   lifecycle: "NEW" | "MATURE";
+  matureDemandModel: MatureDemandModel;
   productionDays: number | null; domesticDays: number | null; oceanDays: number | null;
   safetyDays: number; reviewDays: number;
   newProductDailyUnits: number | null;
@@ -33,6 +35,8 @@ export function parseReplenishmentInputs(raw: unknown): ReplenishmentInputs {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("缺少补货参数。");
   const row = raw as Record<string, unknown>;
   if (row.lifecycle !== "NEW" && row.lifecycle !== "MATURE") throw new Error("请选择新品或成熟品。");
+  const matureDemandModel = row.matureDemandModel ?? "COMPLETE_28_DAY";
+  if (matureDemandModel !== "COMPLETE_28_DAY" && matureDemandModel !== "WIMOOR_7_15_30") throw new Error("成熟品日需求模型无效。");
   if (typeof row.sourceNote !== "string" || !row.sourceNote.trim() || row.sourceNote.length > 500) throw new Error("必须填写销量及参数来源说明（最多 500 字）。");
   const history = row.salesHistory ?? [];
   if (!Array.isArray(history) || history.length > 366) throw new Error("销量历史最多 366 天。");
@@ -68,7 +72,7 @@ export function parseReplenishmentInputs(raw: unknown): ReplenishmentInputs {
     historicalSource = { storeId: source.storeId.trim() };
   }
   return {
-    lifecycle: row.lifecycle, productionDays: number(row.productionDays, 365, true), domesticDays: number(row.domesticDays, 365, true), oceanDays: number(row.oceanDays, 365, true),
+    lifecycle: row.lifecycle, matureDemandModel, productionDays: number(row.productionDays, 365, true), domesticDays: number(row.domesticDays, 365, true), oceanDays: number(row.oceanDays, 365, true),
     safetyDays: number(row.safetyDays ?? 14, 180)!, reviewDays: number(row.reviewDays ?? 30, 180)!,
     newProductDailyUnits: number(row.newProductDailyUnits, 1_000_000, true), salesHistory, seasonality, receipts,
     unitProfit: unitProfit as number | null, currency,
@@ -77,6 +81,12 @@ export function parseReplenishmentInputs(raw: unknown): ReplenishmentInputs {
   };
 }
 const addDays = (date: string, days: number) => new Date(Date.parse(date) + Math.ceil(days) * 86_400_000).toISOString().slice(0, 10);
+
+export function wimoorWeightedDailyDemand(sales7: number, sales15: number, sales30: number) {
+  const weighted = sales30 * 0.1 / 30 + sales15 * 0.2 / 15 + sales7 * 0.7 / 7;
+  const tenths = Math.ceil(weighted * 10);
+  return Math.floor(tenths / 10) + (tenths % 10 > 8 ? 1 : 0);
+}
 
 /** Deterministic advice only. Missing facts never become zero demand or procurement orders. */
 export function calculateReplenishment(input: ReplenishmentInputs, inventory: { available: number | null; inbound: number | null; fresh: boolean }, today: string): ReplenishmentResult {
@@ -90,11 +100,18 @@ export function calculateReplenishment(input: ReplenishmentInputs, inventory: { 
     reasons.push("新品采用人工维护的试销日需求，不以短期广告销量外推成熟品需求。");
     if (dailyDemand === null) missingInputs.push("新品试销日需求");
   } else {
-    const dates = Array.from({ length: 28 }, (_, index) => addDays(today, -(index + 1)));
+    const modelDays = input.matureDemandModel === "WIMOOR_7_15_30" ? 30 : 28;
+    const dates = Array.from({ length: modelDays }, (_, index) => addDays(today, -(index + 1)));
     const observations = new Map(input.salesHistory.map((row) => [row.date, row.units]));
-    if (dates.some((date) => !observations.has(date))) missingInputs.push("最近完整 28 天销量（缺失日不视为零）");
-    else dailyDemand = dates.reduce((sum, date) => sum + observations.get(date)!, 0) / 28;
-    reasons.push("成熟品采用昨日结束的完整 28 天日均销量。");
+    if (dates.some((date) => !observations.has(date))) missingInputs.push(`最近完整 ${modelDays} 天销量（缺失日不视为零）`);
+    else if (input.matureDemandModel === "WIMOOR_7_15_30") {
+      const total = (days: number) => dates.slice(0, days).reduce((sum, date) => sum + observations.get(date)!, 0);
+      dailyDemand = wimoorWeightedDailyDemand(total(7), total(15), total(30));
+      reasons.push("Wimoor 成熟品日需公式：(30天销量×0.1/30)+(15天销量×0.2/15)+(7天销量×0.7/7)，按源码规则取整；使用截至昨日的完整窗口。");
+    } else {
+      dailyDemand = dates.reduce((sum, date) => sum + observations.get(date)!, 0) / 28;
+      reasons.push("成熟品采用截至昨日的完整 28 天日均销量。");
+    }
   }
   if (input.seasonality && dailyDemand !== null) {
     dailyDemand *= input.seasonality.multiplier;

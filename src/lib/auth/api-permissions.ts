@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
 import { roleCanPerformAction, type PermissionAction } from "@/lib/accounts/permissions";
-import { getCurrentUser, getCurrentUserFromRequest, type CurrentUser } from "@/lib/auth/session";
+import { type CurrentUser } from "@/lib/auth/session";
+import { getAuthorizationContext } from "@/lib/auth/authorization-context";
 import { assertWorkspaceAccess } from "@/lib/workspace/access";
 
 export type ApiPermissionResult =
@@ -15,7 +15,8 @@ export type ApiPermissionResult =
     };
 
 export async function requireApiPermission(moduleId: string, action: PermissionAction, request?: Request): Promise<ApiPermissionResult> {
-  const user = request ? await getCurrentUserFromRequest(request) : await getCurrentUser();
+  const authorization = await getAuthorizationContext(request);
+  const user = authorization?.user;
 
   if (!user) {
     return {
@@ -24,7 +25,7 @@ export async function requireApiPermission(moduleId: string, action: PermissionA
     };
   }
 
-  const permissions = await getOrganizationRolePermissions(user.organizationId);
+  const permissions = authorization!.permissions;
 
   if (!roleCanPerformAction(user.role, moduleId, action, permissions)) {
     return {

@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { LogisticsLogEntry, LogisticsStatusTone, LogisticsTemplateOption, LogisticsWorkspaceState, UploadedFileState } from "@/lib/logistics/types";
 import { downloadBlob, downloadFilesAsZip, formatMetricNumber, makeId } from "@/lib/logistics/utils";
+import { FreightEstimator } from "@/components/logistics/freight-estimator";
 
 const SLOW_PARSE_WARNING_BYTES = 30 * 1024 * 1024;
 
@@ -531,6 +532,8 @@ export function LogisticsWorkbench() {
               }}
             />
         </section>
+
+        <FreightEstimator />
 
         <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
           <Card>

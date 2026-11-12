@@ -54,3 +54,12 @@ test("admin self confirmation still rejects expired, decided, unapplied and repl
   assert.doesNotThrow(() => assertApplicable(approved, expected, now));
   for (const status of ["REQUESTED", "APPLYING", "APPLIED", "REVOKED", "FAILED"]) assert.throws(() => assertApplicable({ ...approved, status }, expected, now), /已失效/);
 });
+
+
+test("order fulfillment recovery mode cannot mix with other repairs or execution windows", () => {
+  const command = { action: "recover-report", id: "source", revision: 1, taskId: "task", rawPages: [1002, 1001], orderFulfillmentOnly: true, recoveryDigest: "digest" };
+  assert.deepEqual(normalizeCommand(command).rawPages, [1001, 1002]);
+  for (const other of ["currencyOnly", "fieldScanOnly", "listingAttributesOnly", "attributionOnly"]) assert.throws(() => normalizeCommand({ ...command, [other]: true }));
+  assert.throws(() => normalizeCommand({ ...command, orderFulfillmentOnly: "true" }));
+  assert.throws(() => normalizeCommand({ ...command, reportWindow: { from: "2026-11-01", to: "2026-11-02" } }));
+});

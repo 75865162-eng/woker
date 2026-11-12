@@ -4,6 +4,7 @@ import { applyRuntimeEnvironment } from "./runtime/environment.mjs";
 import { existsSync } from "node:fs";
 import { readdir, rm, mkdtemp, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
+import { acquireNextOutputLock } from "./runtime/next-output-lock.mjs";
 
 const [, , distDir, ...args] = process.argv;
 
@@ -19,6 +20,10 @@ if (!existsSync(command)) {
   process.exit(1);
 }
 
+// Acquire before loading configuration or generating files. Different ports may
+// otherwise overwrite each other's RSC manifests in the same distDir.
+const releaseOutputLock = acquireNextOutputLock(path.resolve(distDir));
+process.on("exit", releaseOutputLock);
 const runtimeEnv = applyRuntimeEnvironment({ build: args[0] === "build" });
 // Next validates only this invocation's generated routes, never old dist outputs.
 // Turbopack requires its tsconfig path to remain inside the project root.

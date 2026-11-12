@@ -1,3 +1,5 @@
+// Cloud role for existing isolated approval fixtures; no real Amazon calls.
+process.env.AMAZON_API_EXECUTION_ROLE = "cloud";
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { AmazonDataCenterChangeRequest } from "@prisma/client";

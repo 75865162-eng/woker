@@ -1,11 +1,9 @@
 import type { ReactNode } from "react";
-import { AppShellClient } from "@/components/app-shell/app-shell-client";
+import { AppShellPage } from "@/components/app-shell/persistent-app-shell";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getAccessiblePathOrFallback } from "@/lib/accounts/permissions";
-import type { RolePermissionMap } from "@/lib/accounts/permissions";
 import { getCurrentUserFromSignedCookie } from "@/lib/auth/session";
-import type { CurrentUser } from "@/lib/auth/session";
 import { getOrganizationRolePermissionsSnapshot } from "@/lib/accounts/role-permissions-server";
 import { getCurrentAppVersionLabel } from "@/lib/app-version-server";
 
@@ -14,22 +12,15 @@ export async function AppShell({
   title,
   subtitle,
   actions,
-  initialUser,
-  initialRolePermissions,
 }: {
   children: React.ReactNode;
   title: string;
   subtitle: string;
   actions?: ReactNode;
-  initialUser?: CurrentUser;
-  initialRolePermissions?: RolePermissionMap | null;
 }) {
-  const userPromise = initialUser ? Promise.resolve(initialUser) : getCurrentUserFromSignedCookie();
-  const [user, headerStore] = await Promise.all([userPromise, headers()]);
+  const [user, headerStore] = await Promise.all([getCurrentUserFromSignedCookie(), headers()]);
   const rolePermissionsSnapshot =
-    initialRolePermissions
-      ? { permissions: initialRolePermissions }
-      : user?.organizationId
+    user?.organizationId
         ? await getOrganizationRolePermissionsSnapshot(user.organizationId)
         : null;
   const appVersionLabel = getCurrentAppVersionLabel();
@@ -54,19 +45,13 @@ export async function AppShell({
   }
 
   return (
-    <AppShellClient
-      title={title}
-      subtitle={subtitle}
-      userInitials={initials}
-      userId={user.id}
-      organizationId={user.organizationId}
-      userName={user?.name}
-      userRole={user?.role}
-      rolePermissions={rolePermissions}
-      appVersionLabel={appVersionLabel}
-      actions={actions}
-    >
+    <AppShellPage configuration={{
+      title, subtitle, userInitials: initials, userId: user.id,
+      organizationId: user.organizationId, userName: user.name, userRole: user.role,
+      rolePermissions, appVersionLabel, actions,
+      authorizationRevision: `${user.organizationId}:${user.id}:${user.role}:${rolePermissionsSnapshot?.revision ?? "none"}`,
+    }}>
       {children}
-    </AppShellClient>
+    </AppShellPage>
   );
 }

@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db/prisma";
 import { authenticateAmazonMcp } from "@/lib/amazon-sync/mcp";
 import { assertAmazonAction, explicitAmazonDataAccess, parseAccessScopes } from "@/lib/amazon-sync/data-access";
 import { approvalSelect, applyChange, decideChange } from "@/lib/amazon-sync/change-approval";
-import { executeSyncChat, syncSourcesWithinScope, type SyncChatPreview } from "./sync-chat-tools";
+import { executeSyncChat, syncSourcesWithinScope, supportedSyncChatRequest, type SyncChatPreview } from "./sync-chat-tools";
 import type { ObjectJson } from "@/lib/selection-research/types";
 
 export async function callSyncChatTool(request: Request, name: string, args: ObjectJson) {
@@ -14,8 +14,8 @@ export async function callSyncChatTool(request: Request, name: string, args: Obj
     if (current.id !== initial.id || current.revision !== initial.revision || !current.tools.includes(name) || !current.tools.includes("data_sync_start") || args.workspaceId !== current.workspaceId) throw new Error("WORKFLOW_ACCESS_DENIED");
     await assertAmazonAction(scope, current.userId, "view", prisma, "operations");
     if (name === "workflow_sync_confirm") await assertAmazonAction(scope, current.userId, "approve", prisma, "operations");
-    const row = await prisma.amazonDataCenterChangeRequest.findFirst({ where: { ...scope, id: String(args.requestId), requestedByUserId: current.userId, operation: "run" }, select: approvalSelect });
-    if (!row || !row.sourceIds.length) throw new Error("WORKFLOW_REQUEST_NOT_FOUND");
+    const row = await prisma.amazonDataCenterChangeRequest.findFirst({ where: { ...scope, id: String(args.requestId), requestedByUserId: current.userId, operation: { in: ["run", "control-task"] } }, select: approvalSelect });
+    if (!row || !row.sourceIds.length || !supportedSyncChatRequest(row as unknown as SyncChatPreview)) throw new Error("WORKFLOW_REQUEST_NOT_FOUND");
     const access = await explicitAmazonDataAccess(scope, current.userId, prisma, "sync", true);
     const credentialScopes = parseAccessScopes(current.scopes);
     const sources = await prisma.amazonSyncDataSource.findMany({ where: { ...scope, id: { in: row.sourceIds } }, select: { id: true, sellerAccountId: true, marketplaceId: true } });

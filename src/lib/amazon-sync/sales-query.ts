@@ -1,4 +1,6 @@
-import { amazonDataAccess, type AmazonDataAccess } from "./data-access";
+import { parseAmazonBusinessJson } from "./business-data";
+import { amazonAccountReadAccess } from "./read-account";
+import { type AmazonDataAccess } from "./data-access";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { businessDate } from "./date-range";
@@ -23,6 +25,8 @@ export function salesVersionSql(scope: SyncScope, query: SalesQuery, cutoff: Dat
       s."authorizationId", a."amazonSellerId", seller."displayName" AS "sellerName"
     FROM "AmazonSalesTrafficSnapshot" r
     JOIN "AmazonSyncRun" t ON t.id = r."syncRunId" AND t."organizationId" = r."organizationId" AND t."workspaceId" = r."workspaceId" AND t."sourceId" = r."sourceId"
+    LEFT JOIN "AmazonSyncRawPage" raw ON raw."taskId" = t.id AND raw."page" = 1 AND raw.resource = 'sales_traffic'
+      AND raw."organizationId" = r."organizationId" AND raw."workspaceId" = r."workspaceId"
     JOIN "AmazonSyncDataSource" s ON s.id = r."sourceId" AND s."organizationId" = r."organizationId" AND s."workspaceId" = r."workspaceId"
     JOIN "AmazonSpApiAuthorization" a ON a.id = s."authorizationId" AND a."organizationId" = r."organizationId" AND a."workspaceId" = r."workspaceId"
     JOIN "SellerAccount" seller ON seller.id = r."sellerAccountId" AND seller."organizationId" = r."organizationId" AND seller."workspaceId" = r."workspaceId"
@@ -37,30 +41,33 @@ export function salesVersionSql(scope: SyncScope, query: SalesQuery, cutoff: Dat
       ${query.sellerAccountId ? Prisma.sql`AND r."sellerAccountId" = ${query.sellerAccountId}` : Prisma.empty}
       ${query.marketplaceId ? Prisma.sql`AND r."marketplaceId" = ${query.marketplaceId}` : Prisma.empty}
       ${query.taskId ? Prisma.sql`AND r."syncRunId" = ${query.taskId}` : Prisma.empty}
-    ORDER BY r."sourceId", r."businessDate", t."finishedAt" DESC, t.id DESC
+    ORDER BY r."sourceId", r."businessDate", COALESCE(raw."capturedAt", r."capturedAt") DESC, t."startedAt" DESC, t."finishedAt" DESC, t.id DESC
   ), filtered AS (
     SELECT * FROM versions
     ${query.keyword ? Prisma.sql`WHERE position(lower(${query.keyword}) in lower("sellerName" || ' ' || "amazonSellerId" || ' ' || "marketplaceId")) > 0` : Prisma.empty}
   )`;
 }
-export type SalesExactMetrics = { unitsOrdered: string | null; totalOrderItems: string | null; sessions: string | null; pageViews: string | null; orderedProductSales: { amount: string | null; currencyCode: string | null } | null };
-export type SalesRow = { id: string; organizationId: string; workspaceId: string; sourceId: string; syncRunId: string; sellerAccountId: string; marketplaceId: string; businessDate: string; reportId: string; documentId: string; metrics: { unitsOrdered: number | null; totalOrderItems: number | null; sessions: number | null; pageViews: number | null; orderedProductSales: { amount: number; currencyCode: string } | null }; exactMetrics?: SalesExactMetrics; quality: string; capturedAt: Date; publishedAt: Date; amazonSellerId: string; sellerName: string; frozenScope: unknown; summary: unknown };
-export async function readSalesTraffic(scope: SyncScope, p: URLSearchParams, options: { cutoff?: Date; pageSize?: number; actor?: string; sellerFence?: string[]; sourceFence?: string[]; action?: "view" | "export"; includeExactMetrics?: boolean } = {}) {
-  let access = await amazonDataAccess(scope, options.actor, prisma, options.action ?? "view");
+export type SalesMetrics = Prisma.JsonObject & {
+  unitsOrdered?: string | null; totalOrderItems?: string | null; sessions?: string | null; pageViews?: string | null;
+  orderedProductSales?: { amount?: string | null; currencyCode?: string | null } | null;
+};
+export type SalesRow = { id: string; organizationId: string; workspaceId: string; sourceId: string; syncRunId: string; sellerAccountId: string; marketplaceId: string; businessDate: string; reportId: string; documentId: string; metrics: SalesMetrics; quality: string; capturedAt: Date; publishedAt: Date; amazonSellerId: string; sellerName: string; frozenScope: unknown; summary: unknown };
+export async function readSalesTraffic(scope: SyncScope, p: URLSearchParams, options: { cutoff?: Date; pageSize?: number; actor?: string; sellerFence?: string[]; sourceFence?: string[]; action?: "view" | "export" } = {}) {
+  p = new URLSearchParams(p);
+  let access = await amazonAccountReadAccess(scope, options.actor, p, prisma, "sales_traffic");
+  p.set("sellerAccountId", access.sellerIds[0]);
   if (options.sellerFence) access = { allSellers: false, sellerIds: access.allSellers ? options.sellerFence : options.sellerFence.filter(id => access.sellerIds.includes(id)), ...(access.scopes ? { scopes: access.scopes.filter(s => options.sellerFence!.includes(s.sellerAccountId)) } : {}) };
   const query = parseSalesQuery(p), cutoff = options.cutoff ?? new Date(), cte = salesVersionSql(scope, query, cutoff, access, options.sourceFence);
   const page = Math.min(10000, Math.max(1, Math.floor(Number(p.get("page")) || 1))), pageSize = options.pageSize ?? 50;
-  return prisma.$transaction(async tx => {
+  const result = await prisma.$transaction(async tx => {
     const total = await tx.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`${cte} SELECT count(*) FROM filtered`);
-    // Opt-in, current-page projection only. PostgreSQL extracts JSON numeric text before JS parsing.
-    // Legacy ERP consumers retain the original metrics shape and default query.
-    const exactMetrics = options.includeExactMetrics ? Prisma.sql`, jsonb_build_object(
-      'unitsOrdered', metrics->>'unitsOrdered', 'totalOrderItems', metrics->>'totalOrderItems',
-      'sessions', metrics->>'sessions', 'pageViews', metrics->>'pageViews',
-      'orderedProductSales', CASE WHEN jsonb_typeof(metrics->'orderedProductSales') = 'object' THEN jsonb_build_object(
-        'amount', metrics#>>'{orderedProductSales,amount}', 'currencyCode', metrics#>>'{orderedProductSales,currencyCode}') ELSE NULL END
-    ) AS "exactMetrics"` : Prisma.empty;
-    const rows = await tx.$queryRaw<SalesRow[]>(Prisma.sql`${cte} SELECT * ${exactMetrics} FROM filtered ORDER BY "businessDate" ${query.direction === "asc" ? Prisma.sql`ASC` : Prisma.sql`DESC`}, "sourceId", id OFFSET ${(page - 1) * pageSize} LIMIT ${pageSize}`);
+    const rows = await tx.$queryRaw<Array<Omit<SalesRow, "metrics"> & { metricsText: string }>>(Prisma.sql`${cte} SELECT filtered.*, metrics::text AS "metricsText" FROM filtered ORDER BY "businessDate" ${query.direction === "asc" ? Prisma.sql`ASC` : Prisma.sql`DESC`}, "sourceId", id OFFSET ${(page - 1) * pageSize} LIMIT ${pageSize}`);
     return { rows, pagination: { page, pageSize, total: Number(total[0].count), pageCount: Math.ceil(Number(total[0].count) / pageSize) }, query, asOf: cutoff.toISOString(), dateField: "report_business_date", granularity: "SELLER_DAY", versionPolicy: query.taskId ? "historical_task" : "latest_successful_per_source_day" };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  await amazonAccountReadAccess(scope, options.actor, p, prisma, "sales_traffic");
+  return { ...result, numericEncoding: "JSON_NUMERIC_STRINGS", rows: result.rows.map(({ metricsText, ...row }) => {
+    const metrics = parseAmazonBusinessJson(metricsText);
+    if (!metrics || typeof metrics !== "object" || Array.isArray(metrics)) throw new SyncInputError("销售指标不是有效的 JSON 对象。", 409);
+    return { ...row, metrics: metrics as SalesMetrics };
+  }) };
 }

@@ -5,15 +5,17 @@ import { parseDailyMetricsFilters } from "./read-models";
 import { inventorySnapshotStatus } from "./readiness";
 import { readPpcDataset, suggestPpc, summarizePpc } from "./ppc-read";
 import { amazonPublishedReadScope } from "./amazon-read-scope";
-import { amazonDataAccess, sellerAccessWhere } from "@/lib/amazon-sync/data-access";
+import { sellerAccessWhere } from "@/lib/amazon-sync/data-access";
+import { amazonAccountReadAccess } from "@/lib/amazon-sync/read-account";
+import { amazonBusinessData } from "@/lib/amazon-sync/business-data";
 
 export class OpsError extends Error {
   constructor(readonly code: string, message: string, readonly exitCode = 2) { super(message); }
 }
 export type OpsCommand = { command: string; options: Record<string, string>; json: boolean };
 const commands = ["freshness", "inventory list", "inventory summary", "catalog list", "metrics daily", "sync runs", "ppc report-summary", "ppc suggest"];
-const allowedOptions = ["workspace", "sku", "asin", "page", "from", "to", "resource", "status"];
-export const opsHelp = `Internal ERP, local database reads only.\nops ${commands.join("\nops ")}\nOptions: --workspace ID --sku SKU --asin ASIN --page N --from YYYY-MM-DD --to YYYY-MM-DD --resource NAME --status STATUS --json`;
+const allowedOptions = ["workspace", "seller-account", "marketplace", "sku", "asin", "page", "from", "to", "resource", "status"];
+export const opsHelp = `Internal ERP, local database reads only.\nops ${commands.join("\nops ")}\nOptions: --workspace ID --seller-account ID --marketplace ID --sku SKU --asin ASIN --page N --from YYYY-MM-DD --to YYYY-MM-DD --resource NAME --status STATUS --json`;
 export function parseOpsArgs(args: string[]): OpsCommand {
   const words: string[] = []; const options: Record<string, string> = {}; let json = false;
   for (let i = 0; i < args.length; i++) {
@@ -32,7 +34,7 @@ export function parseOpsArgs(args: string[]): OpsCommand {
     freshness: [], "inventory list": ["sku", "page"], "inventory summary": ["sku"], "catalog list": ["sku", "page"],
     "metrics daily": ["from", "to", "sku", "asin", "page"], "sync runs": ["resource", "status", "page"], "ppc report-summary": [], "ppc suggest": [],
   };
-  if (Object.keys(options).some((key) => key !== "workspace" && !applicable[command].includes(key))) throw new OpsError("INVALID_ARGUMENT", "Option does not apply to this command.");
+  if (Object.keys(options).some((key) => key !== "workspace" && !(!command.startsWith("ppc ") && ["seller-account", "marketplace"].includes(key)) && !applicable[command].includes(key))) throw new OpsError("INVALID_ARGUMENT", "Option does not apply to this command.");
   if (options.page && (!/^\d+$/.test(options.page) || +options.page < 1 || +options.page > 10000)) throw new OpsError("INVALID_ARGUMENT", "page must be 1–10000.");
   if (options.resource && !["readiness", "inventory", "catalog", "ads", "orders", "finance", "fulfillment"].includes(options.resource)) throw new OpsError("INVALID_ARGUMENT", "Unknown resource.");
   if (options.status && !["QUEUED", "RUNNING", "SUCCEEDED", "FAILED", "BLOCKED"].includes(options.status)) throw new OpsError("INVALID_ARGUMENT", "Unknown sync status.");
@@ -53,6 +55,7 @@ export async function authorizeOps(db: Prisma.TransactionClient, identity: OpsId
   const member = await db.organizationMember.findFirst({ where: { organizationId, userId: actorUserId, user: { status: "active" } } });
   const workspace = await db.workspaceScope.findUnique({ where: { organizationId_id: { organizationId, id: workspaceId } } });
   if (!member || !workspace) throw new OpsError("FORBIDDEN", "Active organization member and workspace required.", 3);
+  if (!command.command.startsWith("ppc ")) return;
   const roles = await db.organizationRosterRole.findMany({ where: { organizationId }, select: { id: true, permissions: true } });
   let permissions: RolePermissionMap;
   if (roles.length) permissions = Object.fromEntries(roles.map((row) => [row.id, { ...defaultRolePermissionMap[row.id], ...normalizeRolePermissions(row.permissions) }]));
@@ -67,20 +70,33 @@ export function unavailableDailyMetrics() {
   return { rows: [], source: "PPC WorkspaceDataset", sourceStatus: "NOT_SYNCED", sourceNote: "PPC 导入缺少可信的日粒度 SKU/ASIN 映射；上传日期不是报表日期。", missingFields: { sales: null, adSpend: null, tacos: null } };
 }
 export async function runOpsCommand(db: Prisma.TransactionClient, identity: OpsIdentity, input: OpsCommand, now = new Date()) {
+  const result = await readOpsCommand(db, identity, input, now);
+  return input.command.startsWith("ppc ") ? result : amazonBusinessData(JSON.parse(JSON.stringify(result, (_key, value: unknown) => typeof value === "bigint" ? value.toString() : value)));
+}
+export async function assertOpsReadAccess(db: Prisma.TransactionClient, identity: OpsIdentity, input: OpsCommand) {
   await authorizeOps(db, identity, input);
+  if (input.command.startsWith("ppc ")) return;
+  return amazonAccountReadAccess(identity, identity.actorUserId, new URLSearchParams({
+    ...(input.options["seller-account"] ? { sellerAccountId: input.options["seller-account"] } : {}),
+    ...(input.options.marketplace ? { marketplaceId: input.options.marketplace } : {}),
+  }), db);
+}
+async function readOpsCommand(db: Prisma.TransactionClient, identity: OpsIdentity, input: OpsCommand, now: Date) {
   const { organizationId, workspaceId } = identity; const scope = { organizationId, workspaceId };
   const { command, options } = input; const page = Number(options.page ?? 1); const take = 50;
+  const access = await assertOpsReadAccess(db, identity, input);
+  const params = new URLSearchParams({ ...(access ? { sellerAccountId: access.sellerIds[0] } : {}), ...(options.marketplace ? { marketplaceId: options.marketplace } : {}) });
   const sku = options.sku ? { sellerSku: { contains: options.sku, mode: "insensitive" as const } } : {};
   if (command === "metrics daily") return { ...unavailableDailyMetrics(), filters: parseDailyMetricsFilters(new URLSearchParams(options), now) };
   if (command === "sync runs") {
-    const allowed = sellerAccessWhere(await amazonDataAccess(scope, identity.actorUserId, db));
-    return { page, rows: await db.amazonSyncRun.findMany({ where: { ...scope, executionVersion: 2, source: { ...scope, ...allowed, seller: { status: "active" } }, ...(options.resource ? { resource: options.resource } : {}), ...(options.status ? { status: options.status } : {}) }, select: { id: true, sourceId: true, resource: true, status: true, startedAt: true, finishedAt: true, processedCount: true }, orderBy: [{ startedAt: "desc" }, { id: "desc" }], take, skip: (page - 1) * take }) };
+    const allowed = sellerAccessWhere(access!);
+    return { page, rows: await db.amazonSyncRun.findMany({ where: { ...scope, executionVersion: 2, source: { ...scope, ...allowed, ...(options.marketplace ? { marketplaceId: options.marketplace } : {}), seller: { status: "active" } }, ...(options.resource ? { resource: options.resource } : {}), ...(options.status ? { status: options.status } : {}) }, select: { id: true, sourceId: true, resource: true, status: true, startedAt: true, finishedAt: true, processedCount: true }, orderBy: [{ startedAt: "desc" }, { id: "desc" }], take, skip: (page - 1) * take }) };
   }
   if (command.startsWith("ppc ")) {
     const dataset = await readPpcDataset(db, identity);
     return command === "ppc suggest" ? suggestPpc(db, identity, dataset, now) : summarizePpc(dataset, now);
   }
-  const heads = await amazonPublishedReadScope(db, scope, identity.actorUserId);
+  const heads = await amazonPublishedReadScope(db, scope, identity.actorUserId, params);
   const latest = (resource: string) => db.amazonSyncRun.findFirst({ where: { ...scope, resource, status: "SUCCEEDED", executionVersion: 2, OR: heads.filter(h => h.resource === resource).map(h => ({ id: h.activeRunId!, sourceId: h.id })) }, orderBy: [{ finishedAt: "asc" }, { id: "asc" }] });
   if (command === "freshness") {
     const rows = await Promise.all(["inventory", "catalog", "ads", "orders", "finance", "fulfillment"].map(async (resource) => {

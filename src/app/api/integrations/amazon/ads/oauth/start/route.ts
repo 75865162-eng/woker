@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { AmazonCloudExecutionError } from "@/lib/amazon/execution-role";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { boundedJsonObject } from "@/lib/amazon-sync/request-body";
@@ -15,6 +16,7 @@ export async function POST(request: Request) {
     const scope = { organizationId: permission.user.organizationId, workspaceId: workspaceScopeFromRequest(request).workspaceId };
     return NextResponse.json(await startAmazonAdsOAuth(scope, permission.user.id, body.region as AdsRegion), { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
+    if (error instanceof AmazonCloudExecutionError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status, headers: { "Cache-Control": "no-store" } });
     return NextResponse.json({ error: error instanceof Error ? error.message : "无法开始 Amazon Ads 授权。" }, { status: 400, headers: { "Cache-Control": "no-store" } });
   }
 }

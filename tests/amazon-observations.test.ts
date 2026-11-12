@@ -1,12 +1,38 @@
+// Cloud role for injected offline HTTP fixtures; no real Amazon calls.
+process.env.AMAZON_API_EXECUTION_ROLE = "cloud";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { parseObservationPolicy, assertObservationClosed, observationReportSpec, assertObservationRoles, type AnalyticsPolicy, type PricingPolicy } from "../src/lib/amazon-sync/observation-policy";
-import { advanceObservation, initialObservationState } from "../src/lib/amazon-sync/observation-machine";
+import { advanceObservation, initialObservationState, parseObservationState, retryProductFailures, completeProductObject } from "../src/lib/amazon-sync/observation-machine";
 import { parseCompetitivePrices, parseObservationReport } from "../src/lib/amazon-sync/observation-parsers";
 import { parseProductDetail } from "../src/lib/amazon-sync/product-observations";
 const base = { applicationId: "fixture-app", maxRows: 1000, maxRequests: 100, requestsPerSecond: .01 };
 const site = "ATVPDKIKX0DER", id = "B123456789";
+test("inbound discovery resumes beyond 100 plans with stable ordinals and finite capacity", () => {
+  const p = parseObservationPolicy({ ...base, maxRequests: 1000, resource: "fulfillment", planIds: [], discoverPlans: true });
+  const context = { rawBody: "", marketplaceId: site, sellerId: "seller" };
+  const planId = (index: number) => String(index).padStart(38, "0");
+  const plan = (index: number) => ({ inboundPlanId: planId(index), marketplaceIds: [site], name: "", status: "ACTIVE", createdAt: "2025-01-01T00:00:00Z", lastUpdatedAt: "2025-01-01T00:00:00Z" });
+  let state = { ...initialObservationState(p), requests: 16, discoveredPlanIds: Array.from({ length: 95 }, (_, i) => planId(i)) };
+  const response = { inboundPlans: Array.from({ length: 6 }, (_, i) => plan(i + 95)), pagination: { nextToken: "next-page" } };
+  state = advanceObservation(p, state, response, context).state as typeof state;
+  assert.equal(state.discoveredPlanIds.length, 101);
+  assert.equal(state.stage, "DISCOVER_PLANS");
+  assert.equal(state.token, "next-page");
+  const resumed = parseObservationState(JSON.parse(JSON.stringify(state)), p);
+  const finished = advanceObservation(p, resumed, { inboundPlans: [plan(100), plan(101)] }, context).state;
+  assert.equal(finished.discoveredPlanIds?.length, 102);
+  assert.equal(finished.stage, "PLAN");
+  assert.equal(finished.planIndex, 0);
+  assert.equal(finished.requests, 16); // Parser/replay never resets or spends HTTP budget.
+  assert.deepEqual(state.discoveredPlanIds, Array.from({ length: 101 }, (_, i) => planId(i)));
+  const full = { ...state, discoveredPlanIds: Array.from({ length: 1000 }, (_, i) => planId(i)), token: undefined };
+  assert.doesNotThrow(() => parseObservationState(full, p));
+  assert.throws(() => advanceObservation(p, full, { inboundPlans: [plan(1000)] }, context));
+  assert.throws(() => parseObservationState({ ...full, discoveredPlanIds: [...full.discoveredPlanIds, planId(1000)] }, p));
+  assert.throws(() => parseObservationState({ ...state, requests: 1001 }, p));
+});
 function policy(kind: string, fields: Record<string, unknown> = {}) { return parseObservationPolicy({ ...base, resource: "brand_analytics", asins: ["search_query", "search_catalog"].includes(kind) ? [id, "B987654321"] : [], reportKind: kind, reportPeriod: "WEEK", from: "2025-01-05", to: "2025-01-11", marketplaceTimeZone: "America/Los_Angeles", brandEligibilityAttested: true, ...fields }) as AnalyticsPolicy; }
 function report(name: string) { return JSON.parse(readFileSync(`src/data/amazon-contracts/${name}.json`, "utf8")).examples[0]; }
 
@@ -127,4 +153,22 @@ test("bounded product detail policy enforces seller SKU and ASIN allowlists", ()
   assert.throws(() => parseObservationPolicy({ ...base, resource: "listing_details", sellerSkus: [] }));
   assert.throws(() => parseObservationPolicy({ ...base, resource: "catalog_items", asins: ["bad"] }));
   assert.throws(() => parseObservationPolicy({ ...base, resource: "catalog_items", asins: [id], requestsPerSecond: 1.01 }));
+});
+
+
+test("product partial retry visits only missing frozen ordinals and retains repeated 404 gaps", () => {
+  const p = parseObservationPolicy({ ...base, resource: "catalog_items", asins: ["B123456789", "B987654321", "B111111111", "B222222222"] });
+  const done = { ...initialObservationState(p), stage: "COMPLETE" as const, planIndex: 4, requests: 4, unavailableObjectIndexes: [1, 3] };
+  const retry = retryProductFailures(done, p);
+  assert.equal(retry.planIndex, 1); assert.deepEqual(retry.objectRetryQueue, [1, 3]);
+  assert.equal(retry.requests, 4); assert.deepEqual(done.unavailableObjectIndexes, [1, 3]);
+  // A definite repeated 404 retains this ordinal while the other missing object proceeds.
+  retry.unavailableObjectIndexes!.push(1); completeProductObject(retry, p);
+  assert.equal(retry.planIndex, 3); assert.doesNotThrow(() => parseObservationState(retry, p));
+  completeProductObject(retry, p); assert.equal(retry.stage, "COMPLETE");
+  assert.deepEqual(retry.unavailableObjectIndexes, [1]); assert.doesNotThrow(() => parseObservationState(retry, p));
+  assert.deepEqual(retryProductFailures(retry, p).objectRetryQueue, [1]);
+  assert.throws(() => parseObservationState({ ...retry, objectRetryQueue: [1, 1] }, p));
+  assert.throws(() => parseObservationState({ ...retry, stage: "PRODUCT_DETAIL", planIndex: 3, objectRetryQueue: [1] }, p));
+  assert.throws(() => retryProductFailures({ ...done, unavailableObjectIndexes: [4] }, p));
 });

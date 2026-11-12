@@ -1,6 +1,8 @@
+import { amazonAccountReadAccess } from "./read-account";
+import { observationBusinessFields } from "./observation-business-fields";
 import { queryPageSize } from "./query-page";
 import { prisma } from "@/lib/db/prisma";
-import { amazonDataAccess, sourceAccessWhere } from "./data-access";
+import { sourceAccessWhere } from "./data-access";
 import { brandReports, type BrandKind } from "./brand-reports";
 import { readBrandCollection } from "./brand-collection-query";
 import { businessDate } from "./date-range";
@@ -11,17 +13,22 @@ import { readBrandProducts } from "./brand-products-query";
 import type { BrandWindow } from "./brand-collection";
 
 async function resolveBrandSource(scope: SyncScope, params: URLSearchParams, actor: string) {
-  const access = await amazonDataAccess(scope, actor);
+  const access = await amazonAccountReadAccess(scope, actor, params, prisma, "brand_analytics");
+  params.set("sellerAccountId", access.sellerIds[0]);
   for (const name of ["sourceId", "sellerAccountId", "marketplaceId", "runId", "asin", "searchTerm"]) if ((params.get(name)?.length ?? 0) > 5000) throw new SyncInputError("筛选长度超限。");
   const sources = await prisma.amazonSyncDataSource.findMany({ where: { ...scope, ...sourceAccessWhere(access), resource: "brand_analytics", ...(params.get("sellerAccountId") ? { sellerAccountId: params.get("sellerAccountId")! } : {}), ...(params.get("marketplaceId") ? { marketplaceId: params.get("marketplaceId")! } : {}) },
     select: { id: true, revision: true, enabled: true, freshnessMinutes: true, authorizationId: true, authorization: { select: { revision: true } }, sellerAccountId: true, marketplaceId: true, domainPolicy: true, seller: { select: { displayName: true } } }, orderBy: { id: "asc" }, take: 201 });
   if (sources.length > 200) throw new SyncInputError("品牌来源超过本次容量。", 409);
   const source = params.get("sourceId") ? sources.find(s => s.id === params.get("sourceId")) : sources[0];
   if (params.get("sourceId") && !source) throw new SyncInputError("品牌来源不可访问。", 403);
+  if (source) params.set("sourceId", source.id);
   return { source, sources, access };
 }
 export async function readBrandAnalytics(scope: SyncScope, params: URLSearchParams, actor: string) {
-  return readBrandReport(scope, params, await resolveBrandSource(scope, params, actor));
+  params = new URLSearchParams(params);
+  const result = await readBrandReport(scope, params, await resolveBrandSource(scope, params, actor));
+  await amazonAccountReadAccess(scope, actor, params, prisma, "brand_analytics");
+  return result;
 }
 async function readBrandReport(scope: SyncScope, params: URLSearchParams, context: Awaited<ReturnType<typeof resolveBrandSource>>, enrich = true) {
   const { source, sources, access } = context;
@@ -64,7 +71,7 @@ async function readBrandReport(scope: SyncScope, params: URLSearchParams, contex
   const page = Math.min(100000, Math.max(1, Math.floor(Number(params.get("page")) || 1))), pageSize = queryPageSize(params);
   const where: Prisma.AmazonDomainObservationWhereInput = { ...scope, sourceId: source?.id ?? "__none__", sourceRunId: { in: runIds }, ...(asinVersions ? { OR: asinVersions } : {}), kind: `BRAND_${kind.toUpperCase()}`, ...(params.get("asin") ? { asin: params.get("asin")! } : {}), ...(params.get("searchTerm") ? { searchTerm: { contains: params.get("searchTerm")!, mode: "insensitive" } } : {}) };
   const [rows, total, latestTask, collection, plans] = await Promise.all([
-    prisma.amazonDomainObservation.findMany({ where, select: { id: true, sourceRunId: true, asin: true, searchTerm: true, facts: true, capturedAt: true }, orderBy: [{ asin: "asc" }, { id: "asc" }], take: pageSize, skip: (page - 1) * pageSize }),
+    prisma.amazonDomainObservation.findMany({ where, select: { id: true, sourceId: true, sourceRunId: true, asin: true, searchTerm: true, facts: true, capturedAt: true }, orderBy: [{ asin: "asc" }, { id: "asc" }], take: pageSize, skip: (page - 1) * pageSize }),
     prisma.amazonDomainObservation.count({ where }),
     source && enrich ? prisma.amazonSyncRun.findFirst({ where: { ...scope, sourceId: source.id, executionVersion: 2 }, select: { id: true, status: true, stage: true, error: true }, orderBy: [{ startedAt: "desc" }, { id: "desc" }] }) : null,
     source && params.get("coverage") === "1" ? readBrandCollection(prisma, scope, source) : null,
@@ -78,12 +85,13 @@ async function readBrandReport(scope: SyncScope, params: URLSearchParams, contex
   return { sources: sources.map(publicSource), source: source ? publicSource(source) : null,
     configuration: source && access.allSellers ? { ...publicSource(source), authorizationId: source.authorizationId, enabled: source.enabled, freshnessMinutes: source.freshnessMinutes, domainPolicy: source.domainPolicy } : null,
     products: linked.products, productWarnings: linked.warnings, plans, collection: collection ? { definition: collection.policy.collection, total: collection.total, completed: collection.completed, complete: collection.complete, items: collection.items } : null,
-    rows, versions: versions.slice(0, 100).map(v => ({ id: v.id, finishedAt: v.finishedAt, coverage: (v.summary as { coverage?: BrandWindow } | null)?.coverage })), versionsTruncated: versions.length > 100,
+    rows: await observationBusinessFields(scope, rows), numericEncoding: "JSON_NUMERIC_STRINGS", versions: versions.slice(0, 100).map(v => ({ id: v.id, finishedAt: v.finishedAt, coverage: (v.summary as { coverage?: BrandWindow } | null)?.coverage })), versionsTruncated: versions.length > 100,
     run: run ? { id: run.id, coverage: (run.summary as { coverage?: BrandWindow } | null)?.coverage } : null, batchCount: runIds.length, latestTask, pagination: { page, pageSize, total, pageCount: Math.ceil(total / pageSize) } };
 }
 
 /** Single-ASIN view: five bounded report reads, one product metadata join. */
 export async function readBrandAsinAnalysis(scope: SyncScope, params: URLSearchParams, actor: string) {
+  params = new URLSearchParams(params);
   const asin = params.get("asin") ?? "", period = params.get("reportPeriod") || "WEEK";
   if (!/^[A-Z0-9]{10}$/.test(asin) || !["DAY", "WEEK", "MONTH", "QUARTER"].includes(period)) throw new SyncInputError("请选择有效 ASIN 与报告粒度。", 422);
   const context = await resolveBrandSource(scope, params, actor);
@@ -95,16 +103,20 @@ export async function readBrandAsinAnalysis(scope: SyncScope, params: URLSearchP
   }));
   const partners = reports.filter(r => r.reportKind === "market_basket").flatMap(r => r.result?.rows.map(row => (row.facts as { purchasedWithAsin?: unknown }).purchasedWithAsin).filter((v): v is string => typeof v === "string") ?? []);
   const linked = context.source ? await readBrandProducts(scope, context.source, [asin, ...partners], context.access) : { products: {}, warnings: [] };
+  await amazonAccountReadAccess(scope, actor, params, prisma, "brand_analytics");
   return { asin, reportPeriod: period, source: context.source ? { id: context.source.id, sellerAccountId: context.source.sellerAccountId, marketplaceId: context.source.marketplaceId } : null, products: linked.products, productWarnings: linked.warnings, reports };
 }
 
 export async function readBrandAsins(scope: SyncScope, sourceId: string, actor: string) {
   if (!sourceId || sourceId.length > 200) throw new SyncInputError("请选择品牌来源。");
-  const access = await amazonDataAccess(scope, actor);
+  const params = new URLSearchParams({ sourceId });
+  const access = await amazonAccountReadAccess(scope, actor, params, prisma, "brand_analytics");
+  params.set("sellerAccountId", access.sellerIds[0]);
   const source = await prisma.amazonSyncDataSource.findFirst({ where: { ...scope, ...sourceAccessWhere(access), id: sourceId, resource: "brand_analytics" }, include: { authorization: { select: { revision: true, amazonSellerId: true } } } });
   if (!source) throw new SyncInputError("品牌来源不可访问。", 403);
   const catalog = await prisma.amazonSyncDataSource.findFirst({ where: { ...scope, ...sourceAccessWhere(access), authorizationId: source.authorizationId, sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId, resource: "catalog", enabled: true }, select: { id: true } });
   if (!catalog) throw new SyncInputError("该品牌来源没有同授权、同站点的完整商品快照。", 409);
   const manifest = await discoverProductObjects(prisma, scope, source, { resource: "catalog_items", applicationId: "brand-preview", asins: [], discovery: { mode: "catalog_snapshot", sourceId: catalog.id, maxObjects: 1000, batchSize: 100 }, requestsPerSecond: .01, maxRequests: 1000, maxRows: 1000 });
+  await amazonAccountReadAccess(scope, actor, params, prisma, "brand_analytics");
   return { manifest, note: "此清单来自当前已发布商品快照，仅为资格候选；不证明每个 ASIN 有品牌报告资格。批准后对象列表冻结，新商品需重新审阅。" };
 }

@@ -1,3 +1,7 @@
+// Cloud role for injected offline HTTP fixtures; no real Amazon calls.
+process.env.AMAZON_API_EXECUTION_ROLE = "cloud";
+import { orderRecoveryOutcome } from "@/lib/amazon-sync/orders-recovery";
+import { orderProgress, orderProgressGraceMs } from "@/lib/amazon-sync/orders-progress";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
@@ -5,12 +9,24 @@ import { AmazonSpApiClient, AmazonSpApiError } from "@/lib/amazon/sp-api-client"
 import { parseOrderSyncPolicy, nextOrderWindow, orderWindowFromFrozen, parseOrderPage, parseOrderDetail, parseOrderMoney, assertOrderRoles } from "@/lib/amazon-sync/orders";
 import { reserveOrderToken, orderBucketKey } from "@/lib/amazon-sync/orders-rate-limit";
 import { normalizeCommand } from "@/lib/amazon-sync/approval-policy";
-import { orderReadWhere } from "@/lib/amazon-sync/orders-query";
+import { orderReadWhere, orderReadFailure } from "@/lib/amazon-sync/orders-query";
+import { Prisma } from "@prisma/client";
 
 const fixture = (name: string) => JSON.parse(readFileSync(new URL(`./fixtures/amazon/orders/${name}.json`, import.meta.url), "utf8"));
 const policy = parseOrderSyncPolicy(fixture("policy"));
 const window = { from: policy.initialFrom, to: "2026-11-01T01:00:00.000Z" };
 const config = { lwaClientId: "fixture-client", lwaClientSecret: "fixture-secret", refreshToken: "fixture-refresh", awsAccessKeyId: "", awsSecretAccessKey: "", region: "fixture-region", endpoint: "https://spapi.fixture.invalid" };
+
+test("order schema failures expose an actionable code without SQL, identifiers or credentials", () => {
+  for (const code of ["P2021", "P2022"]) {
+    const error = new Prisma.PrismaClientKnownRequestError("fixture-private-sql", { code, clientVersion: "fixture", meta: { column: "fixture-private-column" } });
+    assert.throws(() => orderReadFailure(error), e => e instanceof Error && e.message.startsWith("SCHEMA_UPGRADE_REQUIRED:") && !e.message.includes("private"));
+  }
+  const missing = new Prisma.PrismaClientKnownRequestError("fixture-private-sql", { code: "P2022", clientVersion: "fixture", meta: { column: "AmazonOrderRecord.fulfilledBy" } });
+  assert.throws(() => orderReadFailure(missing), /20261109030000_amazon_order_fulfillment/);
+  const unrelated = new Error("fixture-unrelated");
+  assert.throws(() => orderReadFailure(unrelated), e => e === unrelated);
+});
 
 test("orders policy is explicit, bounded and rejects nonadvancing overlap", () => {
   for (const patch of [{ initialFrom: "2026-02-30T00:00:00Z" }, { windowMinutes: 0 }, { marketplaceTimeZone: "invented" }, { requestsPerSecond: 1 }, { burst: 21 }, { overlapSeconds: 3600 }, { statusMapping: { SHIPPED: 1 } }]) assert.throws(() => parseOrderSyncPolicy({ ...policy, ...patch }));
@@ -160,8 +176,11 @@ test("orders query intersects tenant, seller/site grants and explicit filters", 
   assert.ok(text.includes('"AND"') && text.includes("allowed-seller") && text.includes("forbidden-seller") && text.includes("allowed-site") && text.includes("forbidden-site") && text.includes("fixture-sku") && text.includes("fixture-asin"));
   assert.ok(text.includes('"createdTime"') && text.includes('"items"') && text.includes('"some"'));
   assert.ok(text.includes("2026-11-03T00:00:00.000Z"));
-  const updatedDate = orderReadWhere({ organizationId: "fixture-org", workspaceId: "fixture-ws" }, new URLSearchParams({ from: "2026-11-01" }), access);
+  const createdDate = orderReadWhere({ organizationId: "fixture-org", workspaceId: "fixture-ws" }, new URLSearchParams({ from: "2026-11-01" }), access);
+  assert.ok(JSON.stringify(createdDate).includes('"createdTime"'));
+  const updatedDate = orderReadWhere({ organizationId: "fixture-org", workspaceId: "fixture-ws" }, new URLSearchParams({ from: "2026-11-01", dateField: "sourceUpdatedAt" }), access);
   assert.ok(JSON.stringify(updatedDate).includes('"sourceUpdatedAt"'));
+  assert.throws(() => orderReadWhere({ organizationId: "fixture-org", workspaceId: "fixture-ws" }, new URLSearchParams({ dateField: "arbitraryField" }), access));
   for (const from of ["2026-02-30", "invalid", "2026-11-04"]) assert.throws(() => orderReadWhere({ organizationId: "fixture-org", workspaceId: "fixture-ws" }, new URLSearchParams({ from, to: "2026-11-01" }), access));
 });
 
@@ -178,7 +197,7 @@ test("core item access evidence is operation/site/revision bound and cannot auth
     assert.doesNotThrow(() => assertOrderRoles({ approvedRoles: [], rolesAttestedAt: null }, p));
     for (const change of [{ organizationId: "foreign" }, { workspaceId: "foreign" }, { authorizationId: "other" }, { authorizationRevision: 4 }, { marketplaceId: "other" }]) assert.throws(() => assertOrderRoles({ approvedRoles: [], rolesAttestedAt: null }, p, false, { ...c, ...change }));
     assert.throws(() => assertOrderAccessEvidence(proof, c, new Date(at.getTime() + 86400000)));
-    assert.doesNotThrow(() => assertOrderRoles({ approvedRoles: [], rolesAttestedAt: null }, { ...p, details: { ...p.details!, includedData: ["PROCEEDS"] } }, false, c));
+    assert.throws(() => assertOrderRoles({ approvedRoles: [], rolesAttestedAt: null }, { ...p, details: { ...p.details!, includedData: ["PROCEEDS"] } }, false, c), /数据范围/);
     assert.ok(!JSON.stringify(safeState(p)).includes(proof));
     assert.throws(() => parseOrderSyncPolicy({ ...p, details: { ...p.details, backfillExisting: "all" } }));
   } finally { if (prior === undefined) delete process.env.AMAZON_SP_API_ENCRYPTION_KEY; else process.env.AMAZON_SP_API_ENCRYPTION_KEY = prior; }
@@ -190,4 +209,97 @@ test("item browser pagination excludes base orders without items and preserves t
   const text = JSON.stringify(where);
   assert.ok(text.includes('"items":{"some":{}}'));
   assert.ok(text.includes('"organizationId":"fixture"'));
+});
+
+
+test("getOrder evidence binds optional request datasets and cannot upgrade core proof to proceeds", async () => {
+  const { orderAccessEvidence, assertOrderAccessEvidence } = await import("../src/lib/amazon-sync/order-access-evidence");
+  const priorKey = process.env.AMAZON_SP_API_ENCRYPTION_KEY;
+  process.env.AMAZON_SP_API_ENCRYPTION_KEY = Buffer.alloc(32, 47).toString("base64");
+  try {
+    const context = { organizationId: "fixture-org", workspaceId: "fixture-workspace", authorizationId: "fixture-auth", authorizationRevision: 1, marketplaceId: "fixture-marketplace" };
+    const response = { status: 200, parsed: true, requestId: "fixture-request" };
+    const now = new Date();
+    const core = orderAccessEvidence(context, response, now);
+    assertOrderAccessEvidence(core, { ...context, includedData: [] }, now);
+    assert.throws(() => assertOrderAccessEvidence(core, { ...context, includedData: ["PROCEEDS"] }, now), /数据范围/);
+    const proof = orderAccessEvidence({ ...context, includedData: ["PROCEEDS", "FULFILLMENT"] }, response, now);
+    assertOrderAccessEvidence(proof, { ...context, includedData: ["FULFILLMENT", "PROCEEDS", "PROCEEDS"] }, now);
+    for (const includedData of [[], ["PROCEEDS"], ["PROCEEDS", "FULFILLMENT", "BUYER"]]) assert.throws(() => assertOrderAccessEvidence(proof, { ...context, includedData }, now), /数据范围/);
+    const policy = parseOrderSyncPolicy(fixture("policy-details"));
+    policy.details = { ...policy.details!, includedData: ["PROCEEDS"], accessEvidence: core };
+    assert.throws(() => assertOrderRoles({ approvedRoles: [], rolesAttestedAt: null }, policy, false, context), /数据范围/);
+    policy.details.accessEvidence = orderAccessEvidence({ ...context, includedData: ["PROCEEDS"] }, response, now);
+    assertOrderRoles({ approvedRoles: [], rolesAttestedAt: null }, policy, false, context);
+  } finally { if (priorKey === undefined) delete process.env.AMAZON_SP_API_ENCRYPTION_KEY; else process.env.AMAZON_SP_API_ENCRYPTION_KEY = priorKey; }
+});
+
+
+test("order progress distinguishes intentional backoff, overdue dispatch, expired lease and approval", () => {
+  const now = new Date("2026-11-09T00:00:00Z"), old = new Date(now.getTime() - orderProgressGraceMs - 1), future = new Date(now.getTime() + 60000);
+  const task = { status: "WAITING", startedAt: old, executionStartedAt: old, updatedAt: old, nextAttemptAt: old, leaseExpiresAt: future, frozenScope: { executionExpiresAt: future.toISOString() } };
+  const state = (patch = {}, progress: Date | null = old) => orderProgress({ ...task, ...patch }, progress, now);
+  assert.equal(state().state, "POSSIBLE_STALL");
+  assert.equal(state({ nextAttemptAt: future }).state, "SCHEDULED_WAIT");
+  assert.equal(state({ nextAttemptAt: now }).state, "READY");
+  assert.equal(state({ status: "RUNNING", updatedAt: now }).state, "POSSIBLE_STALL", "heartbeats do not relabel business progress");
+  assert.equal(state({ status: "RUNNING" }, now).state, "RUNNING");
+  assert.equal(state({ status: "RUNNING", leaseExpiresAt: now }).state, "LEASE_RECOVERY_REQUIRED");
+  assert.equal(state({ frozenScope: {} }).state, "EXECUTION_APPROVAL_REQUIRED");
+  assert.equal(state({ frozenScope: { executionExpiresAt: now.toISOString() } }).state, "EXECUTION_APPROVAL_REQUIRED");
+  for (const status of ["FAILED", "BLOCKED", "PARTIAL_SUCCESS"]) assert.equal(state({ status }).state, "ACTION_REQUIRED");
+  assert.equal(state({ status: "PAUSED", frozenScope: {} }).state, "PAUSED");
+  assert.equal(state({ status: "SUCCEEDED", frozenScope: {} }).state, "FINISHED");
+  assert.equal(state({ status: "new-status" }).state, "UNKNOWN");
+  assert.equal(state({}, null).progressBasis, "EXECUTION_OR_QUEUE_START");
+  assert.equal(state().progressBasis, "COMMITTED_PAGE_OR_DETAIL");
+});
+
+
+test("order recovery outcome requires applied evidence and never infers historical completeness", () => {
+  const appliedAt = new Date("2026-11-09T00:00:00Z");
+  const baseline = { mode: "RESUME_COMMITTED_ORDER_CHECKPOINT", pagesCompleted: 2, detailsCompleted: 491, pendingDetails: 9 };
+  const task = { status: "WAITING", pagesCompleted: 2, detailsCompletedCount: 491 };
+  assert.equal(orderRecoveryOutcome(task, 9, baseline, null), null);
+  assert.equal(orderRecoveryOutcome(task, 9, {}, appliedAt), null);
+  assert.equal(orderRecoveryOutcome(task, 9, { ...baseline, detailsCompleted: -1 }, appliedAt), null);
+  assert.equal(orderRecoveryOutcome(task, 9, baseline, appliedAt)?.state, "AWAITING_PROGRESS");
+  const advanced = orderRecoveryOutcome({ ...task, detailsCompletedCount: 492 }, 8, baseline, appliedAt)!;
+  assert.equal(advanced.state, "ADVANCED"); assert.equal(advanced.detailsAdvanced, 1); assert.equal(advanced.pendingDetails, 8);
+  assert.equal(advanced.historicalUniverseComplete, false);
+  assert.equal(orderRecoveryOutcome({ ...task, status: "FAILED" }, 9, baseline, appliedAt)?.state, "FAILED_AGAIN");
+  assert.equal(orderRecoveryOutcome({ ...task, pagesCompleted: 1 }, 9, baseline, appliedAt)?.state, "COUNTER_MISMATCH");
+  assert.equal(orderRecoveryOutcome({ ...task, status: "SUCCEEDED" }, 1, baseline, appliedAt)?.state, "INCONSISTENT_PENDING_WORK");
+  assert.equal(orderRecoveryOutcome({ ...task, status: "SUCCEEDED", detailsCompletedCount: 500 }, 0, baseline, appliedAt)?.state, "WINDOW_COMPLETED");
+});
+
+
+test("detail fulfillment fields preserve official response text and absence without inference", () => {
+  const policy = parseOrderSyncPolicy(fixture("policy-details"));
+  const body = fixture("detail-1");
+  const parse = () => parseOrderDetail(body, "fixture-order-1", "fixture-marketplace", policy, new Date(window.from));
+  assert.equal(parse().fulfilledBy, null); assert.equal(parse().fulfillmentServiceLevel, null);
+  body.order.fulfillment.fulfilledBy = "AMAZON";
+  body.order.fulfillment.fulfillmentServiceLevel = "FutureService";
+  assert.equal(parse().fulfilledBy, "AMAZON"); assert.equal(parse().fulfillmentServiceLevel, "FutureService");
+  for (const value of [42, {}, "", "x".repeat(501)]) {
+    body.order.fulfillment.fulfilledBy = value; assert.throws(parse);
+  }
+  delete body.order.fulfillment.fulfilledBy;
+  body.order.fulfillment.fulfillmentServiceLevel = null;
+  assert.equal(parse().fulfillmentServiceLevel, null);
+});
+
+
+test("order fulfillment filters preserve exact values, bound input and reject duplicate parameters", () => {
+  const scope = { organizationId: "fixture-org", workspaceId: "fixture-ws" }, access = { allSellers: true, sellerIds: [] };
+  const where = orderReadWhere(scope, new URLSearchParams({ fulfilledBy: "FutureProvider", fulfillmentServiceLevel: "FutureService" }), access);
+  assert.ok(JSON.stringify(where).includes('"fulfilledBy":"FutureProvider"'));
+  assert.ok(JSON.stringify(where).includes('"fulfillmentServiceLevel":"FutureService"'));
+  for (const key of ["fulfilledBy", "fulfillmentServiceLevel"]) {
+    orderReadWhere(scope, new URLSearchParams({ [key]: "x".repeat(500) }), access);
+    assert.throws(() => orderReadWhere(scope, new URLSearchParams({ [key]: "x".repeat(501) }), access));
+    const duplicate = new URLSearchParams(); duplicate.append(key, "first"); duplicate.append(key, "second");
+    assert.throws(() => orderReadWhere(scope, duplicate, access));
+  }
 });

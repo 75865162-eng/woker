@@ -1,0 +1,219 @@
+[
+  {
+    "operation": "getPromotionsPage",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:129",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "getMarketplaceParticipations",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:139",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "getListingDetail",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:143",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "getNotificationSubscriptions",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:151",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "getCatalogDetail",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:160",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "searchListingsItems",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:168",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "getOwnPrices",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:178",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "getCompetitiveSummary",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:185",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "createObservationReport",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:191",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "listInboundPlans",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:195",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "getInboundPlan",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:199",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "listInboundPlanItems",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:203",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "getInboundShipment",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:207",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "listInboundShipmentItems",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:211",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "searchOrders",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:227",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "getOrder",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:240",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "listTransactions",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:255",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "getInventorySummaries",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:268",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "createSalesTrafficReport",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:279",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "createReport",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:290",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "createAllListingsReport",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:297",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "createSnapshotReport",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:300",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "createInventoryLedgerReport",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:306",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "getReports",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:324",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "getReport",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:337",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "getReportDocument",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:341",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "downloadReportDocument",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:345",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "downloadReportJsonText",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:347",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "downloadReportText",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:350",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "downloadReportPart",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:352",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  },
+  {
+    "operation": "request",
+    "erp_source": "src/lib/amazon/sp-api-client.ts:430",
+    "status": "CODE_PRESENT_NOT_REAL_VERIFIED",
+    "source": "current working tree",
+    "schema": "official operation/field evidence still required"
+  }
+]

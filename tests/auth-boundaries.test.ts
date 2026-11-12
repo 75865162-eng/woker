@@ -33,7 +33,7 @@ test("workspace access query is tenant-bound", async () => {
   }]);
 });
 
-test("operations view permission is required independently of workspace membership", async () => {
+test("Amazon reads use account checks while PPC workbooks retain module permissions", async () => {
   const identity: OpsIdentity = { organizationId: "org-a", workspaceId: "workspace-a", actorUserId: "user-a" };
   const db = {
     organizationMember: { findFirst: async () => ({ role: "staff" }) },
@@ -41,7 +41,8 @@ test("operations view permission is required independently of workspace membersh
     organizationRosterRole: { findMany: async () => [{ id: "staff", permissions: { workspace: ["view"] } }] },
   } as unknown as Prisma.TransactionClient;
 
-  await assert.rejects(() => authorizeOps(db, identity, parseOpsArgs(["freshness"])), /Missing module view permission/);
+  await authorizeOps(db, identity, parseOpsArgs(["freshness"]));
+  await assert.rejects(() => authorizeOps(db, identity, parseOpsArgs(["ppc", "report-summary"])), /Missing module view permission/);
 });
 
 test("forged permission and session cookies cannot create a database-backed identity", async () => {

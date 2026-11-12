@@ -1,3 +1,4 @@
+import { AmazonCloudExecutionError } from "@/lib/amazon/execution-role";
 import { NextResponse } from "next/server";
 import { boundedJsonObject } from "@/lib/amazon-sync/request-body";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
@@ -13,5 +14,5 @@ export async function POST(request: Request) {
     const scope = { organizationId: permission.user.organizationId, workspaceId: workspaceScopeFromRequest(request).workspaceId };
     if (typeof body.region !== "string") throw new SyncInputError("区域无效。");
     return NextResponse.json(await startAmazonOAuth(scope, permission.user.id, body.region), { headers: { "Cache-Control": "no-store" } });
-  } catch (e) { return NextResponse.json({ error: e instanceof SyncInputError ? e.message : "无法开始 Amazon 授权。" }, { status: e instanceof SyncInputError ? e.status : 500, headers: { "Cache-Control": "no-store" } }); }
+  } catch (e) { return NextResponse.json({ ...(e instanceof AmazonCloudExecutionError ? { code: e.code } : {}), error: e instanceof SyncInputError ? e.message : "无法开始 Amazon 授权。" }, { status: e instanceof SyncInputError ? e.status : 500, headers: { "Cache-Control": "no-store" } }); }
 }

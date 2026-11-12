@@ -1,0 +1,1106 @@
+{
+  "review_date": "2026-11-12",
+  "recorded_at_utc": "2026-11-12T05:37:56.740265+00:00",
+  "source_root": "/Users/chenjieliang/Documents/wimoor",
+  "source_head": "8f894b1eccb8df5d16af19a75c6a517795bf02a5",
+  "source_scan_scope": "rg --files --hidden -g !.git -g !node_modules -g !target -g !dist; nonignored only; no SQL/Java/config executed",
+  "baseline_files": 9082,
+  "current_files": 9082,
+  "changed": [],
+  "missing": [],
+  "added": [],
+  "source_package_groups": [
+    {
+      "source_module": "wimoor-admin",
+      "package_path": "com/wimoor/admin/service",
+      "implementation_candidates": 20,
+      "files": [
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/NotifyHandlerServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysCompanyServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysDeptServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysDictItemServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysDictServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysLocalHolidayServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysMenuFavoriteServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysMenuServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysOauthClientServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysPermissionServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysRoleMenuServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysRolePermissionServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysRoleServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysUserBindServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysUserDatalimitServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysUserGroupServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysUserOnlineServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysUserRoleServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysUserServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysUserWechatMPServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-admin",
+      "package_path": "com/wimoor/common/service",
+      "implementation_candidates": 4,
+      "files": [
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/common/service/impl/QuartzTaskFactory.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/common/service/impl/SchedulerFactoryBeanWithShutdownDelay.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/common/service/impl/SystemSchedulerInit.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/common/service/impl/SystemSchedulerServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-admin",
+      "package_path": "com/wimoor/feishu/service",
+      "implementation_candidates": 7,
+      "files": [
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/feishu/service/impl/AndTablesServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/feishu/service/impl/AuthServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/feishu/service/impl/DocxServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/feishu/service/impl/FeiShuUrlParser.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/feishu/service/impl/LeaveCalendarServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/feishu/service/impl/RobotService.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/feishu/service/impl/SysFeishuTableServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-admin",
+      "package_path": "com/wimoor/manager/service",
+      "implementation_candidates": 9,
+      "files": [
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/service/impl/ManagerLimitAppendServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/service/impl/ManagerLimitServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/service/impl/ShopServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/service/impl/SysCustomerInvoiceServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/service/impl/SysCustomerOrderRefundServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/service/impl/SysCustomerOrderServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/service/impl/SysTariffPackagesAppendDiscountServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/service/impl/SysTariffPackagesAppendServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/service/impl/SysTariffPackagesServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-admin",
+      "package_path": "com/wimoor/open1688/utils",
+      "implementation_candidates": 1,
+      "files": [
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/open1688/utils/ApiCallService.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-admin",
+      "package_path": "com/wimoor/sys/email",
+      "implementation_candidates": 3,
+      "files": [
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/email/service/impl/MailService.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/email/service/impl/SysMailManagerServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/email/service/impl/SysMailTemplateServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-admin",
+      "package_path": "com/wimoor/sys/tool",
+      "implementation_candidates": 12,
+      "files": [
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/service/impl/DeepseekChatMessagesServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/service/impl/DeepseekChatSessionsServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/service/impl/LargeFileServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/service/impl/LargeFileUserServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/service/impl/NotepadServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/service/impl/SysDeepSeekServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/service/impl/SysQueryFieldServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/service/impl/SysQueryUserVersionServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/service/impl/SysQueryVersionFeildServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/service/impl/SysTagsGroupsServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/service/impl/SysTagsServiceImpl.java",
+        "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/service/impl/SysTemplateFileServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-amazon",
+      "package_path": "com/wimoor/amazon/auth",
+      "implementation_candidates": 11,
+      "files": [
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/auth/service/impl/AmazonAuthorityServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/auth/service/impl/AmazonGroupInfoServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/auth/service/impl/AmazonGroupServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/auth/service/impl/AmazonSellerMarketServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/auth/service/impl/AmzApiTimelimitUtil.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/auth/service/impl/AmzAuthApiTimelimitServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/auth/service/impl/ApiBuildService.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/auth/service/impl/ApiCallbackGetMarketplaceParticipations.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/auth/service/impl/FollowOfferServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/auth/service/impl/MarketPriorityServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/auth/service/impl/MarketplaceServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-amazon",
+      "package_path": "com/wimoor/amazon/common",
+      "implementation_candidates": 11,
+      "files": [
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/service/impl/AmazonMoveDataServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/service/impl/DaysalesFormulaServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/service/impl/EstimatedSalesServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/service/impl/ExchangeRateHandlerServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/service/impl/ExchangeRateServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/service/impl/ImportRecordServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/service/impl/PBCExchangeRateParser.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/service/impl/PBCHttpClientService.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/service/impl/SummaryDataServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/service/impl/UserSalesRankServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/service/impl/WHJHttpClientService.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-amazon",
+      "package_path": "com/wimoor/amazon/feed",
+      "implementation_candidates": 9,
+      "files": [
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/feed/service/impl/ApiCallbackCreateFeed.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/feed/service/impl/ApiCallbackCreateFeedDocument.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/feed/service/impl/ApiCallbackGetFeed.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/feed/service/impl/FeedFileInboundFBAExcel.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/feed/service/impl/FeedFileInboundFBAXML.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/feed/service/impl/FeedFileInventoryXML.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/feed/service/impl/FeedFileProductPriceXML.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/feed/service/impl/FeedFileProductXML.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/feed/service/impl/SubmitfeedServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-amazon",
+      "package_path": "com/wimoor/amazon/finances",
+      "implementation_candidates": 17,
+      "files": [
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/service/impl/AmazonSettlementOpenServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/service/impl/AmzFinAccountServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/service/impl/AmzFinEmailServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/service/impl/AmzFinSettlementFormulaServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/service/impl/AmzFinUserItemDataServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/service/impl/AmzFinUserItemServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/service/impl/AmzSettlementAccReportServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/service/impl/AmzSettlementAccStatementImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/service/impl/AmzSettlementReportServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/service/impl/AmzSettlementSKUShareServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/service/impl/AmzSettlementSummarySkuMonthServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/service/impl/AmzStorageFeeServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/service/impl/ApiCallbackListFinancialEventGroupsEvents.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/service/impl/FBAEstimatedFeeServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/service/impl/FBAReimbursementsFeeReportServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/service/impl/OrdersFinancialServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/service/impl/PaymentReportServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-amazon",
+      "package_path": "com/wimoor/amazon/inbound",
+      "implementation_candidates": 16,
+      "files": [
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/service/impl/AmzInboundFbaCycleServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/service/impl/AmzShipFulfillmentCenterServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/service/impl/ApiCallbackGetShipmentItems.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/service/impl/ApiCallbackGetShipments.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/service/impl/FBAShipCycleServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/service/impl/FulfillmentInboundServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/service/impl/ShipAddressServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/service/impl/ShipAddressToServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/service/impl/ShipInboundBoxServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/service/impl/ShipInboundCaseServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/service/impl/ShipInboundItemServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/service/impl/ShipInboundPlanServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/service/impl/ShipInboundShipmentRecordServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/service/impl/ShipInboundShipmentServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/service/impl/ShipInboundTransServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/service/impl/ShipInboundshipmentTraceuploadServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-amazon",
+      "package_path": "com/wimoor/amazon/inboundV2",
+      "implementation_candidates": 25,
+      "files": [
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ApiCallbackGetShipmentItems.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ApiCallbackGetShipments.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/CustomDataServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/InboundApiHandlerServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ProductCustomsSettingServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ShipCrossborderXmlServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ShipCustomsServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ShipInboundBoxAnalysis1ServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ShipInboundBoxAnalysis2ServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ShipInboundBoxAnalysis3ServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ShipInboundBoxServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ShipInboundCaseServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ShipInboundCustomsXmlItemServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ShipInboundCustomsXmlServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ShipInboundItemServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ShipInboundOperationServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ShipInboundPlanQuotaV2ServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ShipInboundPlanServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ShipInboundShipmentCustomServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ShipInboundShipmentCustomsServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ShipInboundShipmentRecordV2ServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ShipInboundShipmentServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ShipInboundShipmentTemplateFileServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ShipInboundTransportationServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ShipV2InboundplanPalletServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-amazon",
+      "package_path": "com/wimoor/amazon/inventory",
+      "implementation_candidates": 4,
+      "files": [
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inventory/service/impl/AmzInventoryPlanningServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inventory/service/impl/FBAInventoryServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inventory/service/impl/InventorySummaryReportServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inventory/service/impl/InventorySupplyServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-amazon",
+      "package_path": "com/wimoor/amazon/notifications",
+      "implementation_candidates": 5,
+      "files": [
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/notifications/service/impl/AmzNotificationsDestinationServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/notifications/service/impl/AmzNotificationsServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/notifications/service/impl/AmzNotificationsSubscriptionsServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/notifications/service/impl/AwsSQSMessageAdaperServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/notifications/service/impl/AwsSQSService.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-amazon",
+      "package_path": "com/wimoor/amazon/orders",
+      "implementation_candidates": 15,
+      "files": [
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/service/impl/AmzOrderItemServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/service/impl/AmzOrderMainServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/service/impl/AmzOrderMessagingServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/service/impl/AmzOrderRemovesServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/service/impl/AmzOrderSolicitationsServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/service/impl/ApiCallbackGetOrderItems.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/service/impl/ApiCallbackGetOrders.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/service/impl/FulfillmentOutboundOrdersServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/service/impl/OrderFBMReturnServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/service/impl/OrderManagerServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/service/impl/OrderReturnServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/service/impl/OrderWordHandler.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/service/impl/OrdersFulfilledShipmentsFeeServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/service/impl/OrdersTodaySalesServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/service/impl/SummaryAllServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-amazon",
+      "package_path": "com/wimoor/amazon/performance",
+      "implementation_candidates": 5,
+      "files": [
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/performance/service/impl/AmzCouponAsinServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/performance/service/impl/AmzCouponPerformanceReportServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/performance/service/impl/AmzOrderFeedbackServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/performance/service/impl/AmzPromotionsAsinServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/performance/service/impl/AmzPromotionsPerformanceReportServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-amazon",
+      "package_path": "com/wimoor/amazon/product",
+      "implementation_candidates": 27,
+      "files": [
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/AmzAplusContentServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/AmzProductPageviewsServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/AmzProductPriceRecordServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/AmzProductRefreshServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/AmzProductSalesPlanServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/AmzProductSalesPlanShipItemServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/ApiCallbackGetCatalogItem.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/ApiCallbackGetPricing.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/ApiCallbackItem.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/DataKioskRequestServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/FollowOfferChangeServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/MerchantShippingGroupServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/ProductCatalogItemServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/ProductFollowHandlerServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/ProductInAftersaleServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/ProductInAutopriceServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/ProductInOptServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/ProductInOrderServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/ProductInPresaleServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/ProductInReviewServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/ProductInfoServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/ProductInfoStatusServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/ProductListingSmallAndLightServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/ProductListingsItemServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/ProductProductPriceServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/ProductProductTypeServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/impl/ProductRankServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-amazon",
+      "package_path": "com/wimoor/amazon/profit",
+      "implementation_candidates": 29,
+      "files": [
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/pojo/entity/PrepServiceFee.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/AEProfitServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/AUProfitServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/CAProfitServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/CalculateProfitServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/EUProfitServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/FBASippServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/FbaFormatServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/FbaLabelingFeeServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/INProfitServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/IndividualFeeServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/InplaceFeeFormatServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/InplaceFeeServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/InventoryStorageFeeServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/JPProfitServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/MXProfitServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/NumberValue.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/OutBoundWeightFormatServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/ProductFormatServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/ProductTierServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/ProfitCfgCountryServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/ProfitCfgServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/ProfitParameterServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/ProfitServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/ReferralFeeServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/SAProfitServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/UKProfitServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/USProfitServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/VariableClosingFeeServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-amazon",
+      "package_path": "com/wimoor/amazon/report",
+      "implementation_candidates": 45,
+      "files": [
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ApiCallbackGetReport.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ApiCallbackGetReportDocument.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ApiCallbackGetReports.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ApiCallbackReportCreate.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/HandlerReportServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzBrandAnalyticsSearchTermsServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzCouponServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzFBAFeeServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzFBALongTermStorageFeeServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzFBAReimbursementsFeeServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzFBAShipmentRemoveServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzFBAStorageFeeServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzFBMReturnsServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzFeedbackServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzFulFilledShipmentsServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzInventoryAgeServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzInventoryCountryServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzInventoryDetailServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzInventoryLoaderServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzInventoryPlanningServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzInventoryServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzInventorySummaryServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzInvoiceDataServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzOrderByLastUpdateServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzOrderByOrderDateServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzOrderInvoiceServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzPaymentServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzPerformanceServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzProductActiveListServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzProductAllListServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzProductOpenListServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzProductRecommendedListServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzPromotionsServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzReservedInventoryServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzReturnsServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzSalesAndTrafficBusinessServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportAmzSettlementListServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportBrowseTreeServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportEPRMonthlyReportServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportFBAUNOInventoryServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportFBAVatTransactionReportServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportInventoryHealthListServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportRequestRecordServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportRequestTypeServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/ReportServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-amazon",
+      "package_path": "com/wimoor/amazon/summary",
+      "implementation_candidates": 3,
+      "files": [
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/summary/service/impl/AmazonSettlementAnalysisAgentServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/summary/service/impl/OrdersSumServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/summary/service/impl/SummaryOrderReportServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-amazon",
+      "package_path": "com/wimoor/amazon/transparency",
+      "implementation_candidates": 4,
+      "files": [
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/transparency/service/impl/TransparencyAuthorityServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/transparency/service/impl/TransparencySkuinfoServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/transparency/service/impl/TransparencyTaskServiceImpl.java",
+        "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/transparency/service/impl/TransparencyTcodeServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-amazon-adv",
+      "package_path": "com/wimoor/amazon/adv/common",
+      "implementation_candidates": 22,
+      "files": [
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/common/service/impl/AmazonGroupServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/common/service/impl/AmazonReportAdvSummaryServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/common/service/impl/AmzAdvApiPagesServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/common/service/impl/AmzAdvAssetsServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/common/service/impl/AmzAdvAuthServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/common/service/impl/AmzAdvBidReCommendServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/common/service/impl/AmzAdvBrandServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/common/service/impl/AmzAdvBrowseNodeServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/common/service/impl/AmzAdvOperateLogServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/common/service/impl/AmzAdvPortfoliosServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/common/service/impl/AmzAdvRecommendationsTargetServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/common/service/impl/AmzAdvRemarkServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/common/service/impl/AmzAdvRemindServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/common/service/impl/AmzAdvSerchHistoryServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/common/service/impl/AmzAdvStoresServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/common/service/impl/AmzAdvTimeTaskHandlerServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/common/service/impl/AmzAdvWarningDateServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/common/service/impl/AmzAdvertInvoicesServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/common/service/impl/ApiBuildServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/common/service/impl/ExchangeRateHandlerServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/common/service/impl/ExchangeRateServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/common/service/impl/MarketplaceServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-amazon-adv",
+      "package_path": "com/wimoor/amazon/adv/exports",
+      "implementation_candidates": 7,
+      "files": [
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/exports/service/impl/AdvExportType.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/exports/service/impl/AmzAdvExportsAdGroupsHandlerServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/exports/service/impl/AmzAdvExportsAdsHandlerServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/exports/service/impl/AmzAdvExportsCampaignsHandlerServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/exports/service/impl/AmzAdvExportsTargetsHandlerServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/exports/service/impl/AmzAdvSnapshotHandlerApiServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/exports/service/impl/AmzAdvSnapshotHandlerServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-amazon-adv",
+      "package_path": "com/wimoor/amazon/adv/report",
+      "implementation_candidates": 32,
+      "files": [
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportHandlerServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportPlacementServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTargetQueryServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatAdgroupsHsaServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatAdgroupsSDServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatAdgroupsServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatAdsHsaServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatAsinSDServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatAsinsServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatCampaignsHsaServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatCampaignsPlaceHsaServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatCampaignsPlaceServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatCampaignsSDServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatCampaignsServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatCampaignsT00001SDServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatKeywordsHsaQuryServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatKeywordsHsaServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatKeywordsQuryServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatKeywordsServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatProductSDServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatProductServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatProductTargetHsaServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatProductTargetSDServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatProductTargetServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatPurchaseProductHSAServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatPurchaseProductSDServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatPurchaseProductServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvReportTreatTargetQueryServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvSumAllTypeServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/report/service/impl/AmzAdvSumProductAdsServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-amazon-adv",
+      "package_path": "com/wimoor/amazon/adv/sb",
+      "implementation_candidates": 9,
+      "files": [
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sb/service/impl/AmzAdvAdgroupsHsaServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sb/service/impl/AmzAdvAdsHsaServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sb/service/impl/AmzAdvCampaignHsaServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sb/service/impl/AmzAdvCreativesHsaServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sb/service/impl/AmzAdvKeywordsHsaServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sb/service/impl/AmzAdvKeywordsNegativaHsaServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sb/service/impl/AmzAdvProductTargeHsaServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sb/service/impl/AmzAdvProductTargeNegativaHsaServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sb/service/impl/AmzAdvRecommendationsHsaServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-amazon-adv",
+      "package_path": "com/wimoor/amazon/adv/sd",
+      "implementation_candidates": 7,
+      "files": [
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sd/service/impl/AmzAdvAdgroupsSDServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sd/service/impl/AmzAdvCampaignsSDServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sd/service/impl/AmzAdvCreativesSDServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sd/service/impl/AmzAdvProductAdsSDServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sd/service/impl/AmzAdvProductTargeNegativaSDServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sd/service/impl/AmzAdvProductTargeSDServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sd/service/impl/AmzAdvRecommendationsSDServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-amazon-adv",
+      "package_path": "com/wimoor/amazon/adv/sellfox",
+      "implementation_candidates": 2,
+      "files": [
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sellfox/service/SellfoxClient.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sellfox/service/impl/SellfoxAdvertisingSyncServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-amazon-adv",
+      "package_path": "com/wimoor/amazon/adv/sp",
+      "implementation_candidates": 13,
+      "files": [
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sp/service/impl/AmzAdvAdGroupServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sp/service/impl/AmzAdvBiddingRulesServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sp/service/impl/AmzAdvBudgetRulesServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sp/service/impl/AmzAdvCampKeywordsNegativaServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sp/service/impl/AmzAdvCampOptimizationRulesServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sp/service/impl/AmzAdvCampProductTargeNegativaServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sp/service/impl/AmzAdvCampaignServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sp/service/impl/AmzAdvKeywordsNegativaServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sp/service/impl/AmzAdvKeywordsServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sp/service/impl/AmzAdvProductAdsServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sp/service/impl/AmzAdvProductTargeNegativaServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sp/service/impl/AmzAdvProductTargeServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sp/service/impl/AmzAdvRecommendationsServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-amazon-adv",
+      "package_path": "com/wimoor/amazon/adv/task",
+      "implementation_candidates": 2,
+      "files": [
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/task/service/impl/AdvSchedulePlanItemServiceImpl.java",
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/task/service/impl/AdvSchedulePlanServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-amazon-adv",
+      "package_path": "com/wimoor/amazon/base",
+      "implementation_candidates": 1,
+      "files": [
+        "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/base/BaseService.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-common",
+      "package_path": "com/wimoor/common/ServiceNameConstants.java",
+      "implementation_candidates": 1,
+      "files": [
+        "wimoor-common/common-core/src/main/java/com/wimoor/common/ServiceNameConstants.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-common",
+      "package_path": "com/wimoor/common/core",
+      "implementation_candidates": 2,
+      "files": [
+        "wimoor-common/common-core-ext/src/main/java/com/wimoor/common/core/constant/ServiceNameConstants.java",
+        "wimoor-common/common-core-ext/src/main/java/com/wimoor/common/core/exception/ServiceException.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-common",
+      "package_path": "com/wimoor/common/service",
+      "implementation_candidates": 13,
+      "files": [
+        "wimoor-common/common-entity/src/main/java/com/wimoor/common/service/impl/BaseServiceImpl.java",
+        "wimoor-common/common-entity/src/main/java/com/wimoor/common/service/impl/OperationLogServiceImpl.java",
+        "wimoor-common/common-entity/src/main/java/com/wimoor/common/service/impl/PictureServiceImpl.java",
+        "wimoor-common/common-entity/src/main/java/com/wimoor/common/service/impl/SerialNumServiceImpl.java",
+        "wimoor-common/common-entity/src/main/java/com/wimoor/common/service/impl/SystemLogAspect.java",
+        "wimoor-common/common-storage/src/main/java/com/wimoor/common/service/impl/StorageLargeService.java",
+        "wimoor-common/common-storage/src/main/java/com/wimoor/common/service/impl/StorageService.java",
+        "wimoor-common/common-storage/src/main/java/com/wimoor/common/service/util/FTPLargeServerUtil.java",
+        "wimoor-common/common-storage/src/main/java/com/wimoor/common/service/util/FTPServerUtil.java",
+        "wimoor-common/common-storage/src/main/java/com/wimoor/common/service/util/MinIOApiUtil.java",
+        "wimoor-common/common-storage/src/main/java/com/wimoor/common/service/util/MinIOLargeApiUtil.java",
+        "wimoor-common/common-storage/src/main/java/com/wimoor/common/service/util/OSSApiUtil.java",
+        "wimoor-common/common-storage/src/main/java/com/wimoor/common/service/util/OSSLargeApiUtil.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-erp",
+      "package_path": "com/wimoor/erp/common",
+      "implementation_candidates": 4,
+      "files": [
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/common/service/impl/DownloadReportServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/common/service/impl/ExcelDownLoadServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/common/service/impl/ImportRecordServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/common/service/impl/SummaryDataServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-erp",
+      "package_path": "com/wimoor/erp/customer",
+      "implementation_candidates": 1,
+      "files": [
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/customer/service/impl/CustomerServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-erp",
+      "package_path": "com/wimoor/erp/finance",
+      "implementation_candidates": 3,
+      "files": [
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/finance/service/impl/FaccountServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/finance/service/impl/FinJournalAccountServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/finance/service/impl/FinanceProjectServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-erp",
+      "package_path": "com/wimoor/erp/inventory",
+      "implementation_candidates": 5,
+      "files": [
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/inventory/service/impl/InventoryFormAgentServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/inventory/service/impl/InventoryHisServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/inventory/service/impl/InventoryMonthSummaryServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/inventory/service/impl/InventoryRecordServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/inventory/service/impl/InventoryServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-erp",
+      "package_path": "com/wimoor/erp/material",
+      "implementation_candidates": 17,
+      "files": [
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/service/impl/AssemblyEntryInstockServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/service/impl/AssemblyFormEntryServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/service/impl/AssemblyFormServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/service/impl/AssemblyServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/service/impl/DimensionsInfoServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/service/impl/MaterialBrandServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/service/impl/MaterialCategoryServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/service/impl/MaterialConsumableInventoryServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/service/impl/MaterialConsumableSafetyStockServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/service/impl/MaterialConsumableServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/service/impl/MaterialGroupServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/service/impl/MaterialMarkServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/service/impl/MaterialServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/service/impl/MaterialSupplierServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/service/impl/StepWisePriceServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/service/impl/StockCycleServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/service/impl/ZipRarUploadServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-erp",
+      "package_path": "com/wimoor/erp/order",
+      "implementation_candidates": 10,
+      "files": [
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/service/impl/ErpOverseaCycleServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/service/impl/OrderInvoiceServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/service/impl/OrderListingServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/service/impl/OrderPlanServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/service/impl/OrderPlatformServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/service/impl/OrderServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/service/impl/OrderShipCycleServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/service/impl/OrderShipPlanFormServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/service/impl/OrderShipPlanServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/service/impl/OrderSkuPresaleServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-erp",
+      "package_path": "com/wimoor/erp/purchase",
+      "implementation_candidates": 29,
+      "files": [
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/impl/ErpPurchaseAlibabaContactServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/impl/ErpPurchaseAlibabaOrderBaseinfoServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/impl/ErpPurchaseAlibabaOrderProductitemsServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/impl/ErpPurchaseAlibabaOrderReceiverinfoServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/impl/ErpPurchaseAlibabaOrderTradetermsServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/impl/ErpPurchaseAlibabaProductitemsServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/impl/Open1688MessageServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/impl/PurchaseAlibabaAuthServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/impl/PurchaseAlibabaMessageHandler.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/impl/PurchaseAlibabaSettlementOrderReturnServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/impl/PurchaseAlibabaSettlementOrderServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/impl/PurchaseAlibabaSettlementPayReturnServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/impl/PurchaseAlibabaSettlementPayServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/impl/PurchaseAlibabaSettlementServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/impl/PurchaseFormEntryAlibabaInfoServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/service/impl/PreprocessFormServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/service/impl/PurchaseFinanceFormServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/service/impl/PurchaseFormEntryChangeReceiveServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/service/impl/PurchaseFormEntryChangeServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/service/impl/PurchaseFormEntryServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/service/impl/PurchaseFormPaymentServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/service/impl/PurchaseFormReceiveServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/service/impl/PurchaseFormServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/service/impl/PurchasePlanConsumableItemServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/service/impl/PurchasePlanItemServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/service/impl/PurchasePlanServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/service/impl/PurchasePlanWareHouseServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/service/impl/PurchaseWareHouseMaterialServiceImp.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/service/impl/PurchaseWareHouseStatusServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-erp",
+      "package_path": "com/wimoor/erp/ship",
+      "implementation_candidates": 9,
+      "files": [
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/ship/pojo/entity/ShipTransCompayServicesZhihui.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/ship/service/impl/ErpShipTransTypeServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/ship/service/impl/ShipAmazonFormServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/ship/service/impl/ShipCustomsServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/ship/service/impl/ShipFormServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/ship/service/impl/ShipPlanItemServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/ship/service/impl/ShipTransChannelServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/ship/service/impl/ShipTransCompanyServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/ship/service/impl/ShipTransDetailServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-erp",
+      "package_path": "com/wimoor/erp/stock",
+      "implementation_candidates": 20,
+      "files": [
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/service/impl/BoxFileExcel.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/service/impl/ChangeWhFormEntryServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/service/impl/ChangeWhFormServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/service/impl/DispatchFormEntryServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/service/impl/DispatchFormServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/service/impl/ErpDispatchOverseaBoxServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/service/impl/ErpDispatchOverseaFormEntryServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/service/impl/ErpDispatchOverseaFormServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/service/impl/ErpDispatchOverseaTransServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/service/impl/InWarehouseFormEntryServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/service/impl/InWarehouseFormServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/service/impl/OutWarehouseFormEntryServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/service/impl/OutWarehouseFormServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/service/impl/OutwhFormConsumableServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/service/impl/ShipInboundCaseServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/service/impl/StockTakingItemServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/service/impl/StockTakingItemShelfServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/service/impl/StockTakingServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/service/impl/StocktakingShelfServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/service/impl/StocktakingWarehouseServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-erp",
+      "package_path": "com/wimoor/erp/thirdparty",
+      "implementation_candidates": 11,
+      "files": [
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/thirdparty/service/impl/Md5Srv2.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/thirdparty/service/impl/OverseasWarehouseKeyManager.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/thirdparty/service/impl/ShipTransCompanyZMServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/thirdparty/service/impl/ShipTransCompanyZhihuiServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/thirdparty/service/impl/ThirdPartyApiServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/thirdparty/service/impl/ThirdPartyQuoteBuyerServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/thirdparty/service/impl/ThirdPartyWarehouseBindServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/thirdparty/service/impl/WarehouseK5ServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/thirdparty/service/impl/WarehouseOPSServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/thirdparty/service/impl/WarehouseXLServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/thirdparty/service/impl/WarehouseYCServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-erp",
+      "package_path": "com/wimoor/erp/util",
+      "implementation_candidates": 1,
+      "files": [
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/util/ApiCallService.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-erp",
+      "package_path": "com/wimoor/erp/warehouse",
+      "implementation_candidates": 7,
+      "files": [
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/warehouse/service/impl/ErpWarehouseAddressServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/warehouse/service/impl/WarehouseServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/warehouse/service/impl/WarehouseShelfInventoryOptRecordServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/warehouse/service/impl/WarehouseShelfInventoryServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/warehouse/service/impl/WarehouseShelfServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/warehouse/service/impl/WarehouseTypeServiceImpl.java",
+        "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/warehouse/service/impl/WhseReportServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-erp",
+      "package_path": "com/wimoor/open1688/utils",
+      "implementation_candidates": 1,
+      "files": [
+        "wimoor-erp/wimoor-erp-proxy/src/main/java/com/wimoor/open1688/utils/ApiCallService.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-modules",
+      "package_path": "com/wimoor/data/service",
+      "implementation_candidates": 4,
+      "files": [
+        "wimoor-modules/wimoor-data/src/main/java/com/wimoor/data/service/impl/DataMoveServiceImpl.java",
+        "wimoor-modules/wimoor-data/src/main/java/com/wimoor/data/service/impl/DataServiceImpl.java",
+        "wimoor-modules/wimoor-data/src/main/java/com/wimoor/data/service/impl/DataTableServiceImpl.java",
+        "wimoor-modules/wimoor-data/src/main/java/com/wimoor/data/service/impl/DataValidateServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-modules",
+      "package_path": "com/wimoor/finance/closing",
+      "implementation_candidates": 22,
+      "files": [
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/service/impl/AccountingClosingService.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/service/impl/BusinessReasonableCheckService.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/service/impl/ClosingReportService.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/service/impl/EnhancedVoucherContinuityService.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/service/impl/FinClosingTemplateAmazonServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/service/impl/FinClosingTemplateFeishuServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/service/impl/FinClosingTemplateHandlerServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/service/impl/FinClosingTemplateItemServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/service/impl/FinClosingTemplateProfitLossServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/service/impl/FinClosingTemplateServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/service/impl/FinClosingTemplateVouchersServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/service/impl/PreClosingCheckService.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/service/impl/ProfitLossSubjectCheckService.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/service/impl/ProfitLossTransferService.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/service/impl/ReverseClosingService.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/service/strategy/FinClosingTemplateStrategyFactory.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/service/strategy/impl/AmzPaymentTemplateStrategy.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/service/strategy/impl/ExchangeTemplateStrategy.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/service/strategy/impl/FeiShuTemplateStrategy.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/service/strategy/impl/FormulaConverter.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/service/strategy/impl/ProfitLossTemplateStrategy.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/service/strategy/impl/WildcardMatcher.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-modules",
+      "package_path": "com/wimoor/finance/ledger",
+      "implementation_candidates": 4,
+      "files": [
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/ledger/service/impl/FinDetailLedgerServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/ledger/service/impl/FinGeneralLedgerServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/ledger/service/impl/SubjectBalanceReportServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/ledger/service/impl/SubjectBalanceServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-modules",
+      "package_path": "com/wimoor/finance/report",
+      "implementation_candidates": 5,
+      "files": [
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/report/service/impl/FinReportAutoSyncService.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/report/service/impl/FinReportCalcCustomAmountService.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/report/service/impl/FinReportItemsServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/report/service/impl/FinReportMappingRulesServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/report/service/impl/FinReportTemplatesServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-modules",
+      "package_path": "com/wimoor/finance/setting",
+      "implementation_candidates": 7,
+      "files": [
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/setting/service/impl/FinAccountingPeriodsServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/setting/service/impl/FinAccountingSubjectAuxiliarySettingServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/setting/service/impl/FinAccountingSubjectsServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/setting/service/impl/FinAuxiliaryItemsServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/setting/service/impl/FinAuxiliaryTypesServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/setting/service/impl/FinCurrencyServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/setting/service/impl/FinSubjectTypeServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-modules",
+      "package_path": "com/wimoor/finance/voucher",
+      "implementation_candidates": 12,
+      "files": [
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/voucher/service/impl/FinVoucherEntriesAuxiliaryServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/voucher/service/impl/FinVoucherEntriesServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/voucher/service/impl/FinVoucherModifyLogServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/voucher/service/impl/FinVoucherTypeServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/voucher/service/impl/FinVoucherUploadServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/voucher/service/impl/FinVouchersServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/voucher/service/impl/FinVourchesFileServiceImpl.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/voucher/service/util/BalanceDetailResult.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/voucher/service/util/BalanceResult.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/voucher/service/util/BatchPostingResult.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/voucher/service/util/FinUtil.java",
+        "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/voucher/service/util/PostingResult.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-modules",
+      "package_path": "com/wimoor/gen/service",
+      "implementation_candidates": 2,
+      "files": [
+        "wimoor-modules/wimoor-gen/src/main/java/com/wimoor/gen/service/GenTableColumnServiceImpl.java",
+        "wimoor-modules/wimoor-gen/src/main/java/com/wimoor/gen/service/GenTableServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-modules",
+      "package_path": "com/wimoor/quote/purchase",
+      "implementation_candidates": 7,
+      "files": [
+        "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/service/impl/PurchaseAlibabaBuyerServiceImpl.java",
+        "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/service/impl/PurchaseAlibabaOrderItemServiceImpl.java",
+        "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/service/impl/PurchaseAlibabaOrderServiceImpl.java",
+        "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/service/impl/PurchaseAlibabaReceiverServiceImpl.java",
+        "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/service/impl/PurchaseAlibabaSellerServiceImpl.java",
+        "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/service/impl/PurchaseOrderEntryServiceImpl.java",
+        "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/service/impl/PurchaseQuoteManagerServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    },
+    {
+      "source_module": "wimoor-modules",
+      "package_path": "com/wimoor/quote/ship",
+      "implementation_candidates": 3,
+      "files": [
+        "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/ship/service/impl/QuoteOrderServiceImpl.java",
+        "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/ship/service/impl/ShipmentSupplierTranschannelServiceImpl.java",
+        "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/ship/service/impl/ShipmentTranschannelServiceImpl.java"
+      ],
+      "semantic_review_complete": false
+    }
+  ],
+  "procurement_source_files": [
+    {
+      "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/controller/PurchaseFormController.java",
+      "sha256": "09b60e03cb97996ddc82ee731cb866489f6728144962fee1e023cee9de33ab69"
+    },
+    {
+      "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/service/impl/PurchaseFormPaymentServiceImpl.java",
+      "sha256": "154885a17b10aa2318a8133614e444105e9851c3a2b01e190d3350de26541f0b"
+    },
+    {
+      "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/pojo/entity/PurchaseFormPayment.java",
+      "sha256": "0065d9654ca89725e40ee8bdee6c378ef6fe80a2af534caab7cd6c04d013562b"
+    },
+    {
+      "path": "wimoor-erp/erp-boot/src/main/resources/mapper/purchase/PurchaseFormPaymentMapper.xml",
+      "sha256": "c66dd27fa2882cc5a20c25208746931fbfdb0a44b01d47a8976f200ab4cdc89e"
+    },
+    {
+      "path": "init-config/mysql/数据库结构/db_erp/t_erp_purchase_form_payment.sql",
+      "sha256": "73adc436e45cc4186e3f76253b17d9166eb85d51677287399532cd80eea56971"
+    }
+  ],
+  "erp_head": "ae0135bf1da92ff6649a8c918a8a1c6915f8d812",
+  "erp_worktree_is_clean": false,
+  "erp_reviewed_files": [
+    {
+      "path": "prisma/schema.prisma",
+      "sha256": "2196fc3bd4cc3f62d35361129152805a5c32cce9f08386a291e0a556cf8cbbad"
+    },
+    {
+      "path": "src/lib/procurement/order-service.ts",
+      "sha256": "f8d7deb33ee7c00fd1aa767c7fbc9890a51710ca4187ce6204f763503f46302b"
+    },
+    {
+      "path": "src/lib/procurement/refund-service.ts",
+      "sha256": "4a5f4b45b84e2ae7382e0fe360680f52050ea550ad59eb9dd82146ef3c70740d"
+    },
+    {
+      "path": "src/lib/procurement/order-amounts.ts",
+      "sha256": "2be354fd817ae387e64bdb95650fb0f437f83c2e3ab80eb92a8d4d6323e9d41e"
+    },
+    {
+      "path": "src/lib/procurement/finance-source-query.ts",
+      "sha256": "ced937e76cb8588c784a19abe6075ae169f88fb2c722b7c367b6ad3b4653a862"
+    },
+    {
+      "path": "src/lib/finance/source-service.ts",
+      "sha256": "1aee79d1b2aa38258bc51e7b79799aa870e4708f7c7cd9b804a7c65ee4416caa"
+    }
+  ],
+  "verification": {
+    "source_hashes_checked": true,
+    "source_behavior_review": "procurement payment slice only",
+    "erp_code_review": "procurement payment/refund/finance-source slice only",
+    "source_runtime_tested": false,
+    "erp_runtime_tested_this_review": false,
+    "real_database_accessed": false,
+    "external_api_called": false,
+    "full_business_extraction_complete": false
+  },
+  "limitations": [
+    "Existing lexical candidate groups, not verified module/feature boundaries",
+    "Source scan excludes ignored and build/vendor paths",
+    "Hash equality does not prove semantic extraction coverage",
+    "ERP dirty worktree; selected file hashes identify reviewed state, not production deployment",
+    "No historical test result promoted to current execution evidence"
+  ]
+}

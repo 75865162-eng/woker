@@ -1,3 +1,6 @@
+// Cloud role for injected offline task fixtures; no real Amazon calls.
+process.env.AMAZON_API_EXECUTION_ROLE = "cloud";
+import { readDataset } from "@/lib/amazon-sync/dataset-query";
 import { brandFairTurn } from "@/lib/amazon-sync/brand-fairness";
 import { seal, unseal, digest } from "@/lib/amazon-sync/approval-policy";
 import { initialObservationState } from "@/lib/amazon-sync/observation-machine";
@@ -21,6 +24,8 @@ import { withApprovedChange } from "@/lib/amazon-sync/approved-context";
 import { controlTask } from "@/lib/amazon-sync/service";
 import { automaticBrandCandidates, latestClosedBrandWindow } from "@/lib/amazon-sync/automatic-brand";
 import { localDate, shiftDate } from "@/lib/amazon-sync/date-range";
+import { manageMcpCredential, authenticateAmazonMcp, invokeAmazonMcp } from "@/lib/amazon-sync/mcp";
+import { callSyncChatTool } from "@/lib/lili/sync-chat-server";
 
 if (process.env.AMAZON_SYNC_OFFLINE_FIXTURE !== "1" || new URL(process.env.DATABASE_URL!).hostname !== "127.0.0.1" || new URL(process.env.DATABASE_URL!).pathname !== "/amazon_sync_test") throw new Error("Disposable offline DB required");
 const site = "ATVPDKIKX0DER", region = "observation-fixture", scopes: Array<[string, string]> = [], planId = "a".repeat(38), asin = "B123456789";
@@ -41,7 +46,8 @@ async function fresh(resource: string, extra: Record<string, unknown> = {}) {
   await prisma.workspaceScope.create({ data: { organizationId: scope.organizationId, id: scope.workspaceId, name: "Fixture" } });
   for (const id of [actor, approver]) await prisma.user.create({ data: { id, email: `${id}@fixture.invalid`, name: "Fixture", passwordHash: "not-login", memberships: { create: { organizationId: scope.organizationId, role: "owner" } } } });
   await prisma.sellerAccount.create({ data: { ...scope, id: sellerAccountId, accountKey: sellerAccountId, displayName: "Fixture", marketplaceCode: "US" } });
-  await prisma.amazonSpApiAuthorization.create({ data: { ...scope, id: authorizationId, name: "Fixture", amazonSellerId: "fixture-seller", awsRegion: region, endpoint: endpoints[region], status: "CONFIGURED", approvedRoles: ["Amazon Fulfillment", "Pricing", "Brand Analytics", "Selling Partner Insights", "Product Listing"], rolesAttestedAt: new Date(), marketplaceParticipations: [{ marketplaceId: site, countryCode: "US" }], updatedByUserId: actor, credentialsCiphertext: encryptAmazonSpApiCredentials({ lwaClientId: "fixture", lwaClientSecret: "fixture", refreshToken: "fixture", awsAccessKeyId: "", awsSecretAccessKey: "" }, { ...scope, authorizationId }) } });
+  await prisma.amazonDataAccessGrant.createMany({ data: [actor, approver].map(userId => ({ ...scope, id: randomUUID(), userId, sellerAccountId, marketplaceIds: [site], actions: ["view", "sync"] })) });
+  await prisma.amazonSpApiAuthorization.create({ data: { ...scope, id: authorizationId, name: "Fixture", amazonSellerId: "fixture-seller", awsRegion: region, endpoint: endpoints[region], status: "CONFIGURED", identityVerifiedAt: new Date(), approvedRoles: ["Amazon Fulfillment", "Pricing", "Brand Analytics", "Selling Partner Insights", "Product Listing"], rolesAttestedAt: new Date(), marketplaceParticipations: [{ marketplaceId: site, countryCode: "US" }], updatedByUserId: actor, credentialsCiphertext: encryptAmazonSpApiCredentials({ lwaClientId: "fixture", lwaClientSecret: "fixture", refreshToken: "fixture", awsAccessKeyId: "", awsSecretAccessKey: "" }, { ...scope, authorizationId }) } });
   const domainPolicy: Record<string, unknown> = { resource, applicationId: "fixture-app", maxRequests: 30, maxRows: 1000, requestsPerSecond: .01, ...(resource === "fulfillment" ? { planIds: [planId] } : resource === "listing_details" ? { sellerSkus: ["fixture-sku"] } : ["pricing", "catalog_items"].includes(resource) ? { asins: [asin] } : { asins: [], from: "2021-06-06", to: "2021-06-12", marketplaceTimeZone: "America/Los_Angeles", reportKind: "search_terms", reportPeriod: "WEEK", brandEligibilityAttested: true }), ...extra };
   async function approved(body: Record<string, unknown>) { const r = await requestChange(scope, actor, body); await decideChange(scope, approver, String(r.id), "APPROVED", "fixture"); await applyChange(scope, actor, String(r.id)); return prisma.amazonDataCenterChangeRequest.findUniqueOrThrow({ where: { id: String(r.id) } }); }
   const config = await approved({ action: "save-source", authorizationId, sellerAccountId, marketplaceId: site, resource, domainPolicy, enabled: true, freshnessMinutes: 1440 });
@@ -83,6 +89,7 @@ async function fresh(resource: string, extra: Record<string, unknown> = {}) {
       return Response.json(raw);
     }
     if (url.pathname.startsWith("/catalog/2022-04-01/items/")) {
+      if (mode === "catalog-missing" && url.pathname.endsWith("/B987654321")) return Response.json({ errors: [{ code: "NotFound", message: "fixture missing object" }] }, { status: 404 });
       const raw = officialExample("src/data/amazon-contracts/catalog-detail-model.json", "/catalog/2022-04-01/items/{asin}", "getCatalogItem");
       raw.asin = url.pathname.split("/").at(-1)!; raw.attributes = {}; (raw.attributes as Record<string, unknown>).brand = [{ marketplace_id: site, value: "Fixture Brand" }]; raw.secret_contact = "DO_NOT_EXPOSE";
       return Response.json(raw);
@@ -140,9 +147,61 @@ test("inbound approval → staged slices → publication; scope and quantity sem
   const done = await f.finish(run.id); assert.equal(done.status, "SUCCEEDED", done.error ?? "");
   const result = await f.read(); assert.equal(result.rows.length, 4); assert.ok(!JSON.stringify(result).includes("PRIVATE_ADDRESS"));
   const items = result.rows.filter(row => row.kind.endsWith("ITEM")); assert.equal(items.length, 2);
-  for (const item of items) { const facts = item.facts as { declaredQuantity: number; inTransitQuantity: null }; assert.equal(facts.declaredQuantity, 20); assert.equal(facts.inTransitQuantity, null); }
+  for (const item of items) { const facts = item.facts as { declaredQuantity: string; inTransitQuantity: null }; assert.equal(facts.declaredQuantity, "20"); assert.equal(facts.inTransitQuantity, null); }
+  const filtered = { inboundPlanId: planId, shipmentId: "shipment-fixture", pageSize: "1" };
+  const first = await f.read(filtered); assert.equal(first.pagination.total, 2); assert.equal(first.rows.length, 1);
+  const second = await f.read({ ...filtered, page: "2" }); assert.equal(second.rows.length, 1); assert.notEqual(first.rows[0].id, second.rows[0].id);
+  assert.equal((await f.read({ ...filtered, page: "3" })).rows.length, 0);
+  assert.equal((await f.read({ inboundPlanId: planId })).pagination.total, 4);
+  assert.equal((await f.read({ ...filtered, inboundPlanId: "another-plan" })).pagination.total, 0, "plan and shipment filters intersect before counting");
+  assert.equal((await f.read({ shipmentId: "missing-shipment" })).rows.length, 0);
+  await assert.rejects(f.read({ shipmentId: "bad/identifier" }), /标识无效/);
   const raw = await prisma.amazonSyncRawPage.findFirstOrThrow({ where: { taskId: run.id } }); assert.ok(!raw.rawCiphertext.includes("PRIVATE_ADDRESS"));
   const other = await fresh("fulfillment"); await assert.rejects(() => readObservations(other.scope, new URLSearchParams({ resource: "fulfillment", sourceId: f.sourceId }), other.actor));
+});
+test("inbound resumes the archived discovery page crossing 100 plans without another HTTP call", async () => {
+  const f = await fresh("fulfillment", { planIds: [], discoverPlans: true, maxRequests: 1000 });
+  const run = await f.start();
+  const source = await prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: f.sourceId } });
+  const policy = parseObservationPolicy(source.domainPolicy, "fulfillment");
+  const id = (index: number) => String(index).padStart(38, "0");
+  const state = { ...initialObservationState(policy), requests: 16, discoveredPlanIds: Array.from({ length: 95 }, (_, i) => id(i)), token: "page-16", priorTokens: ["page-15"] };
+  const rawBody = JSON.stringify({ inboundPlans: Array.from({ length: 6 }, (_, i) => ({ inboundPlanId: id(i + 95), marketplaceIds: [site], name: "", status: "ACTIVE", createdAt: "2025-01-01T00:00:00Z", lastUpdatedAt: "2025-01-01T00:00:00Z" })), pagination: { nextToken: "page-17" } });
+  await prisma.amazonSyncRun.update({ where: { id: run.id }, data: { stage: "FETCHING", pagesCompleted: 15, checkpointCiphertext: seal({ state }, f.scope, run.id, "amazon-observation-state.v1") } });
+  await prisma.amazonSyncRawPage.create({ data: { ...f.scope, taskId: run.id, resource: "fulfillment", page: 16, requestMetadata: { operation: "listInboundPlans" }, bodySha256: digest(rawBody), rawCiphertext: seal({ rawBody }, f.scope, `${run.id}:16`, "amazon-observation-raw.v1"), capturedAt: new Date() } });
+  const result = await f.slice(run.id);
+  assert.equal(result.status, "WAITING", result.error ?? "");
+  assert.equal(result.pagesCompleted, 16);
+  assert.equal(result.apiRequests, 0); assert.equal(f.calls.length, 0);
+  const next = unseal(result.checkpointCiphertext!, f.scope, run.id, "amazon-observation-state.v1").state as typeof state;
+  assert.equal(next.discoveredPlanIds.length, 101); assert.equal(next.token, "page-17");
+  assert.equal(next.requests, 16); assert.equal(next.planIndex, 0);
+  assert.equal(await prisma.amazonSyncRawPage.count({ where: { taskId: run.id } }), 1);
+  await processSyncCenterTask(run.id, run.dispatchVersion, { clientOptions: { fetch: async () => { throw new Error("duplicate dispatch must not call HTTP"); } } });
+  const duplicate = await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: run.id } });
+  assert.equal(duplicate.checkpointCiphertext, result.checkpointCiphertext);
+  assert.equal(duplicate.pagesCompleted, 16);
+  assert.equal((await prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: f.sourceId } })).activeRunId, null);
+});
+test("inbound item occurrences preserve different quantities from the archived response without another HTTP call", async () => {
+  const f = await fresh("fulfillment"), run = await f.start();
+  const source = await prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: f.sourceId } });
+  const policy = parseObservationPolicy(source.domainPolicy, "fulfillment");
+  const state = { ...initialObservationState(policy), stage: "PLAN_ITEMS", requests: 2 };
+  const rawBody = JSON.stringify({ items: [{ msku: "same-sku", quantity: 60 }, { msku: "same-sku", quantity: 30 }] });
+  await prisma.amazonSyncRun.update({ where: { id: run.id }, data: { stage: "FETCHING", pagesCompleted: 1, checkpointCiphertext: seal({ state }, f.scope, run.id, "amazon-observation-state.v1") } });
+  await prisma.amazonSyncRawPage.create({ data: { ...f.scope, taskId: run.id, resource: "fulfillment", page: 2, requestMetadata: { operation: "listInboundPlanItems" }, bodySha256: digest(rawBody), rawCiphertext: seal({ rawBody }, f.scope, `${run.id}:2`, "amazon-observation-raw.v1"), capturedAt: new Date() } });
+  const result = await f.slice(run.id);
+  assert.equal(result.status, "WAITING");
+  assert.equal(result.pagesCompleted, 2);
+  const rows = await prisma.amazonDomainObservation.findMany({ where: { sourceRunId: run.id }, orderBy: { businessKey: "asc" } });
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map(row => (row.facts as Prisma.JsonObject).declaredQuantity).sort(), [30, 60]);
+  assert.ok(rows.every(row => (row.facts as Prisma.JsonObject).sourceRawPage === 2));
+  assert.equal(result.apiRequests, 0);
+  assert.equal(f.calls.length, 0);
+  assert.equal(await prisma.amazonSyncRawPage.count({ where: { taskId: run.id } }), 1);
+  assert.equal((await prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: f.sourceId } })).activeRunId, null);
 });
 test("foreign marketplace and repeated token block without replacing published head", async () => {
   const f = await fresh("fulfillment"), first = await f.start(); assert.equal((await f.finish(first.id)).status, "SUCCEEDED");
@@ -232,10 +291,10 @@ test("brand finite collection survives independent publications, merges ASIN bat
   assert.equal(sqp.pagination.total, 19); assert.equal(sqp.batchCount, 2);
   const repeat = await readBrandAnalytics(f.scope, new URLSearchParams({ sourceId: f.sourceId, reportKind: "repeat_purchase" }), f.actor);
   assert.equal(repeat.rows.length, 1); assert.equal((repeat.rows[0].facts as { orders: string }).orders, "1256");
-  await assert.rejects(() => readBrandAnalytics(f.scope, new URLSearchParams({ sourceId: f.sourceId, reportKind: "repeat_purchase", runId: sqp.run!.id }), f.actor), /不可访问/);
+  await assert.rejects(() => readBrandAnalytics(f.scope, new URLSearchParams({ sourceId: f.sourceId, reportKind: "repeat_purchase", runId: sqp.run!.id }), f.actor), /不可访问|不属于当前账号/);
   const foreign = await fresh("brand_analytics");
-  await assert.rejects(() => readBrandAnalytics(foreign.scope, new URLSearchParams({ sourceId: f.sourceId }), foreign.actor), /不可访问/);
-  await assert.rejects(() => readBrandAsins(foreign.scope, f.sourceId, foreign.actor), /不可访问/);
+  await assert.rejects(() => readBrandAnalytics(foreign.scope, new URLSearchParams({ sourceId: f.sourceId }), foreign.actor), /不可访问|不属于当前账号/);
+  await assert.rejects(() => readBrandAsins(foreign.scope, f.sourceId, foreign.actor), /不可访问|不属于当前账号/);
 });
 test("brand ASIN association preserves metrics across multiple SKUs and isolates metadata versions, sites and tenants", async () => {
   const f = await fresh("brand_analytics", { reportKind: "repeat_purchase" });
@@ -266,13 +325,15 @@ test("brand ASIN association preserves metrics across multiple SKUs and isolates
   const grant = await prisma.amazonDataAccessGrant.create({ data: { ...f.scope, id: randomUUID(), userId: reader, sellerAccountId: f.sellerAccountId, marketplaceIds: [site], actions: ["view"] } });
   assert.equal((await readBrandAsinAnalysis(f.scope, p, reader)).products[id].brand, "Scoped Brand");
   await prisma.amazonDataAccessGrant.update({ where: { id: grant.id }, data: { marketplaceIds: ["other-site"] } });
-  await assert.rejects(() => readBrandAsinAnalysis(f.scope, p, reader), /不可访问/);
+  assert.equal((await readBrandAsinAnalysis(f.scope, p, reader)).products[id].brand, "Scoped Brand");
+  await prisma.amazonDataAccessGrant.update({ where: { id: grant.id }, data: { enabled: false } });
+  await assert.rejects(() => readBrandAsinAnalysis(f.scope, p, reader), /没有已分配/);
   const daily = await readBrandAsinAnalysis(f.scope, new URLSearchParams({ ...Object.fromEntries(p), reportPeriod: "DAY" }), f.actor);
   assert.equal(daily.reports.filter(r => r.unavailable).length, 3);
   await prisma.amazonSyncDataSource.update({ where: { id: detailId }, data: { revision: { increment: 1 } } });
   assert.equal((await readBrandAnalytics(f.scope, p, f.actor)).products[id].brand, null);
   const foreign = await fresh("brand_analytics");
-  await assert.rejects(() => readBrandAsinAnalysis(foreign.scope, p, foreign.actor), /不可访问/);
+  await assert.rejects(() => readBrandAsinAnalysis(foreign.scope, p, foreign.actor), /不可访问|不属于当前账号/);
   await assert.rejects(() => readBrandAsinAnalysis(f.scope, new URLSearchParams({ sourceId: f.sourceId, asin: "invalid" }), f.actor), /有效 ASIN/);
 });
 test("brand scheduled backfill is explicit, resumes from DB and does not replay uncertain creates", async () => {
@@ -486,7 +547,7 @@ test("notifications read-only discovery persists pages and protects seller-wide 
   const reader = randomUUID();
   await prisma.user.create({ data: { id: reader, email: `${reader}@fixture.invalid`, name: "Fixture", passwordHash: "none", memberships: { create: { organizationId: f.scope.organizationId, role: "viewer" } } } });
   await prisma.amazonDataAccessGrant.create({ data: { ...f.scope, id: randomUUID(), userId: reader, sellerAccountId: f.sellerAccountId, marketplaceIds: [site], actions: ["view"] } });
-  await assert.rejects(readObservations(f.scope, new URLSearchParams({ resource: "notifications", sourceId: f.sourceId }), reader));
+  assert.equal((await readObservations(f.scope, new URLSearchParams({ resource: "notifications", sourceId: f.sourceId }), reader)).rows.length, 2);
 });
 
 test("site sync grants cannot control seller-wide notification tasks", async () => {
@@ -527,4 +588,156 @@ test("Brand reader selects each ASIN once when automatic catalog batches overlap
   const result = await readBrandAnalytics(f.scope, new URLSearchParams({ sourceId: f.sourceId, reportKind: "search_catalog" }), f.actor);
   assert.equal(result.pagination.total, 3); assert.equal(new Set(result.rows.map(row => row.asin)).size, 3);
   assert.equal(result.rows.find(row => row.asin === b)!.sourceRunId, secondId);
+});
+
+
+for (const resource of ["catalog_items", "listing_details"]) for (const legacy of [false, true]) test(`${resource} reuses ${legacy ? "legacy" : "indexed"} explicit-object archive at the request budget`, async () => {
+  const f = await fresh(resource, { maxRequests: 1 }), run = await f.start();
+  const source = await prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: f.sourceId } });
+  const policy = parseObservationPolicy(source.domainPolicy, resource);
+  const state = { ...initialObservationState(policy), requests: 1 };
+  const listing = resource === "listing_details";
+  const operation = listing ? "getListingsItem" : "getCatalogItem";
+  const body = officialExample(`src/data/amazon-contracts/${listing ? "listings" : "catalog"}-detail-model.json`, listing ? "/listings/2021-08-01/items/{sellerId}/{sku}" : "/catalog/2022-04-01/items/{asin}", operation);
+  if (listing) body.sku = "fixture-sku"; else body.asin = asin;
+  body.attributes = {};
+  const rawBody = JSON.stringify(body);
+  const rawCiphertext = seal({ rawBody }, f.scope, `${run.id}:1`, "amazon-observation-raw.v1");
+  await prisma.amazonSyncRun.update({ where: { id: run.id }, data: { stage: "FETCHING", checkpointCiphertext: seal({ state }, f.scope, run.id, "amazon-observation-state.v1") } });
+  await prisma.amazonSyncRawPage.create({ data: { ...f.scope, taskId: run.id, resource, page: 1, requestMetadata: { operation, ...(legacy ? {} : { objectIndex: 0 }) }, bodySha256: digest(rawBody), rawCiphertext, capturedAt: new Date() } });
+  const done = await f.finish(run.id);
+  assert.equal(done.status, "SUCCEEDED", done.error ?? "");
+  assert.equal(done.apiRequests, 0); assert.equal(f.calls.length, 0);
+  assert.equal(done.pagesCompleted, 1); assert.equal(done.insertedCount, 1);
+  assert.equal((await f.read()).pagination.total, 1);
+  assert.equal(await prisma.amazonSyncRawPage.count({ where: { taskId: run.id } }), 1);
+  assert.equal((await prisma.amazonSyncRawPage.findUniqueOrThrow({ where: { taskId_page: { taskId: run.id, page: 1 } } })).rawCiphertext, rawCiphertext);
+});
+
+for (const resource of ["catalog_items", "listing_details"]) test(`${resource} never reuses a committed legacy response for the next explicit object`, async () => {
+  const listing = resource === "listing_details";
+  const f = await fresh(resource, listing ? { sellerSkus: ["fixture-sku", "next-sku"] } : { asins: [asin, "B987654321"] });
+  const run = await f.start();
+  await f.slice(run.id);
+  const first = await prisma.amazonSyncRawPage.findFirstOrThrow({ where: { taskId: run.id, page: 1 } });
+  assert.equal((first.requestMetadata as Prisma.JsonObject).objectIndex, 0);
+  // Existing archives predate objectIndex on explicit object policies.
+  await prisma.amazonSyncRawPage.update({ where: { taskId_page: { taskId: run.id, page: 1 } }, data: { requestMetadata: { operation: listing ? "getListingsItem" : "getCatalogItem" } } });
+  const done = await f.finish(run.id);
+  assert.equal(done.status, "SUCCEEDED", done.error ?? "");
+  assert.equal(done.insertedCount, 2); assert.equal(done.pagesCompleted, 2);
+  assert.equal(f.calls.filter(path => path.startsWith(listing ? "/listings/" : "/catalog/")).length, 2);
+  assert.equal((await f.read()).pagination.total, 2);
+  assert.equal((await prisma.amazonSyncRawPage.findUniqueOrThrow({ where: { taskId_page: { taskId: run.id, page: 1 } } })).rawCiphertext, first.rawCiphertext);
+});
+
+for (const resource of ["catalog_items", "listing_details", "fulfillment"]) test(`MCP approval resumes ${resource} without recollecting committed objects`, async () => {
+  const product = resource !== "fulfillment";
+  const f = await fresh(resource, resource === "catalog_items" ? { asins: [asin, "B987654321"] } : resource === "listing_details" ? { sellerSkus: ["fixture-sku", "next-sku"] } : {});
+  const pair = { sellerAccountId: f.sellerAccountId, marketplaceId: site };
+  const auth = await prisma.amazonSpApiAuthorization.update({ where: { id: f.authorizationId }, data: { identityVerifiedAt: new Date(), identityEvidence: "OFFLINE_FIXTURE" } });
+  await prisma.amazonSellerIdentity.create({ data: { ...f.scope, id: randomUUID(), ...pair, authorizationId: f.authorizationId, amazonSellerId: auth.amazonSellerId!, region, verifiedAt: new Date() } });
+  await prisma.amazonDataAccessGrant.updateMany({ where: { ...f.scope, userId: f.actor, sellerAccountId: f.sellerAccountId }, data: { mcpEnabled: true } });
+  const credential = await manageMcpCredential(f.scope, f.actor, { action: "create", name: "offline product resume", scopes: [{ sellerAccountId: f.sellerAccountId, marketplaceIds: [site] }], tools: ["data_query", "data_sync_start", "workflow_sync_review", "workflow_sync_confirm"], expiresAt: new Date(Date.now() + 60000).toISOString() });
+  const identity = await authenticateAmazonMcp(`Bearer ${credential.token!}`);
+  const run = await f.start(); await f.slice(run.id);
+  await f.approved({ action: "control-task", id: run.id, control: product ? "cancel" : "pause" });
+  const stopped = await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: run.id } });
+  const original = await prisma.amazonSyncRawPage.findFirstOrThrow({ where: { taskId: run.id, page: 1 } });
+  const requests = f.calls.length;
+  await assert.rejects(() => invokeAmazonMcp(identity, "data_sync_start", { ...pair, resource }), /taskId/);
+  await assert.rejects(() => invokeAmazonMcp(identity, "data_sync_start", { ...pair, resource, taskId: randomUUID() }), /范围/);
+  const response = await invokeAmazonMcp(identity, "data_sync_start", { ...pair, resource, taskId: run.id }) as { data: { started: boolean; changeRequest: { id: string } } };
+  assert.equal(response.data.started, false); assert.equal(f.calls.length, requests);
+  assert.equal((await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: run.id } })).status, stopped.status);
+  const request = new Request("http://localhost/api/lili/mcp", { headers: { authorization: `Bearer ${credential.token!}` } });
+  const requestId = response.data.changeRequest.id;
+  await callSyncChatTool(request, "workflow_sync_review", { workspaceId: f.scope.workspaceId, requestId });
+  const approval = await prisma.amazonDataCenterChangeRequest.findUniqueOrThrow({ where: { id: requestId } });
+  if (product) assert.equal((((approval.beforeSummary as Prisma.JsonObject).current as Prisma.JsonObject).productRecovery as Prisma.JsonObject).recordsPreserved, 1);
+  await callSyncChatTool(request, "workflow_sync_confirm", { workspaceId: f.scope.workspaceId, requestId, expectedDigest: approval.changeDigest, expectedRevision: approval.baseRevision, userConfirmation: "批准本次离线夹具指定任务按原清单恢复，保留原件和已提交记录" });
+  const resumed = await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: run.id } });
+  assert.equal(resumed.checkpointCiphertext, stopped.checkpointCiphertext);
+  assert.equal(resumed.insertedCount, stopped.insertedCount); assert.equal(resumed.pagesCompleted, stopped.pagesCompleted);
+  assert.equal(resumed.apiRequests, stopped.apiRequests); assert.equal(await prisma.amazonSyncRun.count({ where: f.scope }), 1);
+  const done = await f.finish(run.id); assert.equal(done.status, "SUCCEEDED", done.error ?? "");
+  assert.equal((await prisma.amazonSyncRawPage.findUniqueOrThrow({ where: { taskId_page: { taskId: run.id, page: 1 } } })).rawCiphertext, original.rawCiphertext);
+  if (product) assert.equal(f.calls.filter(path => path.startsWith(resource === "catalog_items" ? "/catalog/" : "/listings/")).length, 2);
+  const published = await invokeAmazonMcp(identity, "data_query", { ...pair, table: resource, pageSize: 1 }) as { total: number; records: unknown[] };
+  assert.equal(published.total, product ? 2 : 4); assert.equal(published.records.length, 1);
+  const last = await invokeAmazonMcp(identity, "data_query", { ...pair, table: resource, pageSize: 1, page: published.total }) as { total: number; records: unknown[]; hasMore: boolean };
+  assert.equal(last.total, published.total); assert.equal(last.records.length, 1); assert.equal(last.hasMore, false);
+});
+
+test("catalog cancelled recovery approval rejects checkpoint drift and disabled bindings", async () => {
+  const f = await fresh("catalog_items", { asins: [asin, "B987654321"] }), run = await f.start();
+  await f.slice(run.id); await f.approved({ action: "control-task", id: run.id, control: "cancel" });
+  const req = await requestChange(f.scope, f.actor, { action: "control-task", id: run.id, control: "retry" });
+  await decideChange(f.scope, f.approver, String(req.id), "APPROVED", "fixture");
+  await prisma.amazonSyncRun.update({ where: { id: run.id }, data: { pagesCompleted: { increment: 1 } } });
+  const calls = f.calls.length;
+  await assert.rejects(() => applyChange(f.scope, f.actor, String(req.id)));
+  assert.equal((await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: run.id } })).status, "CANCELLED");
+  await prisma.amazonSyncRun.update({ where: { id: run.id }, data: { pagesCompleted: { decrement: 1 }, stage: "BINDING_DISABLED" } });
+  await assert.rejects(() => f.approved({ action: "control-task", id: run.id, control: "retry" }), /检查点/);
+  assert.equal(f.calls.length, calls);
+});
+
+test("catalog partial retry preserves successful originals and publishes only after the missing object succeeds", async () => {
+  const f = await fresh("catalog_items", { asins: [asin, "B987654321"] });
+  f.setMode("catalog-missing"); const run = await f.start();
+  const partial = await f.finish(run.id); assert.equal(partial.status, "PARTIAL_SUCCESS", partial.error ?? "");
+  assert.equal(partial.insertedCount, 1); assert.equal((await f.read()).rows.length, 0);
+  const original = await prisma.amazonSyncRawPage.findFirstOrThrow({ where: { taskId: run.id, page: 1 } });
+  const calls = f.calls.filter(path => path.startsWith("/catalog/")).length;
+  await f.approved({ action: "control-task", id: run.id, control: "retry" });
+  const again = await f.finish(run.id); assert.equal(again.status, "PARTIAL_SUCCESS");
+  assert.equal(f.calls.filter(path => path.startsWith("/catalog/")).length - calls, 1);
+  assert.equal(again.insertedCount, 1); assert.equal((await f.read()).rows.length, 0);
+  f.setMode("normal"); await f.approved({ action: "control-task", id: run.id, control: "retry" });
+  const done = await f.finish(run.id); assert.equal(done.status, "SUCCEEDED", done.error ?? "");
+  assert.equal(done.insertedCount, 2); assert.equal(done.processedCount, 2);
+  assert.equal(f.calls.filter(path => path.startsWith("/catalog/")).length - calls, 2);
+  assert.equal((await prisma.amazonSyncRawPage.findUniqueOrThrow({ where: { taskId_page: { taskId: original.taskId, page: original.page } } })).rawCiphertext, original.rawCiphertext);
+  const published = await f.read({ pageSize: "1", page: "1" }); assert.equal(published.rows.length, 1);
+  assert.equal((await f.read({ pageSize: "1", page: "2" })).rows.length, 1);
+  assert.equal((await f.read({ pageSize: "1", page: "3" })).rows.length, 0);
+});
+
+
+test("approved catalog partial publication exposes verified rows and gaps without declaring completeness", async () => {
+  const f = await fresh("catalog_items", { asins: [asin, "B987654321"] });
+  f.setMode("catalog-missing"); const run = await f.start();
+  const partial = await f.finish(run.id); assert.equal(partial.status, "PARTIAL_SUCCESS");
+  const requests = f.calls.length;
+  await f.approved({ action: "control-task", id: run.id, control: "publish-available" });
+  assert.equal(f.calls.length, requests, "publishing archived facts must not request Amazon");
+  const published = await f.read(); assert.equal(published.rows.length, 1);
+  assert.equal(published.run?.id, run.id);
+  assert.equal(typeof published.completeness, "object");
+  const shared = await readDataset(f.scope, new URLSearchParams({ table: "catalog_items", sourceId: f.sourceId, sellerAccountId: f.sellerAccountId, marketplaceId: site }), f.actor);
+  assert.equal(shared.total, 1); assert.ok(shared.warnings.some(warning => String(warning).includes("部分发布")));
+  assert.deepEqual(shared.evidenceRefs, [{ sourceId: f.sourceId, syncRunId: run.id }]);
+  assert.equal((published.run?.summary as { coverage: { complete: boolean; unavailableObjectIds: string[] } }).coverage.complete, false);
+  assert.deepEqual((published.run?.summary as { coverage: { unavailableObjectIds: string[] } }).coverage.unavailableObjectIds, ["B987654321"]);
+  const after = await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: run.id } });
+  assert.equal(after.status, "PARTIAL_SUCCESS"); assert.equal(after.stage, "PARTIAL_PUBLISHED"); assert.equal(after.checkpointCiphertext, partial.checkpointCiphertext);
+  assert.equal((await f.read({ page: "2" })).rows.length, 0);
+  await assert.rejects(f.approved({ action: "control-task", id: run.id, control: "publish-available" }));
+  f.setMode("normal"); await f.approved({ action: "control-task", id: run.id, control: "retry" });
+  assert.equal((await f.finish(run.id)).status, "SUCCEEDED");
+  assert.equal((await f.read()).rows.length, 2);
+});
+
+test("catalog partial publication preserves a previous complete default and rejects changed facts", async () => {
+  const f = await fresh("catalog_items", { asins: [asin, "B987654321"] });
+  const complete = await f.start(); assert.equal((await f.finish(complete.id)).status, "SUCCEEDED");
+  f.setMode("catalog-missing"); const run = await f.start(); await f.finish(run.id);
+  const row = await prisma.amazonDomainObservation.findFirstOrThrow({ where: { sourceRunId: run.id } });
+  await prisma.amazonDomainObservation.update({ where: { id: row.id }, data: { facts: {} } });
+  await assert.rejects(f.approved({ action: "control-task", id: run.id, control: "publish-available" }));
+  await prisma.amazonDomainObservation.update({ where: { id: row.id }, data: { facts: row.facts as Prisma.InputJsonValue } });
+  await f.approved({ action: "control-task", id: run.id, control: "publish-available" });
+  assert.equal((await f.read()).run?.id, complete.id);
+  assert.equal((await f.read({ runId: run.id })).rows.length, 1);
 });

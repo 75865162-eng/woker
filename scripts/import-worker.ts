@@ -8,7 +8,10 @@ import { processImportJob } from "@/lib/jobs/processor";
 import { enqueueImportJob, enqueueProductOutboxEvent } from "@/lib/queue";
 import { enqueuePendingProductOutboxEvents, markExpiredProductAttachmentsOrphaned, processProductOutboxEvent, recoverStaleProductOutboxEvents, scanOverdueProductWorkflowNotifications } from "@/lib/products/product-outbox";
 import { prisma } from "@/lib/db/prisma";
-import { createRedisConnectionOptions, importJobQueueName, productOutboxQueueName } from "@/lib/queue/redis-queue";
+import { createRedisConnectionOptions, importJobQueueName, productOutboxQueueName, wmsEventQueueName } from "@/lib/queue/redis-queue";
+import { processWmsEventDelivery } from "@/lib/wms/event-bus";
+import { runDueAgingSchedules } from "@/lib/wms/aging-schedule-service";
+import { dispatchPendingWmsEvents } from "@/lib/wms/event-dispatch";
 
 const workerName = process.env.WORKER_NAME?.trim() || `${importJobQueueName}-${process.pid}`;
 const workerId = process.env.WORKER_ID?.trim() || `${workerName}-${process.pid}`;
@@ -53,6 +56,26 @@ const productOutboxWorker = new Worker<{ eventId: string }>(
     concurrency: Math.max(1, Number(process.env.PRODUCT_OUTBOX_WORKER_CONCURRENCY ?? 2)),
   },
 );
+
+const wmsEventWorker = new Worker<{ deliveryId: string }>(wmsEventQueueName,
+  async job => { await processWmsEventDelivery(job.data.deliveryId); },
+  { connection: createRedisConnectionOptions(), concurrency: 2 });
+observeWorker(wmsEventWorker, "wms-event-worker");
+void dispatchPendingWmsEvents().catch(() => console.error("[worker] WMS event recovery failed"));
+let agingScanRunning = false;
+async function scanAgingSchedules() {
+  if (agingScanRunning) return;
+  agingScanRunning = true;
+  try { await runDueAgingSchedules(); }
+  finally { agingScanRunning = false; }
+}
+const agingScheduleTimer = setInterval(() => {
+  void scanAgingSchedules().catch(() => console.error("[worker] aging schedule scan failed"));
+}, 60_000);
+
+const wmsEventTimer = setInterval(() => {
+  void dispatchPendingWmsEvents().catch(() => console.error("[worker] WMS event recovery failed"));
+}, 15_000);
 
 async function enqueuePendingOutboxEvents() {
   if (process.env.QUEUE_DRIVER !== "redis") return;
@@ -141,6 +164,8 @@ worker.on("failed", (job) => {
 });
 
 process.on("SIGINT", async () => {
+  clearInterval(agingScheduleTimer);
+  clearInterval(wmsEventTimer);
   clearInterval(heartbeatTimer);
   clearInterval(importJobRecoveryTimer);
   clearInterval(outboxRecoveryTimer);
@@ -149,10 +174,13 @@ process.on("SIGINT", async () => {
   await writeHeartbeat("stopping").catch(() => undefined);
   await worker.close();
   await productOutboxWorker.close();
+  await wmsEventWorker.close();
   process.exit(0);
 });
 
 process.on("SIGTERM", async () => {
+  clearInterval(agingScheduleTimer);
+  clearInterval(wmsEventTimer);
   clearInterval(heartbeatTimer);
   clearInterval(importJobRecoveryTimer);
   clearInterval(outboxRecoveryTimer);
@@ -161,6 +189,7 @@ process.on("SIGTERM", async () => {
   await writeHeartbeat("stopping").catch(() => undefined);
   await worker.close();
   await productOutboxWorker.close();
+  await wmsEventWorker.close();
   process.exit(0);
 });
 

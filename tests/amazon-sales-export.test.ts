@@ -12,12 +12,12 @@ test("export service freezes the displayed version and filters, enforces idempot
   const previous = { scopes: process.env.AMAZON_SYNC_CENTER_SCOPES, driver: process.env.QUEUE_DRIVER };
   const scope = { organizationId: "export-org", workspaceId: "export-ws" }, asOf = "2026-11-01T12:00:00.000Z";
   process.env.AMAZON_SYNC_CENTER_SCOPES = JSON.stringify([[scope.organizationId, scope.workspaceId]]); process.env.QUEUE_DRIVER = "redis";
-  let role = "owner", job: Record<string, unknown> | null = null;
+  let role = "owner", assigned = true, job: Record<string, unknown> | null = null;
   const audits: string[] = [];
   const db = {
-    amazonSyncDataSource: { findMany: async () => [{ id: "source" }] },
+    amazonSyncDataSource: { findMany: async () => [{ id: "source", authorization: { status: "CONFIGURED", identityVerifiedAt: new Date() } }] },
     amazonRoleDataAccessGrant: { findMany: async () => [] },
-    amazonDataAccessGrant: { findMany: async () => [] },
+    amazonDataAccessGrant: { findMany: async () => assigned ? [{ sellerAccountId: "seller" }] : [] },
     workspaceScope: { findUnique: async () => ({ id: scope.workspaceId }) },
     organizationMember: { findUnique: async () => ({ role, user: { status: "active" } }) },
     organizationRosterRole: { findMany: async () => [{ id: "read_only", permissions: { operations: ["view"] } }] },
@@ -38,8 +38,8 @@ test("export service freezes the displayed version and filters, enforces idempot
     assert.equal(job!.organizationId, scope.organizationId); assert.equal(job!.workspaceId, scope.workspaceId);
     assert.deepEqual(await requestSalesExport(scope, "actor", { idempotencyKey: "key", filters, asOf }), first);
     await assert.rejects(() => requestSalesExport(scope, "actor", { idempotencyKey: "key", filters: { ...filters, from: "2026-10-02" }, asOf }), /幂等键/);
-    role = "read_only";
-    await assert.rejects(() => requestSalesExport(scope, "actor", { idempotencyKey: "other", filters }), /权限不足|没有有效/);
+    role = "read_only"; assigned = false;
+    await assert.rejects(() => requestSalesExport(scope, "actor", { idempotencyKey: "other", filters }), /没有已分配/);
     await processSalesExport(first.id as string, 0);
     assert.equal(job!.status, "FAILED"); assert.ok(audits.includes("amazon.data.export.failed"));
     assert.equal("fileId" in job!, false, "revocation blocks work before querying facts or storage");

@@ -1,10 +1,9 @@
-import { nextBuyBoxPolicy } from "./buy-box-history";
-import { nextBrandCollectionPolicy } from "./brand-collection-query";
+import { amazonCloudExecutionEnabled } from "@/lib/amazon/execution-role";
 import { configuredSyncScopes } from "./activation";
-import { brandWindowKey } from "./brand-collection";
 import { continuityGrant } from "./continuity-access";
 import { maintainContinuity } from "./continuity";
-import { automaticTaskKey } from "./automatic-schedule";
+import { automaticAdapters, automaticAdapter, automaticAdapterHasRequiredPolicy, automaticSourcePolicyFields, assertAutomaticAdapterPolicy } from "./automatic-adapters";
+import { digest } from "./approval-policy";
 import { ensureAutomaticConnections } from "./automatic-connection";
 import { assertExecutionWindow } from "./execution-window";
 import { dispatchSalesExports } from "./exports";
@@ -14,13 +13,13 @@ import { Prisma } from "@prisma/client";
 import { getAmazonSyncQueue } from "@/lib/queue/redis-queue";
 import { createTask, scopeLock, syncIncrementalCursorStatus } from "./service";
 import { activeTaskStatuses, isIncrementalResource, SyncInputError, type SyncScope } from "./policy";
-import { financeWindowFromFrozen, nextFinanceWindow, parseFinancePolicy } from "./finance";
-import { nextOrderWindow, orderWindowFromFrozen, parseOrderSyncPolicy } from "./orders";
-import { parseReturnPolicy, returnWindowFromFrozen } from "./returns";
-import { domainReportRunWindow } from "./domain-reports";
-import { isObservationResource, parseObservationPolicy } from "./observation-policy";
-import { nextAutomaticInventoryEventWindow, nextAutomaticReimbursementWindow, nextAutomaticReturnWindow, nextAutomaticSettlementDiscovery, nextSalesTrafficRange, automaticBackfillStart, automaticIntervalMinutes, automaticResourceIntervalMinutes, automaticSnapshotSlot, automaticMarketplaces, automaticMarketplaceAllowed, automaticPlanId, automaticPlanKey, automaticResources, isAutomaticResource } from "./automatic-schedule";
+import { parseOrderSyncPolicy } from "./orders";
+import { automaticBackfillStart, automaticResourceIntervalMinutes, automaticMarketplaces, automaticMarketplaceAllowed, automaticPlanId, automaticPlanKey, automaticResources, isAutomaticResource, automaticTaskKey } from "./automatic-schedule";
+import { planAutomaticTask } from "./automatic-planner";
 import { assertAmazonAction, assertAmazonScopeAdmin } from "./data-access";
+import { recoverFinanceParserFailures } from "./finance-parser-recovery";
+import { recoverAutomaticFailures, automaticTransientFailureCodes } from "./automatic-recovery";
+import { recoverRenewedAuthorizations } from "./authorization-recovery";
 
 export function enabledSyncScopes(value = process.env.AMAZON_SYNC_CENTER_SCOPES): SyncScope[] {
   return configuredSyncScopes(value) ?? [];
@@ -46,6 +45,7 @@ export async function ensureAmazonSyncInitialized(scope: SyncScope, authorizatio
   const sourceIds = (await prisma.amazonSyncDataSource.findMany({ where: { ...scope, authorizationId }, select: { id: true } })).map(source => source.id);
   if (!sourceIds.length) return { status: "no_eligible_sources" as const, sourceCount: 0, planCount: 0, taskCount: 0 };
   await ensureAutomaticSchedules([scope], now, sourceIds);
+  await recoverRenewedAuthorizations([scope], now, { authorizationId, forceInspection: true });
   await enqueueDueAutomaticPlans([scope], now, sourceIds);
 
   const [sourceCount, planCount, taskCount] = await Promise.all([
@@ -66,17 +66,38 @@ export async function tickSyncCenter(now = new Date(), only?: { taskIds: string[
   const scopes = await resolveEnabledSyncScopes();
   if (!scopes.length) return;
   // Durable recovery must run even when discovery, maintenance or exports fail.
-  const recovery = { scopeCount: scopes.length, examined: 0, dispatched: 0, dispatchFailures: 0, expiredLeases: 0, maintenanceFailures: 0 };
-  const expired = await prisma.amazonSyncRun.findMany({ where: { OR: scopes, ...(only ? { id: { in: only.taskIds } } : {}), executionVersion: 2, status: "RUNNING", leaseExpiresAt: { lt: now } }, take: 100 });
+  const recovery = { scopeCount: scopes.length, examined: 0, dispatched: 0, dispatchFailures: 0, expiredLeases: 0, automaticRecoveries: 0, authorizationRecoveries: 0, maintenanceFailures: 0 };
+  if (!amazonCloudExecutionEnabled()) {
+    // Local exports read the local replica. Official sync jobs and leases stay
+    // untouched for the cloud scheduler; never consume them as local failures.
+    await dispatchSalesExports(scopes, only?.exportIds);
+    return { ...recovery, executionRole: "local" as const };
+  }
+  // A missing lease gets a full normal lease interval of grace. It must not
+  // strand an interrupted task forever or fence a just-written transition.
+  const expiredLeaseWhere: Prisma.AmazonSyncRunWhereInput = { OR: [
+    { leaseExpiresAt: { lte: now } },
+    { leaseExpiresAt: null, updatedAt: { lte: new Date(now.getTime() - 5 * 60_000) } },
+  ] };
+  const expired = await prisma.amazonSyncRun.findMany({ where: { AND: [{ OR: scopes }, expiredLeaseWhere], ...(only ? { id: { in: only.taskIds } } : {}), executionVersion: 2, status: "RUNNING" }, orderBy: [{ updatedAt: "asc" }, { id: "asc" }], take: 100 });
   recovery.expiredLeases = expired.length;
   for (const run of expired) {
     try { await prisma.$transaction(async tx => {
       await scopeLock(tx, run);
-      const changed = await tx.amazonSyncRun.updateMany({ where: { id: run.id, status: "RUNNING", fenceVersion: run.fenceVersion, leaseExpiresAt: { lt: now } }, data: { status: run.attempts >= run.maxAttempts ? "FAILED" : "RETRY_WAIT", stage: run.stage, fenceVersion: { increment: 1 }, dispatchVersion: { increment: 1 }, leaseOwner: null, leaseExpiresAt: null, nextAttemptAt: now, finishedAt: run.attempts >= run.maxAttempts ? now : null, error: "任务租约过期；从已提交分页检查点恢复，旧执行器不能发布。" } });
-      if (changed.count) await syncIncrementalCursorStatus(tx, run, run.attempts >= run.maxAttempts ? "FAILED" : "RETRY_WAIT");
-      if (changed.count) await tx.amazonSyncTaskLog.create({ data: { id: randomUUID(), organizationId: run.organizationId, workspaceId: run.workspaceId, taskId: run.id, attempt: run.attempts, event: "LEASE_EXPIRED", stage: run.stage, code: "INTERRUPTED" } });
+      const status = run.control === "CANCEL" ? "CANCELLED" : run.control === "PAUSE" ? "PAUSED" : run.attempts >= run.maxAttempts ? "FAILED" : "RETRY_WAIT";
+      const terminal = status === "FAILED" || status === "CANCELLED";
+      const changed = await tx.amazonSyncRun.updateMany({ where: { organizationId: run.organizationId, workspaceId: run.workspaceId, id: run.id, executionVersion: 2, status: "RUNNING", fenceVersion: run.fenceVersion, control: run.control, AND: [expiredLeaseWhere] }, data: { status, control: null, stage: run.stage, fenceVersion: { increment: 1 }, dispatchVersion: { increment: 1 }, leaseOwner: null, leaseExpiresAt: null, nextAttemptAt: now, finishedAt: terminal ? now : null, error: run.control ? null : "任务租约过期或缺失；从已提交分页检查点恢复，旧执行器不能发布。" } });
+      if (changed.count) await syncIncrementalCursorStatus(tx, run, status);
+      if (changed.count && status === "FAILED" && run.trigger === "schedule") {
+        const summary = run.summary && typeof run.summary === "object" && !Array.isArray(run.summary) ? run.summary as Prisma.JsonObject : {};
+        await tx.amazonSyncRun.update({ where: { id: run.id }, data: { summary: { ...summary, quality: { code: "WORKER_INTERRUPTED", status: "FAILED", retryScheduled: false, published: false } } } });
+      }
+      if (changed.count) await tx.amazonSyncTaskLog.create({ data: { id: randomUUID(), organizationId: run.organizationId, workspaceId: run.workspaceId, taskId: run.id, attempt: run.attempts, event: "LEASE_EXPIRED", stage: run.stage, code: run.control === "CANCEL" ? "CANCEL_REQUESTED" : run.control === "PAUSE" ? "PAUSE_REQUESTED" : run.leaseExpiresAt ? "INTERRUPTED" : "LEASE_MISSING" } });
     }); } catch { recovery.maintenanceFailures++; console.error(`[amazon-sync-center] lease recovery deferred for task ${run.id}; other tasks remain independent`); }
   }
+  try { await recoverFinanceParserFailures(scopes, now, only ? { taskIds: only.taskIds } : undefined); } catch { recovery.maintenanceFailures++; }
+  try { recovery.authorizationRecoveries = (await recoverRenewedAuthorizations(scopes, now, { taskIds: only?.taskIds })).recovered; } catch { recovery.maintenanceFailures++; }
+  try { recovery.automaticRecoveries = (await recoverAutomaticFailures(scopes, now, only?.taskIds)).recovered; } catch { recovery.maintenanceFailures++; }
   const pending = await prisma.amazonSyncRun.findMany({ where: { OR: scopes, ...(only ? { id: { in: only.taskIds } } : {}), executionVersion: 2, status: { in: ["WAITING", "QUEUED", "RETRY_WAIT"] }, nextAttemptAt: { lte: new Date(Math.max(now.getTime(), Date.now())) } }, orderBy: [{ priority: "asc" }, { nextAttemptAt: "asc" }], take: 100 });
   recovery.examined = pending.length;
   for (const run of pending) {
@@ -107,23 +128,38 @@ export async function tickSyncCenter(now = new Date(), only?: { taskIds: string[
 }
 
 async function ensureAutomaticSchedules(scopes: SyncScope[], now: Date, sourceIds?: string[]) {
+  // Apply registry prerequisites before the bounded scan. Incomplete sources
+  // and tasks already executing must not starve later ready adapters/accounts.
+  const policies: Prisma.AmazonSyncDataSourceWhereInput[] = automaticAdapters.map(definition => {
+    const adapter = automaticAdapter(definition.resource)!;
+    return { resource: adapter.resource, ...(adapter.requiredPolicy ? { [adapter.requiredPolicy]: { not: Prisma.AnyNull } } : {}) };
+  });
   const sources = await prisma.amazonSyncDataSource.findMany({
-    where: { OR: scopes, ...(sourceIds ? { id: { in: sourceIds } } : {}), enabled: true, resource: { in: [...automaticResources] }, marketplaceId: { in: [...automaticMarketplaces] }, authorization: { status: "CONFIGURED" } },
-    include: { authorization: { select: { updatedByUserId: true } }, resourceCursor: true }, take: 200,
+    where: { AND: [{ OR: scopes }, { OR: policies }], ...(sourceIds ? { id: { in: sourceIds } } : {}), enabled: true, resource: { in: [...automaticResources] }, marketplaceId: { in: [...automaticMarketplaces] }, authorization: { status: "CONFIGURED" },
+      runs: { none: { status: { in: activeTaskStatuses } } },
+      targets: { none: { schedule: { executionVersion: 2, planKey: { startsWith: "auto-v1:" } } } } },
+    include: { authorization: { select: { updatedByUserId: true } }, resourceCursor: true }, orderBy: [{ updatedAt: "asc" }, { id: "asc" }], take: 200,
   });
   for (const candidate of sources) {
-    if ((candidate.resource === "orders" && !candidate.orderPolicy) || (candidate.resource === "finance" && !candidate.financePolicy) || (candidate.resource === "returns" && !candidate.returnsPolicy) || (isObservationResource(candidate.resource) && !candidate.domainPolicy)) continue;
+    const candidateAdapter = automaticAdapter(candidate.resource);
+    if (!candidateAdapter || !automaticAdapterHasRequiredPolicy(candidateAdapter, candidate)) continue;
     const scope = { organizationId: candidate.organizationId, workspaceId: candidate.workspaceId };
     try { await prisma.$transaction(async tx => {
       await scopeLock(tx, scope);
       const source = await tx.amazonSyncDataSource.findFirst({ where: { ...scope, id: candidate.id, authorization: { status: "CONFIGURED" } }, include: { authorization: { select: { updatedByUserId: true } } } });
-      if (!source || !source.enabled) return;
-      // A validated complete-period collection already defines the executable
-      // report windows. It does not need a separate manual plan activation.
-      if (source.resource === "brand_analytics") {
-        const policy = parseObservationPolicy(source.domainPolicy, "brand_analytics");
-        if (policy.resource !== "brand_analytics" || !policy.collection && !policy.automaticDiscovery) return;
+      if (!source || !source.enabled || source.resource !== candidate.resource || !automaticAdapterHasRequiredPolicy(candidateAdapter, source)) return;
+      try { assertAutomaticAdapterPolicy(candidateAdapter, source); }
+      catch {
+        const id = digest([scope, source.id, source.revision, "automatic-policy-invalid"]);
+        if (!await tx.auditLog.findUnique({ where: { id }, select: { id: true } })) await tx.auditLog.create({ data: {
+          id, organizationId: scope.organizationId, userId: source.authorization.updatedByUserId,
+          action: "amazon.sync.plan.policy-invalid", entityType: "AmazonSyncDataSource", entityId: source.id,
+          metadata: { workspaceId: scope.workspaceId, resource: source.resource, sourceRevision: source.revision,
+            policyField: candidateAdapter.requiredPolicy ?? null, code: "AUTOMATIC_POLICY_INVALID", taskCreated: false },
+        } });
+        return;
       }
+      if (candidateAdapter.scheduleReady && !candidateAdapter.scheduleReady(source)) return;
       const key = automaticPlanKey(source.id);
       const exists = await tx.amazonSyncSchedule.findUnique({ where: { organizationId_workspaceId_resource_planKey: { ...scope, resource: source.resource, planKey: key } }, select: { id: true } });
       if (exists) return;
@@ -131,37 +167,51 @@ async function ensureAutomaticSchedules(scopes: SyncScope[], now: Date, sourceId
       await assertAmazonAction(scope, source.authorization.updatedByUserId, "create", tx);
       await assertAmazonAction(scope, source.authorization.updatedByUserId, "approve", tx);
       if (await tx.amazonSyncRun.findFirst({ where: { ...scope, sourceId: source.id, status: { in: activeTaskStatuses } }, select: { id: true } })) return;
-      const backfillStart = source.resource === "finance" && source.financePolicy ? parseFinancePolicy(source.financePolicy).initialFrom : automaticBackfillStart(now);
-      if (source.resource === "orders" && source.orderPolicy) {
-        const policy = { ...parseOrderSyncPolicy(source.orderPolicy), initialFrom: backfillStart, windowMinutes: 1440 };
-        await tx.amazonSyncDataSource.update({ where: { id: source.id }, data: { orderPolicy: policy as Prisma.InputJsonValue, revision: { increment: 1 } } });
-      }
-      if (source.resource === "finance" && source.financePolicy) {
-        // The source already records its chosen retention start and gap. Do not
-        // erase them when creating a plan or move an existing cursor implicitly.
-        const policy = { ...parseFinancePolicy(source.financePolicy), windowMinutes: 43200 };
-        await tx.amazonSyncDataSource.update({ where: { id: source.id }, data: { financePolicy: policy as Prisma.InputJsonValue, revision: { increment: 1 } } });
-      }
-      if (source.resource === "returns" && source.returnsPolicy) {
-        const policy = { ...parseReturnPolicy(source.returnsPolicy), initialFrom: backfillStart, windowMinutes: 43200 };
-        await tx.amazonSyncDataSource.update({ where: { id: source.id }, data: { returnsPolicy: policy as Prisma.InputJsonValue, revision: { increment: 1 } } });
-      }
+      const adapter = automaticAdapter(source.resource);
+      if (!adapter) return;
+      const defaultInitialFrom = automaticBackfillStart(now);
+      const backfillStart = adapter.scheduleInitialFrom?.(source, defaultInitialFrom) ?? defaultInitialFrom;
+      const schedulePolicies = adapter.prepareSchedulePolicy?.(source, defaultInitialFrom);
+      if (schedulePolicies) assertAutomaticAdapterPolicy(adapter, { ...source, ...schedulePolicies });
+      if (schedulePolicies && Object.keys(schedulePolicies).length) await tx.amazonSyncDataSource.update({ where: { id: source.id }, data: {
+        ...Object.fromEntries(Object.entries(automaticSourcePolicyFields(schedulePolicies)).map(([key, value]) => [key, value as Prisma.InputJsonValue])), revision: { increment: 1 },
+      } });
       const id = automaticPlanId(source.id);
-      const plan = await tx.amazonSyncSchedule.create({ data: { ...scope, id, resource: source.resource, executionVersion: 2, planKey: key, name: `自动同步 · ${source.resource}`, revision: 1, mode: source.resource === "sales_traffic" ? "date_range" : isIncrementalResource(source.resource) ? "incremental" : "snapshot", priority: 1, maxAttempts: 3, retentionDays: 30, nextRunAt: now, intervalMinutes: automaticResourceIntervalMinutes(source.resource), enabled: true, updatedByUserId: source.authorization.updatedByUserId } });
+      const plan = await tx.amazonSyncSchedule.create({ data: { ...scope, id, resource: source.resource, executionVersion: 2, planKey: key, name: `自动同步 · ${source.resource}`, revision: 1, mode: adapter.scheduleMode, priority: 1, maxAttempts: 3, retentionDays: 30, nextRunAt: now, intervalMinutes: automaticResourceIntervalMinutes(source.resource), enabled: true, updatedByUserId: source.authorization.updatedByUserId } });
       await tx.amazonSyncPlanTarget.create({ data: { ...scope, scheduleId: plan.id, sourceId: source.id } });
       await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: source.authorization.updatedByUserId, action: "amazon.sync.plan.automatic_created", entityType: "AmazonSyncSchedule", entityId: plan.id, metadata: { workspaceId: scope.workspaceId, sourceId: source.id, resource: source.resource, marketplaceId: source.marketplaceId, ...(source.resource === "orders" || source.resource === "finance" || source.resource === "returns" ? { initialFrom: backfillStart } : {}), ...(source.resource === "inventory_events" ? { initialFrom: new Date(now.getTime() - 540 * 86_400_000).toISOString() } : {}) } } });
     }); } catch { console.error(`[amazon-sync-center] automatic plan discovery deferred for source ${candidate.id}`); }
+    // Persist scan rotation using existing modification metadata. Never change
+    // configuration/revision, coverage, grants, cursor or task state. A concurrent
+    // edit, new plan or active task makes this guarded inspection touch a no-op.
+    try {
+      await prisma.amazonSyncDataSource.updateMany({ where: { ...scope, id: candidate.id, revision: candidate.revision,
+        updatedAt: candidate.updatedAt, enabled: true, runs: { none: { status: { in: activeTaskStatuses } } },
+        targets: { none: { schedule: { executionVersion: 2, planKey: { startsWith: "auto-v1:" } } } } },
+        data: { updatedAt: new Date(Math.max(now.getTime(), candidate.updatedAt.getTime() + 1)) } });
+    } catch { /* A DB outage leaves the original source eligible for a later scan. */ }
   }
 }
 
 export async function enqueueDueAutomaticPlans(scopes: SyncScope[], now: Date, sourceIds?: string[]) {
-  const plans = await prisma.amazonSyncSchedule.findMany({ where: { OR: scopes, executionVersion: 2, enabled: true, planKey: { startsWith: "auto-v1:" }, ...(sourceIds ? { targets: { some: { sourceId: { in: sourceIds } } } } : {}), nextRunAt: { lte: now } }, include: { targets: { include: { source: { include: { authorization: true, seller: true, resourceCursor: true } } } } }, orderBy: { nextRunAt: "asc" }, take: 100 });
+  const plans = await prisma.amazonSyncSchedule.findMany({ where: { OR: scopes, executionVersion: 2, enabled: true, planKey: { startsWith: "auto-v1:" }, ...(sourceIds ? { targets: { some: { sourceId: { in: sourceIds } } } } : {}), nextRunAt: { lte: now } }, include: { targets: { include: { source: { include: { authorization: true, seller: true, resourceCursor: true } } } } }, orderBy: [{ nextRunAt: "asc" }, { id: "asc" }], take: 100 });
   for (const plan of plans) {
+    try {
     if (!isAutomaticResource(plan.resource)) continue;
     const target = plan.targets[0]?.source;
     if (!target || !target.enabled || plan.targets.length !== 1 || target.authorization.status !== "CONFIGURED" || !automaticMarketplaceAllowed(plan.resource, target.marketplaceId)) continue;
     if (await prisma.amazonSyncRun.findFirst({ where: { organizationId: plan.organizationId, workspaceId: plan.workspaceId, sourceId: target.id, status: { in: activeTaskStatuses } }, select: { id: true } })) continue;
     const scope = { organizationId: plan.organizationId, workspaceId: plan.workspaceId };
+    // A new schedule slot is not new upstream permission. Retry only after
+    // source/authorization revision changes, or a later approved task succeeds.
+    const latest = await prisma.amazonSyncRun.findFirst({ where: { ...scope, sourceId: target.id, executionVersion: 2, authorizationRevision: target.authorization.revision,
+      frozenScope: { path: ["sourceRevision"], equals: target.revision } }, orderBy: [{ startedAt: "desc" }, { id: "desc" }], select: { status: true, summary: true, trigger: true } });
+    const failureCode = (latest?.summary as { quality?: { code?: string } } | null)?.quality?.code;
+    if (latest?.status === "FAILED" && (failureCode === "AUTH" || failureCode === "API_REJECTED")) continue;
+    // Recovery owns exhausted transient work, including its archived pages and
+    // pending publication. A new cadence must not race the cooldown by creating
+    // a replacement task with a different key and discarding that progress.
+    if (latest?.status === "FAILED" && latest.trigger === "schedule" && automaticTransientFailureCodes.includes(failureCode ?? "")) continue;
     // Leave a completed boundary for the approved detail transition; don't
     // immediately race it with another base-only history window.
     if (plan.resource === "orders" && !parseOrderSyncPolicy(target.orderPolicy).details && target.resourceCursor?.status === "SUCCEEDED" && await continuityGrant(prisma, target) && await prisma.amazonOrderRecord.count({ where: { ...scope, sourceId: target.id } })) continue;
@@ -169,69 +219,26 @@ export async function enqueueDueAutomaticPlans(scopes: SyncScope[], now: Date, s
     let options: Parameters<typeof createTask>[4];
     let backfill = false;
     try {
-      if (plan.resource === "brand_analytics") {
-        const brandPolicy = await nextBrandCollectionPolicy(prisma, scope, target);
-        options = { key: automaticTaskKey(plan, target, brandWindowKey(brandPolicy)), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, brandPolicy };
-        backfill = true;
-      } else if (plan.resource === "buy_box_history") {
-        const buyBoxPolicy = await nextBuyBoxPolicy(prisma, scope, target, now);
-        options = { key: automaticTaskKey(plan, target, buyBoxPolicy.from, buyBoxPolicy.to), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, buyBoxPolicy };
-        backfill = buyBoxPolicy.from < new Intl.DateTimeFormat("en-CA", { timeZone: buyBoxPolicy.marketplaceTimeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(now.getTime() - 86400000));
-      } else if (plan.resource === "orders") {
-        if (!target.orderPolicy) continue;
-        const policy = parseOrderSyncPolicy(target.orderPolicy);
-        const cursor = target.resourceCursor;
-        const window = nextOrderWindow(policy, cursor, now);
-        options = { key: automaticTaskKey(plan, target, window.from, window.to), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, orderWindow: orderWindowFromFrozen(window) };
-        backfill = Date.parse(window.to) < now.getTime() - policy.safetyLagSeconds * 1000;
-      } else if (plan.resource === "finance") {
-        if (!target.financePolicy) continue;
-        const policy = parseFinancePolicy(target.financePolicy);
-        const cursor = target.resourceCursor;
-        const window = nextFinanceWindow(policy, cursor, now);
-        options = { key: automaticTaskKey(plan, target, window.from, window.to), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, financeWindow: financeWindowFromFrozen(window) };
-        backfill = Date.parse(window.to) < now.getTime() - policy.safetyLagSeconds * 1000;
-      } else if (plan.resource === "returns") {
-        if (!target.returnsPolicy) continue;
-        const policy = parseReturnPolicy(target.returnsPolicy);
-        const window = nextAutomaticReturnWindow(policy, target.resourceCursor, now);
-        options = { key: automaticTaskKey(plan, target, window.from, window.to), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, returnWindow: returnWindowFromFrozen(window) };
-        backfill = Date.parse(window.to) < now.getTime() - policy.safetyLagSeconds * 1000;
-      } else if (plan.resource === "sales_traffic") {
-        const history = await prisma.amazonSyncRun.findMany({ where: { ...scope, sourceId: target.id, resource: "sales_traffic", status: "SUCCEEDED", stage: "COMPLETED" }, select: { frozenScope: true }, orderBy: { finishedAt: "desc" }, take: 1000 });
-        const coverage = history.flatMap(run => { const range = (run.frozenScope as { requestedRange?: { from?: unknown; to?: unknown } } | null)?.requestedRange; return typeof range?.from === "string" && typeof range?.to === "string" ? [{ from: range.from, to: range.to }] : []; });
-        const next = nextSalesTrafficRange(target.marketplaceId, now, coverage);
-        options = { key: automaticTaskKey(plan, target, next.range.from, next.range.to), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, requestedRange: next.range };
-        backfill = next.backfill;
-      } else if (plan.resource === "inventory_events") {
-        const window = nextAutomaticInventoryEventWindow(target.resourceCursor, now);
-        if (!window) {
-          await prisma.amazonSyncSchedule.updateMany({ where: { ...scope, id: plan.id, revision: plan.revision, enabled: true }, data: { nextRunAt: new Date(now.getTime() + automaticIntervalMinutes * 60_000) } });
-          continue;
-        }
-        const checked = domainReportRunWindow("inventory_events", window);
-        options = { key: automaticTaskKey(plan, target, window.from, window.to), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, reportWindow: checked! };
-        backfill = window.to < new Date(now.getTime() - 86_400_000).toISOString().slice(0, 10);
-      } else if (plan.resource === "settlements") {
-        const window = nextAutomaticSettlementDiscovery(now, target.resourceCursor);
-        options = { key: automaticTaskKey(plan, target, window.createdSince.slice(0, 10), window.createdUntil.slice(0, 10)), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, reportWindow: domainReportRunWindow("settlements", window)! };
-      } else if (plan.resource === "reimbursements") {
-        const window = nextAutomaticReimbursementWindow(now, target.resourceCursor);
-        options = { key: automaticTaskKey(plan, target, window.from, window.to), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, reportWindow: window };
-        backfill = window.to < new Date(now.getTime() - 86_400_000).toISOString().slice(0, 10);
-      } else if (plan.resource === "inventory_age") {
-        options = { key: automaticTaskKey(plan, target, automaticSnapshotSlot(now, plan.intervalMinutes)), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority };
-      } else if (plan.resource === "catalog" || plan.resource === "inventory") {
-        options = { key: automaticTaskKey(plan, target, automaticSnapshotSlot(now, plan.intervalMinutes)), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority };
-      } else {
-        if (!isObservationResource(plan.resource) || !target.domainPolicy) continue;
-        const policy = parseObservationPolicy(target.domainPolicy, plan.resource);
-        if (["brand_analytics", "buy_box_history"].includes(policy.resource)) continue;
-        options = { key: automaticTaskKey(plan, target, automaticSnapshotSlot(now, plan.intervalMinutes)), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority };
+      const adapter = automaticAdapter(plan.resource);
+      if (!adapter) continue;
+      const planned = await planAutomaticTask(adapter, scope, target, plan, now);
+      if (!planned) continue;
+      if (planned.deferUntil) {
+        await prisma.amazonSyncSchedule.updateMany({ where: { ...scope, id: plan.id, revision: plan.revision, enabled: true }, data: { nextRunAt: planned.deferUntil } });
+        continue;
       }
+      options = { key: automaticTaskKey(plan, target, planned.keyFrom, planned.keyTo), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision,
+        maxAttempts: plan.maxAttempts, priority: plan.priority, ...planned.payload };
+      backfill = planned.backfill;
     } catch (error) {
       if (error instanceof SyncInputError && error.status === 409) {
-        await prisma.amazonSyncSchedule.updateMany({ where: { ...scope, id: plan.id, revision: plan.revision, enabled: true }, data: { nextRunAt: new Date(now.getTime() + automaticIntervalMinutes * 60_000) } });
+        await prisma.$transaction(async tx => {
+          await scopeLock(tx, scope);
+          const recoveryRequired = error.message.startsWith("ORDER_WINDOW_REQUIRES_RECOVERY");
+          const nextRunAt = new Date(now.getTime() + automaticResourceIntervalMinutes(plan.resource) * 60_000);
+          const changed = await tx.amazonSyncSchedule.updateMany({ where: { ...scope, id: plan.id, revision: plan.revision, enabled: true, nextRunAt: { lte: now } }, data: { nextRunAt } });
+          if (changed.count) await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: plan.updatedByUserId, action: "amazon.sync.plan.window-blocked", entityType: "AmazonSyncSchedule", entityId: plan.id, metadata: { workspaceId: scope.workspaceId, sourceId: target.id, resource: plan.resource, scheduleRevision: plan.revision, code: recoveryRequired ? "ORDER_WINDOW_REQUIRES_RECOVERY" : error.message.startsWith("SALES_HISTORY_EVIDENCE_LIMIT") ? "SALES_HISTORY_EVIDENCE_LIMIT" : "AUTOMATIC_WINDOW_BLOCKED", nextCheckAt: nextRunAt.toISOString(), taskCreated: false } } });
+        });
       }
       continue;
     }
@@ -247,6 +254,14 @@ export async function enqueueDueAutomaticPlans(scopes: SyncScope[], now: Date, s
       });
       if (run?.status === "WAITING") await getAmazonSyncQueue().add("process-amazon-sync-run", { runId: run.id, dispatchVersion: run.dispatchVersion }, { jobId: `adc-${run.id}-${run.dispatchVersion}`, priority: run.priority, attempts: 1, removeOnComplete: true, removeOnFail: true });
     } catch { console.error(`[amazon-sync-center] automatic plan ${plan.id} could not enqueue; plan intent retained`); }
+    } catch { console.error(`[amazon-sync-center] automatic plan ${plan.id} inspection deferred; other plans remain independent`); }
+    finally {
+      // A skipped or dependency-blocked plan cannot occupy every bounded scan.
+      // Preserve disabled plans and any nextRunAt already advanced by planning.
+      try {
+        await prisma.amazonSyncSchedule.updateMany({ where: { organizationId: plan.organizationId, workspaceId: plan.workspaceId, id: plan.id, revision: plan.revision, enabled: true, nextRunAt: { lte: now } }, data: { nextRunAt: new Date(now.getTime() + 30_000) } });
+      } catch { console.error(`[amazon-sync-center] automatic plan ${plan.id} inspection checkpoint deferred`); }
+    }
   }
 }
 

@@ -1,0 +1,50 @@
+{
+  "observedAt": "2026-11-10T05:28:14.521641+00:00",
+  "environment": "existing local stored-data database; enforced PostgreSQL read-only connections",
+  "realAmazonRequests": 0,
+  "existingTasksModified": false,
+  "combinations": [
+    {
+      "marketplace": "CA",
+      "resource": "catalog_items",
+      "taskId": "9f7b68e2-e09f-4abd-a191-7ec8a6e45649",
+      "status": "BLOCKED",
+      "committedPages": 11,
+      "published": false,
+      "sourceAndFrozenPolicyMatch": true,
+      "frozenCatalogHeadMatchesCurrent": false,
+      "executionExpiredAt": "2026-11-08T15:31:57.397Z",
+      "reason": "Current catalog head differs from frozen discovery manifest; manual execution grant also expired. Historical generic preflight message does not prove the original failed predicate. No eligibility failure inferred."
+    },
+    {
+      "marketplace": "MX",
+      "resource": "catalog_items",
+      "taskId": "d1099d0f-d28f-4f80-8f13-fde5217fdc44",
+      "status": "BLOCKED",
+      "committedPages": 11,
+      "published": false,
+      "sourceAndFrozenPolicyMatch": true,
+      "frozenCatalogHeadMatchesCurrent": false,
+      "executionExpiredAt": "2026-11-08T15:31:57.444Z",
+      "reason": "Current catalog head differs from frozen discovery manifest; manual execution grant also expired. Historical generic preflight message does not prove the original failed predicate. No eligibility failure inferred."
+    },
+    {
+      "marketplace": "MX",
+      "resource": "notifications",
+      "taskId": "6dafe42b-adb8-4125-b6a1-970b54972da8",
+      "status": "FAILED",
+      "committedPages": 3,
+      "archivesIncludingError": 4,
+      "published": false,
+      "operation": "getSubscriptions",
+      "statusCode": 400,
+      "upstreamCode": "InvalidInput",
+      "reason": "Archived official response says missing or invalid parameters; generic response does not identify a specific parameter or prove account ineligibility."
+    }
+  ],
+  "port3017": {
+    "meaning": "normal local web/API configured port; not a task or test number",
+    "started": false,
+    "reason": "This acceptance uses an independent random HTTP port and disposable DB/Redis rather than the configured stored-data environment."
+  }
+}

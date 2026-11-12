@@ -1,0 +1,1094 @@
+[
+  {
+    "path": "init-config/mysql/数据/db_admin/t_role.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_admin/t_role_menu.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_admin/t_shop.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_admin/t_sys_dict.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_admin/t_sys_dict_item.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_admin/t_sys_quartz_task.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_admin/t_sys_query_field.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_admin/t_sys_role_menu.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_admin/t_sys_tariff_packages.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_admin/t_user.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_admin/t_user_role.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_admin/t_user_shop.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_admin/t_userinfo.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_amz_api_timelimit.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_amz_notifications.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_amz_region.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_amz_report_request_type.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_amz_returns_detailed_disposition.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_amz_returns_reason.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_amz_returns_status.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_amz_settlement_amount_description.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_amz_settlement_amount_type_nonsku.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_amz_ship_fulfillment_anysis_center.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_amz_ship_fulfillment_center.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_amz_ship_state_province_code.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_erp_amazon_feedstatus.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_erp_ship_config_carrier.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_erp_ship_shipment_template_file.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_erp_ship_status.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_exchangeinfo.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_exchangerate.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_fba_fbasipp.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_fba_labeling_service_fee.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_fbaformat.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_fixed_closingfee.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_individualfee.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_inplacefee.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_inplacefeeformat.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_inventorystoragefee.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_manual_processing_fee.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_marketplace.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_outbound_weightformat.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_prepservicefee.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_product_type.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_productformat.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_producttier.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_profitcfg.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_profitcfgcountry.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_referralfee.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon/t_variable_closing_fee.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon_adv/t_amz_adv_report_request_type.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon_adv/t_amz_region.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_amazon_adv/t_marketplace.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_erp/t_erp_fin_project.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_erp/t_erp_formtype.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_erp/t_erp_purchase_form_payment_method.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_erp/t_marketplace.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据/db_finance/fin_report_mapping_rules_default.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据库结构/db_amazon/autoRefreshInsert.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据库结构/db_amazon/opt_owner.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据库结构/db_amazon_adv/db_timeout_process_kill.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据库结构/db_amazon_adv/delete_long_data.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据库结构/db_amazon_adv/groupSync.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据库结构/db_amazon_adv/syncData.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "init-config/mysql/数据库结构/db_finance/refreshData.sql",
+    "line": 1,
+    "reason": "SQL without parsed table definition; data/routine script not executed or imported",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/ISysCompanyService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/ISysDictService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/ISysMenuFavoriteService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/ISysUserDatalimitService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/ISysUserGroupService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/ISysUserWechatMPService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysCompanyServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysDictServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysMenuFavoriteServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysUserDatalimitServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysUserGroupServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/service/impl/SysUserWechatMPServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/feishu/service/IAuthService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/feishu/service/impl/AuthServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/service/IManagerLimitAppendService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/service/IShopService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/service/ISysCustomerOrderRefundService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/service/ISysCustomerOrderService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/service/ISysTariffPackagesAppendDiscountService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/service/ISysTariffPackagesAppendService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/service/ISysTariffPackagesService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/service/impl/ManagerLimitAppendServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/service/impl/ShopServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/service/impl/SysCustomerOrderRefundServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/service/impl/SysCustomerOrderServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/service/impl/SysTariffPackagesAppendDiscountServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/service/impl/SysTariffPackagesAppendServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/service/impl/SysTariffPackagesServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/email/service/ISysMailTemplateService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/email/service/impl/SysMailTemplateServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/service/IDeepseekChatSessionsService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/service/ILargeFileUserService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/service/ISysQueryUserVersionService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/service/ISysQueryVersionFeildService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/service/impl/DeepseekChatSessionsServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/service/impl/LargeFileUserServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/service/impl/SysQueryUserVersionServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/service/impl/SysQueryVersionFeildServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/exports/service/impl/AdvExportType.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/auth/service/impl/AmzApiTimelimitUtil.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/service/PaymentReportService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/service/impl/PaymentReportServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/IShipCustomsService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/IShipInboundShipmentCustomService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/IShipV2InboundplanPalletService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ShipInboundShipmentCustomServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/service/impl/ShipV2InboundplanPalletServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inventory/service/IAmzInventoryPlanningService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inventory/service/IInventorySummaryReportService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inventory/service/impl/AmzInventoryPlanningServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inventory/service/impl/InventorySummaryReportServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/notifications/service/IAmzNotificationsService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/notifications/service/impl/AmzNotificationsServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/performance/service/IAmzCouponAsinService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/performance/service/IAmzPromotionsAsinService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/performance/service/impl/AmzCouponAsinServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/performance/service/impl/AmzPromotionsAsinServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/service/IProductReponseTreatService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/pojo/entity/PrepServiceFee.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/IIndividualFeeService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/IInplaceFeeService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/IVariableClosingFeeService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/IndividualFeeServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/InplaceFeeServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/service/impl/VariableClosingFeeServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/IAmzInventoryCountryReportService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/IInventoryHealthService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/IReportAmzInventoryAgeService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/service/impl/IReportAmzPerformanceService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-common/common-core-ext/src/main/java/com/wimoor/common/core/constant/ServiceNameConstants.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-common/common-core-ext/src/main/java/com/wimoor/common/core/utils/StringUtils.java",
+    "line": 605,
+    "reason": "method block unresolved",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-common/common-core/src/main/java/com/wimoor/common/ServiceNameConstants.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-common/common-entity/src/main/java/com/wimoor/common/service/impl/SystemControllerLog.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/service/IDimensionsInfoService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/service/IMaterialConsumableSafetyStockService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/service/impl/DimensionsInfoServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/service/impl/MaterialConsumableSafetyStockServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/service/IErpOverseaCycleService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/service/IOrderPlatformService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/service/IOrderShipPlanService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/service/impl/ErpOverseaCycleServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/service/impl/OrderPlatformServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/service/impl/OrderShipPlanServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/IErpPurchaseAlibabaContactService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/IErpPurchaseAlibabaOrderBaseinfoService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/IErpPurchaseAlibabaOrderProductitemsService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/IErpPurchaseAlibabaOrderReceiverinfoService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/IErpPurchaseAlibabaOrderTradetermsService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/IErpPurchaseAlibabaProductitemsService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/IOpen1688MessageService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/impl/ErpPurchaseAlibabaContactServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/impl/ErpPurchaseAlibabaOrderBaseinfoServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/impl/ErpPurchaseAlibabaOrderProductitemsServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/impl/ErpPurchaseAlibabaOrderReceiverinfoServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/impl/ErpPurchaseAlibabaOrderTradetermsServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/impl/ErpPurchaseAlibabaProductitemsServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/service/impl/Open1688MessageServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/service/IPurchaseWareHouseStatusService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/service/impl/PurchaseWareHouseStatusServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/ship/mapper/ShipTransCompayServicesZhihuiMapper.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/ship/pojo/entity/ShipTransCompayServicesZhihui.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/ship/service/IShipCustomsService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/ship/service/IShipPlanItemService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/ship/service/impl/ShipCustomsServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/ship/service/impl/ShipPlanItemServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/service/IPurchaseAlibabaBuyerService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/service/IPurchaseAlibabaOrderItemService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/service/IPurchaseAlibabaOrderService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/service/IPurchaseAlibabaReceiverService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/service/IPurchaseAlibabaSellerService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/service/IPurchaseOrderEntryService.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/service/impl/PurchaseAlibabaBuyerServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/service/impl/PurchaseAlibabaOrderItemServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/service/impl/PurchaseAlibabaOrderServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/service/impl/PurchaseAlibabaReceiverServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/service/impl/PurchaseAlibabaSellerServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/service/impl/PurchaseOrderEntryServiceImpl.java",
+    "line": 1,
+    "reason": "Service candidate without parsed signatures",
+    "status": "UNCERTAIN"
+  }
+]

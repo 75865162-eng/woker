@@ -1,3 +1,5 @@
+// Cloud role for injected offline HTTP fixtures; no real Amazon calls.
+process.env.AMAZON_API_EXECUTION_ROLE = "cloud";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AmazonSpApiClient, AmazonSpApiError, financePaginationRejected } from "@/lib/amazon/sp-api-client";
@@ -51,6 +53,22 @@ test("download diagnostics retain only received byte count after a partial body 
   let reads = 0;
   const client = new AmazonSpApiClient(getAmazonSpApiServerConfiguration(environment), { fetch: async () => new Response(new ReadableStream({ pull(controller) { if (reads++ === 0) controller.enqueue(new Uint8Array([1, 2, 3])); else controller.error(new DOMException("private-signed-url", "TimeoutError")); } })) });
   await assert.rejects(client.downloadReportText({ url: "https://fixture.s3.amazonaws.com/report?private=secret" }), (e: unknown) => e instanceof AmazonSpApiError && e.downloadedBytes === 3 && e.upstreamCode === "REPORT_DOWNLOAD_TIMEOUT" && !e.message.includes("private"));
+});
+
+test("JSON report archival keeps numeric lexemes and malformed JSON for later parser repair", async () => {
+  const document = { url: "https://fixture.s3.amazonaws.com/report?signature=private" };
+  for (const raw of ['{"amount":9007199254740993.01,"zero":1.00}', '{"broken":']) {
+    const client = new AmazonSpApiClient(getAmazonSpApiServerConfiguration(environment), { fetch: async (_url, init) => {
+      const headers = new Headers(init?.headers);
+      assert.equal(headers.has("authorization"), false);
+      assert.equal(headers.has("x-amz-access-token"), false);
+      return new Response(raw);
+    } });
+    assert.equal(await client.downloadReportJsonText(document), raw);
+  }
+  const invalidUtf8 = new AmazonSpApiClient(getAmazonSpApiServerConfiguration(environment), { fetch: async () => new Response(new Uint8Array([0xff])) });
+  await assert.rejects(invalidUtf8.downloadReportJsonText(document), (error: unknown) => error instanceof AmazonSpApiError && !error.message.includes("private"));
+  await assert.rejects(invalidUtf8.downloadReportJsonText({ url: "https://untrusted.invalid/report" }));
 });
 
 test("SP-API client obtains LWA token and signs the marketplace request without exposing secrets", async () => {

@@ -4,7 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 import type { SyncSourceView, SyncTaskView, SyncPlanView } from "@/lib/amazon-sync/contracts";
 let bundle = "", styles = "";
 test.beforeAll(async () => {
-  bundle = (await build({ entryPoints: ["tests/browser/sync-center-harness.tsx"], bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env.NODE_ENV": '"development"' } })).outputFiles[0].text;
+  bundle = (await build({ entryPoints: ["tests/browser/sync-center-harness.tsx"], bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env": '{"NODE_ENV":"development"}' }, plugins: [{ name: "isolated-next-navigation", setup(builder) { builder.onResolve({ filter: /^next\/navigation$/ }, () => ({ path: "navigation", namespace: "fixture" })); builder.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({ contents: "export function useSearchParams(){return new URLSearchParams(window.location.search)}" })); } }] })).outputFiles[0].text;
   const [{ readFile }, { default: postcss }, { default: tailwind }] = await Promise.all([import("node:fs/promises"), import("postcss"), import("@tailwindcss/postcss")]);
   // The installed Tailwind plugin resolves a second PostCSS copy. The public plugin
   // contract is identical, but its nominal node classes differ between packages.
@@ -13,9 +13,10 @@ test.beforeAll(async () => {
 const task: SyncTaskView = { id: "fixture-task", sourceId: "source-a", resource: "inventory", status: "FAILED", stage: "FETCHING", trigger: "manual", mode: "snapshot", scheduleId: null, scheduleRevision: null, queuedAt: "2026-11-04T01:00:00Z", startedAt: "2026-11-04T01:00:01Z", finishedAt: "2026-11-04T01:00:05Z", elapsedMs: 4000, pagesCompleted: 2, processedCount: 25, insertedCount: 25, updatedCount: 0, skippedCount: 0, apiRequests: 3, throttles: 1, attempts: 1, maxAttempts: 3, error: "Amazon 请求限流，未发布新快照。", control: null, nextAttemptAt: "2026-11-04T01:01:00Z", summary: null };
 const sources: SyncSourceView[] = ["a", "b"].map((v, i) => ({ id: `source-${v}`, resource: "inventory", enabled: true, marketplaceId: i ? "CA" : "US", sellerAccountId: `store-${v}`, authorizationId: `auth-${v}`, activeRunId: i ? "prior-b" : null, freshnessMinutes: 360, lastSuccessAt: i ? "2026-11-04T01:00:00Z" : null, rowCount: i ? 10 : 0, coverage: null, health: i ? "FRESH" : "FAILED", latestTask: i ? null : task, seller: { id: `store-${v}`, displayName: `店铺 ${v.toUpperCase()}`, accountKey: v, status: "active" }, authorization: { id: `auth-${v}`, name: `授权 ${v}`, status: "CONFIGURED", amazonSellerId: `SELLER-${v}`, awsRegion: "us-east-1" } }));
 async function setup(page: Page, readOnly = false, entry = false) {
+  page.on("pageerror", error => console.error("SYNC UI FIXTURE:", error.message));
   const businessCalls: string[] = [];
   const calls: Array<{ section: string; params: URLSearchParams; body?: Record<string, unknown> }> = [];
-  const state = { grants: [] as Array<{ id: string; userId: string; sellerAccountId: string; enabled: boolean; revision: number }>, salesSources: [] as SyncSourceView[], exportStatus: "QUEUED", plans: [] as SyncPlanView[], approvalStatus: "REQUESTED", approvalOperation: "save-authorization", disabledAuth: false, denied: false, succeeded: false, invalidAuth: false, workerOnline: false, delayed: false, release: () => {} };
+  const state = { grants: [] as Array<{ id: string; userId: string; sellerAccountId: string; enabled: boolean; revision: number }>, salesSources: [] as SyncSourceView[], exportStatus: "QUEUED", plans: [] as SyncPlanView[], approvalStatus: "REQUESTED", approvalOperation: "save-authorization", ordersTask: false, recoveryBlocked: false, disabledAuth: false, denied: false, succeeded: false, listingTask: false, cancelledCatalog: false, invalidAuth: false, workerOnline: false, delayed: false, release: () => {} };
   await page.route("**/*", async route => {
     const request = route.request(), url = new URL(request.url()); expect(url.origin).toBe("http://127.0.0.1:43224");
     if (url.pathname === "/bundle.js") return route.fulfill({ contentType: "application/javascript", body: bundle });
@@ -58,6 +59,8 @@ async function setup(page: Page, readOnly = false, entry = false) {
     const common = { access, sources: visible };
     if (section === "overview") return route.fulfill({ json: { ...common, metrics: { connectedStores: visible.length, enabledDomains: 1, running: 0, issues: 1, expired: 0, lastSuccessAt: "2026-11-04T01:00:00Z" }, trend: [], legacyActive: 0 } });
     if (section === "approvals") return route.fulfill({ json: { ...common, requests: [{ id: "approval-1", targetEnvironment: "local", changeType: "CredentialChange", operation: state.approvalOperation, targetId: "auth-a", beforeSummary: { credentials: "已配置" }, afterSummary: { refreshToken: "将替换／新增" }, sellerIds: ["SELLER-a"], marketplaceIds: ["US"], domains: ["inventory"], sourceIds: [], baseRevision: 1, changeDigest: "fixture-digest", requestedByUserId: "requester", approvedByUserId: state.approvalStatus === "APPROVED" ? "approver" : null, status: state.approvalStatus, expiresAt: "2026-11-04T02:00:00Z", appliedAt: null, createdAt: "2026-11-04T01:00:00Z" }] } });
+    if (section === "coverage") return route.fulfill({ json: { observedAt: "2026-11-09T00:00:00Z", universe: "OFFLINE_FIXTURE", evidenceTruncated: false, summary: { registeredDomains: 0, completedDomains: 0, domainCoveragePercent: null, complete: false }, domains: [], sources: [] } });
+    if (section === "skill-readiness") return route.fulfill({ json: { skills: [] } });
     if (section === "sources") return route.fulfill({ json: { ...common, sources: state.salesSources.length ? state.salesSources : sources } });
     if (section === "orders") return route.fulfill({ json: { access, rows: [], sources: [], pagination: { total: 0, pageCount: 0 } } });
     if (section === "domain-reports") {
@@ -66,7 +69,7 @@ async function setup(page: Page, readOnly = false, entry = false) {
     }
     if (section === "plans") return route.fulfill({ json: { ...common, sources, plans: state.plans } });
     if (section === "tasks") return route.fulfill({ json: { ...common, rows: [{ ...task, scope: { sellerAccountId: "store-a", marketplaceId: "US", seller: sources[0].seller } }], pagination: { total: 31, page: Number(url.searchParams.get("page")), pageSize: 30, pageCount: 2 } } });
-    if (section === "task") return route.fulfill({ json: { ...common, task: state.succeeded ? { ...task, status: "SUCCEEDED", stage: "COMPLETED", error: null } : task, source: sources[0], logs: [{ id: "log", attempt: 1, event: "FAILED", stage: "FETCHING", page: 2, code: "THROTTLE", statusCode: 429, rateLimit: "1", requestId: "fixture-request", createdAt: "2026-11-04T01:00:05Z" }], nextAfter: null } });
+    if (section === "task") return route.fulfill({ json: { ...common, orderRecovery: state.ordersTask ? { state: state.recoveryBlocked ? "BLOCKED" : "CHECKPOINT_VALID", reason: state.recoveryBlocked ? "CHECKPOINT_INVALID" : null, message: state.recoveryBlocked ? "检查点缺失，不能从头覆盖。" : "检查点可继续，仍须审批。", approvalRequired: true, started: false, checkedAt: "2026-11-09T01:00:00Z", checkpoint: state.recoveryBlocked ? null : { mode: "RESUME_COMMITTED_ORDER_CHECKPOINT", window: { from: "2024-11-20T00:00:00Z", to: "2024-11-21T00:00:00Z" }, pagesCompleted: 2, detailsCompleted: 491, pendingDetails: 9, archivedResponses: 493, listComplete: false, nextOperation: "getOrder", restartsFromBeginning: false } } : null, task: { ...task, ...(state.ordersTask ? { resource: "orders", status: "FAILED", stage: "FETCHING_DETAILS" } : {}), ...(state.listingTask ? { resource: "catalog" } : {}), ...(state.cancelledCatalog ? { resource: "catalog_items", status: "CANCELLED", stage: "FETCHING" } : {}), ...(state.succeeded ? { status: "SUCCEEDED", stage: "COMPLETED", error: null } : {}) }, source: state.listingTask ? { ...sources[0], resource: "catalog" } : sources[0], logs: [{ id: "log", attempt: 1, event: "FAILED", stage: "FETCHING", page: 2, code: "THROTTLE", statusCode: 429, rateLimit: "1", requestId: "fixture-request", createdAt: "2026-11-04T01:00:05Z" }], nextAfter: null } });
     if (section === "snapshots") return route.fulfill({ json: { snapshot: { taskId: task.id, sourceId: "source-a", sellerAccountId: "store-a", amazonSellerId: "SELLER-a", marketplaceId: "US", resource: "inventory", publishedAt: task.finishedAt, isCurrent: true }, snapshotRows: [{ sellerSku: "FIXTURE-SNAPSHOT-SKU", asin: "B-FIXTURE", condition: "NewItem", fulfillableQuantity: 5, reservedQuantity: 1, capturedAt: task.finishedAt, sourceUpdatedAt: null, dataVersion: 1 }], pagination: { page: Number(url.searchParams.get("page")), pageSize: 50, total: 51, pageCount: 2 } } });
     if (section === "sales-traffic") return route.fulfill({ json: { ...common, rows: [{ id: "sale-row", businessDate: "2026-11-01", sellerName: "报告店铺", amazonSellerId: "REAL_TRANSPORT_FIXTURE", marketplaceId: "ATVPDKIKX0DER", metrics: { unitsOrdered: 2, totalOrderItems: 1, sessions: 10, pageViews: 15, orderedProductSales: { amount: 20, currencyCode: "USD" } }, quality: "VALID", reportId: "report-fixture", documentId: "doc-fixture", syncRunId: "sale-task", capturedAt: "2026-11-04T01:00:00Z", publishedAt: "2026-11-04T01:01:00Z" }], pagination: { total: 60, pageCount: 2 }, asOf: "2026-11-04T02:00:00.000Z" } });
     if (section === "connections") return route.fulfill({ json: { ...common, sources, grants: state.grants, grantMembers: [{ userId: "member-a", user: { name: "运营成员" } }], authorizations: [{ id: "auth-a", name: "授权 a", amazonSellerId: "SELLER-a", awsRegion: "us-east-1", endpoint: "https://sellingpartnerapi-na.amazon.com", revision: 1, status: state.disabledAuth ? "DISABLED" : state.invalidAuth ? "ERROR" : "CONFIGURED", lastValidatedAt: null, validationErrorCode: state.invalidAuth ? "AUTH_REJECTED" : null, validationAttemptedAt: "2026-11-04T01:00:00Z", marketplaceParticipations: [{ marketplaceId: "US", countryCode: "US", name: "US" }] }], sellers: [{ id: "store-a", displayName: "店铺 A", accountKey: "a" }] } });
@@ -657,10 +660,10 @@ test("Catalog source configuration submits only the selected bounded ASINs", asy
   await expect.poll(() => calls.find(c => c.body && (c.body as { resource?: string }).resource === "catalog_items")?.body).toMatchObject({ resource: "catalog_items", domainPolicy: { asins: ["B123456789", "B987654321"] } });
 });
 
-test("operations organizes existing readers into eight sections and keeps capability gaps explicit", async ({ page }) => {
+test("operations organizes existing readers and procurement into nine sections and keeps capability gaps explicit", async ({ page }) => {
   const { calls, businessCalls } = await setup(page);
-  const cards = page.getByRole("region", { name: "经营中台八大板块", exact: true });
-  await expect(cards.locator(":scope > article")).toHaveCount(8);
+  const cards = page.getByRole("region", { name: "经营中台业务板块", exact: true });
+  await expect(cards.locator(":scope > article")).toHaveCount(9);
   const navigation = page.getByRole("navigation", { name: "业务数据导航", exact: true });
   for (const label of ["商品与 Listing", "订单与销售", "库存与仓储", "物流与履约", "价格与竞争报价", "财务、结算与税务", "经营与品牌分析", "退货、售后与账户健康"]) {
     await expect(navigation.getByRole("region", { name: label, exact: true })).toBeVisible();
@@ -749,4 +752,49 @@ test("Inventory age displays the selected marketplace report failure", async ({ 
   });
   await page.getByRole("button", { name: "库龄", exact: true }).click();
   await expect(page.getByTestId("amazon-inventory_age-workbench").getByRole("alert")).toContainText("REPORT_CANCELLED");
+});
+
+
+for (const readOnly of [false, true]) test(`Listing recovery entry follows successful task and configuration permission (${readOnly ? "read-only" : "admin"})`, async ({ page }) => {
+  const { state } = await setup(page, readOnly); state.listingTask = true; state.succeeded = true;
+  await page.getByRole("button", { name: "同步任务", exact: true }).click();
+  await page.getByRole("button", { name: "详情", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Listing 历史属性补齐", exact: true })).toHaveCount(readOnly ? 0 : 1);
+  if (!readOnly) {
+    state.succeeded = false; await page.getByRole("button", { name: "刷新", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Listing 历史属性补齐", exact: true })).toHaveCount(0);
+  }
+});
+
+for (const blocked of [false, true]) test(`Orders recovery shows checkpoint-only evidence and blocks invalid retries (${blocked})`, async ({ page }) => {
+  const { state, calls } = await setup(page);
+  state.ordersTask = true; state.recoveryBlocked = blocked;
+  await page.getByRole("button", { name: "同步任务", exact: true }).click();
+  await page.getByRole("button", { name: "详情", exact: true }).click();
+  const panel = page.getByTestId("order-recovery-readiness");
+  await expect(panel).toBeVisible();
+  const retry = page.getByRole("button", { name: "从增量游标重试", exact: true });
+  if (blocked) {
+    await expect(panel).toContainText("不能从头覆盖");
+    await expect(retry).toBeDisabled();
+  } else {
+    await expect(panel).toContainText("当前窗口待处理 9 笔");
+    await expect(panel).toContainText("已补齐 491 笔");
+    await expect(panel).toContainText("继续采集订单详情");
+    await expect(retry).toBeEnabled();
+  }
+  expect(calls.filter(call => call.body?.action === "control-task")).toHaveLength(0);
+});
+
+for (const readOnly of [false, true]) test(`Cancelled Catalog recovery preserves approval boundary (${readOnly ? "read-only" : "admin"})`, async ({ page }) => {
+  const { state, calls } = await setup(page, readOnly); state.cancelledCatalog = true;
+  await page.getByRole("button", { name: "同步任务", exact: true }).click();
+  await page.getByRole("button", { name: "详情", exact: true }).click();
+  const retry = page.getByRole("button", { name: "申请恢复已取消任务（保留进度）", exact: true });
+  if (readOnly) await expect(retry).toBeDisabled();
+  else {
+    await retry.click();
+    await expect(page.getByRole("status").filter({ hasText: "审批请求已创建" })).toContainText("尚未应用配置或启动任务");
+    expect(calls.filter(c => c.body?.action === "control-task").map(c => c.body)).toEqual([{ action: "control-task", id: "fixture-task", control: "retry" }]);
+  }
 });

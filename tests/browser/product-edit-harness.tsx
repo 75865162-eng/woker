@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { AppShellUserProvider } from "@/components/app-shell/app-shell-context";
 import { ProductEditor } from "@/components/products/product-workbench";
+import { ProductTable } from "@/components/products/product-workbench-shell";
 import { productToDraft } from "@/components/products/product-workbench-data";
 import type { Product } from "@/lib/products/types";
 import * as repository from "@/lib/products/product-edit-draft-repository";
@@ -12,6 +13,7 @@ function Harness() {
   const [product, setProduct] = useState<Product | null>(null);
   const [opened, setOpened] = useState(true);
   const params = new URLSearchParams(location.search);
+  const isList = params.get("mode") === "list";
   const userId = params.get("user") || "user-1";
   const organizationId = params.get("org") || "org-1";
   const workspaceId = params.get("workspace") || "default";
@@ -30,9 +32,11 @@ function Harness() {
     } catch (error) { setDetailError(String(error)); }
   }
   useEffect(() => {
+    if (isList) return;
     if (shell) setProduct({ ...productToDraft(null, [], "SKU-1"), id: "product-1", revision: 1, chineseName: "列表商品", englishName: "List product", status: "listing_confirming" } as Product);
     void loadDetail();
-  }, [opened, shell]);
+  }, [opened, shell, isList]);
+  if (isList) return <AppShellUserProvider value={{ organizationId, userId, userName: "测试编辑者", userInitials: "T" }}><main className="p-6"><ProductTable products={[{ ...productToDraft(null, [], "SKU-1"), id: "product-1", revision: 1, chineseName: "隔离列表商品", englishName: "Fixture list product", status: "listing_confirming" } as Product]} totalCount={1} sort={{ field: "sku", direction: "asc" }} onSortChange={() => undefined} onOpenProduct={sku => { (window as Window & { openedSku?: string }).openedSku = sku; }} onOpenHistory={() => undefined} /></main></AppShellUserProvider>;
   return <AppShellUserProvider value={{ organizationId, userId, userName: "测试编辑者", userInitials: "T" }}>
     <button onClick={() => setOpened(true)}>打开编辑器</button>
     {opened && product ? <ProductEditor product={params.get("mode") === "import" ? null : product} initialDraft={params.get("mode") === "import" ? { ...product, revision: undefined } : undefined} products={[product]} nextSku="SKU-2" creatorName="测试编辑者" creatorUserId={userId} detailReady={!shell || ready} canEdit detailError={detailError} onRetryDetail={() => void loadDetail()} opsOptions={["运营甲", "运营乙"]} designerOptions={[]}

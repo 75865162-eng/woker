@@ -1,4 +1,6 @@
+import {inboundVoidOperations,parseInboundOperation,inboundOperationForRequest,type InboundOperationInput} from '@/lib/fba-local/inbound-write-contract';
 import { createHash, createHmac } from "node:crypto";
+import { assertAmazonCloudExecution } from "./execution-role";
 import { gunzipSync } from "node:zlib";
 import { reportRangeHeaders, validateReportRange, reportDownloadPartSize, type ReportDownloadPosition, type ReportDownloadPart } from "./report-download-range";
 import type { AmazonSpApiServerConfiguration } from "./sp-api-config";
@@ -25,17 +27,6 @@ function inboundPageQuery(token?: string): string {
     query.set("paginationToken", token);
   }
   return query.toString();
-}
-function inboundRequestOperation(url: string): string | undefined {
-  const path = new URL(url).pathname;
-  if (path === inboundReadPath) return "listInboundPlans";
-  if (!path.startsWith(inboundReadPath + "/")) return undefined;
-  const parts = path.slice(inboundReadPath.length + 1).split("/");
-  if (parts.length === 1) return "getInboundPlan";
-  if (parts.length === 2 && parts[1] === "items") return "listInboundPlanItems";
-  if (parts.length === 3 && parts[1] === "shipments") return "getShipment";
-  if (parts.length === 4 && parts[1] === "shipments" && parts[3] === "items") return "listShipmentItems";
-  return undefined;
 }
 
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
@@ -124,6 +115,17 @@ export class AmazonSpApiClient {
     this.requestTimeoutMs = Math.min(Math.max(options.requestTimeoutMs ?? 30_000, 5_000), 120_000);
   }
 
+  /** The cloud Worker owns execution; MCP only reads published local data. */
+  async getPromotionsPage(input: { operation: string; path: string }): Promise<{ body: unknown; rawBody: string }> {
+    const url = new URL(input.path, "https://contract.invalid");
+    const path = url.pathname;
+    const operation = path === "/promotions/2025-12-01/promotions" ? "searchPromotions" : /^\/promotions\/2025-12-01\/promotions\/[^/]+\/selections\/[^/]+$/.test(path) ? "getSelection" : /^\/promotions\/2025-12-01\/promotions\/[^/]+$/.test(path) ? "getPromotion" : null;
+    if (url.origin !== "https://contract.invalid" || operation !== input.operation || input.path.length > 40000) throw new AmazonSpApiError("Promotions 请求契约无效。");
+    let rawBody = "";
+    const body = await this.request("GET", input.path, undefined, text => { rawBody = text; });
+    return { body, rawBody };
+  }
+
   async getMarketplaceParticipations(): Promise<unknown> {
     return this.request("GET", "/sellers/v1/marketplaceParticipations");
   }
@@ -180,6 +182,19 @@ export class AmazonSpApiClient {
     if (!["GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT", "GET_BRAND_ANALYTICS_SEARCH_QUERY_PERFORMANCE_REPORT", "GET_BRAND_ANALYTICS_SEARCH_CATALOG_PERFORMANCE_REPORT", "GET_BRAND_ANALYTICS_MARKET_BASKET_REPORT", "GET_BRAND_ANALYTICS_REPEAT_PURCHASE_REPORT", "GET_SALES_AND_TRAFFIC_REPORT"].includes(input.reportType) || input.marketplaceIds.length !== 1) throw new AmazonSpApiError("报告请求类型或站点范围无效。");
     return this.request("POST", "/reports/2021-06-30/reports", input);
   }
+  /** Caller must persist authorization, approval and unknown-result recovery before submitting writes. */
+  async executeInboundOperation(input: InboundOperationInput): Promise<{ body: unknown; rawBody: string }> {
+    const request = parseInboundOperation(input);
+    if (request.mutating && !this.beforeRequest) throw new AmazonSpApiError("Inbound 写入必须绑定实时授权与任务检查。");
+    let rawBody = "";
+    const body = await this.request(request.method, request.path, request.body, text => { rawBody = text; });
+    return { body, rawBody };
+  }
+
+  async getInboundOperationStatus(input: { operationId: string }): Promise<{ body: unknown; rawBody: string }> {
+    return this.executeInboundOperation({ operation: "getInboundOperationStatus", pathParameters: input });
+  }
+
   async listInboundPlans(input: { paginationToken?: string } = {}): Promise<{ body: unknown; rawBody: string }> {
     return this.readInbound(`${inboundReadPath}?${inboundPageQuery(input.paginationToken)}`);
   }
@@ -331,6 +346,8 @@ export class AmazonSpApiClient {
   }
   /** Presigned S3 downloads never receive LWA/AWS headers and never follow redirects. */
   async downloadReportDocument(value: unknown): Promise<unknown> { return this.downloadReport(value, false); }
+  /** Preserve decompressed JSON report bytes for encrypted archival and replay. */
+  async downloadReportJsonText(value: unknown): Promise<string> { return this.downloadReport(value, false, undefined, true) as Promise<string>; }
   /** Reports v2021-06-30 TSV path; identical URL/auth/size safeguards to JSON.
    * https://developer-docs.amazon.com/sp-api/docs/retrieve-a-report */
   async downloadReportText(value: unknown, options: { timeoutMs?: number } = {}): Promise<string> { return this.downloadReport(value, true, options.timeoutMs) as Promise<string>; }
@@ -342,7 +359,9 @@ export class AmazonSpApiClient {
     if (url.protocol !== "https:" || url.port || url.username || url.password || url.hash || (url.hostname !== this.reportDownloadTestHost && !/^(?:[a-z0-9.-]+\.)?s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com(?:\.cn)?$/.test(url.hostname))) throw new AmazonSpApiError("报告下载地址不在允许的 S3 HTTPS 范围。");
     if (document.compressionAlgorithm !== undefined && document.compressionAlgorithm !== "GZIP") throw new AmazonSpApiError("报告压缩格式不支持。");
     let received = 0;
+    assertAmazonCloudExecution();
     await this.beforeRequest?.();
+    assertAmazonCloudExecution();
     try {
       const headers = reportRangeHeaders(position);
       const response = await this.fetcher(url.toString(), { method: "GET", headers, redirect: "error", cache: "no-store", signal: AbortSignal.timeout(90_000) });
@@ -361,7 +380,7 @@ export class AmazonSpApiClient {
       throw new AmazonSpApiError("报告分段下载失败，保留已完成分段。", { retryable: true, upstreamCode: timeout ? "REPORT_DOWNLOAD_TIMEOUT" : "REPORT_DOWNLOAD_TRANSPORT", downloadedBytes: received });
     }
   }
-  private async downloadReport(value: unknown, textOnly: boolean, timeoutMs?: number): Promise<unknown> {
+  private async downloadReport(value: unknown, textOnly: boolean, timeoutMs?: number, rawJsonOnly = false): Promise<unknown> {
     const document = value as { url?: unknown; compressionAlgorithm?: unknown } | null;
     if (!document || typeof document.url !== "string") throw new AmazonSpApiError("报告下载地址缺失。");
     const url = new URL(document.url);
@@ -369,7 +388,9 @@ export class AmazonSpApiClient {
     if (document.compressionAlgorithm !== undefined && document.compressionAlgorithm !== "GZIP") throw new AmazonSpApiError("报告压缩格式不支持。");
     const limit = 16 * 1024 * 1024;
     let downloadedBytes = 0;
+    assertAmazonCloudExecution();
     await this.beforeRequest?.();
+    assertAmazonCloudExecution();
     try {
       const downloadTimeoutMs = timeoutMs !== undefined && Number.isFinite(timeoutMs) ? Math.min(90_000, Math.max(5_000, timeoutMs)) : this.requestTimeoutMs;
       const response = await this.fetcher(url.toString(), { method: "GET", redirect: "error", cache: "no-store", signal: AbortSignal.timeout(downloadTimeoutMs) });
@@ -394,7 +415,13 @@ export class AmazonSpApiClient {
         try { return new TextDecoder(encoding, { fatal: true }).decode(decoded); }
         catch { throw new AmazonSpApiError("报告内容不符合声明的字符编码。"); }
       }
-      try { return JSON.parse(decoded.toString("utf8")); } catch { throw new AmazonSpApiError("报告不是有效 JSON。"); }
+      if (rawJsonOnly) {
+        try { return new TextDecoder("utf-8", { fatal: true }).decode(decoded); }
+        catch { throw new AmazonSpApiError("JSON 报告字符编码无效。"); }
+      }
+      try {
+        return JSON.parse(decoded.toString("utf8"));
+      } catch { throw new AmazonSpApiError("报告不是有效 JSON。"); }
     } catch (error) {
       if (error instanceof AmazonSpApiError) throw error;
       // Signed URLs and upstream exception text must never reach logs or responses.
@@ -403,7 +430,7 @@ export class AmazonSpApiClient {
     }
   }
 
-  async request(method: "GET" | "POST", path: string, body?: unknown, captureRaw?: (text: string) => void, rawOnly = false): Promise<unknown> {
+  async request(method: "GET" | "POST" | "PUT", path: string, body?: unknown, captureRaw?: (text: string) => void, rawOnly = false): Promise<unknown> {
     const accessToken = await this.getAccessToken();
     const url = new URL(path, this.config.endpoint);
     if (url.origin !== this.config.endpoint || !url.pathname.startsWith("/")) {
@@ -438,7 +465,8 @@ export class AmazonSpApiClient {
       cache: "no-store",
       redirect: "error",
     });
-    const text = captureRaw || this.onErrorResponse && !response.ok ? await readBoundedOrderResponse(response) : await response.text();
+    const emptyInboundVoid = response.ok && !response.body && inboundVoidOperations.includes(inboundOperationForRequest(url.toString(), method) ?? "");
+    const text = emptyInboundVoid ? "" : captureRaw || this.onErrorResponse && !response.ok ? await readBoundedOrderResponse(response) : await response.text();
     // Finance preserves successful JSON number lexemes. Error bodies still need
     // parsing, otherwise InvalidInput loses its actual retention diagnostic.
     const payload = rawOnly && response.ok ? undefined : parseResponseBody(text);
@@ -498,12 +526,14 @@ export class AmazonSpApiClient {
   }
 
   private async fetchWithTimeout(input: string, init: RequestInit): Promise<Response> {
+    assertAmazonCloudExecution();
     await this.beforeRequest?.();
+    assertAmazonCloudExecution();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.requestTimeoutMs);
     try {
       const response = await this.fetcher(input, { ...init, signal: controller.signal });
-      this.onResponse?.({ operation: input === this.tokenEndpoint ? "LWA" : inboundRequestOperation(input) ?? (input.includes("/notifications/v1/subscriptions") ? "getSubscriptions" : input.includes("/products/pricing/v0/price") ? "getPricing" : input.includes("/products/pricing/2022-05-01/") ? "getCompetitiveSummary" : new URL(input).pathname === "/finances/2024-06-19/transactions" ? "listTransactions" : new URL(input).pathname.startsWith("/orders/2026-01-01/orders/") ? "getOrder" : input.includes("/orders/2026-01-01/orders") ? "searchOrders" : input.includes("/fba/inventory/") ? "getInventorySummaries" : input.includes("/catalog/2022-04-01/items/") ? "getCatalogItem" : input.includes("/listings/") ? (new URL(input).pathname.split("/").length > 5 ? "getListingsItem" : "searchListingsItems") : input.includes("/reports/2021-06-30/documents/") ? "getReportDocument" : new URL(input).pathname === "/reports/2021-06-30/reports" && new URL(input).searchParams.has("nextToken") ? "getReports" : new URL(input).pathname === "/reports/2021-06-30/reports" && new URL(input).searchParams.has("reportTypes") ? "getReports" : input.includes("/reports/2021-06-30/reports/") ? "getReport" : input.includes("/reports/2021-06-30/reports") ? "createReport" : "getMarketplaceParticipations"), status: response.status,
+      this.onResponse?.({ operation: input === this.tokenEndpoint ? "LWA" : inboundOperationForRequest(input, init.method ?? "GET") ?? (new URL(input).pathname.startsWith("/promotions/2025-12-01/promotions") ? (new URL(input).pathname.includes("/selections/") ? "getSelection" : new URL(input).pathname === "/promotions/2025-12-01/promotions" ? "searchPromotions" : "getPromotion") : input.includes("/notifications/v1/subscriptions") ? "getSubscriptions" : input.includes("/products/pricing/v0/price") ? "getPricing" : input.includes("/products/pricing/2022-05-01/") ? "getCompetitiveSummary" : new URL(input).pathname === "/finances/2024-06-19/transactions" ? "listTransactions" : new URL(input).pathname.startsWith("/orders/2026-01-01/orders/") ? "getOrder" : input.includes("/orders/2026-01-01/orders") ? "searchOrders" : input.includes("/fba/inventory/") ? "getInventorySummaries" : input.includes("/catalog/2022-04-01/items/") ? "getCatalogItem" : input.includes("/listings/") ? (new URL(input).pathname.split("/").length > 5 ? "getListingsItem" : "searchListingsItems") : input.includes("/reports/2021-06-30/documents/") ? "getReportDocument" : new URL(input).pathname === "/reports/2021-06-30/reports" && new URL(input).searchParams.has("nextToken") ? "getReports" : new URL(input).pathname === "/reports/2021-06-30/reports" && new URL(input).searchParams.has("reportTypes") ? "getReports" : input.includes("/reports/2021-06-30/reports/") ? "getReport" : input.includes("/reports/2021-06-30/reports") ? "createReport" : "getMarketplaceParticipations"), status: response.status,
         requestId: safeRequestId(response.headers.get("x-amzn-requestid")), rateLimit: safeRateLimit(response.headers.get("x-amzn-ratelimit-limit")) });
       return response;
     } catch (error) {

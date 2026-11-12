@@ -1,4 +1,6 @@
 import { type Prisma } from "@prisma/client";
+import { cache } from "react";
+import { measureServerOperation } from "@/lib/server/performance";
 import { buildDefaultRoleCatalog, type RoleCatalogItem } from "@/lib/accounts/role-catalog";
 import { defaultRolePermissionMap } from "@/lib/accounts/permissions";
 import { prisma } from "@/lib/db/prisma";
@@ -73,7 +75,7 @@ async function seedOrganizationRoles(client: typeof prisma | Prisma.TransactionC
   });
 }
 
-export async function getOrganizationRoleCatalogSnapshot(organizationId: string): Promise<RoleCatalogSnapshot> {
+export const getOrganizationRoleCatalogSnapshot = cache(async (organizationId: string): Promise<RoleCatalogSnapshot> => {
   if (!process.env.DATABASE_URL) {
     return {
       roles: defaultRoleCatalog,
@@ -82,11 +84,13 @@ export async function getOrganizationRoleCatalogSnapshot(organizationId: string)
   }
 
   try {
-    let roles = (await prisma.organizationRosterRole.findMany({
+    let roles = (await measureServerOperation("auth.roles", () => prisma.organizationRosterRole.findMany({
       where: { organizationId },
       orderBy: [{ sortOrder: "asc" }, { updatedAt: "asc" }, { id: "asc" }],
-    })) as RoleRow[];
+    }))) as RoleRow[];
 
+    // Role catalog is the authorization source of truth; seed definitions for new or
+    // partially initialized organizations so the operational permission editor stays consistent.
     if (roles.length === 0) {
       await prisma.$transaction(async (tx) => {
         await seedOrganizationRoles(tx, organizationId);
@@ -112,7 +116,7 @@ export async function getOrganizationRoleCatalogSnapshot(organizationId: string)
 
     throw error;
   }
-}
+});
 
 export async function saveOrganizationRoleCatalog(organizationId: string, roles: RoleCatalogItem[]): Promise<RoleCatalogSnapshot> {
   if (!process.env.DATABASE_URL) {

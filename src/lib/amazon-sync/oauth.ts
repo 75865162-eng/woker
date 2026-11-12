@@ -1,3 +1,4 @@
+import { assertAmazonCloudExecution } from "@/lib/amazon/execution-role";
 import { randomBytes, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -9,6 +10,7 @@ import { mcpTokenHash } from "./mcp";
 import { endpoints, requiredText, SyncInputError, type SyncScope } from "./policy";
 import { scopeLock } from "./service";
 import { ensureAmazonSyncInitialized } from "./scheduler";
+import { assignNewAutomaticAccount } from "./automatic-account-access";
 
 const consentHosts: Record<string, string> = { "us-east-1": "sellercentral.amazon.com", "eu-west-1": "sellercentral-europe.amazon.com", "us-west-2": "sellercentral.amazon.co.jp" };
 function appSettings() {
@@ -24,6 +26,7 @@ async function assertManager(scope: SyncScope, actor: string, tx: Prisma.Transac
   await assertAmazonScopeAdmin(scope, actor, tx); await assertAmazonAction(scope, actor, "edit", tx, "settings");
 }
 export async function startAmazonOAuth(scope: SyncScope, actor: string, region: string) {
+  assertAmazonCloudExecution();
   await assertManager(scope, actor);
   if (!consentHosts[region]) throw new SyncInputError("区域无效。");
   const settings = appSettings(), state = randomBytes(32).toString("base64url"), id = randomUUID();
@@ -40,6 +43,7 @@ export async function startAmazonOAuth(scope: SyncScope, actor: string, region: 
 /** Seller ID is supplied by Amazon OAuth, then checked against a seller-scoped Listings
  * request. Sellers marketplaceParticipations alone is NEVER treated as Seller ID evidence. */
 export async function finishAmazonOAuth(actor: string, params: URLSearchParams) {
+  assertAmazonCloudExecution();
   const state = requiredText(params.get("state"), "state", 200);
   const attempt = await prisma.amazonOAuthAttempt.findUnique({ where: { stateHash: mcpTokenHash(state) } });
   if (!attempt || attempt.userId !== actor || attempt.status !== "PENDING" || attempt.expiresAt <= new Date()) throw new SyncInputError("授权会话无效或已过期。", 403);
@@ -53,6 +57,7 @@ export async function finishAmazonOAuth(actor: string, params: URLSearchParams) 
     const sellerId = requiredText(params.get("selling_partner_id"), "Amazon Seller ID", 32);
     if (!/^[A-Z0-9]{8,32}$/.test(sellerId) || params.has("error")) throw new SyncInputError("Amazon 未完成授权。", 409);
     const code = requiredText(params.get("spapi_oauth_code"), "OAuth code", 4096);
+    assertAmazonCloudExecution();
     const response = await fetch("https://api.amazon.com/auth/o2/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: settings.redirectUri, client_id: settings.clientId, client_secret: settings.clientSecret }), cache: "no-store", redirect: "error", signal: AbortSignal.timeout(30000) });
     if (!response.ok) throw new SyncInputError("Amazon 授权交换失败。", 409);
     const text = await response.text(); if (Buffer.byteLength(text) > 64000) throw new SyncInputError("Amazon 响应无效。", 409);
@@ -85,6 +90,9 @@ export async function finishAmazonOAuth(actor: string, params: URLSearchParams) 
       if (existing) await tx.amazonSpApiAuthorization.update({ where: { id, revision: existing.revision }, data: { ...data, revision: { increment: 1 } } });
       else await tx.amazonSpApiAuthorization.create({ data: { ...scope, id, name: `Amazon ${sellerId}`, amazonSellerId: sellerId, awsRegion: attempt.region, endpoint: endpoints[attempt.region], ...data } });
       await tx.amazonSellerIdentity.deleteMany({ where: { ...scope, authorizationId: id, marketplaceId: { notIn: sites.map(s => s.marketplaceId) } } });
+      // A newly authorized regional Seller is one account across its sites.
+      // Keep legacy per-site accounts intact; never merge their historical facts.
+      let newRegionalAccountId: string | undefined;
       for (const site of sites) {
         const identity = await tx.amazonSellerIdentity.findUnique({ where: { organizationId_workspaceId_amazonSellerId_marketplaceId_region: { ...scope, amazonSellerId: sellerId, marketplaceId: site.marketplaceId, region: attempt.region } } });
         let sellerAccountId = identity?.sellerAccountId;
@@ -95,7 +103,13 @@ export async function finishAmazonOAuth(actor: string, params: URLSearchParams) 
           if (sellerIds.length > 1) throw new SyncInputError("旧数据源身份映射冲突。", 409);
           sellerAccountId = sellerIds[0];
           if (sellerAccountId && await tx.amazonSyncDataSource.findFirst({ where: { ...scope, sellerAccountId, marketplaceId: site.marketplaceId, authorizationId: { not: id } }, select: { id: true } })) throw new SyncInputError("旧数据源身份映射冲突。", 409);
-          if (!sellerAccountId) sellerAccountId = (await tx.sellerAccount.create({ data: { ...scope, id: randomUUID(), accountKey: `amazon:${sellerId}:${attempt.region}:${site.marketplaceId}`, displayName: `Amazon ${site.countryCode || site.marketplaceId} · ${sellerId}`, marketplaceCode: site.countryCode || site.marketplaceId } })).id;
+          if (!sellerAccountId) {
+            if (!newRegionalAccountId) {
+              newRegionalAccountId = (await tx.sellerAccount.create({ data: { ...scope, id: randomUUID(), accountKey: `amazon:${sellerId}:${attempt.region}:${site.marketplaceId}`, displayName: `Amazon · ${sellerId}`, marketplaceCode: site.countryCode || site.marketplaceId } })).id;
+              await assignNewAutomaticAccount(tx, scope, actor, newRegionalAccountId);
+            }
+            sellerAccountId = newRegionalAccountId;
+          }
           await tx.amazonSellerIdentity.create({ data: { ...scope, id: randomUUID(), sellerAccountId, amazonSellerId: sellerId, marketplaceId: site.marketplaceId, region: attempt.region, authorizationId: id, verifiedAt: now } });
         } else await tx.amazonSellerIdentity.update({ where: { id: identity!.id }, data: { verifiedAt: now } });
       }

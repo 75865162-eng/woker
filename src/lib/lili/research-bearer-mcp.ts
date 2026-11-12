@@ -1,3 +1,4 @@
+import { AmazonReadError } from "@/lib/amazon-sync/read-account";
 import { skillMetaTools, liliInstructions, liliVersion, callSkillMeta, getSkillManifest } from "./skill-manifest";
 import { validate } from "@/lib/selection-research/schema";
 import { randomUUID } from "node:crypto";
@@ -62,8 +63,8 @@ export async function handleResearchBearerMcp(request: Request, body: Record<str
       if (permission.ok && (permission.user.id !== current.userId || permission.user.organizationId !== current.organizationId)) return { ok: false, response: failure(403) };
       return permission;
     };
-    const view = await authorize(identity.tools.some(isResearchTool) ? "agents" : "operations", "view", request);
-    if (!view.ok) return view.response;
+    const verifiedIdentity = await authorize("amazon_account", "view", request);
+    if (!verifiedIdentity.ok) return verifiedIdentity.response;
     const skills = createRuntimeTools([]);
     let result: unknown;
     if (method === "initialize") {
@@ -121,6 +122,7 @@ export async function handleResearchBearerMcp(request: Request, body: Record<str
     recorded = true;
     return json({ jsonrpc: "2.0", id, result });
   } catch (error) {
+    if (error instanceof AmazonReadError) return json({ jsonrpc: "2.0", id, error: { code: -32004, message: error.message, data: { businessCode: error.businessCode, requestId } } }, error.status);
     const status = error && typeof error === "object" && "status" in error && [401, 403].includes(Number(error.status)) ? Number(error.status) : error instanceof Error && /^(SCHEMA_|CREDENTIAL)/.test(error.message) ? 400 : 503;
     return failure(status);
   } finally {

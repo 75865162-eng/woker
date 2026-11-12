@@ -1,3 +1,4 @@
+import { catalogBusinessFields } from "./catalog-business-fields";
 import { skillDataTables, datasetForTable, describeMcpDataset, normalizeDatasetQuery, presentMcpReport, McpDatasetError } from "./mcp-datasets";
 import { queryPublishedAdsReports } from "@/lib/amazon-ads/report-query";
 import { parseAdsQuery } from "@/lib/amazon-ads/query-contract";
@@ -6,6 +7,7 @@ import { prisma } from "@/lib/db/prisma";
 import { SyncInputError, type SyncScope } from "./policy";
 import { readSalesTraffic } from "./sales-query";
 import { isSpApiDataset, querySpApiDataset } from "./sp-api-data-query";
+export { skillDataContracts, skillReadiness } from "./skill-contracts";
 
 type DataSource = {
   id: string;
@@ -22,13 +24,25 @@ type DataSource = {
 export { skillDataTables } from "./mcp-datasets";
 
 function validSources(sources: DataSource[], resource: string) {
-  return sources.filter(source => source.resource === resource && source.activeRunId && source.publishedRun?.status === "SUCCEEDED"
+  return sources.filter(source => source.resource === resource && source.activeRunId && (source.publishedRun?.status === "SUCCEEDED" || source.resource === "catalog_items" && source.publishedRun?.status === "PARTIAL_SUCCESS" && source.publishedRun.stage === "PARTIAL_PUBLISHED")
     && source.publishedRun.executionVersion === 2 && source.publishedRun.resource === resource && source.publishedRun.sourceId === source.id
     && source.publishedRun.finishedAt && source.publishedRun.stage !== "PURGED");
 }
 
+function readableSources(sources: DataSource[], table: ReturnType<typeof datasetForTable>) {
+  // Orders/finance publish facts atomically per page, independently of the
+  // window finishing. Their existing readers still enforce live permissions.
+  // Report readers fence each document/row themselves. They must also run when
+  // no head is published so failed, staged and unattributed reports are visible
+  // as diagnostics rather than being mistaken for an absent dataset.
+  return table.publicationPolicy === "page_committed_current_facts"
+    || ["settlements_v2", "reimbursements", "inventory_age", "long_term_storage_fees", "removal_shipment_report", "inventory_events", "removal_order_report", "storage_fees", "fba_fulfilled_inventory", "fba_inventory_report", "reserved_inventory", "stranded_inventory", "recommended_removals", "fba_overage_fees", "fee_preview"].includes(table.name)
+    ? sources.filter(source => source.resource === table.resource)
+    : validSources(sources, table.resource);
+}
+
 export function availableSkillTables(sources: DataSource[]) {
-  return skillDataTables.filter(table => validSources(sources, table.resource).length > 0).map(table => ({
+  return skillDataTables.filter(table => readableSources(sources, datasetForTable(table.name)).length > 0).map(table => ({
     ...describeMcpDataset(datasetForTable(table.name)),
     schemaStatus: "application_schema_confirmed_source_sample_pending",
     warnings: table.warnings ?? [],
@@ -38,7 +52,7 @@ export function availableSkillTables(sources: DataSource[]) {
 export function skillTableAvailability(sources: DataSource[]) {
   const now = Date.now();
   return skillDataTables.map(table => {
-    const published = validSources(sources, table.resource);
+    const published = readableSources(sources, datasetForTable(table.name));
     const syncDates = published.map(source => source.lastSuccessAt).filter((value): value is Date => !!value);
     return {
       name: table.name,
@@ -74,7 +88,7 @@ export async function querySkillTable(input: {
 }) {
   const table = datasetForTable(input.tableName);
   const normalized = normalizeDatasetQuery(table, { filters: input.filters, page: input.page, pageSize: input.pageSize });
-  const sources = (table.name === "ads_report_daily" ? input.sources : validSources(input.sources, table.resource)).filter(source => (!input.sellerAccountId || source.sellerAccountId === input.sellerAccountId)
+  const sources = (table.name === "ads_report_daily" ? input.sources : readableSources(input.sources, table)).filter(source => (!input.sellerAccountId || source.sellerAccountId === input.sellerAccountId)
     && (!input.marketplaceId || source.marketplaceId === input.marketplaceId));
   if (!sources.length) throw new McpDatasetError("DATASET_UNPUBLISHED", "TABLE_NOT_ALLOWED: 当前授权范围没有该表的已发布数据源。", 403);
   const filters = normalized.filters;
@@ -109,6 +123,11 @@ export async function querySkillTable(input: {
       sources: meta.sources.filter(source => source.sourceId === result.source.id),
       lastSyncAt: actual[0]?.lastSuccessAt?.toISOString() ?? null,
       completeness: result.completeness,
+      ...(result.numericEncoding ? { numericEncoding: result.numericEncoding } : {}),
+      ...(result.fieldQuality ? { fieldQuality: result.fieldQuality } : {}),
+      ...(result.reportCoverage ? { reportCoverage: result.reportCoverage } : {}),
+      ...(result.orderCoverage ? { orderCoverage: result.orderCoverage } : {}),
+      warnings: [...meta.warnings, ...result.warnings],
       page: { page: result.pagination.page, pageSize: result.pagination.pageSize, hasNext: result.pagination.page < result.pagination.pageCount } } };
   }
 
@@ -118,12 +137,12 @@ export async function querySkillTable(input: {
     const result = await readSalesTraffic(input.scope, new URLSearchParams({
       ...(from ? { from } : {}), ...(to ? { to } : {}), ...(input.sellerAccountId ? { sellerAccountId: input.sellerAccountId } : {}),
       ...(input.marketplaceId ? { marketplaceId: input.marketplaceId } : {}), page: String(input.page), direction: filters.sortDirection, sort: filters.sortBy,
-    }), { actor: input.actor, pageSize: input.pageSize, sourceFence: sources.map(source => source.id), includeExactMetrics: true });
+    }), { actor: input.actor, pageSize: input.pageSize, sourceFence: sources.map(source => source.id) });
     return {
-      data: { items: result.rows.map(row => ({ sellerAccountId: row.sellerAccountId, marketplaceId: row.marketplaceId, businessDate: row.businessDate, metrics: row.metrics, exactMetrics: row.exactMetrics, quality: row.quality, capturedAt: row.capturedAt, syncRunId: row.syncRunId })), total: result.pagination.total },
+      data: { items: result.rows.map(row => ({ sellerAccountId: row.sellerAccountId, marketplaceId: row.marketplaceId, businessDate: row.businessDate, metrics: row.metrics, quality: row.quality, capturedAt: row.capturedAt, syncRunId: row.syncRunId })), total: result.pagination.total },
       meta: { ...meta, lastSyncAt: oldestSyncAt ?? result.asOf, freshness: result.rows.length === 0 && !result.pagination.total ? "missing" : meta.freshness,
-        numericEncoding: "legacy_metrics_numbers_and_exactMetrics_strings_from_stored_json",
-        warnings: [...(table.warnings ?? []), "exactMetrics 为数据库已保存 JSON 数值的精确字符串；旧 metrics 保持兼容，不证明采集前的精度。"],
+        numericEncoding: "JSON_NUMERIC_STRINGS",
+        warnings: [...(table.warnings ?? []), "metrics 保留全部已保存指标；JSON 数值以精确字符串返回，不恢复采集前已丢失的精度。"],
         page: { page: result.pagination.page, pageSize: result.pagination.pageSize, hasNext: result.pagination.page < result.pagination.pageCount } },
     };
   }
@@ -141,7 +160,7 @@ export async function querySkillTable(input: {
     };
     const [total, rows] = await Promise.all([
       prisma.amazonInventorySnapshot.count({ where }),
-      prisma.amazonInventorySnapshot.findMany({ where, select: { sellerAccountId: true, marketplaceId: true, sellerSku: true, asin: true, fnSku: true, condition: true, fulfillableQuantity: true, inboundWorkingQuantity: true, inboundShippedQuantity: true, inboundReceivingQuantity: true, reservedQuantity: true, unfulfillableQuantity: true, researchingQuantity: true, sourceUpdatedAt: true, capturedAt: true, syncRunId: true }, orderBy: [{ [filters.sortBy]: filters.sortDirection as Prisma.SortOrder }, { id: "asc" }], skip: (input.page - 1) * input.pageSize, take: input.pageSize }),
+      prisma.amazonInventorySnapshot.findMany({ where, select: { id: true, dataVersion: true, createdAt: true, sellerAccountId: true, marketplaceId: true, sellerSku: true, asin: true, fnSku: true, condition: true, fulfillableQuantity: true, inboundWorkingQuantity: true, inboundShippedQuantity: true, inboundReceivingQuantity: true, reservedQuantity: true, unfulfillableQuantity: true, researchingQuantity: true, sourceUpdatedAt: true, capturedAt: true, syncRunId: true }, orderBy: [{ [filters.sortBy]: filters.sortDirection as Prisma.SortOrder }, { id: "asc" }], skip: (input.page - 1) * input.pageSize, take: input.pageSize }),
     ]);
     return { data: { items: rows, total }, meta: { ...meta, page: { page: input.page, pageSize: input.pageSize, hasNext: input.page * input.pageSize < total } } };
   }
@@ -155,9 +174,9 @@ export async function querySkillTable(input: {
   };
   const [total, rows] = await Promise.all([
     prisma.amazonCatalogSnapshot.count({ where }),
-    prisma.amazonCatalogSnapshot.findMany({ where, select: { sellerAccountId: true, marketplaceId: true, sellerSku: true, asin: true, listingStatus: true, fulfillmentType: true, listingAttributes: true, sourceUpdatedAt: true, capturedAt: true, sourceRunId: true }, orderBy: [{ [filters.sortBy]: filters.sortDirection as Prisma.SortOrder }, { id: "asc" }], skip: (input.page - 1) * input.pageSize, take: input.pageSize }),
+    prisma.amazonCatalogSnapshot.findMany({ where, select: { id: true, dataVersion: true, createdAt: true, sellerAccountId: true, marketplaceId: true, sellerSku: true, asin: true, listingStatus: true, fulfillmentType: true, listingAttributes: true, fieldSources: true, sourceUpdatedAt: true, capturedAt: true, sourceRunId: true }, orderBy: [{ [filters.sortBy]: filters.sortDirection as Prisma.SortOrder }, { id: "asc" }], skip: (input.page - 1) * input.pageSize, take: input.pageSize }),
   ]);
-  return { data: { items: rows, total }, meta: { ...meta, page: { page: input.page, pageSize: input.pageSize, hasNext: input.page * input.pageSize < total } } };
+  return { data: { items: await catalogBusinessFields(input.scope, rows), total }, meta: { ...meta, numericEncoding: "JSON_NUMERIC_STRINGS", page: { page: input.page, pageSize: input.pageSize, hasNext: input.page * input.pageSize < total } } };
 }
 
 function dateBounds(from?: string, to?: string) {

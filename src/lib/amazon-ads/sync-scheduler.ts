@@ -1,3 +1,4 @@
+import { amazonCloudExecutionEnabled } from "@/lib/amazon/execution-role";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 import { getAmazonSyncQueue } from "@/lib/queue/redis-queue";
@@ -9,6 +10,7 @@ import { ensureAdsPlan } from "./sync-service";
 
 const dueStatuses = ["WAITING", "QUEUED", "RUNNING", "RETRY_WAIT"];
 export async function tickAmazonAds(now = new Date()) {
+  if (!amazonCloudExecutionEnabled()) return;
   if (!process.env.DATABASE_URL || process.env.QUEUE_DRIVER !== "redis" || !adsReadAdapterReady()) return;
   if (process.env.AMAZON_ADS_SYNC_ENABLED !== undefined && process.env.AMAZON_ADS_SYNC_ENABLED !== "true") return;
   const configured = configuredSyncScopes(process.env.AMAZON_ADS_SYNC_SCOPES ?? process.env.AMAZON_SYNC_CENTER_SCOPES);

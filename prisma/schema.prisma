@@ -36,6 +36,8 @@ model Organization {
   productProjectionFailures ProductProjectionFailure[]
   sellerAccounts     SellerAccount[]
   suppliers          Supplier[]
+  purchaseOrders     PurchaseOrder[]
+  productCatalogEntries ProductCatalogEntry[]
   productMasters     ProductMaster[]
   productVariants    ProductVariant[]
   productListings    ProductListing[]
@@ -43,9 +45,35 @@ model Organization {
   productCosts       ProductCost[]
   productMedia       ProductMedia[]
   amazonDataCenterChangeRequests AmazonDataCenterChangeRequest[]
+  financeBooks FinanceBook[]
+  financeExpenses FinanceExpense[]
 }
 
 model User {
+  wmsOutbounds WmsOutbound[] @relation("WmsOutboundCreator")
+  fbaLocalPlans FbaLocalPlan[]
+  wmsCountedLines         WmsStocktakeLine[]
+  wmsStocktakes           WmsStocktake[]
+  wmsReceipts             WmsReceipt[] @relation("WmsReceiptCreator")
+  wmsReservations         WmsReservation[] @relation("WmsReservationCreator")
+  wmsCommands             WmsCommand[]
+  wmsMovements            WmsMovement[]
+  wmsApprovalRequests     WmsApproval[] @relation("WmsRequester")
+  wmsApprovalDecisions    WmsApproval[] @relation("WmsApprover")
+  purchaseApprovalRequests PurchaseOrderApproval[] @relation("PurchaseOrderApprovalRequester")
+  purchaseApprovalDecisions PurchaseOrderApproval[] @relation("PurchaseOrderApprovalApprover")
+  purchasePaymentsCreated PurchasePayment[] @relation("PurchasePaymentCreator")
+  purchasePaymentApprovalRequests PurchasePaymentApproval[] @relation("PurchasePaymentApprovalRequester")
+  purchasePaymentApprovalDecisions PurchasePaymentApproval[] @relation("PurchasePaymentApprovalApprover")
+  purchasePaymentRefundsCreated PurchasePaymentRefund[] @relation("PurchasePaymentRefundCreator")
+  purchasePaymentRefundApprovalRequests PurchasePaymentRefundApproval[] @relation("PurchasePaymentRefundApprovalRequester")
+  purchasePaymentRefundApprovalDecisions PurchasePaymentRefundApproval[] @relation("PurchasePaymentRefundApprovalApprover")
+  financeBooksCreated FinanceBook[] @relation("FinanceBookCreator")
+  financeExpensesCreated FinanceExpense[] @relation("FinanceExpenseCreator")
+  financeExpensesReviewed FinanceExpense[] @relation("FinanceExpenseReviewer")
+  financeVouchersCreated FinanceVoucher[] @relation("FinanceVoucherCreator")
+  financeVouchersReviewed FinanceVoucher[] @relation("FinanceVoucherReviewer")
+  financeVouchersPosted FinanceVoucher[] @relation("FinanceVoucherPoster")
   id                      String                          @id @default(cuid())
   email                   String                          @unique
   name                    String
@@ -61,6 +89,7 @@ model User {
   externalIntegrationSettings ExternalIntegrationSetting[]
   listingAiChatHistories  ListingAiChatHistory[]
   listingAiWorkspaces     ListingAiWorkspace[]
+  listingAiGallerySaves   ListingAiGallerySave[]
   productMeetingNotes     ProductMeetingNote[]
   wecomNotificationSettings WeComNotificationSetting[]
   memberships             OrganizationMember[]
@@ -76,6 +105,23 @@ model User {
 }
 
 model WorkspaceScope {
+  productCatalogEntries ProductCatalogEntry[]
+  wmsWarehouseTypes WmsWarehouseType[]
+  wmsWarehouseAddresses WmsWarehouseAddress[]
+  wmsTransferOrders WmsTransferOrder[]
+  fbaLocalPlans FbaLocalPlan[]
+  wmsWarehouses WmsWarehouse[]
+  wmsLots WmsLot[]
+  wmsCommands WmsCommand[]
+  wmsApprovals WmsApproval[]
+  purchaseOrders PurchaseOrder[]
+  purchaseOrderApprovals PurchaseOrderApproval[]
+  purchasePayments PurchasePayment[]
+  purchasePaymentApprovals PurchasePaymentApproval[]
+  purchasePaymentRefunds PurchasePaymentRefund[]
+  purchasePaymentRefundApprovals PurchasePaymentRefundApproval[]
+  financeBooks FinanceBook[]
+  financeExpenses FinanceExpense[]
   organizationId String
   id             String
   name           String
@@ -265,6 +311,8 @@ model AuditLog {
 }
 
 model FileObject {
+  financeAttachments FinanceVoucherAttachment[]
+  @@unique([organizationId, workspaceId, id], map: "FileObject_scoped_id_key")
   id               String             @id @default(cuid())
   organizationId   String
   userId           String
@@ -410,6 +458,12 @@ model ExportRecord {
 }
 
 model ProductRecord {
+ customsProfiles FbaCustomsProfile[]
+  wmsConsumables WmsOutboundConsumable[]
+  wmsOutboundLines WmsOutboundLine[]
+  wmsLots WmsLot[]
+  purchaseOrderLines PurchaseOrderLine[]
+  @@unique([organizationId, workspaceId, id], map: "ProductRecord_wms_scope_key")
   id                           String    @id
   organizationId               String
   userId                       String
@@ -489,6 +543,7 @@ model Marketplace {
 }
 
 model SellerAccount {
+  fbaLocalPlans FbaLocalPlan[]
   id              String           @id @default(cuid())
   organizationId  String
   workspaceId     String           @default("default")
@@ -529,8 +584,10 @@ model Supplier {
   updatedAt      DateTime          @updatedAt
   organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   productLinks   ProductSupplier[]
+  purchaseOrders PurchaseOrder[]
 
   @@unique([organizationId, normalizedName])
+  @@unique([organizationId, id])
   @@index([organizationId, name])
   @@index([organizationId, updatedAt])
 }
@@ -1039,6 +1096,21 @@ model ListingAiWorkspace {
   @@index([organizationId, updatedAt])
   @@index([organizationId, workspaceId, updatedAt])
   @@index([userId, updatedAt])
+}
+
+model ListingAiGallerySave {
+  id             String   @id @default(cuid())
+  organizationId String
+  workspaceId    String   @default("default")
+  userId         String
+  name           String
+  savedBy        String
+  snapshot       Json
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, workspaceId, userId, createdAt, id], map: "ListingAiGallerySave_scope_created_idx")
+  @@unique([organizationId, workspaceId, userId, name], map: "ListingAiGallerySave_scope_name_key")
 }
 
 model ListingAiChatHistory {
@@ -2007,6 +2079,7 @@ model AmazonDataCenterConfigVersion {
 }
 
 model AmazonSyncRun {
+  localFbaShipments FbaLocalShipment[]
   id                String    @id
   organizationId    String
   workspaceId       String    @default("default")
@@ -3016,6 +3089,8 @@ model AmazonOrderRecord {
   detailPolicyDigest  String?
   detailHash          String?
   detailCiphertext    String? @db.Text
+  fulfilledBy         String?
+  fulfillmentServiceLevel String?
   grandTotalOriginal  String?
   grandTotalAmount    Decimal? @db.Decimal(65, 30)
   currencyCode        String?
@@ -3024,6 +3099,7 @@ model AmazonOrderRecord {
 
   @@unique([organizationId, workspaceId, sourceId, id], map: "AmazonOrder_scope_record_key")
   @@unique([organizationId, workspaceId, sellerAccountId, marketplaceId, amazonOrderId], map: "AmazonOrder_scope_business_key")
+  @@index([organizationId, workspaceId, sourceId, createdTime], map: "AmazonOrder_source_created_idx")
   @@index([organizationId, workspaceId, sourceId, sourceUpdatedAt], map: "AmazonOrder_source_updated_idx")
 }
 
@@ -3156,6 +3232,8 @@ model AmazonSyncRawPage {
 
   @@id([taskId, page])
   settlementReports AmazonSettlementReport[]
+  fieldScans AmazonFieldObservation[]
+  @@unique([organizationId, workspaceId, taskId, page], map: "AmazonRaw_scope_page_key")
 }
 
 // Shared seller/application bucket across marketplaces; operation has its own quota.
@@ -3419,6 +3497,8 @@ model AmazonSyncReportRow {
   amountDescription   String?
   amountOriginal      String?
   currencyCode        String?
+  currencySource String?
+  currencySourceRowNumber Int?
   quantityOriginal    String?
   fields              Json
 
@@ -3539,6 +3619,8 @@ model AmazonSettlementRow {
   asin String?
   amountOriginal String?
   currencyCode String?
+  currencySource String?
+  currencySourceRowNumber Int?
   transactionType String?
   amountType String?
   amountDescription String?
@@ -3547,4 +3629,2219 @@ model AmazonSettlementRow {
   source AmazonSyncDataSource? @relation(fields: [organizationId, workspaceId, sourceId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: NoAction, map: "AmazonSettlementRow_source_fkey")
   @@unique([reportDocumentId, rowNumber], map: "AmazonSettlementRow_document_row_key")
   @@index([organizationId, workspaceId, sourceId, businessDate], map: "AmazonSettlementRow_source_date_idx")
+}
+
+// Tenant-local observed source catalogue; registration is never runtime approval.
+model AmazonDataSourceRegistry {
+  id String @id
+  organizationId String
+  workspaceId String
+  provider String
+  sourceCode String
+  apiVersion String
+  sourceType String
+  verificationStatus String @default("OBSERVED")
+  firstSeenAt DateTime @db.Timestamptz(3)
+  lastSeenAt DateTime @db.Timestamptz(3)
+  fields AmazonFieldRegistry[]
+  @@unique([organizationId, workspaceId, provider, sourceCode, apiVersion], map: "AmazonDataRegistry_identity_key")
+  @@unique([organizationId, workspaceId, id], map: "AmazonDataRegistry_scope_key")
+}
+
+model AmazonFieldRegistry {
+  id String @id
+  organizationId String
+  workspaceId String
+  sourceRegistryId String
+  fieldId String
+  sourcePathCiphertext String @db.Text
+  layer String @default("L0")
+  verificationStatus String @default("OBSERVED")
+  mappingStatus String @default("UNMAPPED")
+  firstSeenAt DateTime @db.Timestamptz(3)
+  lastSeenAt DateTime @db.Timestamptz(3)
+  source AmazonDataSourceRegistry @relation(fields: [organizationId, workspaceId, sourceRegistryId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  observations AmazonFieldObservation[]
+  mappings AmazonFieldMappingVersion[]
+  @@unique([organizationId, workspaceId, sourceRegistryId, fieldId], map: "AmazonFieldRegistry_identity_key")
+  @@unique([organizationId, workspaceId, id], map: "AmazonFieldRegistry_scope_key")
+}
+
+model AmazonFieldMappingVersion {
+  id String @id
+  organizationId String
+  workspaceId String
+  fieldRegistryId String
+  mappingVersion Int
+  targetTable String
+  targetColumn String
+  transformRule Json
+  status String @default("DRAFT")
+  effectiveFrom DateTime? @db.Timestamptz(3)
+  effectiveTo DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  field AmazonFieldRegistry @relation(fields: [organizationId, workspaceId, fieldRegistryId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  @@unique([organizationId, workspaceId, fieldRegistryId, mappingVersion], map: "AmazonFieldMapping_version_key")
+}
+
+// No sample values. Dynamic field names remain encrypted in the field catalogue.
+model AmazonFieldObservation {
+  id String @id
+  organizationId String
+  workspaceId String
+  fieldRegistryId String
+  rawTaskId String
+  rawPage Int
+  scannerVersion String
+  observedTypes Json
+  nullCount BigInt?
+  nonNullCount BigInt?
+  emptyStringCount BigInt?
+  scanComplete Boolean
+  observedAt DateTime @db.Timestamptz(3)
+  field AmazonFieldRegistry @relation(fields: [organizationId, workspaceId, fieldRegistryId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  raw AmazonSyncRawPage @relation(fields: [organizationId, workspaceId, rawTaskId, rawPage], references: [organizationId, workspaceId, taskId, page], onDelete: Restrict)
+  @@unique([organizationId, workspaceId, rawTaskId, rawPage, fieldRegistryId, scannerVersion], map: "AmazonFieldObservation_archive_key")
+  @@index([organizationId, workspaceId, fieldRegistryId, observedAt], map: "AmazonFieldObservation_scope_idx")
+}
+
+// Company-owned stock. Amazon/Sellfox snapshots never write these balances.
+model WmsWarehouse {
+  agingSnapshots WmsAgingSnapshot[]
+  agingSchedules WmsAgingSchedule[]
+  typeId String?
+  type WmsWarehouseType? @relation(fields:[organizationId,workspaceId,typeId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict)
+  addresses WmsWarehouseAddress[]
+  outbounds WmsOutbound[]
+  id String @id
+  organizationId String
+  workspaceId String
+  code String
+  name String
+  enabled Boolean @default(true)
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  workspace WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict)
+  stocktakes WmsStocktake[]
+  areas WmsArea[]
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, code])
+}
+
+model WmsArea {
+  id String @id
+  organizationId String
+  workspaceId String
+  warehouseId String
+  code String
+  name String
+  enabled Boolean @default(true)
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  warehouse WmsWarehouse @relation(fields: [organizationId, workspaceId, warehouseId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  locations WmsLocation[]
+  @@unique([organizationId, workspaceId, warehouseId, id])
+  @@unique([organizationId, workspaceId, warehouseId, code])
+}
+
+model WmsLocation {
+ parentId String?
+ parent WmsLocation? @relation("WmsLocationTree",fields:[organizationId,workspaceId,warehouseId,parentId],references:[organizationId,workspaceId,warehouseId,id],onDelete:Restrict,onUpdate:Restrict)
+ children WmsLocation[] @relation("WmsLocationTree")
+  lengthCm Decimal? @db.Decimal(18,6)
+  widthCm Decimal? @db.Decimal(18,6)
+  heightCm Decimal? @db.Decimal(18,6)
+  capacityCubicMeters Decimal? @db.Decimal(18,6)
+  transferOrderLines WmsTransferOrderLine[]
+  id String @id
+  organizationId String
+  workspaceId String
+  warehouseId String
+  areaId String
+  code String
+  kind String
+  enabled Boolean @default(true)
+  frozen Boolean @default(false)
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  area WmsArea @relation(fields: [organizationId, workspaceId, warehouseId, areaId], references: [organizationId, workspaceId, warehouseId, id], onDelete: Restrict, onUpdate: Restrict)
+  stocktakeLocations WmsStocktakeLocation[]
+  receipts WmsReceipt[]
+  balances WmsStockBalance[]
+  @@unique([organizationId, workspaceId, warehouseId, id])
+  @@unique([organizationId, workspaceId, warehouseId, code])
+}
+
+model WmsLot {
+ costRules WmsCostRule[]
+ unitVolumeCubicMeters Decimal? @db.Decimal(24,9)
+  id String @id
+  organizationId String
+  workspaceId String
+  productRecordId String
+  lotCode String
+  barcode String?
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  workspace WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict)
+  product ProductRecord @relation(fields: [organizationId, workspaceId, productRecordId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  stocktakeLines WmsStocktakeLine[]
+  receiptLines WmsReceiptLine[]
+  balances WmsStockBalance[]
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, productRecordId, lotCode])
+  @@unique([organizationId, workspaceId, barcode])
+}
+
+model WmsReceipt {
+  id String @id
+  organizationId String
+  workspaceId String
+  warehouseId String
+  receivingLocationId String
+  number String
+  sourceReference String?
+  createdBy String
+  status String @default("DRAFT")
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  location WmsLocation @relation(fields: [organizationId, workspaceId, warehouseId, receivingLocationId], references: [organizationId, workspaceId, warehouseId, id], onDelete: Restrict, onUpdate: Restrict)
+  creator User @relation("WmsReceiptCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  lines WmsReceiptLine[]
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, number])
+  @@index([organizationId, workspaceId, createdAt, id])
+}
+
+model WmsReceiptLine {
+  id String @id
+  organizationId String
+  workspaceId String
+  receiptId String
+  lotId String
+  expectedQty Int
+  receivedQty Int @default(0)
+  acceptedQty Int @default(0)
+  rejectedQty Int @default(0)
+  returnedQty Int @default(0)
+  putawayQty Int @default(0)
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  receipt WmsReceipt @relation(fields: [organizationId, workspaceId, receiptId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  lot WmsLot @relation(fields: [organizationId, workspaceId, lotId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([organizationId, workspaceId, receiptId, lotId])
+}
+
+model WmsStockBalance {
+  transferOrderLines WmsTransferOrderLine[]
+  fbaLocalPlanLines FbaLocalPlanLine[]
+  id String @id
+  organizationId String
+  workspaceId String
+  warehouseId String
+  locationId String
+  lotId String
+  onHand Int @default(0)
+  pendingQc Int @default(0)
+  pendingPutaway Int @default(0)
+  rejected Int @default(0)
+  reserved Int @default(0)
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  location WmsLocation @relation(fields: [organizationId, workspaceId, warehouseId, locationId], references: [organizationId, workspaceId, warehouseId, id], onDelete: Restrict, onUpdate: Restrict)
+  lot WmsLot @relation(fields: [organizationId, workspaceId, lotId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  reservations WmsReservation[]
+  movements WmsMovement[]
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, locationId, lotId])
+  @@index([organizationId, workspaceId, warehouseId, createdAt, id])
+}
+
+model WmsReservation {
+  fbaLocalPlanLines FbaLocalPlanLine[]
+  id String @id
+  organizationId String
+  workspaceId String
+  number String
+  balanceId String
+  outboundWarehouseId String?
+  outboundLineId String?
+  createdBy String
+  requestedQty Int
+  releasedQty Int @default(0)
+  dispatchedQty Int @default(0)
+  pickedQty Int @default(0)
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  balance WmsStockBalance @relation(fields: [organizationId, workspaceId, balanceId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  outboundLine WmsOutboundLine? @relation(fields: [organizationId, workspaceId, outboundWarehouseId, outboundLineId], references: [organizationId, workspaceId, warehouseId, id], onDelete: Restrict, onUpdate: Restrict)
+  creator User @relation("WmsReservationCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, number])
+  @@index([organizationId, workspaceId, createdAt, id])
+  @@index([organizationId, workspaceId, outboundWarehouseId, outboundLineId], map: "WmsReservation_outbound_line_idx")
+}
+
+model WmsCommand {
+ financeDraft WmsFinanceDraft?
+  id String @id
+  organizationId String
+  workspaceId String
+  idempotencyKey String
+  action String
+  requestHash String
+  aggregateId String
+  expectedRevision Int
+  result Json
+  actorUserId String
+  createdAt DateTime @default(now())
+  workspace WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict)
+  actor User @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  movements WmsMovement[]
+  domainEvent WmsDomainEvent?
+  postedStocktake WmsStocktake?
+  consumedApproval WmsApproval?
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, idempotencyKey])
+}
+
+// Infrastructure records; not Wimoor business-table mappings.
+model WmsDomainEvent {
+  id String @id
+  organizationId String
+  workspaceId String
+  commandId String
+  eventType String
+  schemaVersion Int @default(1)
+  payload Json
+  occurredAt DateTime @default(now())
+  command WmsCommand @relation(fields: [organizationId, workspaceId, commandId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  deliveries WmsEventDelivery[]
+  @@unique([organizationId, workspaceId, commandId])
+  @@unique([organizationId, workspaceId, id])
+  @@index([occurredAt, id])
+}
+
+model WmsEventDelivery {
+  id String @id
+  organizationId String
+  workspaceId String
+  eventId String
+  consumerId String
+  attempts Int @default(0)
+  availableAt DateTime @default(now())
+  processedAt DateTime?
+  lastError String?
+  createdAt DateTime @default(now())
+  event WmsDomainEvent @relation(fields: [organizationId, workspaceId, eventId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([eventId, consumerId])
+  @@index([consumerId, processedAt, availableAt, id])
+}
+
+model WmsMovement {
+ @@unique([organizationId,workspaceId,id])
+ costEntry WmsCostEntry?
+ deltaVolumeCubicMeters Decimal? @db.Decimal(30,9)
+  id String @id
+  organizationId String
+  workspaceId String
+  commandId String
+  sequence Int
+  balanceId String
+  sourceType String
+  sourceId String
+  sourceLineId String?
+  action String
+  deltaOnHand Int
+  deltaPendingQc Int
+  deltaPendingPutaway Int
+  deltaRejected Int
+  deltaReserved Int
+  beforeRevision Int
+  afterRevision Int
+  balanceAfter Json
+  actorUserId String
+  occurredAt DateTime @default(now())
+  command WmsCommand @relation(fields: [organizationId, workspaceId, commandId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  balance WmsStockBalance @relation(fields: [organizationId, workspaceId, balanceId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  actor User @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  @@unique([organizationId, workspaceId, commandId, sequence])
+  @@index([organizationId, workspaceId, occurredAt, id])
+  @@index([organizationId, workspaceId, balanceId, occurredAt, id])
+}
+
+model WmsApproval {
+  id String @id
+  organizationId String
+  workspaceId String
+  action String
+  aggregateId String
+  expectedRevision Int
+  requestHash String
+  request Json
+  requestedBy String
+  approvedBy String?
+  expiresAt DateTime
+  status String @default("PENDING")
+  revision Int @default(1)
+  consumedCommandId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  workspace WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict)
+  requester User @relation("WmsRequester", fields: [requestedBy], references: [id], onDelete: Restrict)
+  approver User? @relation("WmsApprover", fields: [approvedBy], references: [id], onDelete: Restrict)
+  command WmsCommand? @relation(fields: [organizationId, workspaceId, consumedCommandId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([organizationId, workspaceId, consumedCommandId])
+  @@index([organizationId, workspaceId, createdAt, id])
+}
+
+model PurchaseOrder {
+  id             String   @id @default(cuid())
+  organizationId String
+  workspaceId    String   @default("default")
+  number         String
+  supplierId     String
+  status         String   @default("DRAFT")
+  currency       String   @default("CNY")
+  expectedAt     DateTime?
+  notes          String   @default("")
+  wmsReceiptIds  String[] @default([])
+  createdBy      String
+  revision       Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+  supplier       Supplier @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict)
+  lines          PurchaseOrderLine[]
+  approvals      PurchaseOrderApproval[]
+  payments       PurchasePayment[]
+  paymentApprovals PurchasePaymentApproval[]
+  paymentRefunds PurchasePaymentRefund[]
+  paymentRefundApprovals PurchasePaymentRefundApproval[]
+
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, number])
+  @@index([organizationId, workspaceId, status, updatedAt])
+  @@index([organizationId, workspaceId, supplierId, createdAt])
+}
+
+model PurchasePayment {
+  id              String   @id
+  organizationId  String
+  workspaceId     String
+  purchaseOrderId String
+  amount          Decimal  @db.Decimal(20, 6)
+  currency        String
+  paidAt          DateTime @db.Timestamptz(3)
+  method          String
+  reference       String
+  notes           String   @default("")
+  createdBy       String
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  order           PurchaseOrder @relation(fields: [organizationId, workspaceId, purchaseOrderId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Cascade)
+  creator         User @relation("PurchasePaymentCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  workspace       WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  approval        PurchasePaymentApproval? @relation("PurchasePaymentSettlement")
+  refunds         PurchasePaymentRefund[]
+  refundApprovals PurchasePaymentRefundApproval[]
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, purchaseOrderId, reference])
+  @@index([organizationId, workspaceId, purchaseOrderId, paidAt, id])
+}
+
+model PurchasePaymentApproval {
+  id              String   @id
+  organizationId  String
+  workspaceId     String
+  purchaseOrderId String
+  amount          Decimal  @db.Decimal(20, 6)
+  currency        String
+  paidAt          DateTime @db.Timestamptz(3)
+  method          String
+  reference       String
+  notes           String   @default("")
+  requestHash     String
+  requestedBy     String
+  approvedBy      String?
+  status          String   @default("PENDING")
+  decisionReason  String   @default("")
+  settledPaymentId String?
+  expiresAt       DateTime @db.Timestamptz(3)
+  revision        Int      @default(1)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  order           PurchaseOrder @relation(fields: [organizationId, workspaceId, purchaseOrderId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  workspace       WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  requester       User @relation("PurchasePaymentApprovalRequester", fields: [requestedBy], references: [id], onDelete: Restrict)
+  approver        User? @relation("PurchasePaymentApprovalApprover", fields: [approvedBy], references: [id], onDelete: Restrict)
+  settledPayment  PurchasePayment? @relation("PurchasePaymentSettlement", fields: [organizationId, workspaceId, settledPaymentId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, settledPaymentId])
+  @@index([organizationId, workspaceId, purchaseOrderId, createdAt])
+  @@index([organizationId, workspaceId, status, expiresAt])
+}
+
+model PurchasePaymentRefund {
+  id              String   @id
+  organizationId  String
+  workspaceId     String
+  purchaseOrderId String
+  paymentId       String
+  amount          Decimal  @db.Decimal(20, 6)
+  currency        String
+  refundedAt      DateTime @db.Timestamptz(3)
+  method          String
+  reference       String
+  notes           String   @default("")
+  createdBy       String
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  order           PurchaseOrder @relation(fields: [organizationId, workspaceId, purchaseOrderId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Cascade)
+  payment         PurchasePayment @relation(fields: [organizationId, workspaceId, paymentId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  creator         User @relation("PurchasePaymentRefundCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  workspace       WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  approval        PurchasePaymentRefundApproval? @relation("PurchasePaymentRefundSettlement")
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, purchaseOrderId, reference])
+  @@index([organizationId, workspaceId, paymentId, refundedAt, id])
+}
+
+model PurchasePaymentRefundApproval {
+  id              String   @id
+  organizationId  String
+  workspaceId     String
+  purchaseOrderId String
+  paymentId       String
+  amount          Decimal  @db.Decimal(20, 6)
+  currency        String
+  refundedAt      DateTime @db.Timestamptz(3)
+  method          String
+  reference       String
+  notes           String   @default("")
+  requestHash     String
+  requestedBy     String
+  approvedBy      String?
+  status          String   @default("PENDING")
+  decisionReason  String   @default("")
+  settledRefundId String?
+  expiresAt       DateTime @db.Timestamptz(3)
+  revision        Int      @default(1)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  order           PurchaseOrder @relation(fields: [organizationId, workspaceId, purchaseOrderId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict, map: "PurchasePaymentRefundApproval_order_fkey")
+  payment         PurchasePayment @relation(fields: [organizationId, workspaceId, paymentId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict, map: "PurchasePaymentRefundApproval_payment_fkey")
+  workspace       WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  requester       User @relation("PurchasePaymentRefundApprovalRequester", fields: [requestedBy], references: [id], onDelete: Restrict)
+  approver        User? @relation("PurchasePaymentRefundApprovalApprover", fields: [approvedBy], references: [id], onDelete: Restrict)
+  settledRefund   PurchasePaymentRefund? @relation("PurchasePaymentRefundSettlement", fields: [organizationId, workspaceId, settledRefundId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, settledRefundId])
+  @@index([organizationId, workspaceId, paymentId, createdAt])
+  @@index([organizationId, workspaceId, status, expiresAt])
+}
+
+model FinanceBook {
+  id String @id
+  organizationId String
+  workspaceId String
+  code String
+  name String
+  currency String
+  enabled Boolean @default(true)
+  closePolicy Json?
+  currencies FinanceCurrency[]
+  exchangeRates FinanceExchangeRate[]
+  subjectCategories FinanceSubjectCategory[]
+  bankAccounts FinanceBankAccount[]
+  voucherImports FinanceVoucherImport[]
+  reportTemplates FinanceReportTemplate[]
+  auxiliaryTypes FinanceAuxiliaryType[]
+  voucherTypes FinanceVoucherType[]
+  closeReviews FinanceCloseReview[]
+  revision Int @default(1)
+  createdBy String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  workspace WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict)
+  creator User @relation("FinanceBookCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  periods FinancePeriod[]
+  subjects FinanceSubject[]
+  vouchers FinanceVoucher[]
+  openings FinanceOpeningBalance[]
+  expenses FinanceExpense[]
+  openItems FinanceOpenItem[]
+  settlements FinanceSettlement[]
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, code])
+  @@index([organizationId, workspaceId, enabled, code])
+}
+
+model FinancePeriod {
+ fxRevaluations FinanceFxRevaluation[]
+  bankMatches FinanceBankMatch[]
+  id String @id
+  organizationId String
+  workspaceId String
+  bookId String
+  code String
+  start DateTime @db.Date
+  end DateTime @db.Date
+  status String @default("NOT_OPEN")
+  revision Int @default(1)
+  closedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  book FinanceBook @relation(fields: [organizationId, workspaceId, bookId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  vouchers FinanceVoucher[]
+  openings FinanceOpeningBalance[]
+  closeReviews FinanceCloseReview[]
+  expenses FinanceExpense[]
+  settlements FinanceSettlement[]
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, bookId, id])
+  @@unique([organizationId, workspaceId, bookId, code])
+  @@index([organizationId, workspaceId, bookId, start, end])
+}
+
+model FinanceSubject {
+  id String @id
+  organizationId String
+  workspaceId String
+  bookId String
+  parentId String?
+  code String
+  name String
+  normalSide String
+  enabled Boolean @default(true)
+  leaf Boolean @default(true)
+  revision Int @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  book FinanceBook @relation(fields: [organizationId, workspaceId, bookId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  parent FinanceSubject? @relation("FinanceSubjectTree", fields: [organizationId, workspaceId, bookId, parentId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict)
+  children FinanceSubject[] @relation("FinanceSubjectTree")
+  lines FinanceVoucherLine[]
+  openings FinanceOpeningBalance[]
+  openItems FinanceOpenItem[]
+  expenseDebits FinanceExpense[] @relation("FinanceExpenseDebitSubject")
+  expenseCredits FinanceExpense[] @relation("FinanceExpenseCreditSubject")
+  categoryId String?
+  category FinanceSubjectCategory? @relation(fields: [organizationId, workspaceId, bookId, categoryId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict, map: "FinanceSubject_category_fkey")
+  bankAccounts FinanceBankAccount[]
+  auxiliaryRules FinanceSubjectAuxiliary[]
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, bookId, code])
+  @@unique([organizationId, workspaceId, bookId, id])
+  @@index([organizationId, workspaceId, bookId, enabled, code])
+}
+
+model FinanceOpeningBalance {
+  id String @id
+  organizationId String
+  workspaceId String
+  bookId String
+  periodId String
+  subjectId String
+  amount Decimal @db.Decimal(30, 6)
+  side String
+  revision Int @default(1)
+  createdBy String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  book FinanceBook @relation(fields: [organizationId, workspaceId, bookId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  period FinancePeriod @relation(fields: [organizationId, workspaceId, periodId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  subject FinanceSubject @relation(fields: [organizationId, workspaceId, bookId, subjectId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([organizationId, workspaceId, periodId, subjectId])
+  @@index([organizationId, workspaceId, bookId, periodId])
+}
+
+model FinanceVoucher {
+ externalSourceClaims FinanceExternalSourceClaim[]
+  id String @id
+  organizationId String
+  workspaceId String
+  bookId String
+  periodId String
+  sourceKey String
+  idempotencyKey String
+  requestHash String
+  date DateTime @db.Date
+  memo String @default("")
+  status String @default("DRAFT")
+  kind String @default("STANDARD")
+  reversalOf String?
+  revision Int @default(1)
+  createdBy String
+  reviewedBy String?
+  postedBy String?
+  reviewedAt DateTime? @db.Timestamptz(3)
+  postedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  book FinanceBook @relation(fields: [organizationId, workspaceId, bookId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  period FinancePeriod @relation(fields: [organizationId, workspaceId, periodId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  creator User @relation("FinanceVoucherCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  reviewer User? @relation("FinanceVoucherReviewer", fields: [reviewedBy], references: [id], onDelete: Restrict)
+  poster User? @relation("FinanceVoucherPoster", fields: [postedBy], references: [id], onDelete: Restrict)
+  lines FinanceVoucherLine[]
+  original FinanceVoucher? @relation("FinanceVoucherReversal", fields: [organizationId, workspaceId, bookId, reversalOf], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict)
+  reversals FinanceVoucher[] @relation("FinanceVoucherReversal")
+  profile FinanceVoucherProfile?
+  attachments FinanceVoucherAttachment[]
+  expense FinanceExpense?
+  openItems FinanceOpenItem[]
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, bookId, id])
+  @@unique([organizationId, workspaceId, bookId, sourceKey])
+  @@unique([organizationId, workspaceId, bookId, idempotencyKey])
+  @@index([organizationId, workspaceId, bookId, periodId, date, id])
+  @@index([organizationId, workspaceId, bookId, status, date])
+}
+
+model FinanceExpense {
+  id String @id
+  organizationId String
+  workspaceId String
+  number String
+  category String
+  payee String
+  description String
+  expenseDate DateTime @db.Date
+  amount Decimal @db.Decimal(30, 6)
+  currency String
+  bookId String
+  periodId String
+  debitSubjectId String
+  creditSubjectId String
+  status String @default("DRAFT")
+  revision Int @default(1)
+  createdBy String
+  reviewedBy String?
+  reviewedAt DateTime? @db.Timestamptz(3)
+  decisionMemo String @default("")
+  financeVoucherId String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  workspace WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict)
+  book FinanceBook @relation(fields: [organizationId, workspaceId, bookId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  period FinancePeriod @relation(fields: [organizationId, workspaceId, bookId, periodId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict)
+  debitSubject FinanceSubject @relation("FinanceExpenseDebitSubject", fields: [organizationId, workspaceId, bookId, debitSubjectId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict)
+  creditSubject FinanceSubject @relation("FinanceExpenseCreditSubject", fields: [organizationId, workspaceId, bookId, creditSubjectId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict)
+  creator User @relation("FinanceExpenseCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  reviewer User? @relation("FinanceExpenseReviewer", fields: [reviewedBy], references: [id], onDelete: Restrict)
+  voucher FinanceVoucher? @relation(fields: [organizationId, workspaceId, financeVoucherId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, number])
+  @@unique([organizationId, workspaceId, financeVoucherId])
+  @@index([organizationId, workspaceId, status, expenseDate, id])
+  @@index([organizationId, workspaceId, bookId, periodId, status])
+}
+
+model FinanceVoucherLine {
+  bankMatchEntries FinanceBankMatchEntry[]
+  id String @id
+  organizationId String
+  workspaceId String
+  bookId String
+  voucherId String
+  subjectId String
+  lineNumber Int
+  debit Decimal @db.Decimal(30, 6)
+  credit Decimal @db.Decimal(30, 6)
+  memo String @default("")
+  auxiliaries FinanceVoucherAuxiliary[]
+  voucher FinanceVoucher @relation(fields: [organizationId, workspaceId, bookId, voucherId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict)
+  subject FinanceSubject @relation(fields: [organizationId, workspaceId, bookId, subjectId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([organizationId,workspaceId,bookId,id], map:"FinanceVoucherLine_bank_scope_key")
+  @@unique([organizationId, workspaceId, voucherId, lineNumber])
+  @@unique([organizationId, workspaceId, bookId, voucherId, lineNumber], map: "FinanceVoucherLine_scoped_number_key")
+  @@index([organizationId, workspaceId, bookId, subjectId, voucherId])
+}
+
+model PurchaseOrderApproval {
+  id              String   @id
+  organizationId  String
+  workspaceId     String
+  purchaseOrderId String
+  expectedRevision Int
+  requestHash     String
+  requestedBy     String
+  approvedBy      String?
+  status          String   @default("PENDING")
+  decisionReason  String   @default("")
+  expiresAt       DateTime
+  revision        Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  order           PurchaseOrder @relation(fields: [organizationId, workspaceId, purchaseOrderId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  workspace       WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  requester       User @relation("PurchaseOrderApprovalRequester", fields: [requestedBy], references: [id], onDelete: Restrict)
+  approver        User? @relation("PurchaseOrderApprovalApprover", fields: [approvedBy], references: [id], onDelete: Restrict)
+  @@unique([organizationId, workspaceId, id])
+  @@index([organizationId, workspaceId, purchaseOrderId, createdAt])
+  @@index([organizationId, workspaceId, status, expiresAt])
+}
+
+model PurchaseOrderLine {
+  id              String   @id @default(cuid())
+  organizationId  String
+  workspaceId     String   @default("default")
+  purchaseOrderId String
+  productRecordId String
+  expectedQty     Int
+  unitPrice       Decimal  @db.Decimal(20, 6)
+  notes           String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  order           PurchaseOrder @relation(fields: [organizationId, workspaceId, purchaseOrderId], references: [organizationId, workspaceId, id], onDelete: Cascade)
+  product         ProductRecord @relation(fields: [organizationId, workspaceId, productRecordId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, id])
+  @@index([organizationId, workspaceId, purchaseOrderId])
+  @@index([organizationId, workspaceId, productRecordId])
+}
+
+
+// Foundation only: no stocktake command/API is enabled by these models.
+enum WmsStocktakeStatus {
+  DRAFT
+  COUNTING
+  REVIEW
+  POSTED
+  CANCELLED
+}
+
+model WmsStocktake {
+  id String @id
+  organizationId String
+  workspaceId String
+  warehouseId String
+  number String
+  mode String @default("SAMPLE")
+  blind Boolean @default(false)
+  selectionEvidence String @default("")
+  status WmsStocktakeStatus @default(DRAFT)
+  createdBy String
+  revision Int @default(1)
+  startedAt DateTime?
+  postedAt DateTime?
+  postedCommandId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  warehouse WmsWarehouse @relation(fields: [organizationId, workspaceId, warehouseId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  creator User @relation(fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  postedCommand WmsCommand? @relation(fields: [organizationId, workspaceId, postedCommandId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  locations WmsStocktakeLocation[]
+  @@unique([organizationId, workspaceId, warehouseId, id])
+  @@unique([organizationId, workspaceId, number])
+  @@unique([organizationId, workspaceId, postedCommandId])
+  @@index([organizationId, workspaceId, warehouseId, status, createdAt, id], map: "WmsStocktake_scope_work_idx")
+}
+
+model WmsStocktakeLocation {
+  id String @id
+  organizationId String
+  workspaceId String
+  warehouseId String
+  stocktakeId String
+  locationId String
+  createdAt DateTime @default(now())
+  stocktake WmsStocktake @relation(fields: [organizationId, workspaceId, warehouseId, stocktakeId], references: [organizationId, workspaceId, warehouseId, id], onDelete: Restrict, onUpdate: Restrict, map: "WmsStocktakeLocation_stocktake_fkey")
+  location WmsLocation @relation(fields: [organizationId, workspaceId, warehouseId, locationId], references: [organizationId, workspaceId, warehouseId, id], onDelete: Restrict, onUpdate: Restrict, map: "WmsStocktakeLocation_location_fkey")
+  lines WmsStocktakeLine[]
+  @@unique([organizationId, workspaceId, stocktakeId, locationId], map: "WmsStocktakeLocation_scope_location_key")
+}
+
+model WmsStocktakeLine {
+  id String @id
+  organizationId String
+  workspaceId String
+  stocktakeId String
+  locationId String
+  lotId String
+  // Null revision means no balance existed at capture; every baseline bucket must then be zero.
+  baselineRevision Int?
+  baselineOnHand Int
+  baselinePendingQc Int
+  baselinePendingPutaway Int
+  baselineRejected Int
+  baselineReserved Int
+  countedQty Int?
+  countedBy String?
+  countedAt DateTime?
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  range WmsStocktakeLocation @relation(fields: [organizationId, workspaceId, stocktakeId, locationId], references: [organizationId, workspaceId, stocktakeId, locationId], onDelete: Restrict, onUpdate: Restrict)
+  lot WmsLot @relation(fields: [organizationId, workspaceId, lotId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  counter User? @relation(fields: [countedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([organizationId, workspaceId, stocktakeId, locationId, lotId], map: "WmsStocktakeLine_scope_lot_key")
+}
+
+
+// Local planning only; this model does not represent an Amazon-created inbound plan.
+model FbaLocalPlan {
+ remoteReadSnapshots FbaRemoteReadSnapshot[]
+ remoteBinding FbaRemotePlanBinding?
+ remoteActions FbaRemoteAction[]
+  id String @id
+  organizationId String
+  workspaceId String
+  sellerAccountId String
+  marketplaceId String
+  number String
+  idempotencyKey String
+  requestHash String
+  createdBy String
+  status String @default("DRAFT")
+  packing Json?
+  costAllocation Json?
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  workspace WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "FbaLocalPlan_workspace_fkey")
+  seller SellerAccount @relation(fields: [organizationId, workspaceId, sellerAccountId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict, map: "FbaLocalPlan_seller_fkey")
+  creator User @relation(fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "FbaLocalPlan_creator_fkey")
+  lines FbaLocalPlanLine[]
+  workflowOptions FbaWorkflowOptionSnapshot[]
+  externalOperations FbaExternalOperationRecord[]
+  fees FbaLocalFee[]
+  forwarderOrder FbaLocalForwarderOrder?
+  shipments FbaLocalShipment[]
+  customsDeclarations FbaLocalCustomsDeclaration[]
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, number])
+  @@unique([organizationId, workspaceId, idempotencyKey])
+  @@index([organizationId, workspaceId, sellerAccountId, marketplaceId, createdAt, id], map: "FbaLocalPlan_scope_seller_site_date_idx")
+}
+
+model FbaLocalPlanLine {
+  id String @id
+  organizationId String
+  workspaceId String
+  planId String
+  balanceId String
+  quantity Int
+  reservationId String?
+  shipmentItems FbaLocalShipmentItem[]
+  customsItems FbaLocalCustomsItem[]
+  plan FbaLocalPlan @relation(fields: [organizationId, workspaceId, planId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict, map: "FbaLocalPlanLine_plan_fkey")
+  balance WmsStockBalance @relation(fields: [organizationId, workspaceId, balanceId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict, map: "FbaLocalPlanLine_balance_fkey")
+  reservation WmsReservation? @relation(fields: [organizationId, workspaceId, reservationId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict, map: "FbaLocalPlanLine_reservation_fkey")
+  @@unique([organizationId, workspaceId, planId, balanceId], map: "FbaLocalPlanLine_scope_plan_balance_key")
+  @@unique([organizationId, workspaceId, reservationId], map: "FbaLocalPlanLine_scope_reservation_key")
+  @@unique([organizationId, workspaceId, planId, id], map: "FbaLocalPlanLine_scope_plan_id_key")
+}
+
+model FbaLocalShipment {
+  documents FbaLocalShipmentDocument[]
+  id String @id
+  customsDeclarations FbaLocalCustomsDeclaration[]
+  organizationId String
+  workspaceId String
+  planId String
+  sellerAccountId String
+  marketplaceId String
+  sourceId String
+  sourceRunId String
+  observationId String
+  spApiInboundPlanId String
+  spApiShipmentId String
+  sourceStatus String?
+  warehouseId String?
+  capturedAt DateTime
+  sourceFacts Json
+  mappingEvidence String
+  idempotencyKey String
+  requestHash String
+  createdBy String
+  createdAt DateTime @default(now())
+  plan FbaLocalPlan @relation(fields: [organizationId, workspaceId, planId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict, map: "FbaLocalShipment_plan_fkey")
+  sourceRun AmazonSyncRun @relation(fields: [sourceRunId, organizationId, workspaceId, sourceId], references: [id, organizationId, workspaceId, sourceId], onDelete: Restrict, onUpdate: Restrict, map: "FbaLocalShipment_run_fkey")
+  items FbaLocalShipmentItem[]
+  @@unique([organizationId, workspaceId, planId, id], map: "FbaLocalShipment_scope_plan_id_key")
+  @@unique([organizationId, workspaceId, sellerAccountId, marketplaceId, spApiShipmentId], map: "FbaLocalShipment_scope_amazon_key")
+  @@unique([organizationId, workspaceId, planId, idempotencyKey], map: "FbaLocalShipment_scope_request_key")
+}
+
+model FbaLocalShipmentItem {
+  id String @id
+  organizationId String
+  workspaceId String
+  planId String
+  shipmentId String
+  planLineId String
+  observationId String
+  sellerSku String
+  fnsku String?
+  quantity Int
+  shipment FbaLocalShipment @relation(fields: [organizationId, workspaceId, planId, shipmentId], references: [organizationId, workspaceId, planId, id], onDelete: Restrict, onUpdate: Restrict, map: "FbaLocalShipmentItem_shipment_fkey")
+  planLine FbaLocalPlanLine @relation(fields: [organizationId, workspaceId, planId, planLineId], references: [organizationId, workspaceId, planId, id], onDelete: Restrict, onUpdate: Restrict, map: "FbaLocalShipmentItem_planline_fkey")
+  @@unique([shipmentId, observationId, planLineId], map: "FbaLocalShipmentItem_source_line_key")
+}
+
+model FbaLocalFee {
+  id String @id
+  organizationId String
+  workspaceId String
+  planId String
+  number String
+  feeType String
+  idempotencyKey String
+  requestHash String
+  estimate Json
+  createdBy String
+  createdAt DateTime @default(now())
+  plan FbaLocalPlan @relation(fields: [organizationId, workspaceId, planId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  bill FbaLocalForwarderBill?
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, planId, number])
+  @@unique([organizationId, workspaceId, planId, idempotencyKey])
+  @@index([organizationId, workspaceId, planId, createdAt, id])
+}
+
+model FbaLocalForwarderBill {
+  id String @id
+  organizationId String
+  workspaceId String
+  feeId String
+  number String
+  forwarder String
+  forwarderOrderId String?
+  idempotencyKey String
+  requestHash String
+  actual Json
+  reconciliation Json
+  createdBy String
+  createdAt DateTime @default(now())
+  fee FbaLocalFee @relation(fields: [organizationId, workspaceId, feeId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  adjustment FbaLocalCostAdjustment?
+  forwarderOrder FbaLocalForwarderOrder? @relation(fields: [organizationId, workspaceId, forwarderOrderId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict, map: "FbaLocalForwarderBill_order_fkey")
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, feeId])
+}
+
+model FbaLocalForwarderOrder {
+  id String @id
+  organizationId String
+  workspaceId String
+  planId String
+  number String
+  forwarder String
+  channel String
+  mode String
+  destination String
+  containerNumber String?
+  billOfLading String?
+  vesselOrFlight String?
+  cutoffAt DateTime?
+  departureEta DateTime?
+  arrivalEta DateTime?
+  status String @default("BOOKED")
+  lastEventAt DateTime?
+  idempotencyKey String
+  requestHash String
+  createdBy String
+  createdAt DateTime @default(now())
+  plan FbaLocalPlan @relation(fields: [organizationId, workspaceId, planId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict, map: "FbaLocalForwarderOrder_plan_fkey")
+  events FbaLocalTracking[]
+  bills FbaLocalForwarderBill[]
+  @@unique([organizationId, workspaceId, id], map: "FbaLocalForwarderOrder_scope_id_key")
+  @@unique([organizationId, workspaceId, planId], map: "FbaLocalForwarderOrder_scope_plan_key")
+  @@unique([organizationId, workspaceId, number], map: "FbaLocalForwarderOrder_scope_number_key")
+}
+
+model FbaLocalTracking {
+  id String @id
+  organizationId String
+  workspaceId String
+  orderId String
+  eventType String
+  occurredAt DateTime
+  location String
+  evidence String
+  source String @default("MANUAL")
+  idempotencyKey String
+  requestHash String
+  createdBy String
+  createdAt DateTime @default(now())
+  order FbaLocalForwarderOrder @relation(fields: [organizationId, workspaceId, orderId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict, map: "FbaLocalTracking_order_fkey")
+  @@unique([organizationId, workspaceId, orderId, idempotencyKey], map: "FbaLocalTracking_scope_order_request_key")
+  @@index([organizationId, workspaceId, orderId, occurredAt, id], map: "FbaLocalTracking_scope_order_time_idx")
+}
+
+// Accounting handoff evidence. No posting status is inferred from this document.
+model FbaLocalCostAdjustment {
+  id String @id
+  organizationId String
+  workspaceId String
+  billId String
+  currency String
+  difference String
+  status String @default("NEEDS_ACCOUNT_MAPPING")
+  createdAt DateTime @default(now())
+  drafts FbaLocalFinanceDraft[]
+  bill FbaLocalForwarderBill @relation(fields: [organizationId, workspaceId, billId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([organizationId, workspaceId, billId])
+  @@unique([organizationId, workspaceId, id],map:"FbaLocalCostAdjustment_scope_id_key")
+}
+
+// t_erp_outwh_form: local outbound demand, separate from per-balance reservations.
+enum WmsOutboundStatus {
+  DRAFT
+  RELEASED
+  COMPLETED
+  CANCELLED
+}
+
+model WmsOutbound {
+  id String @id
+  organizationId String
+  workspaceId String
+  warehouseId String
+  number String
+  customer String?
+  deliveryAddress String?
+  carrier String?
+  trackingNumber String?
+  remark String?
+  status WmsOutboundStatus @default(DRAFT)
+  createdBy String
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  warehouse WmsWarehouse @relation(fields: [organizationId, workspaceId, warehouseId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  creator User @relation("WmsOutboundCreator", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  lines WmsOutboundLine[]
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, warehouseId, id], map: "WmsOutbound_scope_warehouse_key")
+  @@unique([organizationId, workspaceId, number])
+  @@index([organizationId, workspaceId, warehouseId, status, createdAt, id], map: "WmsOutbound_work_idx")
+}
+
+// t_erp_outwh_form_entry: product demand; batch/location allocation belongs to reservations.
+model WmsOutboundLine {
+  consumables WmsOutboundConsumable[]
+  id String @id
+  organizationId String
+  workspaceId String
+  warehouseId String
+  outboundId String
+  productRecordId String
+  requestedQty Int
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  outbound WmsOutbound @relation(fields: [organizationId, workspaceId, warehouseId, outboundId], references: [organizationId, workspaceId, warehouseId, id], onDelete: Restrict, onUpdate: Restrict)
+  product ProductRecord @relation(fields: [organizationId, workspaceId, productRecordId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  reservations WmsReservation[]
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, warehouseId, id], map: "WmsOutboundLine_scope_warehouse_key")
+  @@unique([organizationId, workspaceId, outboundId, productRecordId], map: "WmsOutboundLine_scope_product_key")
+  @@index([organizationId, workspaceId, productRecordId, createdAt, id], map: "WmsOutboundLine_product_idx")
+}
+
+// Local declaration evidence; reviewed is a local review, not customs acceptance.
+model FbaLocalCustomsDeclaration {
+ templateExports FbaCustomsExport[]
+  id String @id
+  organizationId String
+  workspaceId String
+  planId String
+  shipmentId String
+  number String
+  destinationCountry String
+  currency String
+  exporter String
+  importer String
+  templateReference String
+  evidence String
+  idempotencyKey String
+  requestHash String
+  createdBy String
+  reviewedBy String?
+  reviewedAt DateTime?
+  status String @default("DRAFT")
+  createdAt DateTime @default(now())
+  plan FbaLocalPlan @relation(fields:[organizationId,workspaceId,planId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict,map:"FbaLocalCustomsDeclaration_plan_fkey")
+  shipment FbaLocalShipment @relation(fields:[organizationId,workspaceId,planId,shipmentId],references:[organizationId,workspaceId,planId,id],onDelete:Restrict,onUpdate:Restrict,map:"FbaLocalCustomsDeclaration_shipment_fkey")
+  items FbaLocalCustomsItem[]
+  events FbaLocalClearanceEvent[]
+  @@unique([organizationId,workspaceId,planId,id],map:"FbaLocalCustomsDeclaration_scope_plan_id_key")
+  @@unique([organizationId,workspaceId,planId,number],map:"FbaLocalCustomsDeclaration_number_key")
+  @@unique([organizationId,workspaceId,planId,idempotencyKey],map:"FbaLocalCustomsDeclaration_request_key")
+ @@unique([organizationId,workspaceId,id],map:"FbaLocalCustomsDeclaration_identity_key")
+}
+
+model FbaLocalCustomsItem {
+  id String @id
+  organizationId String
+  workspaceId String
+  planId String
+  declarationId String
+  planLineId String
+  description String
+  hsCode String
+  originCountry String
+  quantity Int
+  unit String
+  unitPrice String
+  declaredValue String
+  declaration FbaLocalCustomsDeclaration @relation(fields:[organizationId,workspaceId,planId,declarationId],references:[organizationId,workspaceId,planId,id],onDelete:Restrict,onUpdate:Restrict,map:"FbaLocalCustomsItem_declaration_fkey")
+  planLine FbaLocalPlanLine @relation(fields:[organizationId,workspaceId,planId,planLineId],references:[organizationId,workspaceId,planId,id],onDelete:Restrict,onUpdate:Restrict,map:"FbaLocalCustomsItem_planline_fkey")
+  @@unique([declarationId,planLineId],map:"FbaLocalCustomsItem_line_key")
+}
+
+model FbaLocalClearanceEvent {
+  id String @id
+  organizationId String
+  workspaceId String
+  planId String
+  declarationId String
+  eventType String
+  occurredAt DateTime
+  reference String
+  evidence String
+  idempotencyKey String
+  requestHash String
+  createdBy String
+  createdAt DateTime @default(now())
+  declaration FbaLocalCustomsDeclaration @relation(fields:[organizationId,workspaceId,planId,declarationId],references:[organizationId,workspaceId,planId,id],onDelete:Restrict,onUpdate:Restrict,map:"FbaLocalClearanceEvent_declaration_fkey")
+  @@unique([declarationId,idempotencyKey],map:"FbaLocalClearanceEvent_request_key")
+  @@index([organizationId,workspaceId,planId,declarationId,occurredAt,id],map:"FbaLocalClearanceEvent_scope_date_idx")
+}
+
+// Proposed accounting rule inputs and voucher drafts; never a posted general ledger.
+model FbaLocalFinanceDraft {
+ id String @id
+ organizationId String
+ workspaceId String
+ adjustmentId String
+ idempotencyKey String
+ requestHash String
+ ruleInput Json
+ voucher Json
+ summary Json
+ status String @default("DRAFT_RULES")
+ createdBy String
+ reviewedBy String?
+ reviewedAt DateTime?
+ createdAt DateTime @default(now())
+ adjustment FbaLocalCostAdjustment @relation(fields:[organizationId,workspaceId,adjustmentId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict,map:"FbaLocalFinanceDraft_adjustment_fkey")
+ @@unique([organizationId,workspaceId,adjustmentId,idempotencyKey],map:"FbaLocalFinanceDraft_request_key")
+}
+
+// Typed manual shipment evidence. Registration does not execute an external booking or insurance purchase.
+model FbaLocalShipmentDocument {
+ id String @id
+ organizationId String
+ workspaceId String
+ planId String
+ shipmentId String
+ kind String
+ number String
+ evidence String
+ payload Json
+ idempotencyKey String
+ requestHash String
+ createdBy String
+ status String @default("REGISTERED")
+ cancellationEvidence String?
+ cancelledBy String?
+ cancelledAt DateTime?
+ createdAt DateTime @default(now())
+ shipment FbaLocalShipment @relation(fields:[organizationId,workspaceId,planId,shipmentId],references:[organizationId,workspaceId,planId,id],onDelete:Restrict,onUpdate:Restrict,map:"FbaLocalShipmentDocument_shipment_fkey")
+ @@unique([organizationId,workspaceId,planId,kind,number],map:"FbaLocalShipmentDocument_number_key")
+ @@unique([organizationId,workspaceId,planId,idempotencyKey],map:"FbaLocalShipmentDocument_request_key")
+ @@index([organizationId,workspaceId,planId,createdAt,id],map:"FbaLocalShipmentDocument_scope_date_idx")
+}
+
+model WmsTransferOrder {
+ overseas WmsOverseasManifest?
+ id String @id
+ organizationId String
+ workspaceId String
+ number String
+ reason String
+ idempotencyKey String
+ requestHash String
+ createdBy String
+ status String @default("DRAFT")
+ revision Int @default(1)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ workspace WorkspaceScope @relation(fields:[organizationId,workspaceId],references:[organizationId,id],onDelete:Restrict,onUpdate:Restrict,map:"WmsTransferOrder_workspace_fkey")
+ lines WmsTransferOrderLine[]
+ @@unique([organizationId,workspaceId,id],map:"WmsTransferOrder_scope_id_key")
+ @@unique([organizationId,workspaceId,number],map:"WmsTransferOrder_number_key")
+ @@unique([organizationId,workspaceId,idempotencyKey],map:"WmsTransferOrder_request_key")
+ @@index([organizationId,workspaceId,createdAt,id],map:"WmsTransferOrder_scope_date_idx")
+}
+model WmsTransferOrderLine {
+ @@unique([organizationId,workspaceId,id])
+ overseasLines WmsOverseasLine[]
+ overseasBoxItems WmsOverseasBoxItem[]
+ id String @id
+ organizationId String
+ workspaceId String
+ orderId String
+ sourceBalanceId String
+ targetWarehouseId String
+ targetLocationId String
+ quantity Int
+ shippedQty Int @default(0)
+ receivedQty Int @default(0)
+ order WmsTransferOrder @relation(fields:[organizationId,workspaceId,orderId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict,map:"WmsTransferOrderLine_order_fkey")
+ source WmsStockBalance @relation(fields:[organizationId,workspaceId,sourceBalanceId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict,map:"WmsTransferOrderLine_source_fkey")
+ target WmsLocation @relation(fields:[organizationId,workspaceId,targetWarehouseId,targetLocationId],references:[organizationId,workspaceId,warehouseId,id],onDelete:Restrict,onUpdate:Restrict,map:"WmsTransferOrderLine_target_fkey")
+ @@unique([orderId,sourceBalanceId,targetLocationId],map:"WmsTransferOrderLine_route_key")
+}
+
+model WmsWarehouseType {
+ id String @id
+ organizationId String
+ workspaceId String
+ name String
+ remark String?
+ revision Int @default(1)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ workspace WorkspaceScope @relation(fields:[organizationId,workspaceId],references:[organizationId,id],onDelete:Restrict,onUpdate:Restrict)
+ warehouses WmsWarehouse[]
+ @@unique([organizationId,workspaceId,id])
+ @@unique([organizationId,workspaceId,name])
+}
+model WmsWarehouseAddress {
+ id String @id
+ organizationId String
+ workspaceId String
+ warehouseId String
+ label String
+ countryCode String
+ region String?
+ city String
+ addressLine1 String
+ addressLine2 String?
+ postalCode String
+ contactName String
+ phone String?
+ revision Int @default(1)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ workspace WorkspaceScope @relation(fields:[organizationId,workspaceId],references:[organizationId,id],onDelete:Restrict,onUpdate:Restrict)
+ warehouse WmsWarehouse @relation(fields:[organizationId,workspaceId,warehouseId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict)
+ @@unique([organizationId,workspaceId,id])
+ @@unique([organizationId,workspaceId,warehouseId,label])
+}
+model WmsOutboundConsumable {
+ id String @id
+ organizationId String
+ workspaceId String
+ warehouseId String
+ outboundLineId String
+ productRecordId String
+ units Decimal @db.Decimal(18,6)
+ accountedMainQty Int @default(0)
+ issuedQty Int @default(0)
+ revision Int @default(1)
+ createdBy String
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ line WmsOutboundLine @relation(fields:[organizationId,workspaceId,warehouseId,outboundLineId],references:[organizationId,workspaceId,warehouseId,id],onDelete:Restrict,onUpdate:Restrict)
+ product ProductRecord @relation(fields:[organizationId,workspaceId,productRecordId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict)
+ @@unique([organizationId,workspaceId,id])
+ @@unique([organizationId,workspaceId,outboundLineId,productRecordId])
+}
+
+model WmsOverseasManifest {
+ charges WmsOverseasCharge[]
+ requestHash String
+ id String @id
+ organizationId String
+ workspaceId String
+ orderId String
+ countryCode String
+ destinationAddress Json
+ reference String
+ createdAt DateTime @default(now())
+ order WmsTransferOrder @relation(fields:[organizationId,workspaceId,orderId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict)
+ lines WmsOverseasLine[]
+ boxes WmsOverseasBox[]
+ transport WmsOverseasTransport?
+ @@unique([organizationId,workspaceId,id])
+ @@unique([organizationId,workspaceId,orderId])
+}
+model WmsOverseasLine {
+ id String @id
+ organizationId String
+ workspaceId String
+ manifestId String
+ transferLineId String
+ sellerSku String?
+ fnsku String?
+ manifest WmsOverseasManifest @relation(fields:[organizationId,workspaceId,manifestId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict)
+ transferLine WmsTransferOrderLine @relation(fields:[organizationId,workspaceId,transferLineId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict)
+ @@unique([organizationId,workspaceId,manifestId,transferLineId])
+}
+model WmsOverseasBox {
+ id String @id
+ organizationId String
+ workspaceId String
+ manifestId String
+ number String
+ lengthCm Decimal @db.Decimal(18,6)
+ widthCm Decimal @db.Decimal(18,6)
+ heightCm Decimal @db.Decimal(18,6)
+ grossWeightKg Decimal @db.Decimal(18,6)
+ netWeightKg Decimal? @db.Decimal(18,6)
+ manifest WmsOverseasManifest @relation(fields:[organizationId,workspaceId,manifestId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict)
+ items WmsOverseasBoxItem[]
+ @@unique([organizationId,workspaceId,id])
+ @@unique([organizationId,workspaceId,manifestId,number])
+}
+model WmsOverseasBoxItem {
+ id String @id
+ organizationId String
+ workspaceId String
+ boxId String
+ transferLineId String
+ quantity Int
+ box WmsOverseasBox @relation(fields:[organizationId,workspaceId,boxId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict)
+ transferLine WmsTransferOrderLine @relation(fields:[organizationId,workspaceId,transferLineId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict)
+ @@unique([organizationId,workspaceId,boxId,transferLineId])
+}
+model WmsOverseasTransport {
+ id String @id
+ organizationId String
+ workspaceId String
+ manifestId String
+ carrier String
+ channel String
+ containerNumber String?
+ billOfLading String?
+ trackingNumber String
+ departureAt DateTime?
+ expectedArrivalAt DateTime?
+ chargeableWeightKg Decimal? @db.Decimal(18,6)
+ currency String?
+ unitPrice Decimal? @db.Decimal(24,6)
+ surcharge Decimal? @db.Decimal(24,6)
+ estimatedFee Decimal? @db.Decimal(24,6)
+ revision Int @default(1)
+ reference String
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ manifest WmsOverseasManifest @relation(fields:[organizationId,workspaceId,manifestId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict)
+ @@unique([organizationId,workspaceId,manifestId])
+}
+model WmsCostRule {
+ id String @id
+ organizationId String
+ workspaceId String
+ lotId String
+ unitCost Decimal @db.Decimal(24,6)
+ currency String
+ inventoryAccount String
+ offsetAccounts Json
+ reference String
+ createdBy String
+ status String @default("DRAFT")
+ revision Int @default(1)
+ activatedAt DateTime?
+ createdAt DateTime @default(now())
+ lot WmsLot @relation(fields:[organizationId,workspaceId,lotId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict)
+ entries WmsCostEntry[]
+ @@unique([organizationId,workspaceId,id])
+ @@index([organizationId,workspaceId,lotId,status,activatedAt])
+}
+model WmsFinanceDraft {
+ id String @id
+ organizationId String
+ workspaceId String
+ commandId String
+ status String @default("NEEDS_DATA")
+ revision Int @default(1)
+ voucher Json
+ missingData Json
+ valuedBy String?
+ valuedAt DateTime?
+ createdAt DateTime @default(now())
+ command WmsCommand @relation(fields:[organizationId,workspaceId,commandId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict)
+ entries WmsCostEntry[]
+ @@unique([organizationId,workspaceId,id])
+ @@unique([organizationId,workspaceId,commandId])
+ @@index([organizationId,workspaceId,createdAt,id])
+}
+model WmsCostEntry {
+ id String @id
+ organizationId String
+ workspaceId String
+ draftId String
+ movementId String
+ ruleId String
+ quantity Int
+ unitCost Decimal @db.Decimal(24,6)
+ amount Decimal @db.Decimal(30,6)
+ currency String
+ debitAccount String
+ creditAccount String
+ createdAt DateTime @default(now())
+ adjustments WmsCostAdjustment[]
+ draft WmsFinanceDraft @relation(fields:[organizationId,workspaceId,draftId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict)
+ movement WmsMovement @relation(fields:[organizationId,workspaceId,movementId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict)
+ rule WmsCostRule @relation(fields:[organizationId,workspaceId,ruleId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict)
+ @@unique([organizationId,workspaceId,id])
+ @@unique([organizationId,workspaceId,movementId])
+}
+
+// AP/AR evidence is derived from posted vouchers; registration does not post again.
+model FinanceOpenItem {
+  id String @id
+  organizationId String
+  workspaceId String
+  bookId String
+  voucherId String
+  subjectId String
+  counterparty String
+  kind String
+  currency String
+  amount Decimal @db.Decimal(30, 6)
+  dueDate DateTime @db.Date
+  evidence String
+  status String @default("OPEN")
+  revision Int @default(1)
+  createdBy String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  book FinanceBook @relation(fields: [organizationId, workspaceId, bookId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  voucher FinanceVoucher @relation(fields: [organizationId, workspaceId, bookId, voucherId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict)
+  subject FinanceSubject @relation(fields: [organizationId, workspaceId, bookId, subjectId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict)
+  documentSettlements FinanceSettlement[] @relation("SettlementDocument")
+  paymentSettlements FinanceSettlement[] @relation("SettlementPayment")
+  @@unique([organizationId, workspaceId, bookId, id])
+  @@unique([organizationId, workspaceId, voucherId, subjectId])
+  @@index([organizationId, workspaceId, bookId, counterparty, dueDate])
+}
+
+model FinanceSettlement {
+  id String @id
+  organizationId String
+  workspaceId String
+  bookId String
+  documentId String
+  paymentId String
+  periodId String
+  date DateTime @db.Date
+  amount Decimal @db.Decimal(30, 6)
+  idempotencyKey String
+  requestHash String
+  evidence String
+  createdBy String
+  reversedBy String?
+  reversedAt DateTime? @db.Timestamptz(3)
+  reversalEvidence String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  book FinanceBook @relation(fields: [organizationId, workspaceId, bookId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  period FinancePeriod @relation(fields: [organizationId, workspaceId, bookId, periodId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict)
+  document FinanceOpenItem @relation("SettlementDocument", fields: [organizationId, workspaceId, bookId, documentId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict)
+  payment FinanceOpenItem @relation("SettlementPayment", fields: [organizationId, workspaceId, bookId, paymentId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([organizationId, workspaceId, bookId, idempotencyKey])
+  @@index([organizationId, workspaceId, bookId, documentId, reversedAt])
+  @@index([organizationId, workspaceId, bookId, paymentId, reversedAt])
+}
+
+// Operator-reported external uncertainty. This journal never dispatches remote requests.
+model FbaExternalOperationRecord {
+  id String @id
+  organizationId String
+  workspaceId String
+  planId String
+  planRevision Int
+  step String
+  operationName String
+  apiVersion String
+  requestDigest String
+  requestId String?
+  operationId String?
+  entityId String?
+  idempotencyKey String
+  requestHash String
+  evidence String
+  status String @default("RESULT_UNKNOWN")
+  resolutionEvidence String?
+  createdBy String
+  reviewedBy String?
+  reviewedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  plan FbaLocalPlan @relation(fields: [organizationId, workspaceId, planId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([organizationId, workspaceId, planId, idempotencyKey])
+  @@index([organizationId, workspaceId, planId, status])
+}
+
+// Source completeness remains an explicit independent review, never inferred from trial balance.
+model FinanceCloseReview {
+  id String @id
+  organizationId String
+  workspaceId String
+  bookId String
+  periodId String
+  periodRevision Int
+  policyHash String
+  ledgerHash String
+  evidence Json
+  status String @default("PENDING")
+  requestedBy String
+  reviewedBy String?
+  decisionEvidence String?
+  reviewedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  book FinanceBook @relation(fields: [organizationId, workspaceId, bookId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  period FinancePeriod @relation(fields: [organizationId, workspaceId, bookId, periodId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict)
+  @@index([organizationId, workspaceId, bookId, periodId, status])
+}
+
+// Value-only corrections; physical movement and original valuation remain immutable.
+model WmsCostAdjustment {
+  id String @id
+  organizationId String
+  workspaceId String
+  costEntryId String
+  delta Decimal @db.Decimal(30,6)
+  date DateTime @db.Date
+  policyReference String
+  evidence String
+  idempotencyKey String
+  requestHash String
+  status String @default("DRAFT")
+  revision Int @default(1)
+  createdBy String
+  reviewedBy String?
+  reviewedAt DateTime? @db.Timestamptz(3)
+  decisionEvidence String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  entry WmsCostEntry @relation(fields:[organizationId,workspaceId,costEntryId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict)
+  @@unique([organizationId,workspaceId,id])
+  @@unique([organizationId,workspaceId,idempotencyKey])
+  @@index([organizationId,workspaceId,costEntryId,status])
+}
+
+// Versioned target-defined report/closing mappings; no built-in company chart or formula defaults.
+model FinanceReportTemplate {
+  id String @id
+  organizationId String
+  workspaceId String
+  bookId String
+  code String
+  version Int
+  kind String
+  definition Json
+  policyReference String
+  status String @default("DRAFT")
+  createdBy String
+  reviewedBy String?
+  reviewedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  book FinanceBook @relation(fields:[organizationId,workspaceId,bookId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict)
+  @@unique([organizationId,workspaceId,bookId,code,version])
+  @@index([organizationId,workspaceId,bookId,status])
+}
+
+model FinanceAuxiliaryType {
+  id String @id
+  organizationId String
+  workspaceId String
+  bookId String
+  code String
+  name String
+  createdBy String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  book FinanceBook @relation(fields: [organizationId, workspaceId, bookId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict, map: "FinanceAuxiliaryType_book_fkey")
+  items FinanceAuxiliaryItem[]
+  rules FinanceSubjectAuxiliary[]
+  @@unique([organizationId, workspaceId, bookId, id], map: "FinanceAuxiliaryType_scope_key")
+  @@unique([organizationId, workspaceId, bookId, code], map: "FinanceAuxiliaryType_code_key")
+}
+
+model FinanceAuxiliaryItem {
+ isFixed Boolean @default(false)
+ enabled Boolean @default(true)
+ revision Int @default(1)
+  id String @id
+  organizationId String
+  workspaceId String
+  bookId String
+  typeId String
+  code String
+  name String
+  createdBy String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  type FinanceAuxiliaryType @relation(fields: [organizationId, workspaceId, bookId, typeId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict, map: "FinanceAuxiliaryItem_type_fkey")
+  assignments FinanceVoucherAuxiliary[]
+  @@unique([organizationId, workspaceId, bookId, typeId, id], map: "FinanceAuxiliaryItem_scope_key")
+  @@unique([organizationId, workspaceId, bookId, typeId, code], map: "FinanceAuxiliaryItem_code_key")
+}
+
+model FinanceSubjectAuxiliary {
+  id String @id
+  organizationId String
+  workspaceId String
+  bookId String
+  subjectId String
+  typeId String
+  required Boolean
+  policyReference String
+  createdBy String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  type FinanceAuxiliaryType @relation(fields: [organizationId, workspaceId, bookId, typeId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict, map: "FinanceSubjectAuxiliary_type_fkey")
+  subject FinanceSubject @relation(fields: [organizationId, workspaceId, bookId, subjectId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict, map: "FinanceSubjectAuxiliary_subject_fkey")
+  @@unique([organizationId, workspaceId, bookId, subjectId, typeId], map: "FinanceSubjectAuxiliary_subject_type_key")
+}
+
+model FinanceVoucherAuxiliary {
+  id String @id
+  organizationId String
+  workspaceId String
+  bookId String
+  voucherId String
+  lineNumber Int
+  typeId String
+  itemId String
+  line FinanceVoucherLine @relation(fields: [organizationId, workspaceId, bookId, voucherId, lineNumber], references: [organizationId, workspaceId, bookId, voucherId, lineNumber], onDelete: Restrict, onUpdate: Restrict, map: "FinanceVoucherAuxiliary_line_fkey")
+  item FinanceAuxiliaryItem @relation(fields: [organizationId, workspaceId, bookId, typeId, itemId], references: [organizationId, workspaceId, bookId, typeId, id], onDelete: Restrict, onUpdate: Restrict, map: "FinanceVoucherAuxiliary_item_fkey")
+  @@unique([organizationId, workspaceId, voucherId, lineNumber, typeId], map: "FinanceVoucherAuxiliary_line_type_key")
+}
+
+model FinanceVoucherType {
+  id String @id
+  organizationId String
+  workspaceId String
+  bookId String
+  code String
+  name String
+  policyReference String
+  createdBy String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  book FinanceBook @relation(fields: [organizationId, workspaceId, bookId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict, map: "FinanceVoucherType_book_fkey")
+  profiles FinanceVoucherProfile[]
+  @@unique([organizationId, workspaceId, bookId, id], map: "FinanceVoucherType_scope_key")
+  @@unique([organizationId, workspaceId, bookId, code], map: "FinanceVoucherType_code_key")
+}
+
+model FinanceVoucherProfile {
+  id String @id
+  organizationId String
+  workspaceId String
+  bookId String
+  voucherId String
+  voucherTypeId String
+  evidence String
+  createdBy String
+  voucher FinanceVoucher @relation(fields: [organizationId, workspaceId, bookId, voucherId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict, map: "FinanceVoucherProfile_voucher_fkey")
+  type FinanceVoucherType @relation(fields: [organizationId, workspaceId, bookId, voucherTypeId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict, map: "FinanceVoucherProfile_type_fkey")
+  @@unique([organizationId, workspaceId, bookId, voucherId], map: "FinanceVoucherProfile_voucher_key")
+}
+
+model FinanceVoucherAttachment {
+  id String @id
+  organizationId String
+  workspaceId String
+  bookId String
+  voucherId String
+  fileId String
+  contentHash String
+  evidence String
+  createdBy String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  voucher FinanceVoucher @relation(fields: [organizationId, workspaceId, bookId, voucherId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict, map: "FinanceVoucherAttachment_voucher_fkey")
+  file FileObject @relation(fields: [organizationId, workspaceId, fileId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict, map: "FinanceVoucherAttachment_file_fkey")
+  @@unique([organizationId, workspaceId, bookId, voucherId, contentHash], map: "FinanceVoucherAttachment_content_key")
+  @@index([organizationId, workspaceId, voucherId, createdAt], map: "FinanceVoucherAttachment_voucher_idx")
+}
+
+model FinanceVoucherImport {
+  id String @id
+  organizationId String
+  workspaceId String
+  bookId String
+  idempotencyKey String
+  requestHash String
+  sourceName String
+  evidence String
+  records Json
+  status String
+  errors Json
+  voucherIds Json
+  createdBy String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  importedAt DateTime? @db.Timestamptz(3)
+  book FinanceBook @relation(fields: [organizationId, workspaceId, bookId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([organizationId, workspaceId, bookId, idempotencyKey], map: "FinanceVoucherImport_idempotency_key")
+  @@index([organizationId, workspaceId, bookId, createdAt], map: "FinanceVoucherImport_book_idx")
+}
+
+model FinanceCurrency {
+ id String @id
+ organizationId String
+ workspaceId String
+ bookId String
+ code String
+ name String
+ createdBy String
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ book FinanceBook @relation(fields: [organizationId, workspaceId, bookId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+ @@unique([organizationId, workspaceId, bookId, code], map: "FinanceCurrency_code_key")
+}
+model FinanceExchangeRate {
+ revaluations FinanceFxRevaluation[]
+ id String @id
+ organizationId String
+ workspaceId String
+ bookId String
+ sourceCurrency String
+ targetCurrency String
+ rate Decimal @db.Decimal(24,12)
+ observedAt DateTime @db.Timestamptz(3)
+ reference String
+ evidence String
+ createdBy String
+ reviewedBy String?
+ reviewedAt DateTime? @db.Timestamptz(3)
+ status String @default("DRAFT")
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ book FinanceBook @relation(fields: [organizationId, workspaceId, bookId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+ @@unique([organizationId, workspaceId, bookId, reference], map: "FinanceExchangeRate_reference_key")
+ @@index([organizationId, workspaceId, bookId, sourceCurrency, targetCurrency, observedAt], map: "FinanceExchangeRate_pair_idx")
+}
+model FinanceSubjectCategory {
+ level Int @default(1)
+ isFixed Boolean @default(false)
+ enabled Boolean @default(true)
+ revision Int @default(1)
+ id String @id
+ organizationId String
+ workspaceId String
+ bookId String
+ code String
+ name String
+ categoryType String
+ parentId String?
+ sortOrder Int
+ createdBy String
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ book FinanceBook @relation(fields: [organizationId, workspaceId, bookId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+ parent FinanceSubjectCategory? @relation("FinanceCategoryTree",fields: [organizationId, workspaceId, bookId, parentId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict, map: "FinanceSubjectCategory_parent_fkey")
+ children FinanceSubjectCategory[] @relation("FinanceCategoryTree")
+ subjects FinanceSubject[]
+ @@unique([organizationId, workspaceId, bookId, id], map: "FinanceSubjectCategory_scope_key")
+ @@unique([organizationId, workspaceId, bookId, code], map: "FinanceSubjectCategory_code_key")
+}
+model FinanceBankAccount {
+ enabled Boolean @default(true)
+ isDefault Boolean @default(false)
+ paymentMethod String @default("UNSPECIFIED")
+ revision Int @default(1)
+ id String @id
+ organizationId String
+ workspaceId String
+ bookId String
+ subjectId String
+ code String
+ name String
+ maskedNumber String
+ currency String
+ policyReference String
+ createdBy String
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ book FinanceBook @relation(fields: [organizationId, workspaceId, bookId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict, map: "FinanceBankAccount_book_fkey")
+ subject FinanceSubject @relation(fields: [organizationId, workspaceId, bookId, subjectId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict, map: "FinanceBankAccount_subject_fkey")
+ statements FinanceBankStatement[]
+ @@unique([organizationId, workspaceId, bookId, id], map: "FinanceBankAccount_scope_key")
+ @@unique([organizationId, workspaceId, bookId, code], map: "FinanceBankAccount_code_key")
+ @@unique([organizationId, workspaceId, bookId, subjectId], map: "FinanceBankAccount_subject_key")
+}
+model FinanceBankStatement {
+ id String @id
+ organizationId String
+ workspaceId String
+ bookId String
+ accountId String
+ reference String
+ date DateTime @db.Date
+ amount Decimal @db.Decimal(30,6)
+ evidence String
+ sourceSheet String
+ sourceRow Int
+ requestHash String
+ createdBy String
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ account FinanceBankAccount @relation(fields: [organizationId, workspaceId, bookId, accountId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict)
+ matches FinanceBankMatch[]
+ @@unique([organizationId, workspaceId, bookId, id], map: "FinanceBankStatement_scope_key")
+ @@unique([organizationId, workspaceId, bookId, accountId, reference], map: "FinanceBankStatement_reference_key")
+ @@index([organizationId, workspaceId, bookId, accountId, date], map: "FinanceBankStatement_date_idx")
+}
+model FinanceBankMatch {
+ period FinancePeriod @relation(fields:[organizationId,workspaceId,bookId,periodId],references:[organizationId,workspaceId,bookId,id],onDelete:Restrict,onUpdate:Restrict,map:"FinanceBankMatch_period_fkey")
+ id String @id
+ organizationId String
+ workspaceId String
+ bookId String
+ statementId String
+ periodId String
+ amount Decimal @db.Decimal(30,6)
+ evidence String
+ matchedBy String
+ matchedAt DateTime @default(now()) @db.Timestamptz(3)
+ reversedBy String?
+ reversedAt DateTime? @db.Timestamptz(3)
+ reversalEvidence String?
+ statement FinanceBankStatement @relation(fields: [organizationId, workspaceId, bookId, statementId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict)
+ entries FinanceBankMatchEntry[]
+ @@unique([organizationId, workspaceId, bookId, id], map: "FinanceBankMatch_scope_key")
+}
+model FinanceBankMatchEntry {
+ voucherLine FinanceVoucherLine @relation(fields:[organizationId,workspaceId,bookId,voucherLineId],references:[organizationId,workspaceId,bookId,id],onDelete:Restrict,onUpdate:Restrict,map:"FinanceBankMatchEntry_line_fkey")
+ id String @id
+ organizationId String
+ workspaceId String
+ bookId String
+ matchId String
+ voucherLineId String
+ active Boolean @default(true)
+ match FinanceBankMatch @relation(fields: [organizationId, workspaceId, bookId, matchId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict)
+ @@index([organizationId, workspaceId, bookId, voucherLineId], map: "FinanceBankMatchEntry_line_idx")
+}
+
+model WmsAgingSnapshot {
+ riskAssessments WmsInventoryRiskAssessment[]
+ warehouse WmsWarehouse @relation(fields:[organizationId,workspaceId,warehouseId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict,map:"WmsAgingSnapshot_warehouse_fkey")
+ id String @id
+ organizationId String
+ workspaceId String
+ warehouseId String
+ snapshotDate DateTime @db.Date
+ capturedAt DateTime @db.Timestamptz(3)
+ policyReference String
+ status String
+ records Json
+ recordCount Int
+ sourceHash String
+ createdBy String
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ @@unique([organizationId, workspaceId,id],map:"WmsAgingSnapshot_scope_key")
+ @@unique([organizationId, workspaceId, warehouseId, snapshotDate], map: "WmsAgingSnapshot_day_key")
+ @@index([organizationId, workspaceId, snapshotDate], map: "WmsAgingSnapshot_day_idx")
+}
+
+model WmsAgingSchedule {
+ id String @id
+ organizationId String
+ workspaceId String
+ warehouseId String
+ actorUserId String
+ policyReference String
+ enabled Boolean @default(false)
+ revision Int @default(1)
+ nextRunAt DateTime @db.Timestamptz(3)
+ lastSucceededAt DateTime? @db.Timestamptz(3)
+ lastError String?
+ warehouse WmsWarehouse @relation(fields:[organizationId,workspaceId,warehouseId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict,map:"WmsAgingSchedule_warehouse_fkey")
+ @@unique([organizationId,workspaceId,warehouseId], map:"WmsAgingSchedule_warehouse_key")
+ @@index([enabled,nextRunAt], map:"WmsAgingSchedule_due_idx")
+}
+
+model FbaWorkflowOptionSnapshot {
+ id String @id
+ organizationId String
+ workspaceId String
+ planId String
+ idempotencyKey String
+ kind String
+ externalPlanId String
+ operationId String
+ capturedAt DateTime @db.Timestamptz(3)
+ expiresAt DateTime @db.Timestamptz(3)
+ evidence String
+ options Json
+ sourceHash String
+ createdBy String
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ plan FbaLocalPlan @relation(fields:[organizationId,workspaceId,planId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict,map:"FbaWorkflowOptionSnapshot_plan_fkey")
+ selection FbaWorkflowOptionSelection?
+ @@unique([organizationId,workspaceId,id],map:"FbaWorkflowOptionSnapshot_scope_key")
+ @@unique([organizationId,workspaceId,planId,idempotencyKey],map:"FbaWorkflowOptionSnapshot_request_key")
+}
+model FbaWorkflowOptionSelection {
+ id String @id
+ organizationId String
+ workspaceId String
+ snapshotId String @unique
+ optionId String
+ evidence String
+ createdBy String
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ snapshot FbaWorkflowOptionSnapshot @relation(fields:[organizationId,workspaceId,snapshotId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict,map:"FbaWorkflowOptionSelection_snapshot_fkey")
+ @@unique([organizationId,workspaceId,snapshotId],map:"FbaWorkflowOptionSelection_scope_key")
+}
+
+model FinanceExternalSourceClaim {
+ id String @id
+ organizationId String
+ workspaceId String
+ bookId String
+ voucherId String
+ kind String
+ economicKey String
+ requestHash String
+ sourceFingerprint String
+ currency String
+ sourceDate DateTime @db.Date
+ policyReference String
+ evidence String
+ provenance Json
+ createdBy String
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ voucher FinanceVoucher @relation(fields:[organizationId,workspaceId,bookId,voucherId],references:[organizationId,workspaceId,bookId,id],onDelete:Restrict,onUpdate:Restrict,map:"FinanceExternalSourceClaim_voucher_fkey")
+ @@unique([organizationId,workspaceId,economicKey],map:"FinanceExternalSourceClaim_economic_key")
+ @@index([organizationId,workspaceId,bookId,createdAt],map:"FinanceExternalSourceClaim_book_idx")
+}
+model WmsInventoryRiskAssessment {
+ id String @id
+ organizationId String
+ workspaceId String
+ snapshotId String
+ idempotencyKey String
+ requestHash String
+ policy Json
+ evidence Json
+ result Json
+ status String @default("DRAFT")
+ revision Int @default(1)
+ createdBy String
+ reviewedBy String?
+ reviewedAt DateTime? @db.Timestamptz(3)
+ decisionEvidence String?
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ snapshot WmsAgingSnapshot @relation(fields:[organizationId,workspaceId,snapshotId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict,map:"WmsInventoryRiskAssessment_snapshot_fkey")
+ @@unique([organizationId,workspaceId,idempotencyKey],map:"WmsInventoryRiskAssessment_request_key")
+ @@index([organizationId,workspaceId,snapshotId,createdAt],map:"WmsInventoryRiskAssessment_snapshot_idx")
+}
+
+model FbaRemoteExecutionPolicy {
+ id String @id
+ organizationId String
+ workspaceId String
+ sellerAccountId String
+ marketplaceId String
+ authorizationId String
+ enabled Boolean @default(false)
+ allowedOperations Json
+ contractReference String
+ expiresAt DateTime @db.Timestamptz(3)
+ revision Int @default(1)
+ createdBy String
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ @@unique([organizationId,workspaceId,id],map:"FbaRemoteExecutionPolicy_identity_key")
+ @@unique([organizationId,workspaceId,sellerAccountId,marketplaceId],map:"FbaRemoteExecutionPolicy_scope_key")
+}
+model FbaRemotePlanBinding {
+ id String @id
+ organizationId String
+ workspaceId String
+ planId String
+ externalPlanId String
+ sourceReference String
+ createdBy String
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ plan FbaLocalPlan @relation(fields:[organizationId,workspaceId,planId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict,map:"FbaRemotePlanBinding_plan_fkey")
+ @@unique([organizationId,workspaceId,planId],map:"FbaRemotePlanBinding_plan_key")
+ @@unique([organizationId,workspaceId,externalPlanId],map:"FbaRemotePlanBinding_external_key")
+}
+model FbaRemoteAction {
+ readSnapshots FbaRemoteReadSnapshot[]
+ requestMetadata Json
+ planRevision Int
+ id String @id
+ organizationId String
+ workspaceId String
+ planId String
+ policyId String
+ policyRevision Int
+ idempotencyKey String
+ operation String
+ requestHash String
+ requestCiphertext String
+ status String @default("DRAFT")
+ revision Int @default(1)
+ createdBy String
+ reviewedBy String?
+ reviewedAt DateTime? @db.Timestamptz(3)
+ reviewEvidence String?
+ operationId String?
+ externalEntityId String?
+ responseCiphertext String?
+ errorCode String?
+ attempt Int @default(0)
+ nextRunAt DateTime? @db.Timestamptz(3)
+ leaseToken String?
+ leaseExpiresAt DateTime? @db.Timestamptz(3)
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ updatedAt DateTime @updatedAt @db.Timestamptz(3)
+ plan FbaLocalPlan @relation(fields:[organizationId,workspaceId,planId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict,map:"FbaRemoteAction_plan_fkey")
+ @@unique([organizationId,workspaceId,planId,idempotencyKey],map:"FbaRemoteAction_request_key")
+ @@index([status,nextRunAt],map:"FbaRemoteAction_due_idx")
+ @@unique([organizationId,workspaceId,id],map:"FbaRemoteAction_identity_key")
+}
+
+model FinanceFxRevaluation {
+ reviewEvidence String?
+ id String @id
+ organizationId String
+ workspaceId String
+ bookId String
+ periodId String
+ sourceCurrency String
+ rateId String
+ policyReference String
+ evidence String
+ idempotencyKey String
+ requestHash String
+ createdBy String
+ items Json
+ calculation Json
+ status String @default("DRAFT")
+ reviewedBy String?
+ reviewedAt DateTime? @db.Timestamptz(3)
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ period FinancePeriod @relation(fields:[organizationId,workspaceId,bookId,periodId],references:[organizationId,workspaceId,bookId,id],onDelete:Restrict,onUpdate:Restrict,map:"FinanceFxRevaluation_period_fkey")
+ rate FinanceExchangeRate @relation(fields:[rateId],references:[id],onDelete:Restrict,onUpdate:Restrict,map:"FinanceFxRevaluation_rate_fkey")
+ @@unique([organizationId,workspaceId,bookId,idempotencyKey],map:"FinanceFxRevaluation_request_key")
+ @@index([organizationId,workspaceId,bookId,periodId],map:"FinanceFxRevaluation_period_idx")
+}
+model FbaCustomsProfile {
+ id String @id
+ organizationId String
+ workspaceId String
+ productRecordId String
+ destinationCountry String
+ forwarder String
+ version Int
+ values Json
+ sourceReference String
+ requestHash String
+ createdBy String
+ status String @default("DRAFT")
+ reviewedBy String?
+ reviewedAt DateTime? @db.Timestamptz(3)
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ product ProductRecord @relation(fields:[organizationId,workspaceId,productRecordId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict,map:"FbaCustomsProfile_product_fkey")
+ @@unique([organizationId,workspaceId,productRecordId,destinationCountry,forwarder,version],map:"FbaCustomsProfile_version_key")
+}
+model FbaCustomsTemplate {
+ id String @id
+ organizationId String
+ workspaceId String
+ code String
+ version Int
+ destinationCountry String
+ forwarder String
+ schemaReference String
+ definition Json
+ requestHash String
+ createdBy String
+ status String @default("DRAFT")
+ reviewedBy String?
+ reviewedAt DateTime? @db.Timestamptz(3)
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ exports FbaCustomsExport[]
+ @@unique([organizationId,workspaceId,id],map:"FbaCustomsTemplate_scope_key")
+ @@unique([organizationId,workspaceId,code,version],map:"FbaCustomsTemplate_version_key")
+}
+model FbaCustomsExport {
+ id String @id
+ organizationId String
+ workspaceId String
+ declarationId String
+ templateId String
+ idempotencyKey String
+ requestHash String
+ xml String
+ xmlHash String
+ createdBy String
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ declaration FbaLocalCustomsDeclaration @relation(fields:[organizationId,workspaceId,declarationId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict,map:"FbaCustomsExport_declaration_fkey")
+ template FbaCustomsTemplate @relation(fields:[organizationId,workspaceId,templateId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict,map:"FbaCustomsExport_template_fkey")
+ @@unique([organizationId,workspaceId,idempotencyKey],map:"FbaCustomsExport_request_key")
+}
+
+model FbaRemoteReadSnapshot {
+ id String @id
+ organizationId String
+ workspaceId String
+ planId String
+ actionId String
+ operation String
+ externalPlanId String
+ shipmentId String?
+ capturedAt DateTime @default(now()) @db.Timestamptz(3)
+ sourceHash String
+ pageComplete Boolean
+ continuationTokenPresent Boolean
+ normalized Json
+ plan FbaLocalPlan @relation(fields:[organizationId,workspaceId,planId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict,map:"FbaRemoteReadSnapshot_plan_fkey")
+ action FbaRemoteAction @relation(fields:[organizationId,workspaceId,actionId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict,map:"FbaRemoteReadSnapshot_action_fkey")
+ @@unique([organizationId,workspaceId,actionId],map:"FbaRemoteReadSnapshot_action_key")
+ @@index([organizationId,workspaceId,planId,capturedAt],map:"FbaRemoteReadSnapshot_plan_idx")
+}
+model WmsOverseasCharge {
+ id String @id
+ organizationId String
+ workspaceId String
+ manifestId String
+ number String
+ currency String
+ amount Decimal @db.Decimal(30,6)
+ allocationMethod String
+ reference String
+ evidence String
+ idempotencyKey String
+ requestHash String
+ allocation Json
+ createdBy String
+ status String @default("DRAFT")
+ reviewedBy String?
+ reviewedAt DateTime? @db.Timestamptz(3)
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ manifest WmsOverseasManifest @relation(fields:[organizationId,workspaceId,manifestId],references:[organizationId,workspaceId,id],onDelete:Restrict,onUpdate:Restrict,map:"WmsOverseasCharge_manifest_fkey")
+ @@unique([organizationId,workspaceId,idempotencyKey],map:"WmsOverseasCharge_request_key")
+ @@unique([organizationId,workspaceId,manifestId,number],map:"WmsOverseasCharge_number_key")
+}
+
+// Brand/category dictionaries; product facts reference these from ProductRecord.payload.
+model ProductCatalogEntry {
+  id String @id
+  organizationId String
+  workspaceId String
+  kind String
+  code String
+  name String
+  color String @default("")
+  notes String @default("")
+  enabled Boolean @default(true)
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  workspace WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, kind, code])
+  @@index([organizationId, workspaceId, kind, enabled, name])
 }

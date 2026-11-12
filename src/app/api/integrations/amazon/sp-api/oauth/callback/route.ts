@@ -1,3 +1,4 @@
+import { AmazonCloudExecutionError } from "@/lib/amazon/execution-role";
 import { NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth/session";
 import { finishAmazonOAuth } from "@/lib/amazon-sync/oauth";
@@ -10,5 +11,5 @@ export async function GET(request: Request) {
     await finishAmazonOAuth(user.id, new URL(request.url).searchParams);
     // Relative destination; never redirect using callback/client-provided URLs.
     return new Response(null, { status: 303, headers: { Location: "/operations?view=connections", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
-  } catch (e) { return NextResponse.json({ error: e instanceof SyncInputError ? e.message : "Amazon 授权失败。" }, { status: e instanceof SyncInputError ? e.status : 500, headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } }); }
+  } catch (e) { return NextResponse.json({ ...(e instanceof AmazonCloudExecutionError ? { code: e.code } : {}), error: e instanceof SyncInputError ? e.message : "Amazon 授权失败。" }, { status: e instanceof SyncInputError ? e.status : 500, headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } }); }
 }

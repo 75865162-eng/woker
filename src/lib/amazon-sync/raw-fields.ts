@@ -42,7 +42,16 @@ export function observedJsonFields(raw: string): ObservedFieldInventory {
 
 export function rawResponseEnvelope(rawBody: string, operation?: string, apiVersion?: string) {
   const fieldInventory = observedJsonFields(rawBody);
-  return { rawBody, fieldInventory, registeredContract: compareResponseSchema(operation, apiVersion, fieldInventory.fields, fieldInventory.complete) };
+  return { rawBody, archiveManifest: rawArchiveManifest(rawBody), fieldInventory, registeredContract: compareResponseSchema(operation, apiVersion, fieldInventory.fields, fieldInventory.complete) };
+}
+
+/** Describes the saved decoded UTF-8 source, not the compressed HTTP object or
+ * an official Amazon schema. Stored in the encrypted envelope alongside it. */
+export function rawArchiveManifest(raw: string) {
+  return { version: 1, encoding: "UTF-8", byteLength: Buffer.byteLength(raw, "utf8"),
+    sha256: createHash("sha256").update(raw).digest("hex"), hashBasis: "DECODED_UTF8_SOURCE",
+    storageFormat: "AES_GCM_DATABASE_ENVELOPE_V1", parserVersion: null,
+    parseStatus: "NOT_PARSED", officialSchemaVersion: null };
 }
 
 export function rawReportEnvelope(rawText: string) {
@@ -57,5 +66,5 @@ export function rawReportEnvelope(rawText: string) {
       }
     } catch { /* Raw text is still archived when metadata inspection is incomplete. */ }
   }
-  return { rawText, fieldInventory };
+  return { rawText, archiveManifest: rawArchiveManifest(rawText), fieldInventory };
 }

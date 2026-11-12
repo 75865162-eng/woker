@@ -35,6 +35,8 @@
     "typecheck": "node scripts/runtime/typecheck.mjs",
     "test": "tsx --test tests/*.test.ts",
     "test:e2e": "playwright test",
+    "performance:dev": "node scripts/performance/erp-navigation.mjs --mode=dev --output=outputs/performance/dev.json",
+    "performance:build": "node scripts/performance/erp-navigation.mjs --mode=production --output=outputs/performance/build.json",
     "test:products:browser": "playwright test --config tests/browser/playwright.config.ts",
     "test:sellfox:browser": "playwright test --config tests/browser/sellfox.config.ts",
     "test:operations:browser": "playwright test --config tests/browser/operations.config.ts",

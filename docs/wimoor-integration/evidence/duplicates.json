@@ -1,0 +1,58 @@
+[
+  {
+    "database": "db_admin",
+    "table": "t_sys_menu",
+    "sources": [
+      "init-config/mysql/数据/db_admin/t_sys_menu.sql:18",
+      "init-config/mysql/数据库结构/db_admin/t_sys_menu.sql:18"
+    ]
+  },
+  {
+    "database": "db_admin",
+    "table": "t_sys_permission",
+    "sources": [
+      "init-config/mysql/数据/db_admin/t_sys_permission.sql:18",
+      "init-config/mysql/数据库结构/db_admin/t_sys_permission.sql:18"
+    ]
+  },
+  {
+    "database": "db_erp",
+    "table": "t_erp_ship_transcompany_api",
+    "sources": [
+      "init-config/mysql/数据/db_erp/t_erp_ship_transcompany_api.sql:18",
+      "init-config/mysql/数据库结构/db_erp/t_erp_ship_transcompany_api.sql:18"
+    ]
+  },
+  {
+    "database": "db_erp",
+    "table": "t_erp_thirdparty_system",
+    "sources": [
+      "init-config/mysql/数据/db_erp/t_erp_thirdparty_system.sql:18",
+      "init-config/mysql/数据库结构/db_erp/t_erp_thirdparty_system.sql:18"
+    ]
+  },
+  {
+    "database": "db_erp",
+    "table": "t_erp_transtype",
+    "sources": [
+      "init-config/mysql/数据/db_erp/t_erp_transtype.sql:18",
+      "init-config/mysql/数据库结构/db_erp/t_erp_transtype.sql:18"
+    ]
+  },
+  {
+    "database": "db_erp",
+    "table": "t_erp_warehouse_type",
+    "sources": [
+      "init-config/mysql/数据/db_erp/t_erp_warehouse_type.sql:18",
+      "init-config/mysql/数据库结构/db_erp/t_erp_warehouse_type.sql:18"
+    ]
+  },
+  {
+    "database": "db_erp",
+    "table": "t_parameterconfig",
+    "sources": [
+      "init-config/mysql/数据/db_erp/t_parameterconfig.sql:18",
+      "init-config/mysql/数据库结构/db_erp/t_parameterconfig.sql:18"
+    ]
+  }
+]

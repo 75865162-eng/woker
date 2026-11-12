@@ -1,9 +1,16 @@
 import { build } from "esbuild";
 import { expect, test } from "@playwright/test";
-let bundle = "";
+import { mkdir, readFile } from "node:fs/promises";
+let bundle = "", styles = "";
+const screenshotDir = "docs/wimoor-integration/ui/screenshots";
 const mcpToolTuples = [["amazon.inventory.list", "查询库存"], ["amazon.ads.entities.list", "只读分页查询已同步的 SP 广告结构"], ["amazon.ads.reports.list", "只读查询本地最新已发布广告日报；需要独立显式授权"]] as const;
 const mcpToolCatalog = mcpToolTuples.map(([name, description]) => ({ name, description, module: name.startsWith("amazon.ads.") ? "amazon_ads" : "amazon_sync", version: "1.1.0", inputSchema: { type: "object", properties: {} }, outputSchema: { type: "object" }, operationMode: "READ_ONLY", requiredPermissions: ["operations:view", "amazon_data:view:mcp"], enabled: true, implementationStatus: "IMPLEMENTED" }));
-test.beforeAll(async () => { bundle = (await build({ stdin: { contents: 'import React from "react"; import {createRoot} from "react-dom/client"; import {SkillErpSettingsPanel} from "./src/components/settings/skill-erp-settings-panel"; import {AmazonStoresPanel} from "./src/components/operations/amazon-stores-panel"; createRoot(document.getElementById("root")!).render(<><SkillErpSettingsPanel/><AmazonStoresPanel canEdit={true}/></>);', resolveDir: process.cwd(), loader: "tsx" }, bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env.NODE_ENV": '"development"' } })).outputFiles[0].text; });
+test.beforeAll(async () => {
+  bundle = (await build({ stdin: { contents: 'import React from "react"; import {createRoot} from "react-dom/client"; import {SkillErpSettingsPanel} from "./src/components/settings/skill-erp-settings-panel"; import {AmazonStoresPanel} from "./src/components/operations/amazon-stores-panel"; createRoot(document.getElementById("root")!).render(<><SkillErpSettingsPanel/><AmazonStoresPanel canEdit={true}/></>);', resolveDir: process.cwd(), loader: "tsx" }, bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env.NODE_ENV": '"development"' } })).outputFiles[0].text;
+  const [{ default: postcss }, { default: tailwind }] = await Promise.all([import("postcss"), import("@tailwindcss/postcss")]);
+  styles = (await postcss([tailwind() as unknown as import("postcss").AcceptedPlugin]).process(await readFile("src/app/globals.css", "utf8"), { from: "src/app/globals.css" })).css;
+  await mkdir(screenshotDir, { recursive: true });
+});
 test("personal MCP credential lifecycle is reachable; plaintext clears on workspace change", async ({ page }) => {
   const commands: Record<string, unknown>[] = [];
   let credential: Record<string, unknown> | undefined;
@@ -87,9 +94,11 @@ test("Skill ERP settings rejects an invalid MCP tool catalog without stale fallb
   await page.route("**/*", async route => {
     const r = route.request(), url = new URL(r.url()); expect(url.origin).toBe("http://127.0.0.1:43225");
     if (url.pathname === "/bundle.js") return route.fulfill({ contentType: "application/javascript", body: bundle });
+    if (url.pathname === "/styles.css") return route.fulfill({ contentType: "text/css", body: styles });
     if (url.pathname === "/api/operations/amazon-mcp") return route.fulfill({ json: { credentials: [], scopes: [{ sellerAccountId: "seller-a", marketplaceId: "US", displayName: "店铺 A" }], tools: null, toolCatalog: mcpToolCatalog, tables: [] } });
     if (url.pathname === "/api/operations/amazon-stores") return route.fulfill({ json: { stores: [] } });
-    return route.fulfill({ contentType: "text/html", body: '<html><body><div id="root"></div><script src="/bundle.js"></script></body></html>' });
+    if (url.pathname === "/api/lili/devices") return route.fulfill({ json: { devices: [] } });
+    return route.fulfill({ contentType: "text/html", body: '<html><head><link rel="stylesheet" href="/styles.css"></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>' });
   });
   await page.goto("http://127.0.0.1:43225");
   await expect(page.getByRole("alert")).toHaveText("MCP 工具目录格式无效。");
@@ -100,17 +109,29 @@ test("store details support name edits without submitting identity changes", asy
   await page.route("**/*", async route => {
     const r = route.request(), url = new URL(r.url()); expect(url.origin).toBe("http://127.0.0.1:43225");
     if (url.pathname === "/bundle.js") return route.fulfill({ contentType: "application/javascript", body: bundle });
+    if (url.pathname === "/styles.css") return route.fulfill({ contentType: "text/css", body: styles });
     if (url.pathname === "/api/operations/amazon-mcp") return route.fulfill({ json: { credentials: [], scopes: [], tools: [], toolCatalog: [], tables: [] } });
     if (url.pathname === "/api/operations/amazon-stores") {
       if (r.method() === "PATCH") { submitted = r.postDataJSON(); name = String(submitted.displayName); return route.fulfill({ json: { saved: true } }); }
-      return route.fulfill({ json: { stores: [{ id: "seller", displayName: name, updatedAt: "2026-11-05T00:00:00Z", identities: [{ amazonSellerId: "REALID", marketplaceId: "US", region: "us-east-1" }], authorizations: [{ id: "auth", amazonSellerId: "REALID", awsRegion: "us-east-1", status: "CONFIGURED", identityVerifiedAt: "2026-11-05T00:00:00Z", authorizedByUserId: "owner", createdAt: "2026-11-05T00:00:00Z" }], sources: [], operators: [{ userId: "a", name: "运营 A", role: "operations" }], grants: [], roleGrants: [] }] } });
+      return route.fulfill({ json: { stores: [{ id: "seller", displayName: name, status: "active", updatedAt: "2026-11-05T00:00:00Z", identities: [{ id: "identity-us", amazonSellerId: "REALID", marketplaceId: "US", region: "us-east-1", authorizationId: "auth", verifiedAt: "2026-11-05T00:00:00Z" }, { id: "identity-ca", amazonSellerId: "REALID", marketplaceId: "CA", region: "us-east-1", authorizationId: "auth", verifiedAt: "2026-11-05T00:00:00Z" }], authorizations: [{ id: "auth", amazonSellerId: "REALID", awsRegion: "us-east-1", status: "CONFIGURED", identityVerifiedAt: "2026-11-05T00:00:00Z", authorizedByUserId: "owner", createdAt: "2026-11-05T00:00:00Z" }], sources: [], operators: [{ userId: "a", name: "运营 A", role: "operations" }], grants: [], roleGrants: [] }] } });
     }
-    return route.fulfill({ contentType: "text/html", body: '<html><body><div id="root"></div><script src="/bundle.js"></script></body></html>' });
+    return route.fulfill({ contentType: "text/html", body: '<html><head><link rel="stylesheet" href="/styles.css"></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>' });
   });
   await page.goto("http://127.0.0.1:43225");
-  await page.locator("summary").filter({ hasText: "REALID" }).click();
+  await expect(page.getByRole("columnheader", { name: "SP-API 授权" })).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: "REALID" })).toHaveCount(2);
+  await page.getByLabel("Marketplace 筛选").selectOption("US");
+  const storeRow = page.getByRole("row").filter({ hasText: "REALID" });
+  await expect(storeRow).toContainText("身份已验证");
+  await expect(storeRow).toContainText("US");
+  await page.getByLabel("授权状态筛选").selectOption("CONFIGURED");
+  await expect(storeRow).toHaveCount(1);
+  await page.locator('[aria-label="Amazon 店铺与站点授权"]').screenshot({ path: `${screenshotDir}/amazon-store-sites-fixture.png` });
+  await expect(storeRow).toContainText("店铺详情 / 管理");
+  await storeRow.getByText("店铺详情 / 管理").click();
   await page.getByLabel("ERP 店铺显示名称").fill("改名后"); await page.getByRole("button", { name: "保存显示名称" }).click();
-  await expect(page.locator("summary").filter({ hasText: "REALID" })).toContainText("改名后");
+  await expect(page.getByRole("row").filter({ hasText: "REALID" })).toContainText("改名后");
   expect(Object.keys(submitted).sort()).toEqual(["displayName", "id", "updatedAt"]);
-  await page.getByLabel("搜索店铺名称或 Seller ID").fill("不存在"); await expect(page.getByText("暂无符合条件的店铺。", { exact: true })).toBeVisible();
+  await page.getByLabel("Marketplace 筛选").selectOption(""); await page.getByLabel("授权状态筛选").selectOption("");
+  await page.getByLabel("搜索店铺名称或 Seller ID").fill("不存在"); await expect(page.getByText("暂无符合条件的店铺或站点。", { exact: true })).toBeVisible();
 });

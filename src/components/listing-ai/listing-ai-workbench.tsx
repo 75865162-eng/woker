@@ -42,6 +42,9 @@ import {
   ImagePlanSection,
   ListingSection,
 } from "@/components/listing-ai/listing-ai-output-panels";
+import { GallerySaveControls } from "@/components/listing-ai/gallery-save-controls";
+import { clearGalleryImageAt, galleryImageRowCount, reserveGalleryUploadRows } from "@/lib/listing-ai/gallery-upload-slots";
+import { galleryInputKeys } from "@/lib/listing-ai/gallery-snapshot";
 import { ReviewHistorySection } from "@/components/listing-ai/review-history-section";
 import {
   blobToDataUrl,
@@ -1394,7 +1397,6 @@ function ImagesSection({
   setCellStyles,
   input,
   update,
-  handleImageUpload,
 }: {
   competitors: CompetitorDraft[];
   ownImages: OwnImageDraft;
@@ -1412,6 +1414,55 @@ function ImagesSection({
     callback: (images: ImagePreview[]) => void,
   ) => void;
 }) {
+  const [uploads, setUploads] = useState<Record<string, number>>({});
+  const uploadSlots = useRef(new Map<string, { column: string; row: number }>());
+  const uploading = Object.keys(uploads).length > 0;
+  async function uploadGalleryImages(files: FileList | null, type: "mine" | "competitor", columnIndex: number, rowIndex?: number) {
+    const selected = Array.from(files ?? []).slice(0, rowIndex === undefined ? 12 : 1);
+    if (!selected.length || excelBusy) return;
+    const columnKey = `${type}-${columnIndex}`;
+    const currentImages = type === "mine" ? ownImages.images : competitors[columnIndex]?.images ?? [];
+    const pendingRows = [...uploadSlots.current.values()].filter(slot => slot.column === columnKey).map(slot => slot.row);
+    const rows = reserveGalleryUploadRows(currentImages, pendingRows, selected.length, rowIndex);
+    if (rows.length !== selected.length) {
+      setExcelError("没有足够的空图片位置，或该位置正在上传。");
+      return;
+    }
+    const keys = rows.map(row => `${columnKey}-${row}`);
+    keys.forEach((key, index) => uploadSlots.current.set(key, { column: columnKey, row: rows[index] }));
+    setUploads(current => ({ ...current, ...Object.fromEntries(keys.map(key => [key, 0])) }));
+    setExcelError(""); setExcelNotice("");
+    for (const [index, file] of selected.entries()) {
+      const key = keys[index];
+      const row = rows[index];
+      try {
+        const asset = await saveListingAiImageAsset(file, { onUploadProgress: progress => {
+          setUploads(current => ({ ...current, [key]: Math.round(progress * 100) }));
+        } });
+        const image = { name: asset.name, url: asset.url || await blobToDataUrl(asset.blob), assetId: asset.id };
+        const applyImage = (current: ImagePreview[]) => {
+          const next = Array.from({ length: Math.max(current.length, row + 1) }, (_, i) => current[i] ?? { name: "", url: "" });
+          next[row] = image;
+          return next;
+        };
+        if (type === "mine") setOwnImages(current => ({ ...current, images: applyImage(current.images) }));
+        else setCompetitors(current => current.map((competitor, i) => i === columnIndex ? { ...competitor, images: applyImage(competitor.images) } : competitor));
+      } catch (error) {
+        setExcelError(error instanceof Error ? error.message : "图片上传失败，请在对应位置重试。");
+      } finally {
+        uploadSlots.current.delete(key);
+        setUploads(current => {
+          const next = { ...current };
+          delete next[key];
+          return next;
+        });
+      }
+    }
+  }
+  function removeGalleryImage(type: "mine" | "competitor", columnIndex: number, row: number) {
+    if (type === "mine") setOwnImages(current => ({ ...current, images: clearGalleryImageAt(current.images, row) }));
+    else setCompetitors(current => current.map((competitor, index) => index === columnIndex ? { ...competitor, images: clearGalleryImageAt(competitor.images, row) } : competitor));
+  }
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [draggedImage, setDraggedImage] = useState<{
     column: "mine" | "competitor";
@@ -1428,10 +1479,9 @@ function ImagesSection({
     styleKey: string;
     range: { start: number; end: number };
   } | null>(null);
-  const maxRows = Math.max(
-    8,
-    ...competitors.map((item) => item.images.length),
-    ownImages.images.length,
+  const maxRows = galleryImageRowCount(
+    [...competitors.map(item => item.images), ownImages.images],
+    [...uploadSlots.current.values()].map(slot => slot.row),
   );
   const competitorColumns = competitors.map((competitor, index) => ({
     key: `competitor-${index}`,
@@ -2252,8 +2302,22 @@ function ImagesSection({
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle>Competitor Images Gallery</CardTitle>
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
+          <GallerySaveControls
+            snapshot={{ competitors, ownImages, input, cellStyles }}
+            disabled={excelBusy || uploading}
+            onRestore={(snapshot) => {
+              setCompetitors(snapshot.competitors);
+              setOwnImages(snapshot.ownImages);
+              setCellStyles(snapshot.cellStyles);
+              galleryInputKeys.forEach(key => update(key, snapshot.input[key]));
+              setFocusedCellKey("");
+              selectedTextRangeRef.current = null;
+              setPreviewImage(null);
+              setExcelError("");
+              setExcelNotice("");
+            }}
+          />
           <div className="flex flex-wrap items-center justify-end gap-2">
             <input
               ref={importInputRef}
@@ -2296,29 +2360,12 @@ function ImagesSection({
             </Button>
             <Button
               variant="secondary"
-              size="icon"
-              onClick={addCompetitorColumn}
-              title="Add competitor"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="secondary"
-              size="icon"
-              disabled={competitors.length <= 1}
-              onClick={removeCompetitorColumn}
-              title="Remove competitor"
-            >
-              <Minus className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="secondary"
               size="sm"
-              disabled={excelBusy}
+              disabled={excelBusy || uploading}
               onClick={() => importInputRef.current?.click()}
             >
               <Upload className="h-4 w-4" />
-              导入 Excel
+              导入
             </Button>
             <Button
               variant="secondary"
@@ -2331,17 +2378,17 @@ function ImagesSection({
               ) : (
                 <Download className="h-4 w-4" />
               )}
-              导出 Excel
+              导出
             </Button>
             <Button
               variant="danger"
               size="sm"
-              disabled={excelBusy}
+              disabled={excelBusy || uploading}
               onClick={() => setClearGalleryConfirmOpen(true)}
               title="清空当前图片表格中的图片和文字"
             >
               <Trash2 className="h-4 w-4" />
-              清空图片和文字
+              清空
             </Button>
           </div>
         </CardHeader>
@@ -2354,7 +2401,30 @@ function ImagesSection({
             <thead className="sticky top-0 z-10 bg-surface-muted text-xs font-bold text-muted">
               <tr>
                 <th className="sticky left-0 z-20 w-36 bg-surface-muted px-4 py-3">
-                  Image
+                  <div className="flex items-center gap-1">
+            <Button
+              variant="secondary"
+              size="icon"
+              className="h-7 w-7"
+              disabled={excelBusy}
+              onClick={addCompetitorColumn}
+              title="增加竞品列"
+              aria-label="增加竞品列"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="secondary"
+              size="icon"
+              className="h-7 w-7"
+              disabled={excelBusy || uploading || competitors.length <= 1}
+              onClick={removeCompetitorColumn}
+              title="减少竞品列"
+              aria-label="减少竞品列"
+            >
+              <Minus className="h-4 w-4" />
+            </Button>
+                  </div>
                 </th>
                 {competitorColumns.map((column) => (
                   <th key={column.key} className="w-[260px] px-4 py-3">
@@ -2362,11 +2432,10 @@ function ImagesSection({
                       <span>{column.label}</span>
                       <MiniUploader
                         images={column.images}
+                        disabled={excelBusy}
                         label="Upload"
                         onUpload={(files) =>
-                          handleImageUpload(files, (images) =>
-                            setColumnImages(column.type, column.index, images),
-                          )
+                          void uploadGalleryImages(files, column.type, column.index)
                         }
                       />
                     </div>
@@ -2377,11 +2446,10 @@ function ImagesSection({
                     <span>{mineColumn.label}</span>
                     <MiniUploader
                       images={mineColumn.images}
+                      disabled={excelBusy}
                       label="Upload"
                       onUpload={(files) =>
-                        handleImageUpload(files, (images) =>
-                          setColumnImages(mineColumn.type, mineColumn.index, images),
-                        )
+                        void uploadGalleryImages(files, mineColumn.type, mineColumn.index)
                       }
                     />
                   </div>
@@ -2407,8 +2475,12 @@ function ImagesSection({
                   {competitorColumns.map((column) => (
                     <td key={column.key} className="px-4 py-3 align-top">
                       <GalleryCell
-                        image={column.images[index]}
-                        draggable={Boolean(column.images[index])}
+                        image={column.images[index]?.url ? column.images[index] : undefined}
+                        disabled={excelBusy || uploads[`${column.type}-${column.index}-${index}`] !== undefined}
+                        uploadProgress={uploads[`${column.type}-${column.index}-${index}`]}
+                        onUpload={files => void uploadGalleryImages(files, column.type, column.index, index)}
+                        onRemove={() => removeGalleryImage(column.type, column.index, index)}
+                        draggable={!uploading && Boolean(column.images[index]?.url)}
                         onDragStart={() =>
                           setDraggedImage({
                             column: column.type,
@@ -2418,7 +2490,7 @@ function ImagesSection({
                         }
                         onDragOver={(event) => event.preventDefault()}
                         onDrop={() =>
-                          handleDrop(column.type, column.index, index)
+                          !excelBusy && !uploading && handleDrop(column.type, column.index, index)
                         }
                         onMoveUp={() =>
                           moveImage(column.type, column.index, index, index - 1)
@@ -2434,9 +2506,13 @@ function ImagesSection({
                   ))}
                   <td className="px-4 py-3 align-top">
                     <GalleryCell
-                      image={mineColumn.images[index]}
+                      image={mineColumn.images[index]?.url ? mineColumn.images[index] : undefined}
+                        disabled={excelBusy || uploads[`${mineColumn.type}-${mineColumn.index}-${index}`] !== undefined}
+                        uploadProgress={uploads[`${mineColumn.type}-${mineColumn.index}-${index}`]}
+                        onUpload={files => void uploadGalleryImages(files, mineColumn.type, mineColumn.index, index)}
+                        onRemove={() => removeGalleryImage(mineColumn.type, mineColumn.index, index)}
                       mine
-                      draggable={Boolean(mineColumn.images[index])}
+                      draggable={!uploading && Boolean(mineColumn.images[index]?.url)}
                       onDragStart={() =>
                         setDraggedImage({
                           column: mineColumn.type,
@@ -2446,7 +2522,7 @@ function ImagesSection({
                       }
                       onDragOver={(event) => event.preventDefault()}
                       onDrop={() =>
-                        handleDrop(mineColumn.type, mineColumn.index, index)
+                        !excelBusy && !uploading && handleDrop(mineColumn.type, mineColumn.index, index)
                       }
                       onMoveUp={() =>
                         moveImage(mineColumn.type, mineColumn.index, index, index - 1)

@@ -1,3 +1,4 @@
+import { amazonAccountReadAccess } from "@/lib/amazon-sync/read-account";
 import { amazonDataAccess, sellerAccessWhere, sourceAccessWhere } from "@/lib/amazon-sync/data-access";
 import { extractAmazonProductTitle } from "@/lib/amazon-sync/catalog-images";
 import { publishedSnapshotScopes, catalogPublishedWhere, inventoryPublishedWhere } from "@/lib/amazon-sync/read";
@@ -18,11 +19,15 @@ export type AmazonProductReadRow = {
 export const amazonProductKey = (row: { sellerAccountId: string; marketplaceId: string; sellerSku: string }) => JSON.stringify([row.sellerAccountId, row.marketplaceId, row.sellerSku]);
 
 /** Page-bounded database projection. No Amazon requests, no ProductRecord writes. */
-export async function readAmazonProductsForSkus(organizationId: string, workspaceId: string, skus: string[], actor?: string, target?: { sellerAccountId: string; marketplaceId: string }, includeCatalogDetails = false): Promise<AmazonProductReadRow[]> {
+export async function readAmazonProductsForSkus(organizationId: string, workspaceId: string, skus: string[], actor?: string, target?: { sellerAccountId: string; marketplaceId?: string }, includeCatalogDetails = false): Promise<AmazonProductReadRow[]> {
   if (!skus.length) return [];
   if (skus.length > 200) throw new Error("一次最多关联 200 个 SKU。");
   const scope = { organizationId, workspaceId };
-  const allowed = sellerAccessWhere(await amazonDataAccess(scope, actor));
+  const params = new URLSearchParams(target ? Object.entries(target).filter((entry): entry is [string, string] => typeof entry[1] === "string") : []);
+  const access = await amazonAccountReadAccess(scope, actor, params);
+  params.set("sellerAccountId", access.sellerIds[0]);
+  target = { ...target, sellerAccountId: access.sellerIds[0] };
+  const allowed = sellerAccessWhere(access);
   const [catalogHeads, inventoryHeads, attempts] = await Promise.all([
     publishedSnapshotScopes(scope, "catalog", actor, target),
     publishedSnapshotScopes(scope, "inventory", actor, target),
@@ -96,11 +101,12 @@ export async function readAmazonProductsForSkus(organizationId: string, workspac
       for (const row of productRows) {
         const image = imageByProduct.get(JSON.stringify([row.sellerAccountId, row.marketplaceId, row.asin]));
         if (image) {
-          row.thumbnailUrl = `/api/operations/products/images/${encodeURIComponent(image.fileId)}?workspaceId=${encodeURIComponent(workspaceId)}`;
+          row.thumbnailUrl = `/api/operations/products/images/${encodeURIComponent(image.fileId)}?${new URLSearchParams({ workspaceId, sellerAccountId: row.sellerAccountId, marketplaceId: row.marketplaceId })}`;
           row.fieldSources = { ...row.fieldSources, thumbnailUrl: "本地持久化 Amazon 主图" };
         }
       }
     }
   }
+  await amazonAccountReadAccess(scope, actor, params);
   return [...rows.values()];
 }

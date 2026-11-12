@@ -82,6 +82,7 @@ test("real replenishment Route returns only the operator's granted seller", asyn
   const result = await GET(request(actor)); assert.equal(result.status, 200);
   const payload = await result.json();
   assert.ok(payload.rows.length > 0); assert.ok(payload.rows.every((r: { sellerAccountId: string }) => r.sellerAccountId === sellerA));
+  assert.ok(payload.rows.every((r: { sellerSku: string }) => r.sellerSku !== "HISTORY"), "Sellfox historical-source policies stay out of the Amazon recommendations list");
   assert.deepEqual(payload.sellerAccounts.map((r: { id: string }) => r.id), [sellerA]);
   assert.ok(!(JSON.stringify(payload).includes(sellerB)));
 });
@@ -98,6 +99,13 @@ test("authorized PATCH persists with an audit in the same database", async () =>
   const result = await PATCH(request(actor, scope.workspaceId, { sellerAccountId: sellerA, marketplaceId: site, sellerSku: "SAME-SKU", enabled: true, inputs }));
   assert.equal(result.status, 200);
   assert.equal(await prisma.auditLog.count({ where: { organizationId: scope.organizationId, userId: actor, entityId: policyA, action: "amazon.replenishment.policy.saved" } }), 1);
+});
+
+test("Amazon replenishment PATCH rejects Sellfox-bound policies", async () => {
+  const result = await PATCH(request(actor, scope.workspaceId, { sellerAccountId: sellerA, marketplaceId: site, sellerSku: "SELLFOX-ONLY", enabled: true, inputs: { ...inputs, historicalSource: { storeId: "legacy-sellfox-store" } } }));
+  assert.equal(result.status, 400);
+  assert.match((await result.json()).error, /\/sellfox\/restock/);
+  assert.equal(await prisma.amazonReplenishmentPolicy.count({ where: { ...scope, sellerSku: "SELLFOX-ONLY" } }), 0);
 });
 test("real read-only CLI SQL isolates identical SKUs and aggregate from ungranted seller", async () => {
   const inventory = await cli(actor, ["inventory", "list"]) as { rows: Array<{ sellerAccountId: string; fulfillableQuantity: number }> };

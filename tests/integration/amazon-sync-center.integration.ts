@@ -1,3 +1,12 @@
+// Cloud role for injected offline task fixtures; no real Amazon calls.
+process.env.AMAZON_API_EXECUTION_ROLE = "cloud";
+import { Prisma } from "@prisma/client";
+import { readListingAttributeRecoveryHistory, readListingAttributeRecoveryPages, readListingAttributeRecoveryPreview, previewListingAttributeRecovery, applyListingAttributeRecovery } from "@/lib/amazon-sync/listing-attribute-recovery";
+import { normalizeCommand } from "@/lib/amazon-sync/approval-policy";
+import { extractCatalogPage } from "@/lib/amazon/catalog";
+import { unseal } from "@/lib/amazon-sync/approval-policy";
+import { readDataset } from "@/lib/amazon-sync/dataset-query";
+import { createHash } from "node:crypto";
 import { automaticMarketplaces } from "@/lib/amazon-sync/automatic-schedule";
 import assert from "node:assert/strict";
 import test, { before, after } from "node:test";
@@ -166,9 +175,167 @@ test("listing adapter rejects malformed pagination and publishes only a validate
   const truncated = await request(source.id); assert.equal((await runTask(truncated.id)).status, "FAILED");
   assert.equal((await prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: source.id } })).activeRunId, null);
   const good = await request(source.id);
-  catalogTransport = () => Response.json({ items: [{ sku: "LISTING-SKU", summaries: [{ marketplaceId: "ATVPDKIKX0DER", asin: "LISTING-ASIN", status: ["BUYABLE"] }] }] });
+  catalogTransport = () => Response.json({ items: [{ sku: "LISTING-SKU", summaries: [{ marketplaceId: "OTHER", itemName: "WRONG SITE" }, { marketplaceId: "ATVPDKIKX0DER", asin: "LISTING-ASIN", status: ["BUYABLE"], itemName: "Fixture Listing", productType: "HOME", conditionType: "new_new" }] }] });
   assert.equal((await runTask(good.id)).status, "SUCCEEDED");
   const rows = await prisma.amazonCatalogSnapshot.findMany({ where: { sourceRunId: good.id } }); assert.equal(rows.length, 1); assert.equal(rows[0].sourceUpdatedAt, null); assert.equal(rows[0].dataVersion, 1);
+  const attributes = { itemName: "Fixture Listing", productType: "HOME", conditionType: "new_new" };
+  assert.deepEqual(rows[0].listingAttributes, attributes);
+  assert.equal((rows[0].fieldSources as Record<string, unknown>).listingAttributesParserVersion, "catalog.listings-summary.v1");
+  const erp = await readDataset(scope, new URLSearchParams({ table: "listings", sellerAccountId: store, marketplaceId: "ATVPDKIKX0DER", sellerSku: "LISTING-SKU" }), actor);
+  assert.equal(erp.data.total, 1); assert.deepEqual((erp.data.items[0] as { listingAttributes: unknown }).listingAttributes, attributes);
+  const raw = await prisma.amazonSyncRawPage.findFirstOrThrow({ where: { taskId: good.id, resource: "catalog" } });
+  const envelope = unseal(raw.rawCiphertext, scope, `${good.id}:${raw.page}`, "amazon-catalog-raw.v1");
+  assert.equal(typeof envelope.rawBody, "string");
+  assert.equal(createHash("sha256").update(String(envelope.rawBody)).digest("hex"), raw.bodySha256);
+  // The same immutable archived bytes can be parsed with the new parser. This
+  // check does not mutate a previously published historical snapshot.
+  const replay = extractCatalogPage(JSON.parse(String(envelope.rawBody)), "ATVPDKIKX0DER");
+  assert.deepEqual(replay.items[0].listingAttributes, attributes);
+  assert.ok(!JSON.stringify(replay.items).includes("WRONG SITE"));
+  const mappings = await prisma.amazonFieldMappingVersion.findMany({ where: { ...scope, targetTable: "AmazonCatalogSnapshot", targetColumn: "listingAttributes" } });
+  assert.equal(new Set(mappings.map(mapping => mapping.fieldRegistryId)).size, 3);
+  assert.ok(mappings.every(mapping => mapping.status === "IMPLEMENTED_NOT_ACCEPTED"));
+  const conflicting = await request(source.id);
+  catalogTransport = url => Response.json({ items: [{ sku: "LISTING-SKU", summaries: [{ marketplaceId: "ATVPDKIKX0DER", asin: "LISTING-ASIN", status: ["BUYABLE"], itemName: url.searchParams.has("pageToken") ? "Changed" : "Original" }] }], ...(!url.searchParams.has("pageToken") ? { pagination: { nextToken: "fixture-next" } } : {}) });
+  // searchListingsItems uses pageToken for its next-page request.
+  assert.equal((await runTask(conflicting.id)).status, "FAILED");
+  assert.equal((await prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: source.id } })).activeRunId, good.id);
+
+});
+test("Listing recovery discovers only current scoped API archives with sparse stable pagination", async () => {
+  const source = await prisma.amazonSyncDataSource.findFirstOrThrow({ where: { ...scope, sellerAccountId: store, resource: "catalog" } });
+  const taskId = source.activeRunId!;
+  const raw = await prisma.amazonSyncRawPage.findFirstOrThrow({ where: { ...scope, taskId, page: { gt: 0 } } });
+  const metadata = raw.requestMetadata as Prisma.JsonObject;
+  const pageIds = [100001, 100003, 100005, 100007, 100009, 100011, 100013, -100003];
+  const oldPages = Array.from({ length: 101 }, (_, index) => 200001 + index);
+  const params = new URLSearchParams({ sourceId: source.id, taskId, after: "100000" });
+  const savedFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error("Discovery must not request upstream"); };
+  try {
+    await prisma.amazonSyncRawPage.createMany({ data: pageIds.map((page, index) => ({ ...raw, page,
+      requestMetadata: { ...metadata, ...(index === 1 ? { snapshotGeneration: 999999 } : index === 2 ? { marketplaceId: "OTHER_SITE" } : index === 3 ? { operation: "OTHER_OPERATION" } : index === 4 ? { apiVersion: "OTHER_VERSION" } : {}) } as Prisma.InputJsonObject,
+    })) });
+    const first = await readListingAttributeRecoveryPages(scope, actor, params);
+    assert.deepEqual(first.pages, [100001, 100011]); assert.equal(first.nextCursor, 100011); assert.equal(first.hasNext, true);
+    assert.equal(first.started, false); assert.equal(first.rawValuesIncluded, false);
+    assert.ok(!JSON.stringify(first).includes("requestMetadata")); assert.ok(!JSON.stringify(first).includes(raw.rawCiphertext));
+    const second = await readListingAttributeRecoveryPages(scope, actor, new URLSearchParams({ ...Object.fromEntries(params), after: String(first.nextCursor) }));
+    assert.deepEqual(second.pages, [100013]); assert.equal(second.hasNext, false); assert.equal(second.nextCursor, null);
+    const initial = await readListingAttributeRecoveryPages(scope, actor, new URLSearchParams({ sourceId: source.id, taskId }));
+    assert.ok(initial.pages.every(page => page > 0));
+    await prisma.amazonSyncRawPage.createMany({ data: oldPages.map(page => ({ ...raw, page, requestMetadata: { ...metadata, snapshotGeneration: 999999 } as Prisma.InputJsonObject })) });
+    const exhaustedScan = await readListingAttributeRecoveryPages(scope, actor, new URLSearchParams({ ...Object.fromEntries(params), after: "200000" }));
+    assert.deepEqual(exhaustedScan.pages, []); assert.equal(exhaustedScan.hasNext, true); assert.equal(exhaustedScan.nextCursor, 200100);
+    const end = await readListingAttributeRecoveryPages(scope, actor, new URLSearchParams({ ...Object.fromEntries(params), after: "200100" }));
+    assert.deepEqual(end.pages, []); assert.equal(end.hasNext, false);
+    await assert.rejects(() => readListingAttributeRecoveryPages(other, actor, params));
+    await assert.rejects(() => readListingAttributeRecoveryPages(scope, randomUUID(), params));
+    for (const after of ["-1", "1.5", "2147483648"]) await assert.rejects(() => readListingAttributeRecoveryPages(scope, actor, new URLSearchParams({ ...Object.fromEntries(params), after })));
+    const duplicate = new URLSearchParams(params); duplicate.append("taskId", taskId);
+    await assert.rejects(() => readListingAttributeRecoveryPages(scope, actor, duplicate));
+  } finally {
+    globalThis.fetch = savedFetch;
+    await prisma.amazonSyncRawPage.deleteMany({ where: { ...scope, taskId, page: { in: [...pageIds, ...oldPages] } } });
+  }
+});
+
+test("historical Listing attributes require exact approval, fill only missing fields and reject stale or tampered evidence", async () => {
+  const source = await prisma.amazonSyncDataSource.findFirstOrThrow({ where: { ...scope, sellerAccountId: store, resource: "catalog" } });
+  const taskId = source.activeRunId!;
+  const row = await prisma.amazonCatalogSnapshot.findFirstOrThrow({ where: { ...scope, sourceRunId: taskId } });
+  const raw = await prisma.amazonSyncRawPage.findFirstOrThrow({ where: { ...scope, taskId, page: { gt: 0 } } });
+  const params = new URLSearchParams({ sourceId: source.id, taskId, rawPages: String(raw.page) });
+  const snapshotCount = await prisma.amazonCatalogSnapshot.count({ where: scope });
+  const taskCount = await prisma.amazonSyncRun.count({ where: scope });
+  const oldFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error("Recovery must not request Amazon or download archives"); };
+  try {
+    // Only this disposable fixture is changed to represent pre-parser data.
+    await prisma.amazonCatalogSnapshot.update({ where: { id: row.id }, data: { listingAttributes: { price: "19.9900", itemName: null } } });
+    const preview = await readListingAttributeRecoveryPreview(scope, actor, params);
+    assert.equal(preview.started, false); assert.equal(preview.rawValuesIncluded, false);
+    assert.equal(preview.manifest.changedRows, 1); assert.equal(preview.manifest.addedFields, 3);
+    assert.ok(!JSON.stringify(preview).includes("Fixture Listing"));
+    assert.deepEqual((await prisma.amazonCatalogSnapshot.findUniqueOrThrow({ where: { id: row.id } })).listingAttributes, { price: "19.9900", itemName: null });
+    await assert.rejects(() => applyListingAttributeRecovery(scope, actor, preview.command), /APPROVAL_REQUIRED/);
+    for (const flag of ["fieldScanOnly", "currencyOnly", "attributionOnly"]) assert.throws(() => normalizeCommand({ ...preview.command, [flag]: true }), /不可混用/);
+    assert.throws(() => normalizeCommand({ ...preview.command, listingAttributesOnly: "yes" }), /模式无效/);
+    await assert.rejects(() => readListingAttributeRecoveryPreview(other, actor, params));
+    await assert.rejects(() => prisma.$transaction(tx => previewListingAttributeRecovery(tx, scope, source.id, taskId, [-1])));
+    await prisma.amazonSyncRawPage.update({ where: { taskId_page: { taskId, page: raw.page } }, data: { bodySha256: "0".repeat(64) } });
+    await assert.rejects(() => readListingAttributeRecoveryPreview(scope, actor, params), /摘要校验失败/);
+    await prisma.amazonSyncRawPage.update({ where: { taskId_page: { taskId, page: raw.page } }, data: { bodySha256: raw.bodySha256, requestMetadata: { ...(raw.requestMetadata as Prisma.JsonObject), marketplaceId: "other-site" } } });
+    await assert.rejects(() => readListingAttributeRecoveryPreview(scope, actor, params), /站点/);
+    await prisma.amazonSyncRawPage.update({ where: { taskId_page: { taskId, page: raw.page } }, data: { requestMetadata: raw.requestMetadata as Prisma.InputJsonObject } });
+    const authorization = await prisma.amazonSpApiAuthorization.findUniqueOrThrow({ where: { id: source.authorizationId } });
+    await prisma.amazonSpApiAuthorization.update({ where: { id: authorization.id }, data: { amazonSellerId: "OTHER_SELLER_FIXTURE" } });
+    await assert.rejects(() => readListingAttributeRecoveryPreview(scope, actor, params), /同账号/);
+    await prisma.amazonSpApiAuthorization.update({ where: { id: authorization.id }, data: { amazonSellerId: authorization.amazonSellerId } });
+    const emptyHistory = await readListingAttributeRecoveryHistory(scope, actor, params);
+    assert.deepEqual(emptyHistory.batches, []);
+    await assert.rejects(() => readListingAttributeRecoveryHistory(other, actor, params));
+    await assert.rejects(() => readListingAttributeRecoveryHistory(scope, randomUUID(), params));
+    const wrongTask = new URLSearchParams(params); wrongTask.set("taskId", "other-task");
+    await assert.rejects(() => readListingAttributeRecoveryHistory(scope, actor, wrongTask));
+    const stale = await requestChange(scope, actor, preview.command);
+    const pendingHistory = await readListingAttributeRecoveryHistory(scope, actor, params);
+    assert.equal(pendingHistory.batches[0].status, "REQUESTED");
+    assert.deepEqual(pendingHistory.batches[0].pages, [raw.page]);
+    assert.equal(pendingHistory.batches[0].appliedAt, null);
+    assert.ok(!JSON.stringify(pendingHistory).includes("Fixture Listing"));
+    await decideChange(scope, approver, String(stale.id), "APPROVED", "isolated stale Listing recovery");
+    await prisma.amazonCatalogSnapshot.update({ where: { id: row.id }, data: { dataVersion: { increment: 1 } } });
+    await assert.rejects(() => applyChange(scope, actor, String(stale.id)), /变化|不匹配|失效/);
+    assert.equal((await prisma.amazonCatalogSnapshot.findUniqueOrThrow({ where: { id: row.id } })).dataVersion, 2);
+    const current = await readListingAttributeRecoveryPreview(scope, actor, params);
+    const applied = await approved(scope, actor, current.command);
+    assert.equal(applied.status, "APPLIED");
+    const appliedHistory = await readListingAttributeRecoveryHistory(scope, actor, params);
+    const appliedBatch = appliedHistory.batches.find(batch => batch.id === applied.id)!;
+    assert.equal(appliedBatch.status, "APPLIED"); assert.ok(appliedBatch.appliedAt);
+    assert.equal(appliedBatch.changedRows, 1);
+    const updated = await prisma.amazonCatalogSnapshot.findUniqueOrThrow({ where: { id: row.id } });
+    assert.equal(updated.dataVersion, 3);
+    assert.deepEqual(updated.listingAttributes, { price: "19.9900", itemName: "Fixture Listing", productType: "HOME", conditionType: "new_new" });
+    assert.equal(updated.capturedAt.getTime(), row.capturedAt.getTime());
+    assert.equal(updated.sourceUpdatedAt, row.sourceUpdatedAt);
+    assert.equal(updated.sourceRunId, taskId);
+    await assert.rejects(() => applyChange(scope, actor, applied.id), /完整性|审批|使用/);
+    assert.equal((await prisma.amazonCatalogSnapshot.findUniqueOrThrow({ where: { id: row.id } })).dataVersion, 3);
+    const noop = await readListingAttributeRecoveryPreview(scope, actor, params);
+    assert.equal(noop.manifest.changedRows, 0); assert.equal(noop.manifest.addedFields, 0);
+    await approved(scope, actor, noop.command);
+    const expired = await requestChange(scope, actor, noop.command);
+    // Approval payloads are immutable even in fixtures: insert an already-expired
+    // isolated history fixture instead of rewriting an existing approval.
+    const historyTemplate = await prisma.amazonDataCenterChangeRequest.findUniqueOrThrow({ where: { id: String(expired.id) } });
+    const expiredId = randomUUID();
+    await prisma.amazonDataCenterChangeRequest.create({ data: { ...historyTemplate, id: expiredId, beforeSummary: historyTemplate.beforeSummary as Prisma.InputJsonValue, afterSummary: historyTemplate.afterSummary as Prisma.InputJsonValue, expiresAt: new Date(Date.now() - 1000) } });
+    assert.equal((await readListingAttributeRecoveryHistory(scope, actor, params)).batches.find(batch => batch.id === expiredId)?.status, "EXPIRED");
+    await prisma.amazonDataCenterChangeRequest.createMany({ data: Array.from({ length: 22 }, (_, index) => ({ ...historyTemplate, id: randomUUID(), beforeSummary: historyTemplate.beforeSummary as Prisma.InputJsonValue, afterSummary: historyTemplate.afterSummary as Prisma.InputJsonValue, createdAt: new Date(Date.now() + index) })) });
+    const boundedHistory = await readListingAttributeRecoveryHistory(scope, actor, params);
+    assert.equal(boundedHistory.batches.length, 20); assert.equal(boundedHistory.hasMore, true);
+    const duplicateHistoryParams = new URLSearchParams(params); duplicateHistoryParams.append("sourceId", source.id);
+    await assert.rejects(() => readListingAttributeRecoveryHistory(scope, actor, duplicateHistoryParams));
+    assert.equal((await prisma.amazonCatalogSnapshot.findUniqueOrThrow({ where: { id: row.id } })).dataVersion, 3);
+    assert.equal((await prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: source.id } })).activeRunId, taskId);
+    assert.equal((await prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: source.id } })).revision, source.revision);
+    assert.equal(await prisma.amazonCatalogSnapshot.count({ where: scope }), snapshotCount);
+    assert.equal(await prisma.amazonSyncRun.count({ where: scope }), taskCount);
+    const rawAfter = await prisma.amazonSyncRawPage.findUniqueOrThrow({ where: { taskId_page: { taskId, page: raw.page } } });
+    assert.equal(rawAfter.rawCiphertext, raw.rawCiphertext); assert.equal(rawAfter.bodySha256, raw.bodySha256);
+    const audit = await prisma.auditLog.findFirstOrThrow({ where: { organizationId: scope.organizationId, action: "amazon.sync.listing.attributes-recovered", entityId: source.id } });
+    assert.ok(!JSON.stringify(audit.metadata).includes("Fixture Listing"));
+    const erp = await readDataset(scope, new URLSearchParams({ table: "listings", sellerAccountId: store, marketplaceId: "ATVPDKIKX0DER" }), actor);
+    assert.deepEqual((erp.data.items[0] as { listingAttributes: unknown }).listingAttributes, updated.listingAttributes);
+    await prisma.amazonCatalogSnapshot.update({ where: { id: row.id }, data: { listingAttributes: { itemName: "Conflicting existing title" } } });
+    await assert.rejects(() => readListingAttributeRecoveryPreview(scope, actor, params), /冲突/);
+    await prisma.amazonCatalogSnapshot.update({ where: { id: row.id }, data: { listingAttributes: updated.listingAttributes as Prisma.InputJsonObject } });
+  } finally {
+    globalThis.fetch = oldFetch;
+    await prisma.amazonSyncRawPage.update({ where: { taskId_page: { taskId, page: raw.page } }, data: { bodySha256: raw.bodySha256, requestMetadata: raw.requestMetadata as Prisma.InputJsonObject } });
+  }
 });
 test("looping pagination and authorization revision changes cannot advance a published head", async () => {
   await prisma.amazonSyncApiBudget.deleteMany({ where: scope });

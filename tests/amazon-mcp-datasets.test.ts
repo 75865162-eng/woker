@@ -5,14 +5,38 @@ import { mcpDatasets, datasetForTable, resolveMcpDataset, normalizeDatasetQuery,
 const now = new Date("2026-11-06T00:00:00Z");
 const rejected = (run: () => unknown, businessCode: string) => assert.throws(run, error => error instanceof McpDatasetError && error.businessCode === businessCode);
 
+test("business JSON exposes one canonical contract with exact metric strings", () => {
+  const sales = datasetForTable("sales_traffic_daily");
+  assert.equal(sales.fields.find(field => field.name === "metrics")?.type, "object");
+  for (const name of ["unitsOrdered", "totalOrderItems", "sessions", "pageViews", "orderedProductSales.amount"]) {
+    assert.equal(sales.fields.find(field => field.name === `metrics.${name}`)?.type, "string");
+  }
+  const listings = datasetForTable("listings");
+  assert.equal(listings.fields.find(field => field.name === "fieldSources")?.type, "object");
+  for (const dataset of mcpDatasets) {
+    assert.ok(dataset.fields.every(field => !/^(?:exactMetrics|businessMetrics|businessFacts|businessListingAttributes|businessFieldSources)(?:\.|$)/.test(field.name)));
+  }
+});
+
+test("Inbound MCP accepts exact plan/shipment filters only in its own dataset", () => {
+  const input = { filters: { inboundPlanId: "approved-plan", shipmentId: "shipment-id" } };
+  const normalized = normalizeDatasetQuery(datasetForTable("fulfillment"), input);
+  assert.equal(normalized.filters.inboundPlanId, "approved-plan");
+  assert.equal(normalized.filters.shipmentId, "shipment-id");
+  rejected(() => normalizeDatasetQuery(datasetForTable("catalog_items"), input), "FIELD_NOT_MAPPED");
+});
+
 test("all four legacy tables resolve to the same explicit datasets; conflicting and incomplete locators fail", () => {
   for (const dataset of mcpDatasets) {
     assert.equal(resolveMcpDataset({ module: dataset.module, dataType: dataset.dataType }), dataset);
     if (dataset.legacyTable) {
       assert.equal(resolveMcpDataset({ table: dataset.legacyTable }), dataset);
+      assert.equal(resolveMcpDataset({ tableName: dataset.legacyTable }), dataset);
+      assert.equal(resolveMcpDataset({ table: dataset.legacyTable, tableName: dataset.legacyTable }), dataset);
       assert.equal(resolveMcpDataset({ table: dataset.legacyTable, module: dataset.module, dataType: dataset.dataType }), dataset);
     }
   }
+  rejected(() => resolveMcpDataset({ table: "inventory", tableName: "listings" }), "DATASET_LOCATOR_INVALID");
   rejected(() => resolveMcpDataset({ table: "inventory", module: "amazon_sync", dataType: "listings" }), "DATASET_LOCATOR_CONFLICT");
   rejected(() => resolveMcpDataset({ table: "inventory", module: "amazon_sync" }), "DATASET_LOCATOR_INVALID");
   rejected(() => resolveMcpDataset({}), "DATASET_LOCATOR_INVALID");
@@ -94,4 +118,41 @@ test("totals keep known currency groups separate and withhold mixed timezones or
   assert.equal(presentMcpReport({ ...input, totals: [{ ...totals[0], attributionWindow: null }] }).totals, null);
   assert.equal(presentMcpReport({ ...input, totals: [{ ...totals[0], currencyCode: null }] }).totals, null);
   assert.deepEqual(presentMcpReport({ ...input, totals: [], total: 0 }).totals, []);
+});
+
+test("report evidence follows each returned document even when the published source head is missing", () => {
+  const result = enrichDatasetResult({ data: { items: [1, 2].map(rowNumber => ({ reportId: "REPORT", rowNumber, document: { id: "DOC", sourceRunId: "RUN", privateValue: "HIDDEN" } })), total: 2 },
+    meta: { page: { page: 1, pageSize: 50, hasNext: false }, sources: [{ sourceId: "SOURCE", syncRunId: null }], reportCoverage: { coverageStatus: "HISTORY_INCOMPLETE" } } },
+  { dataset: datasetForTable("reimbursements"), requestId: "fixture", toolVersion: "2.0.0", filters: {}, scopePairs: [] });
+  assert.deepEqual(result.evidenceRefs, [{ sourceId: "SOURCE", syncRunId: null }, { sourceId: "SOURCE", syncRunId: "RUN", reportId: "REPORT", reportDocumentId: "DOC" }]);
+  assert.ok(!JSON.stringify(result.evidenceRefs).includes("HIDDEN"));
+});
+
+test("order and finance evidence follow committed row tasks rather than the last successful source head", () => {
+  const pair = { sellerAccountId: "SELLER", marketplaceId: "US" };
+  const row = { ...pair, sourceId: "SOURCE", sourceRunId: "FAILED_TASK_WITH_COMMITTED_ROWS", privateValue: "HIDDEN" };
+  const meta = { page: { page: 1, pageSize: 50, hasNext: false }, sources: [{ ...pair, sourceId: "SOURCE", syncRunId: "OLDER_SUCCESSFUL_HEAD" }] };
+  for (const table of ["orders", "order_items", "finance_transactions"]) {
+    const input = { dataset: datasetForTable(table), requestId: "fixture", toolVersion: "2.0.0", filters: {}, scopePairs: [pair] };
+    const result = enrichDatasetResult({ data: { items: [row, row, { ...row, sourceRunId: "SECOND_TASK" }, { ...row, marketplaceId: "CA" }, { ...row, sellerAccountId: "OTHER" }, { ...row, sourceId: "UNKNOWN_SOURCE" }], total: 6 }, meta }, input);
+    assert.deepEqual(result.evidenceRefs, [{ sourceId: "SOURCE", syncRunId: row.sourceRunId }, { sourceId: "SOURCE", syncRunId: "SECOND_TASK" }]);
+    assert.equal(result.meta.evidenceRefScope, "RETURNED_PAGE_COMMITTED_RECORDS");
+    assert.ok(!JSON.stringify(result.evidenceRefs).includes("HIDDEN"));
+    const empty = enrichDatasetResult({ data: { items: [], total: 6 }, meta }, input);
+    assert.deepEqual(empty.evidenceRefs, [], "an empty page has no returned-record evidence");
+  }
+});
+
+
+test("observation evidence follows returned historical batches instead of the current publication head", () => {
+  const dataset = datasetForTable("fulfillment");
+  const context = { dataset, requestId: "fixture", toolVersion: "fixture", filters: {}, scopePairs: [{ sellerAccountId: "seller", marketplaceId: "site" }] };
+  const meta = { sources: [{ sourceId: "source", sellerAccountId: "seller", marketplaceId: "site", syncRunId: "current-head" }], page: { page: 1, pageSize: 50, hasNext: false } };
+  const result = enrichDatasetResult({ data: { items: [{ sourceRunId: "historical-a" }, { sourceRunId: "historical-a" }, { sourceRunId: "historical-b" }], total: 3 }, meta }, context);
+  assert.deepEqual(result.evidenceRefs, [{ sourceId: "source", syncRunId: "historical-a" }, { sourceId: "source", syncRunId: "historical-b" }]);
+  assert.equal(result.meta.evidenceRefScope, "RETURNED_PUBLISHED_OBSERVATIONS");
+  const empty = enrichDatasetResult({ data: { items: [], total: 3 }, meta }, context);
+  assert.deepEqual(empty.evidenceRefs, []);
+  const ambiguous = enrichDatasetResult({ data: { items: [{ sourceRunId: "historical-a" }], total: 1 }, meta: { ...meta, sources: [...meta.sources, { ...meta.sources[0], sourceId: "other" }] } }, context);
+  assert.deepEqual(ambiguous.evidenceRefs, []);
 });

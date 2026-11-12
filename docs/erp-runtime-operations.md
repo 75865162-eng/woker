@@ -9,6 +9,8 @@ npm run dev
 npm run worker
 ```
 
+Next 启动入口按实际编译目录加独占锁；不同端口不能共用 `.next-dev`，否则服务端代码与 React Client Manifest 可能互相覆盖并导致页面加载失败。开发与构建继续分别使用 `.next-dev` / `.next-build`。正常退出会释放锁；异常退出遗留锁时，须先确认该目录没有仍运行的 Next 子进程，再按错误提示检查并移除对应锁，不能直接删除活进程锁或清理正在使用的编译目录。
+
 `worker` 一次启动现有四类进程：导入及商品 Outbox、图片处理、Amazon SP-API/Ads、Sellfox。Ctrl+C 会停止该管理器拥有的全部子进程；异常退出按 1～30 秒退避重启。重复启动检查失败时整组停止启动，避免只启动一部分。不要把“心跳在线”理解为业务接口权限或任务执行成功。
 
 无需启动真实进程即可检查注册项：`npm run worker -- --list`。保留的专用命令供 systemd 和排障使用，均经过相同环境加载器：`worker:import`、`worker:image-upscale`、`worker:amazon-sync`、`worker:sellfox-sync`。不得绕过管理器直接运行 `scripts/*-worker.ts`。未纳入注册的 Listing AI optimize 仍在请求内执行；这里只统一已有后台处理，不声称所有 AI 请求都已持久化。
@@ -103,3 +105,12 @@ npm run test:runtime:integration
 - Worker registry 当前登记 `import`（含 Product Outbox）、`image-upscale`、`amazon-sync`（含 SP-API 与 Ads 队列）和 `sellfox-sync` 四类 Worker；manager 支持受控单项启动、失败退避和信号停止，子进程锁用于拒绝同一目标上的重复实例。队列恢复能力按各 worker 实现分别核实，不能把统一启动误写成统一恢复已完成。
 - 服务器仍由独立 systemd unit 监督服务进程；这是统一注册/入口管理之上的进程恢复边界，不表示已经合并成一个 systemd unit。更新 Worker 入口、注册表或公共 runtime 时检查所有受影响服务与部署计划。
 - 运行状态必须用本次只读命令核验并注明观察时间；进程、容器、心跳和队列状态都是瞬时事实。不得把历史测试、当前本机进程或单次健康检查写成服务器验收或持续可用证明。
+
+
+### FBA 持久化外部动作（默认关闭）
+
+`amazon-sync` 注册 Worker 的恢复扫描复用 `tickFbaRemoteActions`。只有 `AMAZON_API_EXECUTION_ROLE=cloud`、`AMAZON_FBA_REMOTE_EXECUTION_ENABLED=true`、有效的卖家/站点执行策略、独立审批及申请人显式排队同时成立才执行；配置样例保持关闭。本地开发不启用、不启动 Worker、不发真实 Amazon 请求。
+
+动作保存在 PostgreSQL，Redis 不保存唯一业务证据。扫描有界领取、重新检查实时权限/策略/revision；SENDING 租约超时转 RESULT_UNKNOWN，禁止自动重发；已知 Operation ID 的过期 POLLING 仅恢复查询。独立核实原 Operation ID 后可以恢复 WAITING。请求/响应沿现有密钥加密，列表只返回摘要，原证据按需授权并审计。
+
+关闭总开关或策略可停止新执行；已提交事实、未知结果和待查询状态保留，不能把停用当远程取消或自动退款。重新启用须核实策略 revision、权限、有效期及所有未知记录；不得删除动作或手工改回 QUEUED。迁移与真实开关启用沿现有 CI artifact/deployment-plan 和独立批准流程，本轮仅在临时库验证恢复逻辑。

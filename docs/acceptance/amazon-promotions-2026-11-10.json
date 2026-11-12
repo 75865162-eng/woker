@@ -1,0 +1,260 @@
+{
+  "date": "2026-11-10",
+  "status": "LOCAL_IMPLEMENTED_ISOLATED_ACCEPTANCE_PASSED_CLOUD_NOT_VALIDATED",
+  "api": {
+    "name": "Promotions",
+    "version": "2025-12-01",
+    "operations": [
+      "searchPromotions",
+      "getPromotion",
+      "getSelection"
+    ],
+    "provenance": {
+      "source": "https://github.com/amzn/selling-partner-api-models/blob/main/models/promotions-api-model/promotions_2025-12-01.json",
+      "retrievedAt": "2026-11-10",
+      "gitBlobSha": "58daddc615905446262743bd09cf2693950a9bd2",
+      "sha256": "33bab43184dd43dc99b4268ebce59f3663c6de5deb73ad9cada88ea43dc781d8"
+    }
+  },
+  "addedFiles": [
+    "src/lib/amazon-sync/promotions.ts",
+    "src/data/amazon-contracts/promotions_2025-12-01.json",
+    "src/data/amazon-contracts/promotions_2025-12-01.provenance.json",
+    "prisma/migrations/20261110010000_amazon_promotions/migration.sql",
+    "tests/amazon-promotions.test.ts",
+    "tests/integration/amazon-promotions.integration.ts",
+    "tests/integration/amazon-promotions-http.acceptance.ts",
+    "tests/helpers/amazon-promotions-process-preload.mjs",
+    "docs/acceptance/amazon-promotions-2026-11-10.json"
+  ],
+  "integrationPoints": [
+    "automatic-adapters.ts",
+    "automatic-connection.ts",
+    "observation-policy.ts",
+    "observation-machine.ts",
+    "processor.ts",
+    "service.ts",
+    "policy.ts",
+    "sp-api-datasets.ts",
+    "sp-api-data-query.ts",
+    "observations-query.ts",
+    "mcp-tool-registry.ts",
+    "mcp.ts",
+    "skill-sync-retry.ts",
+    "official-schema-registry.json",
+    "../amazon/sp-api-client.ts",
+    "scripts/test-amazon-sync-integration.mjs",
+    "docs/amazon-automatic-sync.md"
+  ],
+  "environment": {
+    "database": "NEW_DISPOSABLE_POSTGRESQL16_CONTAINER",
+    "redis": "NEW_DISPOSABLE_REDIS7_CONTAINER",
+    "amazon": "MOCK_RESPONSES_ONLY",
+    "worker": "EXISTING_REGISTERED_WORKER_MANAGER_WITH_FIXTURE_PRELOAD",
+    "rootDotenvLoaded": false,
+    "realCredentialsInherited": false,
+    "realAmazonRequests": 0,
+    "existingDatabaseMigrationApplied": false,
+    "productionChanged": false
+  },
+  "synchronization": {
+    "identity": "EXPLICIT_SINGLE_SELLER_ACCOUNT_AND_MARKETPLACE",
+    "roleRequirement": "Pricing OR Product Listing with attestation; actual upstream access pending",
+    "intervalMinutes": 360,
+    "discovery": "ALL_API_VISIBLE_SUMMARIES_ANY_REVISION_ALL_PAGES",
+    "details": "PUBLISHED_AND_LATEST_REVISION_PLUS_PURCHASE_REQUIREMENT_SELECTIONS",
+    "incremental": "FULL_SUMMARY_RECONCILIATION; REUSE_UNCHANGED_OLD_TERMINAL_DETAILS; NO_TIMESTAMP_ONLY_CURSOR",
+    "recentRecheckDays": 30,
+    "terminalMaxReuseDays": 7,
+    "historicalComplete": false,
+    "absence": "KEEP_PREVIOUS_FACTS_WITH_CURRENT_DISCOVERY_FALSE_AND_LAST_CAPTURE_TIME",
+    "publishGuards": [
+      "TOTAL_RESULTS_EQUALS_UNIQUE_DISCOVERY",
+      "NO_TOKEN_LOOPS",
+      "MATCH_MARKETPLACE_AND_SELECTION_REVISION",
+      "SEARCH_DETAIL_CORE_VERSION_MATCH",
+      "DETAIL_REVERIFY_AFTER_SELECTION",
+      "REJECT_OLDER_DETAIL",
+      "EXISTING_FENCE_AND_SNAPSHOT_HEAD_GUARDS"
+    ],
+    "limits": {
+      "maxRequests": 1000,
+      "maxFactRows": 50000,
+      "maxResponseBytes": 4194304,
+      "defaultRequestsPerSecond": 0.1,
+      "conservativeBurst": 1
+    }
+  },
+  "validation": {
+    "command": "node scripts/test-amazon-sync-integration.mjs --promotions",
+    "unitTests": {
+      "passed": 34,
+      "failed": 0
+    },
+    "integrationTests": {
+      "passed": 9,
+      "failed": 0
+    },
+    "targetedRegression": {
+      "passed": 90,
+      "failed": 0,
+      "files": [
+        "tests/amazon-promotions.test.ts",
+        "tests/amazon-automatic-policy-matrix.test.ts",
+        "tests/amazon-automatic-schedule.test.ts",
+        "tests/amazon-mcp-registry.test.ts",
+        "tests/amazon-mcp-datasets.test.ts",
+        "tests/amazon-sync-center.test.ts"
+      ]
+    },
+    "typecheck": "PASSED_EXIT_0",
+    "targetedEslint": "PASSED_EXIT_0",
+    "diffCheck": "PASSED_FOR_TOUCHED_TRACKED_FILES",
+    "scenarios": [
+      "ALL_4_TYPES_AND_7_STATUSES",
+      "EMPTY_PAGES_AND_SELECTION_PAGINATION",
+      "EXACT_DECIMAL_UNKNOWN_NESTED_NULL",
+      "SEARCH_DETAIL_DRIFT_AND_STALE_DETAIL_REJECTION",
+      "ARCHIVE_REPLAY_AFTER_INSERT_SQL40001",
+      "PUBLICATION_SQL40001_RECOVERY_NO_HTTP",
+      "DUPLICATE_DELIVERY_IDEMPOTENCE",
+      "REGISTERED_WORKER_SIGKILL_LEASE_CHECKPOINT_RECOVERY",
+      "TERMINAL_REUSE_ORIGINAL_CAPTURE_TIME",
+      "UPSTREAM_ABSENCE_PRESERVES_HISTORY",
+      "ROLE_QUALIFICATION_AUTOMATIC_PLAN_IDEMPOTENCE",
+      "TWO_TENANTS_ACCOUNTS_AND_MARKETPLACES",
+      "REALTIME_ACCOUNT_REVOKE_REJECTS_READS"
+    ],
+    "warnings": [
+      "Existing pg concurrent-query deprecation warning",
+      "Automatic initialization fixture retains unrelated plan intents when their prerequisites are unavailable; Promotions plan/task completes"
+    ],
+    "notRun": [
+      "Full repository check:fast/check/build; targeted suite, typecheck and lint were run",
+      "Real Amazon/cloud acceptance"
+    ],
+    "httpLiliAcceptance": {
+      "passed": 7,
+      "failed": 0
+    },
+    "repositoryTypecheck": "PASSED_EXIT_0"
+  },
+  "localTools": {
+    "tools": [
+      "promotions_search",
+      "promotions_get",
+      "promotions_get_items"
+    ],
+    "mcpHandlerActualCalls": 3,
+    "liliErpTransportActualCalls": 3,
+    "liliIdentity": "CURRENT_ERP_SCOPE_AND_USER_ID_REVALIDATED",
+    "amazonCallsDuringLocalQueries": 0,
+    "httpMcpProtocolTested": true,
+    "nativeClientRegistrationVerified": true,
+    "newFieldOrDomainReadPermissions": false
+  },
+  "limitations": [
+    "feeSnapshot.previewedFeeRates is creation-time fee rates, not actual charged fees or promotion spend/sales",
+    "CATALOG selection rules preserved; official getSelection cannot enumerate catalog items",
+    "INDIVIDUAL claim-code contents unavailable through these read operations",
+    "No guaranteed historical retention or full historical coverage",
+    "Only existing automaticMarketplaces are eligible; no real marketplace verified",
+    "Actual Pricing/Product Listing role and marketplace access unverified",
+    "Budgets fail closed instead of publishing an incomplete snapshot",
+    "Cloud acceptance requires approved release through existing CI artifact/deployment-plan; no second local executor"
+  ],
+  "delivery": {
+    "committed": false,
+    "pushed": false,
+    "deployed": false,
+    "credentialsChanged": false,
+    "cloudConfigChanged": false,
+    "preexistingWorkspaceChangesPreserved": true
+  },
+  "logs": {
+    "acceptance": {
+      "path": "/tmp/promotions-acceptance-delivery-final.log",
+      "sha256": "daf18fe673bb70d53809a416d15be67122bd52f80b09e64ad93354e08c148bd0"
+    },
+    "regression": {
+      "path": "/tmp/promotions-regression-delivery.log",
+      "sha256": "3d6f3f109c9425ffa45914d21c7791a6622c7208d754863f156063df55072da9"
+    },
+    "typecheck": {
+      "path": "/tmp/promotions-delivery-typecheck-final.log",
+      "sha256": "67eae3a3505af02ed5ea6a2b0788e7f3e74a3149d0bcf6e484c5d941a3675277"
+    },
+    "eslint": {
+      "path": "/tmp/promotions-eslint-delivery.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "eslintLastTests": {
+      "path": "/tmp/promotions-eslint-last-tests.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "httpAndLiliAcceptance": {
+    "command": "node scripts/test-amazon-sync-integration.mjs --promotions-http",
+    "status": "PASSED",
+    "integrationUnitTestCount": 87,
+    "integrationUnitTestsPassed": 87,
+    "workerAndHttpIntegrationTests": 9,
+    "httpLiliScenarios": 7,
+    "httpLiliScenariosPassed": 7,
+    "operations": [
+      "initialize",
+      "notifications/initialized",
+      "tools/list",
+      "tools/call"
+    ],
+    "nativeMcpNames": [
+      "promotions_search",
+      "promotions_get",
+      "promotions_get_items"
+    ],
+    "liliNames": [
+      "erp__promotions_search",
+      "erp__promotions_get",
+      "erp__promotions_get_items"
+    ],
+    "schemaValidation": "CLIENT_TOOL_SCHEMAS_MATCH; INPUT_SCHEMA_VALIDATED; OUTPUT_SCHEMA_VALIDATED_WITH_AJV",
+    "dataConsistency": "ERP_SYNC_CENTER_EQUALS_MCP_AND_LILI_FOR_ALL_THREE_TOOLS_AND_PAGES_1_2",
+    "sameSellerAccountAndMarketplaceRequired": true,
+    "forgedAccountSiteOrUserIdCallsDenied": 18,
+    "revokedAssignmentCallsDeniedImmediately": 6,
+    "revokedToolsRemovedFromBothRegistries": true,
+    "dataStates": [
+      "EMPTY_RESULT",
+      "DATASET_UNPUBLISHED",
+      "WAITING",
+      "FAILED",
+      "BLOCKED"
+    ],
+    "credentialsTokensAndSecretsNotReturned": true,
+    "upstreamAmazonCalls": 0,
+    "codexDesktopConnectorInstalled": false,
+    "liliIdentity": "Authenticated isolated ERP login; server-derived user ID; no extra Amazon permission grant"
+  },
+  "latestVerification": {
+    "date": "2026-11-11",
+    "command": "node scripts/test-amazon-sync-integration.mjs --promotions-http",
+    "status": "PASSED",
+    "relatedUnitTests": "90/90",
+    "workerAndHttpIntegration": "17/17 including seven real HTTP MCP/Lili scenarios",
+    "migration": "Disposable PostgreSQL initialization, Promotions migration deployment, and repeat deploy passed",
+    "currentTypecheck": "FAILED in unrelated concurrent FBA report changes: processor.ts fba_customer_sales resource union and amazon-inventory-reports.test.ts unresolved names",
+    "realAmazonRequests": 0,
+    "realCloudAcceptance": "NOT_RUN; no cloud execution connector is available in this workspace and deploying the new code is outside this request's local-only safety boundary"
+  },
+  "migrationAcceptance": {
+    "status": "PASSED_IN_DISPOSABLE_POSTGRESQL",
+    "emptyDatabaseInitialization": "Prisma current schema initialization plus baseline and Promotions migration deploy succeeded",
+    "existingDatabaseUpgrade": "Existing schedule sentinel and six published promotion facts preserved",
+    "repeatDeployment": "Two subsequent prisma migrate deploy operations reported no pending migrations",
+    "constraintReapplication": "Promotions migration DDL applied twice within the isolated HTTP acceptance",
+    "businessUniqueness": "Duplicate sourceRunId/kind/businessKey rejected by existing database unique constraint",
+    "repeatPublication": "No duplicate observations after redelivery",
+    "staleTask": "Older completed task cannot replace newer active publication head",
+    "productionDatabaseTouched": false
+  }
+}

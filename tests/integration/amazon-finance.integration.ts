@@ -1,3 +1,5 @@
+// Cloud role for injected offline task fixtures; no real Amazon calls.
+process.env.AMAZON_API_EXECUTION_ROLE = "cloud";
 import assert from "node:assert/strict";
 import test, { before, after } from "node:test";
 import { randomUUID } from "node:crypto";
@@ -11,8 +13,13 @@ import { decryptCheckpoint } from "@/lib/amazon-sync/checkpoint";
 import { digest, unseal } from "@/lib/amazon-sync/approval-policy";
 import { readFinance } from "@/lib/amazon-sync/finance-query";
 import { previewFinanceReplay } from "@/lib/amazon-sync/finance-recovery";
+import { recoverFinanceParserFailures } from "@/lib/amazon-sync/finance-parser-recovery";
+import { financeParser } from "@/lib/amazon-sync/finance-parser";
+import { archiveResponse } from "@/lib/amazon-sync/response-evidence";
+import { recordReportParseEvidence } from "@/lib/amazon-sync/report-parse-evidence";
 import { automaticMarketplaces, automaticPlanKey } from "@/lib/amazon-sync/automatic-schedule";
 import { listSources, readTasks } from "@/lib/amazon-sync/read";
+import { createTask, scopeLock } from "@/lib/amazon-sync/service";
 if (process.env.AMAZON_SYNC_OFFLINE_FIXTURE !== "1" || new URL(process.env.DATABASE_URL!).hostname !== "127.0.0.1" || new URL(process.env.DATABASE_URL!).pathname !== "/amazon_sync_test") throw new Error("Disposable offline database required");
 const raw = (name: string) => readFileSync(new URL(`../fixtures/amazon/finance/${name}.json`, import.meta.url), "utf8");
 const policy = JSON.parse(raw("policy")), site = "fixture-site-a", region = "finance-fixture-region";
@@ -27,6 +34,7 @@ async function fresh() {
   await prisma.workspaceScope.create({ data: { organizationId: scope.organizationId, id: scope.workspaceId, name: "Finance fixture" } });
   for (const id of [actor, approver]) await prisma.user.create({ data: { id, email: `${id}@fixture.invalid`, name: "Fixture", passwordHash: "not-login", memberships: { create: { organizationId: scope.organizationId, role: "owner" } } } });
   await prisma.sellerAccount.create({ data: { ...scope, id: store, accountKey: store, displayName: "Finance fixture", marketplaceCode: "FX" } });
+  await prisma.amazonDataAccessGrant.createMany({ data: [actor, approver].map(userId => ({ ...scope, id: randomUUID(), userId, sellerAccountId: store })) });
   await prisma.amazonSpApiAuthorization.create({ data: { ...scope, id: authId, name: "Finance fixture", amazonSellerId: "fixture-seller", awsRegion: region, endpoint: endpoints[region], status: "CONFIGURED", approvedRoles: ["Finance and Accounting"], rolesAttestedAt: new Date(), marketplaceParticipations: policy.marketplaces.map((m: { marketplaceId: string }) => ({ marketplaceId: m.marketplaceId, countryCode: "FX" })), updatedByUserId: actor, credentialsCiphertext: encryptAmazonSpApiCredentials({ lwaClientId: "fixture-client", lwaClientSecret: "fixture-secret", refreshToken: "fixture-refresh", awsAccessKeyId: "", awsSecretAccessKey: "" }, { ...scope, authorizationId: authId }) } });
   async function approved(command: Record<string, unknown>) {
     const request = await requestChange(scope, actor, command), id = String(request.id);
@@ -53,6 +61,191 @@ async function fresh() {
   async function slice(id: string, fetcher = transport) { const run = await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id } }); await processSyncCenterTask(id, run.dispatchVersion, { clientOptions: { fetch: fetcher, tokenEndpoint: "https://lwa.fixture.invalid/token" } }); return prisma.amazonSyncRun.findUniqueOrThrow({ where: { id } }); }
   return { scope, actor, approver, store, authId, source, financePolicy, calls, approved, request, slice, setFault: (status: number, page: string | null = "fixture-page-2") => { fault = status; faultPage = page; }, setBody: (body: string | null) => { override = body; } };
 }
+
+async function financeHistoryReplayTask(f: Awaited<ReturnType<typeof fresh>>, window: { from: string; to: string }) {
+  const schedule = await prisma.amazonSyncSchedule.create({ data: { ...f.scope, id: randomUUID(), resource: "finance", executionVersion: 2,
+    planKey: automaticPlanKey(f.source.id), name: "Finance history replay fixture", revision: 1, mode: "incremental", intervalMinutes: 60,
+    enabled: true, updatedByUserId: f.actor, nextRunAt: new Date() } });
+  await prisma.amazonSyncPlanTarget.create({ data: { ...f.scope, scheduleId: schedule.id, sourceId: f.source.id } });
+  return prisma.$transaction(async tx => {
+    await scopeLock(tx, f.scope);
+    return createTask(tx, f.scope, f.actor, f.source.id, { key: `finance-history:${randomUUID()}`, trigger: "schedule", scheduleId: schedule.id,
+      scheduleRevision: schedule.revision, financeWindow: window, financeHistoryReplay: true });
+  });
+}
+
+test("Finance history replay inserts gaps without overwriting existing transactions or the forward cursor", async () => {
+  const f = await fresh(), forward = await f.request();
+  await f.slice(forward.id); assert.equal((await f.slice(forward.id)).status, "SUCCEEDED");
+  const cursorBefore = await prisma.amazonSyncResourceCursor.findUniqueOrThrow({ where: { sourceId: f.source.id } });
+  const recordBefore = await prisma.amazonFinanceRecord.findUniqueOrThrow({ where: { organizationId_workspaceId_sellerAccountId_transactionId: { ...f.scope, sellerAccountId: f.store, transactionId: "fixture-tx-1" } } });
+  const frozen = (forward.frozenScope as { financeWindow: { from: string; to: string } }).financeWindow;
+  const addedMarketplaces = policy.marketplaces.map((m: { marketplaceId: string }) => m.marketplaceId).filter((id: string) => !automaticMarketplaces.has(id));
+  for (const id of policy.marketplaces.map((m: { marketplaceId: string }) => m.marketplaceId)) automaticMarketplaces.add(id);
+  try {
+    const replay = await financeHistoryReplayTask(f, frozen);
+    f.setBody(raw("page-1").replace("9007199254740993.123456789012345678901234567890", "1.00"));
+    assert.equal((await f.slice(replay.id)).status, "WAITING");
+    f.setBody(null);
+    assert.equal((await f.slice(replay.id)).status, "SUCCEEDED");
+    const recordAfter = await prisma.amazonFinanceRecord.findUniqueOrThrow({ where: { id: recordBefore.id } });
+    assert.equal(recordAfter.rowHash, recordBefore.rowHash);
+    assert.equal(recordAfter.sourceRunId, recordBefore.sourceRunId);
+    assert.equal(recordAfter.observationSequence, recordBefore.observationSequence);
+    const cursorAfter = await prisma.amazonSyncResourceCursor.findUniqueOrThrow({ where: { sourceId: f.source.id } });
+    assert.equal(cursorAfter.status, cursorBefore.status); assert.equal(cursorAfter.watermarkFrom.getTime(), cursorBefore.watermarkFrom.getTime());
+    assert.equal(cursorAfter.watermarkTo.getTime(), cursorBefore.watermarkTo.getTime()); assert.equal(cursorAfter.nextTokenCiphertext, cursorBefore.nextTokenCiphertext);
+    assert.equal(cursorAfter.activeRunId, cursorBefore.activeRunId);
+    assert.equal(cursorAfter.captureSequence, cursorBefore.captureSequence + 2);
+  } finally { for (const id of addedMarketplaces) automaticMarketplaces.delete(id); }
+});
+
+test("Finance history replay refuses a changed forward cursor before requesting Amazon", async () => {
+  const f = await fresh(), forward = await f.request();
+  await f.slice(forward.id); assert.equal((await f.slice(forward.id)).status, "SUCCEEDED");
+  const frozen = (forward.frozenScope as { financeWindow: { from: string; to: string } }).financeWindow;
+  const addedMarketplaces = policy.marketplaces.map((m: { marketplaceId: string }) => m.marketplaceId).filter((id: string) => !automaticMarketplaces.has(id));
+  for (const id of policy.marketplaces.map((m: { marketplaceId: string }) => m.marketplaceId)) automaticMarketplaces.add(id);
+  try {
+    const replay = await financeHistoryReplayTask(f, frozen);
+    await prisma.amazonSyncResourceCursor.update({ where: { sourceId: f.source.id }, data: { nextTokenCiphertext: "stale-forward-version" } });
+    f.calls.length = 0;
+    assert.equal((await f.slice(replay.id)).status, "FAILED");
+    assert.equal(f.calls.length, 0);
+  } finally { for (const id of addedMarketplaces) automaticMarketplaces.delete(id); }
+});
+
+async function legacyParserFailure() {
+  const f=await fresh(),task=await f.request();
+  await f.slice(task.id);
+  const run=await prisma.amazonSyncRun.findUniqueOrThrow({where:{id:task.id}}),cursor=await prisma.amazonSyncResourceCursor.findUniqueOrThrow({where:{sourceId:f.source.id}});
+  const token=decryptCheckpoint(cursor.nextTokenCiphertext,f.scope,cursor.id);
+  const window={from:cursor.watermarkFrom.toISOString(),to:cursor.watermarkTo.toISOString()};
+  const body=`{"newUnmappedDetails":${JSON.stringify(Array(100000).fill(null))},${raw('page-2').trim().slice(1)}`;
+  await prisma.$transaction(async tx=>{
+    await archiveResponse(tx,run,2,{apiVersion:'2024-06-19',operation:'listTransactions',window,pageTokenHash:digest([window,cursor.detailPolicyDigest,token]),policyDigest:cursor.detailPolicyDigest!},body);
+    await tx.amazonSyncRun.update({where:{id:task.id},data:{status:'FAILED',error:'财务响应不是安全、有效的 JSON。',finishedAt:new Date(),nextAttemptAt:new Date(0)}});
+    await tx.amazonSyncResourceCursor.update({where:{sourceId:f.source.id},data:{status:'FAILED'}});
+  });
+  return {...f,task,run,cursor,body};
+}
+
+test("parser upgrade automatically replays a large archived response, validates rows and advances once",async()=>{
+  const f=await legacyParserFailure();
+  const original=await prisma.amazonSyncRawPage.findUniqueOrThrow({where:{taskId_page:{taskId:f.task.id,page:2}}});
+  const calls=f.calls.length;
+  const recovered=await recoverFinanceParserFailures([f.scope]);
+  assert.equal(recovered.recovered,1,JSON.stringify(recovered));assert.equal(recovered.candidates[0].page,2);
+  assert.equal((await prisma.amazonSyncResourceCursor.findUniqueOrThrow({where:{sourceId:f.source.id}})).nextTokenCiphertext,f.cursor.nextTokenCiphertext);
+  assert.equal((await f.slice(f.task.id,async()=>{throw Error('Original replay must not request Amazon');})).status,'SUCCEEDED');
+  assert.equal(f.calls.length,calls);
+  assert.equal(await prisma.amazonFinanceRecord.count({where:f.scope}),3);
+  const done=await prisma.amazonSyncRun.findUniqueOrThrow({where:{id:f.task.id}});
+  assert.equal(done.pagesCompleted,2);assert.equal(done.insertedCount,3);assert.equal(done.processedCount,3);
+  const cursor=await prisma.amazonSyncResourceCursor.findUniqueOrThrow({where:{sourceId:f.source.id}});
+  assert.equal(cursor.status,'SUCCEEDED');assert.equal(cursor.nextTokenCiphertext,null);assert.equal(cursor.captureSequence,f.cursor.captureSequence+1);
+  await processSyncCenterTask(done.id,done.dispatchVersion-1,{clientOptions:{fetch:async()=>{throw Error('Duplicate dispatch must not request Amazon');}}});
+  assert.equal(await prisma.amazonFinanceRecord.count({where:f.scope}),3);
+  const reread=await prisma.amazonSyncRawPage.findUniqueOrThrow({where:{taskId_page:{taskId:f.task.id,page:2}}});
+  assert.equal(reread.bodySha256,original.bodySha256);assert.equal(reread.rawCiphertext,original.rawCiphertext);
+  assert.equal(unseal(reread.rawCiphertext,f.scope,`${f.task.id}:2`,'amazon-finance-raw.v1').rawBody,f.body);
+  const evidence=await prisma.auditLog.findFirstOrThrow({where:{organizationId:f.scope.organizationId,entityId:f.task.id,action:'amazon.sync.report.parse-checkpoint',AND:[{metadata:{path:['rawPage'],equals:2}},{metadata:{path:['phase'],equals:'ROWS_COMMITTED'}}]}});
+  const parseEvidence=evidence.metadata as {parserVersion:string;replayed:boolean};
+  assert.equal(parseEvidence.parserVersion,financeParser.version);assert.equal(parseEvidence.replayed,true);
+  assert.equal(await prisma.auditLog.count({where:{organizationId:f.scope.organizationId,entityId:f.task.id,action:'amazon.sync.report.parse-checkpoint',metadata:{path:['phase'],equals:'PUBLISHED'}}}),1);
+  const fields=await prisma.amazonFieldRegistry.findMany({where:{...f.scope,observations:{some:{rawTaskId:f.task.id,rawPage:2}}}});
+  const unknown=fields.find(field=>unseal(field.sourcePathCiphertext,f.scope,field.id,'amazon-field-path.v1').sourcePath==='/newUnmappedDetails');
+  assert.ok(unknown);assert.equal(unknown.mappingStatus,'UNMAPPED');
+  assert.equal((await recoverFinanceParserFailures([f.scope])).recovered,0);
+});
+
+test("a changed historical parse result cannot overwrite business facts or advance its checkpoint",async()=>{
+ const f=await legacyParserFailure();
+ await prisma.$transaction(tx=>recordReportParseEvidence(tx,f.run,{rawTaskId:f.task.id,rawPage:2,phase:'ROWS_COMMITTED',rowsCommitted:0,checkedAt:new Date(),finance:{resultDigest:'previous-reviewed-result'}}));
+ assert.equal((await recoverFinanceParserFailures([f.scope])).recovered,1);
+ const result=await f.slice(f.task.id,async()=>{throw Error('Historical replay must not request Amazon');});
+ assert.equal(result.status,'FAILED');assert.match(result.error!,/人工审阅/);
+ assert.equal(await prisma.amazonFinanceRecord.count({where:f.scope}),1);
+ const cursor=await prisma.amazonSyncResourceCursor.findUniqueOrThrow({where:{sourceId:f.source.id}});
+ assert.equal(cursor.nextTokenCiphertext,f.cursor.nextTokenCiphertext);assert.equal(cursor.captureSequence,f.cursor.captureSequence);
+});
+
+test("current-version parse failure records location, preserves cursor, and is not retried indefinitely",async()=>{
+ const f=await fresh(),task=await f.request();f.setBody('{"private-secret":]}');
+ assert.equal((await f.slice(task.id)).status,'FAILED');
+ const cursor=await prisma.amazonSyncResourceCursor.findUniqueOrThrow({where:{sourceId:f.source.id}});
+ assert.equal(cursor.captureSequence,0);assert.equal(await prisma.amazonFinanceRecord.count({where:f.scope}),0);
+ const evidence=await prisma.auditLog.findFirstOrThrow({where:{organizationId:f.scope.organizationId,entityId:task.id,action:'amazon.sync.report.parse-checkpoint',metadata:{path:['phase'],equals:'ATTEMPT_FAILED'}}});
+ const diagnostic=(evidence.metadata as {diagnostic:{code:string;offset:number}}).diagnostic;assert.equal(diagnostic.code,'JSON_SYNTAX');assert.ok(diagnostic.offset>0);assert.ok(!JSON.stringify(evidence.metadata).includes('private-secret'));
+ const inspectionAt = new Date(Date.now() + 15 * 60_000);
+ const inspected = await recoverFinanceParserFailures([f.scope], inspectionAt);
+ assert.equal(inspected.examined,1);assert.equal(inspected.recovered,0);
+ assert.equal((await recoverFinanceParserFailures([f.scope], inspectionAt)).examined,0);
+ assert.equal((await prisma.amazonSyncResourceCursor.findUniqueOrThrow({where:{sourceId:f.source.id}})).captureSequence,0);
+});
+
+test("automatic parser recovery cannot resume paused work or a revoked source",async()=>{
+ for(const mode of ['paused','revoked']as const){const f=await legacyParserFailure();
+  if(mode==='paused')await prisma.amazonSyncRun.update({where:{id:f.task.id},data:{status:'PAUSED'}});
+  else await prisma.amazonSyncDataSource.update({where:{id:f.source.id},data:{enabled:false}});
+  assert.equal((await recoverFinanceParserFailures([f.scope])).recovered,0);
+  assert.equal(await prisma.amazonFinanceRecord.count({where:f.scope}),1);
+ }
+});
+
+test("parser recovery defers a full blocked batch and publishes the next archived task without HTTP", async () => {
+  const f = await legacyParserFailure();
+  const now = new Date(), old = new Date(now.getTime() - 60_000);
+  const blocked: string[] = [];
+  // Each failed cursor owns its task. Invalid execution authority must be
+  // preserved, rather than requiring an operator to remove these candidates.
+  for (let index = 0; index < 25; index++) {
+    const sourceId = randomUUID(), id = randomUUID(), authorizationId = randomUUID(), marketplaceId = `blocked-parser-${index}`;
+    await prisma.amazonSpApiAuthorization.create({ data: { ...f.scope, id: authorizationId, name: "Blocked parser fixture",
+      amazonSellerId: `blocked-seller-${index}`, credentialsCiphertext: "unusable-fixture", awsRegion: region,
+      endpoint: endpoints[region], status: "DISABLED", updatedByUserId: f.actor } });
+    await prisma.amazonSyncDataSource.create({ data: { ...f.scope, id: sourceId, authorizationId,
+      sellerAccountId: f.store, marketplaceId, resource: "finance", enabled: false, freshnessMinutes: 60 } });
+    await prisma.amazonSyncRun.create({ data: { ...f.scope, id, requestedByUserId: f.actor, sourceId,
+      resource: "finance", executionVersion: 2, mode: "incremental", status: "FAILED", error: "incompatible parser fixture",
+      nextAttemptAt: old, updatedAt: old } });
+    await prisma.amazonSyncResourceCursor.create({ data: { ...f.scope, id: randomUUID(), sourceId,
+      resource: "finance", amazonSellerId: "fixture-seller", marketplaceId, activeRunId: id, status: "FAILED",
+      watermarkFrom: f.cursor.watermarkFrom, watermarkTo: f.cursor.watermarkTo } });
+    blocked.push(id);
+  }
+  const before = await prisma.amazonSyncRun.findMany({ where: { id: { in: blocked } }, orderBy: { id: "asc" } });
+  const preview = await recoverFinanceParserFailures([f.scope], now, { dryRun: true });
+  assert.equal(preview.examined, 25); assert.equal(preview.recovered, 0);
+  assert.deepEqual(await prisma.amazonSyncRun.findMany({ where: { id: { in: blocked } }, orderBy: { id: "asc" } }), before);
+  const first = await recoverFinanceParserFailures([f.scope], now);
+  assert.equal(first.examined, 25); assert.equal(first.deferred, 25); assert.equal(first.recovered, 0);
+  const failures = await prisma.amazonSyncRun.findMany({ where: { id: { in: blocked } } });
+  for (const run of failures) {
+    assert.equal(run.status, "FAILED"); assert.equal(run.dispatchVersion, 0); assert.equal(run.attempts, 0);
+    assert.equal(run.nextAttemptAt.getTime(), now.getTime() + 15 * 60_000);
+    assert.equal(run.error, "incompatible parser fixture");
+  }
+  const next = await recoverFinanceParserFailures([f.scope], now);
+  assert.equal(next.examined, 1); assert.equal(next.recovered, 1); assert.equal(next.candidates[0].taskId, f.task.id);
+  assert.equal((await recoverFinanceParserFailures([f.scope], now)).examined, 0);
+  assert.equal((await f.slice(f.task.id, async () => { throw Error("Archived parser recovery must not request Amazon"); })).status, "SUCCEEDED");
+  assert.equal(await prisma.amazonFinanceRecord.count({ where: f.scope }), 3);
+  assert.equal(await prisma.amazonSyncResourceCursor.count({ where: { ...f.scope, activeRunId: { in: blocked }, status: "FAILED" } }), 25);
+});
+
+test("precise Finance UTC queries filter before pagination and preserve original batch and money", async () => {
+  const f = await fresh(), task = await f.request();
+  await f.slice(task.id); await f.slice(task.id);
+  const params = new URLSearchParams({ sellerAccountId: f.store, marketplaceId: site, sourceRunId: task.id, fromTimestamp: "2026-11-01T02:00:00.000Z", toTimestamp: "2026-11-01T02:00:00.001Z", pageSize: "1" });
+  const included = await readFinance(f.scope, params, f.actor);
+  assert.equal(included.pagination.total, 1); assert.equal(included.rows[0].transactionId, "fixture-tx-2");
+  assert.equal(included.rows[0].originalAmount, "-1.2300"); assert.equal(included.rows[0].currency, "USD"); assert.equal(included.rows[0].sourceRunId, task.id);
+  params.set("page", "2"); assert.equal((await readFinance(f.scope, params, f.actor)).rows.length, 0);
+  params.set("page", "1"); params.set("fromTimestamp", "2026-11-01T01:00:00Z"); params.set("toTimestamp", "2026-11-01T02:00:00Z");
+  assert.equal((await readFinance(f.scope, params, f.actor)).pagination.total, 0, "exclusive end excludes exactly 02:00; the other-site 01:00 record stays hidden");
+  params.set("from", "2026-11-01"); await assert.rejects(readFinance(f.scope, params, f.actor), /不能同时/);
+});
 
 test("confirmed rejected pagination can replay the same window through approval without deleting evidence", async t => {
   for (const { marketplaceId } of policy.marketplaces) automaticMarketplaces.add(marketplaceId);
@@ -202,6 +395,27 @@ for (const mismatch of ["seller", "site"]) test(`response ${mismatch} overflow f
   const rejected = await prisma.amazonSyncRawPage.findFirstOrThrow({ where: { taskId: task.id, page: 1 } });
   const original = unseal(rejected.rawCiphertext, f.scope, `${task.id}:1`, "amazon-finance-raw.v1").rawBody;
   assert.ok(typeof original === "string" && original.includes("fixture-outside"), "rejected response retained only in encrypted raw evidence");
+});
+test("approved site overflow recovery replays the original, quarantines overflow and advances the same cursor", async () => {
+  const f = await fresh(), task = await f.request();
+  f.setBody(raw("page-1").replaceAll("fixture-site-b", "fixture-outside"));
+  assert.equal((await f.slice(task.id)).status, "FAILED");
+  const original = await prisma.amazonSyncRawPage.findFirstOrThrow({ where: { taskId: task.id, page: 1 } });
+  const calls = f.calls.length;
+  await f.approved({ action: "control-task", id: task.id, control: "retry", quarantineOutsideFinanceScope: true });
+  assert.equal((await f.slice(task.id)).status, "WAITING");
+  assert.equal(f.calls.length, calls, "the rejected original is reused without any Amazon HTTP");
+  const row = await prisma.amazonFinanceRecord.findFirstOrThrow({ where: { ...f.scope, sourceRunId: task.id } });
+  assert.equal(row.attributionStatus, "QUARANTINED");
+  assert.equal(row.quarantineReason, "OUTSIDE_APPROVED_MARKETPLACE");
+  assert.equal(row.marketplaceId, null); assert.equal(row.originalAmount, null); assert.equal(row.currency, null);
+  const hidden = await prisma.amazonFinanceQuarantine.findUniqueOrThrow({ where: { recordId: row.id } });
+  assert.equal(unseal(hidden.ciphertext, f.scope, row.id, "amazon-finance-quarantine.v1").metadataMarketplaceId, "fixture-outside");
+  assert.equal((await prisma.amazonSyncRawPage.findUniqueOrThrow({ where: { taskId_page: { taskId: task.id, page: 1 } } })).bodySha256, original.bodySha256);
+  assert.equal((await readFinance(f.scope, new URLSearchParams({ sellerAccountId: f.store, marketplaceId: site }), f.actor)).rows.length, 0);
+  f.setBody(null);
+  assert.equal((await f.slice(task.id)).status, "SUCCEEDED");
+  assert.equal((await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: task.id } })).processedCount, 3);
 });
 test("finance page rollback preserves facts, archive and checkpoint atomically", async () => {
   const f = await fresh(), task = await f.request();

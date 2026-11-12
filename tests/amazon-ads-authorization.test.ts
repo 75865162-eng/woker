@@ -1,3 +1,5 @@
+// Cloud role for injected offline HTTP fixtures; no real Amazon calls.
+process.env.AMAZON_API_EXECUTION_ROLE = "cloud";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { decryptAmazonAdsCheckpoint, decryptAmazonAdsRefreshToken, encryptAmazonAdsCheckpoint, encryptAmazonAdsRefreshToken, hasAmazonAdsEncryptionKey } from "@/lib/amazon-ads/credentials";

@@ -1,0 +1,470 @@
+[
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_changewh_form",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_changewh_form_entry",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_dispatch_form",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_dispatch_form_entry",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_dispatch_form_record",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_dispatch_oversea_box",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_dispatch_oversea_case",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_dispatch_oversea_form",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_dispatch_oversea_form_entry",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_dispatch_oversea_trans",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_inventory",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_inventory_his",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_inventory_his_day",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_inventory_month_summary",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_inventory_record",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_inwh_form",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_inwh_form_entry",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_outwh_form",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_outwh_form_consumable",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_outwh_form_entry",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_stocktaking",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_stocktaking_item",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_stocktaking_item_shelf",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_stocktaking_shelf",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_stocktaking_warehouse",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_warehouse",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_warehouse_address",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_warehouse_shelf",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_warehouse_shelf_inventory",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_warehouse_shelf_inventory_opt_record",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_warehouse_type",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "WMS: ERP inventory+warehouse+stock annotations",
+    "table": "t_erp_whse_unsalable_rpt",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "FBA: Amazon inbound annotations only",
+    "table": "t_amz_inbound_fba_cycle",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "FBA: Amazon inbound annotations only",
+    "table": "t_amz_ship_fulfillment_center",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "FBA: Amazon inbound annotations only",
+    "table": "t_erp_ship_address",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "FBA: Amazon inbound annotations only",
+    "table": "t_erp_ship_addressto",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "FBA: Amazon inbound annotations only",
+    "table": "t_erp_ship_inboundbox",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "FBA: Amazon inbound annotations only",
+    "table": "t_erp_ship_inboundcase",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "FBA: Amazon inbound annotations only",
+    "table": "t_erp_ship_inbounditem",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "FBA: Amazon inbound annotations only",
+    "table": "t_erp_ship_inboundplan",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "FBA: Amazon inbound annotations only",
+    "table": "t_erp_ship_inboundshipment",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "FBA: Amazon inbound annotations only",
+    "table": "t_erp_ship_inboundshipment_record",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "FBA: Amazon inbound annotations only",
+    "table": "t_erp_ship_inboundshipment_traceupload",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "FBA: Amazon inbound annotations only",
+    "table": "t_erp_ship_inboundtrans",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "FBA: Amazon inbound annotations only",
+    "table": "t_erp_ship_inboundtrans_his",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "FBA: Amazon inbound annotations only",
+    "table": "t_erp_shipcycle",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "FBA: Amazon inbound annotations only",
+    "table": "t_erp_warehouse_shelf_inventory_opt_record",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_accounting_periods",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_accounting_subject_auxiliary_setting",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_accounting_subjects",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_auxiliary_items",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_auxiliary_types",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_closing_template",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_closing_template_amazon",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_closing_template_feishu",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_closing_template_item",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_closing_template_profit_loss",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_closing_template_vouchers",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_currency",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_detail_ledger",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_general_ledger",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_report_items",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_report_mapping_rules",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_report_templates",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_subject_type",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_voucher_entries",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_voucher_entries_auxiliary",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_voucher_inventory_detail",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_voucher_modify_log",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_voucher_type",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_voucher_upload",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_vouchers",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "fin_vourches_file",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "t_erp_fin_account",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "t_erp_fin_journalaccount",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "t_erp_fin_journaldaily",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "t_erp_fin_project",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  },
+  {
+    "scope": "Finance: db_finance fin_* + ERP finance annotations",
+    "table": "t_erp_fin_type_journalmonthly",
+    "status": "INFERRED",
+    "ownership": "candidate membership; exclusive/shared ownership pending"
+  }
+]

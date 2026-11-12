@@ -1,0 +1,371 @@
+{
+  "date": "2026-11-11",
+  "environment": "offline local source analysis; synthetic extractor fixtures only",
+  "source": "Wimoor working tree 8f894b1eccb8df5d16af19a75c6a517795bf02a5 plus source_changes in evidence/summary.json",
+  "checks": {
+    "extractor_fixture_tests": {
+      "passed": 3,
+      "failed": 0,
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/wimoor -p 'test_*.py'"
+    },
+    "source_fingerprint_recheck": {
+      "files": 9082,
+      "drift": 0
+    },
+    "erp_fingerprint_recheck": {
+      "files": 24,
+      "drift": 0
+    },
+    "repeat_extraction_and_review": {
+      "json_datasets": 31,
+      "different_datasets": 0,
+      "environment": "new task-created temporary directory; removed after comparison"
+    },
+    "ignored_source_audit": {
+      "ignored_files": 39,
+      "ignored_java_sql_xml_or_page_candidates": 0,
+      "contents_read": false
+    },
+    "node_builder_syntax": "PASS",
+    "xlsx_saved_zip_xml": {
+      "workbooks": 13,
+      "sheets": 26,
+      "data_rows": 154287,
+      "row_counts": "PASS",
+      "headers_first_last_cells": "PASS; exported empty string and blank normalized; original source NULL distinctions retained in JSON",
+      "unexpected_formulas": 0
+    },
+    "visual_review": {
+      "sheet_previews_reviewed": 26,
+      "empty_sheet_previews_fixed_and_reviewed": 2,
+      "scope": "opening table ranges; full datasets verified by saved XML row counts; no native Excel UI test"
+    },
+    "links_and_whitespace": "checked after creating this verification record",
+    "git_diff_check_scope": "scripts/wimoor and docs/wimoor-integration; untracked text additionally checked directly"
+  },
+  "not_run": [
+    "npm run typecheck/check:fast/check: only independent offline extraction scripts, documentation and workbooks changed; no application TypeScript, shared Schema, permission, API or build dependency modified",
+    "database migration, WMS concurrency/authorization/HTTP/browser acceptance: P0-B implementation not started pending shared-boundary confirmation",
+    "official online API/OpenAPI verification: outside authorization; used specified local SP-API guide only",
+    "real Amazon, MCP Skill E2E, production connection or acceptance"
+  ],
+  "limitations": [
+    "182 extraction exceptions remain explicitly recorded",
+    "102016 receiver.method occurrences are unresolved call candidates, not a semantically resolved full call graph",
+    "SP-API and Ads modernization matrices are initial candidates; operation-level official schema/field/role/limit verification remains pending",
+    "No complete A-class ERP business loop is claimed; capability matrix is the first 11-item WMS-focused review"
+  ],
+  "p0b_gate": "LOCAL_IMPLEMENTATION_AND_FIXTURE_VERIFIED: user-approved scope; no existing database migration or production acceptance",
+  "wms_status": {
+    "CODE_IMPLEMENTED": true,
+    "TEST_VERIFIED": true,
+    "REAL_DATA_VERIFIED": false,
+    "ERP_QUERY_VERIFIED": true,
+    "MCP_QUERY_VERIFIED": false,
+    "SKILL_E2E_VERIFIED": false
+  },
+  "existing_changes": "preserved; no existing tracked source/config/migration file modified by this task",
+  "git_commit": false,
+  "git_push": false,
+  "deployment": false,
+  "real_service_connection": false,
+  "p0b": {
+    "date": "2026-11-11",
+    "environment": "temporary Docker PostgreSQL 16, whitelisted child environment, network/dotenv guard, temporary copied Next project and headless Playwright Chromium; all synthetic",
+    "commands": [
+      "env -i PATH=\"$PATH\" node scripts/test-wms-schema-offline.mjs",
+      "env -i PATH=\"$PATH\" node node_modules/tsx/dist/cli.mjs --test tests/wms-rules.test.ts tests/auth-boundaries.test.ts",
+      "env -i PATH=\"$PATH\" node scripts/runtime/typecheck.mjs"
+    ],
+    "passed": [
+      "11-table incremental and empty full migration chain",
+      "receive10 inspect8/2 putaway8 reserve6 pick4 dispatch4 release2; every bucket reconciled with movements",
+      "20 concurrent idempotent retries; changed payload rejected",
+      "concurrent reserve cannot oversell; failed second receipt line rolls back entire transaction",
+      "expired/self-approved/revoked-approver/cross-workspace requests rejected; live requester revocation rejects reads and idempotent replay",
+      "immutable ledger and nonnegative quantity checks",
+      "actual database sessions and full business chain via loopback HTTP and actual Next Route Handlers",
+      "actual /logistics/warehouse two-session browser workflow: create warehouse/area/locations/lots/receipt, receive10+1, partial inspect/putaway8 reject2, reserve6, pick5/unpick1, dispatch4/release2; final balances verified",
+      "targeted ESLint, strict repository typecheck and 10 rule/auth tests",
+      "scoped diff whitespace and new-file whitespace",
+      "row-level reserve/pick/unpick/dispatch/release actions carry IDs and revisions; readable approval details",
+      "actual ERP workspace selector clears stale forms and scopes reads/writes; three-page forward/back navigation returns the correct prior page",
+      "20 concurrent same-key approval requests create one approval; changed content is rejected",
+      "browser loses persisted approval response and retries the same command; original approval returned without duplication",
+      "multi-line partial inspection/putaway omits zero-quantity lines; untouched batch remains pending QC; invalid and excessive quantities rejected",
+      "standalone WMS workspace selector yields to asynchronously mounted AppShell selector",
+      "WMS batch creation selects existing Product Center records through /api/products; search, 20-row pagination, empty results and other-workspace exclusion verified in browser",
+      "WMS product picker preserves Product Center read permission: warehouse supervisor without products.view receives 403 and no selectable products",
+      "paged warehouse/area/receipt and putaway choices reuse WMS cursor routes; browser creates receipt and executes putaway using locations/lots beyond 100 records",
+      "failed next-page lot query retries its cursor while preserving selected receiving location; completed two-session stock chain and final reconciliation",
+      "standalone workspace observer excludes its own picker to prevent repeated show/hide",
+      "receipt approval request and execution reuse validateReceiptAction: reject missing/stale/wrong-state/foreign-line/over-quantity/zero-inspection/wrong-location requests before storing approval",
+      "approved stale receipt command and disabled receiving location cannot execute; approval idempotent replay returns original after execution",
+      "synthetic second-line movement storage failure rolls back entire receipt transaction and leaves approval reusable; actual HTTP preflight rejection verified",
+      "stock approval and execution reuse validateReserve/validateReservationAction: reject insufficient available stock, duplicate reservation number, stale revision, unpicked dispatch and release of picked quantities before approval storage",
+      "actual HTTP stock approval checks reject disabled storage locations and invalid quantities; approved release invalidated by picking cannot execute; full two-session browser flow and concurrent reservation regression passed",
+      "approval decision reuses current receipt/stock validation and locks requester/approver authorization in sorted order; stale receipt/reservation, disabled location and revoked requester cannot be approved; failed decisions preserve status/revision/audit, rejection remains available",
+      "approval decision retry recovery: 20 concurrent HTTP approvals and service rejections preserve one decision/audit; changed decision/revision, another approver and revoked approver rejected; replay after execution returns CONSUMED without restoring execution eligibility"
+    ],
+    "screenshot": "../../outputs/wms-p0b-local/warehouse.png",
+    "not_run": [
+      "existing/production database migration",
+      "full check:fast/check and production build; scoped shared-boundary tests + typecheck + lint used for this isolated WMS slice",
+      "performance capacity benchmark and real warehouse/Amazon acceptance",
+      "human two-person warehouse acceptance; automated two-session synthetic page workflow passed"
+    ],
+    "cleanup": "Only runner-created labeled container, copied Next project and browser removed; no root .env read; existing working changes preserved"
+  },
+  "verification_scope_note": "Original checks/not_run describe completed P0-A historical evidence. Current WMS status and p0b evidence are synthetic local validation only; no real-data or production acceptance.",
+  "p0b_stock_readability": {
+    "date": "2026-11-11",
+    "scope": "Local P0-B continuation; visible-page stock context reuses the scoped WMS query service without reading ProductRecord; no schema/permission/migration changes in this continuation",
+    "implemented": [
+      "Balance and movement pages show warehouse code/name, location code, lot code and barcode; reserve/transfer forms show source stock context",
+      "Balance available quantity is computed by the server using the same availableQuantity rule as stock commands",
+      "Movement page displays pending QC, pending putaway and rejected deltas alongside physical and reserved deltas"
+    ],
+    "verification": {
+      "isolated_schema_http_two_session_browser": "PASS: env -i PATH=\"$PATH\" node scripts/test-wms-schema-offline.mjs",
+      "typecheck": "PASS: env -i PATH=\"$PATH\" npm run typecheck",
+      "targeted_eslint": "PASS: six changed TypeScript files",
+      "check_fast": {
+        "tests": 1498,
+        "passed": 1495,
+        "failed": 3,
+        "failures": [
+          "tests/amazon-automatic-day-windows.test.ts: advanced cursors cannot conceal internal report holes; unfinished windows retain identity",
+          "tests/amazon-automatic-schedule.test.ts: one adapter registration feeds automatic discovery and scheduling consistently",
+          "tests/amazon-sync-center.test.ts: data domain catalog has explicit execution and planning metadata"
+        ],
+        "lint_and_typecheck_stage": "Not reached because test stage failed; scoped lint and standalone typecheck passed",
+        "log": "/tmp/wms-p0b-check-fast-20261111.log"
+      }
+    },
+    "remaining": [
+      "Capacity benchmark",
+      "Human warehouse acceptance; actual-environment migration and deployment require separate authorization"
+    ],
+    "git_commit": false,
+    "git_push": false,
+    "deployment": false,
+    "existing_database_migration": false
+  },
+  "p0b_capacity_closeout": {
+    "date": "2026-11-11",
+    "capacity": {
+      "environment": "Disposable PostgreSQL 16 container: 1 CPU, 512 MiB; synthetic local service baseline; no HTTP/browser timings or production SLA",
+      "skuCount": 10000,
+      "initialMovementCount": 100000,
+      "concurrency": 30,
+      "timings": {
+        "balances": {
+          "samples": 60,
+          "p50Ms": 109.23,
+          "p95Ms": 253.12,
+          "maxMs": 255.27
+        },
+        "movements": {
+          "samples": 60,
+          "p50Ms": 30.3,
+          "p95Ms": 57.17,
+          "maxMs": 57.61
+        },
+        "reconciliation": {
+          "samples": 60,
+          "p50Ms": 31.77,
+          "p95Ms": 67.68,
+          "maxMs": 68.82
+        },
+        "barcode": {
+          "samples": 30,
+          "p50Ms": 18.78,
+          "p95Ms": 81,
+          "maxMs": 81.72
+        },
+        "independent_reserve": {
+          "samples": 30,
+          "p50Ms": 40.27,
+          "p95Ms": 63.61,
+          "maxMs": 63.74
+        },
+        "contended_reserve": {
+          "samples": 30,
+          "p50Ms": 30.36,
+          "p95Ms": 44.61,
+          "maxMs": 45.24
+        }
+      },
+      "lockWaitSampling": {
+        "intervalMs": 10,
+        "samples": 5,
+        "maxWaiting": 9,
+        "sampledWaiterMs": 99.39
+      },
+      "contention": {
+        "success": 1,
+        "expectedRevisionConflicts": 29,
+        "oversold": false
+      }
+    },
+    "reproduce": "env -i PATH=\"$PATH\" node scripts/test-wms-schema-offline.mjs --capacity",
+    "report": "../../outputs/wms-p0b-local/capacity.json",
+    "workflow": "PASS: isolated upgrade/empty migration, HTTP and actual two-session Next/Chromium regression; env -i PATH=\"$PATH\" node scripts/test-wms-schema-offline.mjs",
+    "tests": {
+      "passed": 1498,
+      "failed": 0,
+      "note": "Three Amazon assertions updated to the already implemented history replay key, fee_preview freshness and executable domain catalog; history replay retains explicit payload/window assertions. Concurrent WMS short-receipt changes preserved and covered by the final run, not authored in this capacity continuation."
+    },
+    "typecheck": "PASS: env -i PATH=\"$PATH\" npm run typecheck",
+    "targeted_lint": "PASS: capacity runner/test and three adjusted test files",
+    "source_lint": {
+      "errors": 0,
+      "warnings": 7,
+      "command": "env -i PATH=\"$PATH\" npm run lint -- --ignore-pattern '.next-process-*/**' --ignore-pattern 'outputs/**'"
+    },
+    "standard_check_fast": "NOT FULL PASS: tests 1498/1498 passed; standard lint interrupted after scanning generated .next-process bundles. Retry excluding bundles found 9 require-import errors in outputs/amazon-field-registry-20261109/execute-approved-settlement-replay.cjs. Excluding both generated locations yields 0 source errors/7 warnings; standalone typecheck passed. Lint configuration unchanged; no generated files deleted.",
+    "not_run": [
+      "Full production build/npm run check: no merge or deployment requested",
+      "Human warehouse acceptance",
+      "Existing database migration or production deployment"
+    ],
+    "status": "P0-B local core and automated functional/capacity validation complete; production/human acceptance not claimed",
+    "git_commit": false,
+    "git_push": false,
+    "deployment": false
+  },
+  "p0b_receipt_work_queues": {
+    "date": "2026-11-11",
+    "implemented": [
+      "Receipt workflowStatus filters: PENDING_QC, PENDING_PUTAWAY, HAS_REJECTED, SHORT_RECEIVED",
+      "Scoped line-quantity predicates apply before cursor pagination; repeatable-read keeps page IDs and lines consistent",
+      "Actual receipt page combines the work selector with existing document, source, warehouse and status filters"
+    ],
+    "verification": {
+      "isolated_schema_http_browser": "PASS: env -i PATH=\"$PATH\" node scripts/test-wms-schema-offline.mjs; actual two-session Next/Chromium workflow plus more than one default page of draft receipts, partial QC/putaway/rejection/shortage queues, combined filters, cursor, unknown value and auth/scope boundaries",
+      "unit_tests": "12/12 PASS: wms-rules, procurement-receipt-summary and procurement-receipt-allocation",
+      "typecheck": "PASS: env -i PATH=\"$PATH\" npm run typecheck",
+      "targeted_lint": "PASS: five modified TypeScript files",
+      "whitespace": "PASS including untracked files"
+    },
+    "fix": "Short-receipt integration assertions now locate lines by lotId rather than relying on unspecified relation row order",
+    "not_run": "Full check:fast/check and capacity rerun: scoped read-query/UI continuation; actual temporary-PG HTTP/browser integration, relevant unit tests, lint and typecheck cover the changed boundary. Known generated-directory lint limitation recorded in prior closeout remains. No production build or deployment requested.",
+    "existing_database_migration": false,
+    "git_commit": false,
+    "git_push": false,
+    "deployment": false
+  },
+  "p0b_approval_work_queues": {
+    "date": "2026-11-11",
+    "implemented": [
+      "TO_REVIEW / TO_EXECUTE / MY_REQUESTS / EXPIRED approval filters apply before pagination and bind cursors to the actor",
+      "Current actor edit/approve permissions, independent-member rules and expiration determine canDecide/canExecute in the unified query service; route no longer maintains a separate rule",
+      "Approved expired items display expired; approval/execution transactions still recheck target, revision and both identities"
+    ],
+    "verification": {
+      "unit_tests": "1499/1499 PASS: env -i PATH=\"$PATH\" npm run test",
+      "typecheck": "PASS: env -i PATH=\"$PATH\" npm run typecheck",
+      "targeted_lint": "PASS: eight changed TypeScript files",
+      "isolated_integration": "PASS: env -i PATH=\"$PATH\" node scripts/test-wms-schema-offline.mjs; migration/HTTP/two-session Next/Chromium approval-to-execution queues plus actor-bound cursor, pagination, expired/read-only controls, revocation, combined filters and scope regressions",
+      "rerun_note": "First browser run timed out on the pre-existing Product Center search request before exercising approval queues; isolated rerun passed the entire workflow",
+      "whitespace": "PASS including untracked task files"
+    },
+    "not_run": "Standard check:fast and production build not repeated; full unit suite plus scoped lint, repository typecheck and actual temporary-PG/HTTP/browser integration used for this query/UI change. Previously recorded generated-directory lint limitation remains. No capacity rerun or production acceptance claimed.",
+    "existing_database_migration": false,
+    "git_commit": false,
+    "git_push": false,
+    "deployment": false
+  },
+  "p0b_receipt_approval_context": {
+    "date": "2026-11-11",
+    "implemented": "Unified approval query batches scoped current receipt number/source/receiving location and only requested lot lines; UI retains requested quantities and identifies current catalog context and putaway destination. No ProductRecord reads or inventory-write changes.",
+    "verification": {
+      "isolated_integration": "PASS: env -i PATH=\"$PATH\" node scripts/test-wms-schema-offline.mjs; temporary PG migration, actual HTTP and two-session Next/Chromium full workflow including receipt approval identity/destination assertions",
+      "unit_tests": "7/7 PASS: tests/wms-rules.test.ts",
+      "typecheck": "PASS: env -i PATH=\"$PATH\" npm run typecheck",
+      "targeted_lint": "PASS: six changed TypeScript files",
+      "rerun_note": "First run passed browser workflow but a new HTTP assertion could not locate the request; corrected test query to TO_REVIEW with bounded limit 100 and reran successfully.",
+      "logs": [
+        "/tmp/wms-receipt-context-integration-rerun.log",
+        "/tmp/wms-receipt-context-types.log",
+        "/tmp/wms-receipt-context-lint.log",
+        "/tmp/wms-receipt-context-unit.log"
+      ]
+    },
+    "not_run": "Full check:fast/check, capacity and production build not repeated for this scoped read/UI change; scoped integration, relevant unit tests, lint and typecheck used. Known generated-directory lint limitation remains.",
+    "existing_database_migration": false,
+    "git_commit": false,
+    "git_push": false,
+    "deployment": false
+  },
+  "p0b_approval_target_lookup": {
+    "date": "2026-11-11",
+    "implemented": "Receipt, balance and reservation rows open exact aggregateId approval lookup through the unified query service; approval target filter combines with existing status/work queues before pagination.",
+    "verification": {
+      "isolated_integration": "PASS: temporary PostgreSQL migration, real HTTP and two-session Next/Chromium; exact target pagination, combined queues, cursor mismatch, oversized ID, workspace isolation and three row-to-approval flows",
+      "typecheck": "PASS: env -i PATH=\"$PATH\" npm run typecheck",
+      "targeted_lint": "PASS: four changed TypeScript files",
+      "whitespace": "PASS: git diff --check",
+      "log": "/tmp/wms-approval-target-integration.log"
+    },
+    "not_run": "Full check:fast/check, capacity and production build not repeated for bounded query/UI change; actual scoped HTTP/browser integration, typecheck and lint used. Known generated-artifact lint limitation remains.",
+    "existing_database_migration": false,
+    "git_commit": false,
+    "git_push": false,
+    "deployment": false
+  },
+  "p0b_receipt_work_identity": {
+    "date": "2026-11-11",
+    "implemented": "Visible receipt pages use scoped batch enrichment for lot code/barcode and receiving warehouse/location, without ProductRecord reads. Receipt details, receive/inspect/putaway forms and draft quantity editor show lot identity while preserving IDs and actual quantities.",
+    "verification": {
+      "isolated_integration": "PASS: env -i PATH=\"$PATH\" node scripts/test-wms-schema-offline.mjs; temporary PG migration/HTTP/two-session Next Chromium workflow; supervisor without products.view and all receipt work queues include exact catalog context; actual draft/receive/inspect/putaway identity assertions",
+      "unit_tests": "7/7 PASS: tests/wms-rules.test.ts",
+      "typecheck": "PASS: npm run typecheck with env -i",
+      "targeted_lint": "PASS: nine changed TypeScript files",
+      "whitespace": "PASS: git diff --check",
+      "log": "/tmp/wms-receipt-identity-integration.log"
+    },
+    "not_run": "Full check:fast/check, capacity and production build not repeated for bounded WMS read/UI changes; targeted integration, unit, type and lint checks used. Previously recorded generated-artifact lint limitation remains.",
+    "existing_database_migration": false,
+    "git_commit": false,
+    "git_push": false,
+    "deployment": false
+  },
+  "p0b_receipt_scan": {
+    "date": "2026-11-11",
+    "implemented": "Exact barcode/lotCode receipt lookup in unified WMS query and page Enter submission. Combined receipt work queues require the same line to match both lot identity and work predicate; response preserves all receipt lines.",
+    "verification": {
+      "isolated_integration": "PASS: temporary PG migrations/actual HTTP/two-session Next Chromium full workflow; exact case/leading zero codes, same-line predicates across all four queues, whole receipt details, page Enter/unknown/clear, paginated ordinary and work queries, combined document/source/warehouse/status filters, cursor binding, length/auth/scope",
+      "typecheck": "PASS: env -i PATH=\"$PATH\" npm run typecheck",
+      "targeted_lint": "PASS: five changed TypeScript files",
+      "unit_tests": "7/7 PASS: tests/wms-rules.test.ts",
+      "whitespace": "PASS: git diff --check",
+      "rerun_note": "Initial page test retained the previous stock scan filter; updated scenario to clear filters before its document-only assertions and complete isolated rerun passed.",
+      "log": "/tmp/wms-receipt-scan-integration-rerun.log"
+    },
+    "not_run": "Full check:fast/check, capacity and production build not repeated for scoped query/UI work; targeted temporary-PG/HTTP/browser, unit, type and lint checks used. Previously recorded generated-artifact lint limitation remains.",
+    "existing_database_migration": false,
+    "git_commit": false,
+    "git_push": false,
+    "deployment": false
+  },
+  "p0b_reservation_approval_review": {
+    "date": "2026-11-11",
+    "implemented": "Visible RELEASE/DISPATCH approvals reuse the existing scoped batched reservation read for current number, revision and quantities. UI distinguishes current/requested revision and flags changes. No schema or stock write changes.",
+    "verification": {
+      "isolated_integration": "PASS: env -i PATH=$PATH node scripts/test-wms-schema-offline.mjs; temporary PG upgrade/empty migrations, actual HTTP, concurrency/permissions, two-session Next Chromium warehouse and procurement workflows; new requester/approver context and dispatch/release UI assertions passed.",
+      "unit_tests": "7/7 PASS: tests/wms-rules.test.ts",
+      "typecheck": "PASS: npm run typecheck under env -i",
+      "targeted_lint": "PASS: six changed TypeScript files",
+      "whitespace": "PASS: git diff --check",
+      "log": "/tmp/wms-reservation-review-20261111.log"
+    },
+    "remaining_local_core_rounds": 0,
+    "remaining": "Actual environment migration, two-person warehouse acceptance and deployment; full Wimoor parity outside P0-B.",
+    "not_run": "Full check:fast/check, capacity and production build not repeated for bounded read/UI enrichment; related integration, unit, typecheck and targeted lint used.",
+    "existing_database_migration": false,
+    "git_commit": false,
+    "git_push": false,
+    "deployment": false
+  }
+}

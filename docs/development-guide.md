@@ -42,6 +42,8 @@
 
 ## 重要提醒：Next.js 15
 
+认证壳和业务页面性能回归规则及 fixture 验证见 `docs/performance-regression.md`；修改公共壳、身份、权限或 Provider 时先测量基线。
+
 这个项目使用 Next.js 15。不要凭旧版 Next.js 经验直接改 API、缓存、路由或构建相关代码。遇到不确定的 Next 行为时，优先查看本地文档：
 
 ```bash

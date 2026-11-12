@@ -1,0 +1,38 @@
+import {Prisma} from '@prisma/client';
+import {prisma} from '@/lib/db/prisma';
+import {scoped,json} from '@/lib/wms/access';
+import {lockKey} from '@/lib/wms/repository';
+import {WmsError,type WmsScope} from '@/lib/wms/contracts';
+import {requireText,requireRevision,strictKeys} from '@/lib/wms/rules';
+import {assertFinanceAction,assertFinanceReviewer} from './access';
+import {validateReportFormula,reportFormulaReferences,evaluateReportFormula} from './report-formula';
+import {amountUnits,unitsAmount} from './open-item-rules';
+import {closeDigest} from './close-rules';
+import {createLedgerVoucher} from './ledger-service';
+function parseDefinition(raw:unknown){if(!Array.isArray(raw)||!raw.length||raw.length>200)throw new WmsError('模板需1–200条明确分录。',400);return raw.map(value=>{if(!value||typeof value!=='object'||Array.isArray(value))throw new WmsError('模板分录无效。',400);const row=value as Record<string,unknown>;strictKeys(row,['summary','subjectId','direction','amountField']);const amountField=requireText(row.amountField,'金额字段表达式',500);validateReportFormula(amountField);if(row.direction!=='DEBIT'&&row.direction!=='CREDIT')throw new WmsError('模板须明确借贷方向。',400);return {summary:requireText(row.summary,'分录摘要',200),subjectId:requireText(row.subjectId,'科目 ID'),direction:row.direction,amountField};});}
+export async function queryVoucherTemplates(scope:WmsScope,bookId:string){return prisma.$transaction(async tx=>{await assertFinanceAction(tx,scope,'view');return tx.financeReportTemplate.findMany({where:{...scoped(scope),bookId,kind:'VOUCHER_MAPPING'},orderBy:[{code:'asc'},{version:'desc'}],take:100});});}
+export async function mutateVoucherTemplate(scope:WmsScope,body:Record<string,unknown>){
+ const action=requireText(body.action,'模板动作'),bookId=requireText(body.bookId,'账套 ID'),fields:Record<string,string[]>={'create-voucher-template':['code','version','policyReference','lines'],'review-voucher-template':['templateId'],'preview-voucher-template':['templateId','values'],'import-voucher-template':['templateId','values','periodId','date','sourceKey','evidence','fingerprint']};if(!fields[action])throw new WmsError('模板动作无效。',400);strictKeys(body,['action','bookId',...fields[action]]);
+ return prisma.$transaction(async tx=>{
+  await assertFinanceAction(tx,scope,action==='review-voucher-template'?'approve':'create');await tx.$queryRaw`SELECT id FROM "FinanceBook" WHERE "organizationId"=${scope.organizationId} AND "workspaceId"=${scope.workspaceId} AND id=${bookId} FOR UPDATE`;
+  if(!await tx.financeBook.findFirst({where:{...scoped(scope),id:bookId,enabled:true}}))throw new WmsError('账套不存在。',404);
+  if(action==='create-voucher-template'){
+   const lines=parseDefinition(body.lines),ids=[...new Set(lines.map(row=>row.subjectId))];if(await tx.financeSubject.count({where:{...scoped(scope),bookId,id:{in:ids},enabled:true,leaf:true}})!==ids.length)throw new WmsError('须使用本账套启用末级科目。',422);
+   const template=await tx.financeReportTemplate.create({data:{id:crypto.randomUUID(),...scoped(scope),bookId,code:requireText(body.code,'模板编码',40),version:requireRevision(body.version),kind:'VOUCHER_MAPPING',definition:json(lines),policyReference:requireText(body.policyReference,'目标模板政策依据',1000),createdBy:scope.actorUserId}});await tx.auditLog.create({data:{organizationId:scope.organizationId,userId:scope.actorUserId,action:'finance.template.create',entityType:'FinanceReportTemplate',entityId:template.id,metadata:json({workspaceId:scope.workspaceId,bookId,definition:lines,policyReference:template.policyReference,version:template.version})}});return {template};
+  }
+  const template=await tx.financeReportTemplate.findFirst({where:{...scoped(scope),bookId,id:requireText(body.templateId,'模板 ID'),kind:'VOUCHER_MAPPING'}});if(!template)throw new WmsError('模板不存在。',404);
+  if(action==='review-voucher-template'){if(template.createdBy===scope.actorUserId)throw new WmsError('模板不能自审。',403);await assertFinanceReviewer(tx,scope,scope.actorUserId);if(template.status==='ACTIVE')return {template,reused:true};const updated=await tx.financeReportTemplate.update({where:{id:template.id},data:{status:'ACTIVE',reviewedBy:scope.actorUserId,reviewedAt:new Date()}});await tx.auditLog.create({data:{organizationId:scope.organizationId,userId:scope.actorUserId,action:'finance.template.review',entityType:'FinanceReportTemplate',entityId:template.id,metadata:{workspaceId:scope.workspaceId,bookId}}});return {template:updated};}
+  if(template.status!=='ACTIVE'||!template.reviewedBy)throw new WmsError('模板须独立复核。',409);await assertFinanceReviewer(tx,scope,template.reviewedBy);const definition=parseDefinition(template.definition);
+  if(!body.values||typeof body.values!=='object'||Array.isArray(body.values))throw new WmsError('须提供目标来源金额字段。',400);const values=body.values as Record<string,unknown>,refs=[...new Set(definition.flatMap(row=>reportFormulaReferences(row.amountField)))];strictKeys(values,refs);if(Object.keys(values).length!==refs.length)throw new WmsError('缺少目标来源字段，不能补零。',422);
+  const resolve=(key:string)=>{const value=requireText(values[key],`来源字段 ${key}`),negative=value.startsWith('-');return amountUnits(negative?value.slice(1):value)*(negative?BigInt(-1):BigInt(1));};refs.forEach(resolve);
+  const lines=definition.flatMap(row=>{const signed=evaluateReportFormula(row.amountField,resolve),debit=(row.direction==='DEBIT')===(signed>=BigInt(0)),amount=unitsAmount(signed<BigInt(0)?-signed:signed);return signed===BigInt(0)?[]:[{subjectId:row.subjectId,debit:debit?amount:'0.000000',credit:debit?'0.000000':amount,memo:row.summary}];});if(lines.length<2||lines.reduce((sum,row)=>sum+amountUnits(row.debit)-amountUnits(row.credit),BigInt(0))!==BigInt(0))throw new WmsError('模板结果无有效借贷平衡分录。',422);
+  const fingerprint=closeDigest({templateId:template.id,version:template.version,definition,values,lines});if(action==='preview-voucher-template')return {lines,fingerprint,postingExecuted:false};if(requireText(body.fingerprint,'模板预览摘要')!==fingerprint)throw new WmsError('模板或来源字段已变化。',409);
+  const sourceKey=requireText(body.sourceKey,'目标业务来源唯一键',150),evidence=requireText(body.evidence,'目标来源与去重核对依据',1000),periodId=requireText(body.periodId,'期间 ID'),date=requireText(body.date,'会计日期'),managedKey=`TEMPLATE-SOURCE:${sourceKey}`;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date)throw new WmsError('会计日期无效。',400);
+  if(!await tx.financePeriod.findFirst({where:{...scoped(scope),bookId,id:periodId}}))throw new WmsError('期间不属于模板账套。',422);
+  await lockKey(tx,JSON.stringify(['finance-template-source',scoped(scope),sourceKey]));const claim=await tx.financeVoucher.findFirst({where:{...scoped(scope),sourceKey:managedKey}});if(claim&&claim.bookId!==bookId)throw new WmsError('目标来源已占用其他账套。',409);
+  const result=await createLedgerVoucher(tx,scope,{periodId,date,idempotencyKey:`TEMPLATE:${closeDigest(sourceKey)}`,sourceKey:managedKey,memo:`${template.code}:${template.version}:${fingerprint}:${evidence}`.slice(0,500),lines:lines.map(row=>({...row,debit:new Prisma.Decimal(row.debit),credit:new Prisma.Decimal(row.credit)}))});
+  if(result.voucher.bookId!==bookId)throw new WmsError('期间不属于模板账套。',422);
+  if(!result.reused)await tx.auditLog.create({data:{organizationId:scope.organizationId,userId:scope.actorUserId,action:'finance.template.import',entityType:'FinanceVoucher',entityId:result.voucher.id,metadata:json({workspaceId:scope.workspaceId,bookId,periodId,templateId:template.id,version:template.version,sourceKey,evidence,values,definition,fingerprint,postingExecuted:false})}});return {...result,postingExecuted:false};
+ });
+}

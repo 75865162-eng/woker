@@ -2104,24 +2104,40 @@
     "zh": "索赔追回",
     "en": "Reimbursement recovery",
     "cat": "profit",
-    "zhSum": "找出丢失或损坏、超过 30 天还没赔的库存，估算可索赔金额。",
-    "enSum": "Find lost or damaged units unpaid after 30 days and estimate the claim.",
+    "zhSum": "核查未核销库存事件及赔付记录，按来源证据区分已记录赔付、未匹配和无法确认。",
+    "enSum": "Review unreconciled inventory events and reimbursement records using source evidence; separate reported payments, unmatched records, and unknown outcomes.",
     "tools": [
+      "data_list_tables",
+      "data_describe_table",
+      "data_sync_status",
       "data_query",
-      "finance_get_balances",
-      "restock_get_reference_summary"
+      "reimbursement_get_events",
+      "reimbursement_get_payments",
+      "finance_get_transactions",
+      "reimbursement_analyze",
+      "data_sync_start"
     ],
     "stepsZh": [
-      "用售价、采购、头程、佣金、FBA 和广告费拆每个 SKU。",
-      "标出亏损和费用占比异常的款，并写明不含哪些成本。",
-      "能索赔或该清仓的，单独折成每月金额。",
-      "动作按金额从大到小排。"
+      "从已授权店铺中固定单个 sellerAccountId 和 marketplaceId；检查事件、赔付和财务数据源状态。",
+      "优先调用 reimbursement_analyze；若当前 MCP 未暴露该专用工具，则用 data_query 分别分页读取 inventory_events、reimbursements、finance_transactions，并以 data_sync_status 的发布和覆盖状态判定查询结果。",
+      "分析若为 PARTIAL_DATA 或达到分页上限，用 reimbursement_get_events、reimbursement_get_payments 和 finance_get_transactions 独立续读并补齐页；总数不一致时不得输出完整结论。",
+      "仅用来源明确提供且语义已验证的共同关联键连接事件、赔付和财务交易；SKU、数量、金额或相近日期不能作为关联依据。",
+      "按原报告和币种分别汇总未核销数量、现金赔付数量、库存赔付数量及金额；不跨重叠报告或币种相加。",
+      "逐事件输出 UNMATCHED、NEEDS_REVIEW 或可证实的赔付状态。没有可靠关联键时标记 UNABLE_TO_CONFIRM，不将未匹配说成未赔付。",
+      "空结果时检查报告创建、解析、入库、发布、归属和覆盖状态；失败或未发布不能解释为没有事件或赔付。",
+      "若任务已成功但状态为 ARCHIVED_SITE_PENDING，或覆盖为 ATTRIBUTION_PENDING / NO_PUBLISHED_REPORT，视为原件已采集并隔离、等待站点归属核验；不要重复请求相同报告或把 0 行解释为无事件。转入现有报告归属恢复审批，只有行级站点证据通过并发布后才继续查询。",
+      "只有报告创建/解析失败或数据确实未请求时才考虑补采；先查同步状态。失败任务可用 taskId 申请保留原时间窗和检查点的重试，否则提交有界新采集申请；data_sync_start 只创建审批申请，不代表同步已执行。"
     ],
     "stepsEn": [
-      "Split each SKU into price, cost, freight, referral, FBA, and ads.",
-      "Flag losses and odd fee ratios, and say which costs are excluded.",
-      "Turn claims and clearance into a monthly amount.",
-      "Sort actions by money."
+      "Fix one authorized sellerAccountId and marketplaceId; inspect event, reimbursement, and finance source status.",
+      "Prefer reimbursement_analyze. If the connected MCP does not expose it, page through inventory_events, reimbursements, and finance_transactions separately with data_query, then use data_sync_status to inspect publication and coverage.",
+      "If the result is PARTIAL_DATA or reaches its page bound, continue with reimbursement_get_events, reimbursement_get_payments, and finance_get_transactions; never present incomplete totals as complete.",
+      "Link records only by an explicit shared key whose meaning is verified by the source; SKU, quantity, amount, or nearby dates are not linkage evidence.",
+      "Summarize unreconciled quantity, cash/inventory reimbursement quantities, and exact original amounts separately by report and currency; do not combine overlapping reports or currencies.",
+      "Classify each event as UNMATCHED, NEEDS_REVIEW, or a payment state supported by evidence. Without a reliable link, report UNABLE_TO_CONFIRM, not unpaid.",
+      "For empty results inspect report creation, parsing, persistence, publication, attribution, and coverage; failures or unpublished reports do not mean zero events or payments.",
+      "If a task succeeded but its stage is ARCHIVED_SITE_PENDING, or coverage is ATTRIBUTION_PENDING / NO_PUBLISHED_REPORT, treat the source as collected and quarantined pending site attribution. Do not request the same report again or interpret zero visible rows as no events. Use the existing report-attribution approval flow; query only after row-level site evidence passes and publication completes.",
+      "Request collection only when report creation/parsing failed or the data was not requested. Inspect sync status first. For a failed task, pass its taskId to request an approved retry preserving its window and checkpoint; otherwise submit a bounded new request. data_sync_start does not execute before approval."
     ]
   },
   {

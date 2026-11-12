@@ -6,33 +6,23 @@ import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { parseReplenishmentInputs } from "@/lib/operations/replenishment";
-import { amazonDataAccess, sellerAccessWhere } from "@/lib/amazon-sync/data-access";
+import { requireAmazonReadSession } from "@/lib/auth/amazon-read-session";
+import { AmazonReadError } from "@/lib/amazon-sync/read-account";
+import { readReplenishmentPlans } from "@/lib/operations/replenishment-query";
 import { SyncInputError } from "@/lib/amazon-sync/policy";
 import { assertReplenishmentAccess } from "@/lib/operations/replenishment-access";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  const permission = await requireApiPermission("operations", "view", request);
+  const permission = await requireAmazonReadSession(request);
   if (!permission.ok) return permission.response;
   const where = { organizationId: permission.user.organizationId, workspaceId: workspaceScopeFromRequest(request).workspaceId };
   try {
     await auditAmazonDataRead(where, permission.user.id, "replenishment", permission.user.role);
-    const allowed = process.env.DATABASE_URL ? await amazonDataAccess(where, permission.user.id) : { allSellers: false, sellerIds: [] };
-    const sellerWhere = sellerAccessWhere(allowed);
-    const sources = process.env.DATABASE_URL ? await prisma.amazonSyncDataSource.findMany({ where: { ...where, ...sellerWhere, seller: { status: "active" } }, select: { sellerAccountId: true, marketplaceId: true }, take: 201 }) : [];
-    if (sources.length > 200) throw new SyncInputError("数据源超过安全范围。", 409);
-    const sourcePairs = sources.map(({ sellerAccountId, marketplaceId }) => ({ sellerAccountId, marketplaceId }));
-    const policies = sources.length ? await prisma.amazonReplenishmentPolicy.findMany({ where: { ...where, AND: [sellerWhere, { OR: sourcePairs }] }, orderBy: { updatedAt: "desc" }, take: 200 }) : [];
-    const sellerAccounts = process.env.DATABASE_URL ? await prisma.sellerAccount.findMany({
-      where: { ...where, ...(allowed.allSellers ? {} : { id: { in: allowed.sellerIds } }), status: "active" },
-      select: { id: true, displayName: true, accountKey: true, marketplaceCode: true, marketplaceId: true },
-      orderBy: [{ displayName: "asc" }, { id: "asc" }],
-    }) : [];
-    const plans = policies.length ? await prisma.amazonReplenishmentPlan.findMany({ where: { ...where, AND: [sellerWhere, { OR: sourcePairs }], policyId: { in: policies.map((row) => row.id) } } }) : [];
     const edit = await requireApiPermission("operations", "edit", request);
-    const reports = await requireApiPermission("sellfox", "view", request);
-    return NextResponse.json({ rows: policies.filter((policy) => reports.ok || !parseReplenishmentInputs(policy.inputs).historicalSource).map((policy) => ({ ...policy, plan: plans.find((row) => row.policyId === policy.id) ?? null })), canEdit: edit.ok, canReadSellfox: reports.ok, sellerAccounts }, { headers: { "Cache-Control": "no-store" } });
-  } catch (error) { return NextResponse.json({ error: error instanceof SyncInputError ? "数据范围不可访问。" : "补货计划读取失败。" }, { status: error instanceof SyncInputError ? error.status : 500, headers: { "Cache-Control": "no-store" } }); }
+    const result = await readReplenishmentPlans(where, permission.user.id, new URL(request.url).searchParams);
+    return NextResponse.json({ ...result, canEdit: edit.ok }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) { return NextResponse.json({ error: error instanceof SyncInputError ? error.message : "补货计划读取失败。", ...(error instanceof AmazonReadError ? { code: error.businessCode } : {}) }, { status: error instanceof SyncInputError ? error.status : 500, headers: { "Cache-Control": "no-store" } }); }
 }
 
 export async function PATCH(request: Request) {
@@ -43,6 +33,7 @@ export async function PATCH(request: Request) {
     for (const field of ["sellerAccountId", "marketplaceId", "sellerSku"]) if (typeof body[field] !== "string" || !body[field].trim() || body[field].length > 200) throw new Error("必须填写店铺、站点和 SKU。");
     if (typeof body.enabled !== "boolean") throw new Error("enabled 必须为布尔值。");
     const inputs = parseReplenishmentInputs(body.inputs);
+    if (inputs.historicalSource) return NextResponse.json({ error: "Sellfox 补货建议请前往 /sellfox/restock；此入口只维护 Amazon 补货策略。" }, { status: 400, headers: { "Cache-Control": "no-store" } });
     const scope = { organizationId: permission.user.organizationId, workspaceId: workspaceScopeFromRequest(request).workspaceId };
     const key = { ...scope, sellerAccountId: body.sellerAccountId as string, marketplaceId: body.marketplaceId as string, sellerSku: body.sellerSku as string };
     const data = { inputs: inputs as unknown as Prisma.InputJsonValue, enabled: body.enabled, updatedByUserId: permission.user.id };

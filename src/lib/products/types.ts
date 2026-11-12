@@ -151,8 +151,10 @@ export type ProductPatentInformation = {
 };
 
 export type Product = {
+  management?: import("./management-contract").ProductManagement;
   amazonSnapshots?: AmazonProductReadRow[];
   amazonSnapshotError?: string;
+  amazonSnapshotErrorCode?: string;
   id: string;
   revision?: number;
   sku: string;
@@ -209,6 +211,7 @@ export type ProductDraft = Omit<Product, "id"> & {
 export type ProductListItem = {
   amazonSnapshots?: AmazonProductReadRow[];
   amazonSnapshotError?: string;
+  amazonSnapshotErrorCode?: string;
   id: string;
   sku: string;
   chineseName: string;

@@ -11,19 +11,28 @@ import { createLiliTransport } from "@/lib/selection-research/lili-transport";
 import { sellerSpritePolicy } from "@/lib/selection-research/seller-transport";
 import { createRuntimeTools, xiyouResearchReadTools, type RuntimeProvider } from "./runtime-tools";
 import type { Transport } from "@/lib/selection-research/types";
+import { getCurrentUserFromRequest } from "@/lib/auth/session";
+import { SyncInputError } from "@/lib/amazon-sync/policy";
 
-/** Uses an existing, explicitly granted personal MCP credential. Session access never creates a grant. */
-export async function createErpResearchTransport(scope: { organizationId: string; workspaceId: string; userId: string }, credentialId?: string): Promise<{ transport?: Transport; reason?: string; credentialId?: string }> {
-  const identities = await prisma.amazonMcpCredential.findMany({ where: { ...scope, status: "ACTIVE", expiresAt: { gt: new Date() }, ...(credentialId ? { id: credentialId } : {}) }, take: 2 });
-  if (!identities.length) return { reason: "ERP_PERSONAL_MCP_GRANT_REQUIRED" };
-  if (identities.length !== 1) return { reason: "ERP_MCP_CREDENTIAL_SELECTION_REQUIRED" };
-  const identity = identities[0];
-  const { listDiscoverableAmazonMcpTools, invokeAmazonMcp } = await import("@/lib/amazon-sync/mcp");
-  return { credentialId: identity.id, transport: {
-    async listTools() { return await listDiscoverableAmazonMcpTools(identity, "2025-06-18") as unknown as Awaited<ReturnType<Transport["listTools"]>>; },
+/** ERP sessions use their own user identity; bearer callers retain their exact credential. */
+export async function createErpResearchTransport(scope: { organizationId: string; workspaceId: string; userId: string }, credentialId?: string, assertSession?: () => Promise<void>): Promise<{ transport?: Transport; reason?: string; credentialId?: string }> {
+  await assertSession?.();
+  const { listDiscoverableAmazonMcpTools, invokeAmazonMcp, createErpSessionAmazonMcpIdentity, validateAmazonMcpCredential } = await import("@/lib/amazon-sync/mcp");
+  const credential = credentialId ? await prisma.amazonMcpCredential.findFirst({ where: { ...scope, id: credentialId, status: "ACTIVE", expiresAt: { gt: new Date() } } }) : undefined;
+  if (credentialId && !credential) return { reason: "ERP_PERSONAL_MCP_CREDENTIAL_INVALID" };
+  const identity = credential ? await validateAmazonMcpCredential(credential) : await createErpSessionAmazonMcpIdentity(scope);
+  return { ...(credential ? { credentialId: credential.id } : {}), transport: {
+    async listTools() {
+      await assertSession?.();
+      const tools = await listDiscoverableAmazonMcpTools(identity, "2025-06-18");
+      await assertSession?.();
+      return tools as unknown as Awaited<ReturnType<Transport["listTools"]>>;
+    },
     async callTool(name, args, signal) {
-      // Existing gateway revalidates credential, current role, workspace and seller/marketplace grants.
-      return await invokeAmazonMcp(identity, name, args, undefined, signal) as never;
+      await assertSession?.();
+      const result = await invokeAmazonMcp(identity, name, args, undefined, signal);
+      await assertSession?.();
+      return result as never;
     },
   } };
 }
@@ -41,8 +50,12 @@ export async function runtimeToolsForUser(user: { id: string; organizationId: st
   // Configuration failures are isolated per source; secrets remain inside server adapters.
   const providers: RuntimeProvider[] = [];
   let erpCredentialId: string | undefined;
+  const erpCredentialOptions: Array<{ id: string; name: string }> = [];
   try {
-    const erp = await createErpResearchTransport(scope, typeof body.erpCredentialId === "string" ? body.erpCredentialId : undefined);
+    const erp = await createErpResearchTransport(scope, undefined, async () => {
+      const current = await getCurrentUserFromRequest(request);
+      if (!current || current.id !== scope.userId || current.organizationId !== scope.organizationId || !await assertWorkspaceAccess(scope.organizationId, scope.workspaceId)) throw new SyncInputError("ERP 登录会话已失效，请重新登录。", 401);
+    });
     erpCredentialId = erp.credentialId;
     providers.push({ id: "erp", ...erp, isReadOnly: tool => tool.annotations?.readOnlyHint === true });
   } catch { providers.push({ id: "erp", reason: "ERP_MCP_CONFIGURATION_UNAVAILABLE", isReadOnly: () => false }); }
@@ -70,5 +83,5 @@ export async function runtimeToolsForUser(user: { id: string; organizationId: st
         return createLiliTransport({ endpoint: current.mcpUrl, authorization: "Bearer " + current.mcpToken });
       }) } : { reason: "XIYOU_MCP_NOT_CONFIGURED" }) });
   } catch { providers.push({ id: "xiyou", reason: "XIYOU_CONFIGURATION_UNAVAILABLE", isReadOnly: () => false }); }
-  return { ...createRuntimeTools(providers), erpCredentialId };
+  return { ...createRuntimeTools(providers), erpCredentialId, erpCredentialOptions };
 }

@@ -1,10 +1,12 @@
+// Cloud role for injected offline HTTP fixtures; no real Amazon calls.
+process.env.AMAZON_API_EXECUTION_ROLE = "cloud";
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { AmazonSyncRun } from "@prisma/client";
 import { executeReportSlice } from "@/lib/amazon-sync/processor";
 import { digest } from "@/lib/amazon-sync/approval-policy";
 import { resolveRequestedRange } from "@/lib/amazon-sync/date-range";
-import { decryptCheckpoint } from "@/lib/amazon-sync/checkpoint";
+import { decryptCheckpoint, encryptCheckpoint } from "@/lib/amazon-sync/checkpoint";
 import { AmazonSpApiClient, type AmazonRequestEvent } from "@/lib/amazon/sp-api-client";
 import { getAmazonSpApiServerConfiguration } from "@/lib/amazon/sp-api-config";
 
@@ -24,7 +26,8 @@ async function setup() {
   const frozen = { executionExpiresAt: new Date(Date.now() + 3600000).toISOString(), sourceId: "source", sourceRevision: 1, authorizationId: "auth", authorizationRevision: 1, amazonSellerId: "fixture-seller", sellerAccountId: "store", marketplaceId: site, resource: "sales_traffic", requestedRange: range };
   const source = { id: "source", ...scope, enabled: true, revision: 1, authorizationId: "auth", sellerAccountId: "store", marketplaceId: site, resource: "sales_traffic", activeRunId: "old-good", authorization: { id: "auth", revision: 1, status: "CONFIGURED", amazonSellerId: "fixture-seller" }, seller: { status: "active" } };
   const state = { run: { id: "task", ...scope, resource: "sales_traffic", sourceId: "source", status: "RUNNING", control: null, stage: "WAITING", fenceVersion: 1, leaseOwner: "worker", leaseExpiresAt: new Date(Date.now() + 300000), attempts: 1, authorizationRevision: 1, executionApprovalId: "approval", requestedByUserId: "actor", executionStartedAt: new Date(), checkpointCiphertext: null, frozenScope: frozen, frozenScopeDigest: digest(frozen), dispatchVersion: 0, summary: null } as unknown as AmazonSyncRun,
-    rows: [] as unknown[], logs: [] as unknown[], grant: true, actorActive: true, approverActive: true, conflict: false, partial: false, uncertain: false, source, apiCalls: [] as string[], dbCalls: [] as string[] };
+    rows: [] as unknown[], logs: [] as unknown[], grant: true, actorActive: true, approverActive: true, conflict: false, partial: false, uncertain: false, reconcileMode: "unique", source, apiCalls: [] as string[], dbCalls: [] as string[] };
+  let rawPage: Record<string, unknown> | null = null;
   const db = {
     $executeRaw: async () => 0,
     workspaceScope: { findUnique: async () => ({ id: scope.workspaceId }) },
@@ -33,11 +36,27 @@ async function setup() {
     amazonDataCenterChangeRequest: { findFirst: async (args: { where: Record<string, unknown> }) => { assert.equal(args.where.organizationId, scope.organizationId); assert.equal(args.where.workspaceId, scope.workspaceId); return state.grant ? { id: "approval", operation: "run", approvedByUserId: "approver" } : null; } },
     amazonSyncDataSource: {
       findFirst: async () => state.conflict ? { ...source, revision: 99 } : source,
-      update: async (args: { data: object }) => { state.dbCalls.push("publish"); Object.assign(source, args.data); return source; },
+      findFirstOrThrow: async () => source,
+      update: async (args: { data: object }) => { if ("activeRunId" in args.data) state.dbCalls.push("publish"); Object.assign(source, args.data); return source; },
+      updateMany: async (args: { where: { activeRunId: string }; data: object }) => {
+        if (source.activeRunId !== args.where.activeRunId) return { count: 0 };
+        Object.assign(source, args.data); return { count: 1 };
+      },
     },
+    amazonSyncRawPage: {
+      findFirstOrThrow: async () => { assert.ok(rawPage, "Stored raw evidence must exist before publication"); return rawPage; },
+      findFirst: async () => rawPage,
+      findUnique: async () => rawPage,
+      create: async (args: { data: Record<string, unknown> }) => { rawPage = args.data; return rawPage; },
+    },
+    amazonDataSourceRegistry: { upsert: async (args: { create: object }) => args.create, updateMany: async () => ({ count: 0 }) },
+    amazonFieldRegistry: { createMany: async (args: { data: unknown[] }) => ({ count: args.data.length }), updateMany: async () => ({ count: 0 }) },
+    amazonFieldObservation: { createMany: async (args: { data: unknown[] }) => ({ count: args.data.length }) },
+    auditLog: { findFirst: async () => null, create: async (args: { data: unknown }) => { state.logs.push(args.data); } },
     amazonSyncApiBudget: { findUnique: async () => null, upsert: async () => ({}) },
     amazonSyncTaskLog: { create: async (args: { data: unknown }) => { state.logs.push(args.data); }, createMany: async (args: { data: unknown[] }) => { state.logs.push(...args.data); } },
     amazonSyncRun: {
+      findMany: async () => [],
       findFirst: async (args: { where: { status: string; fenceVersion: number } }) => state.run.status === args.where.status && state.run.fenceVersion === args.where.fenceVersion ? structuredClone(state.run) : null,
       update: async (args: { data: Record<string, unknown> }) => { for (const [key, value] of Object.entries(args.data)) { const current = state.run as unknown as Record<string, unknown>; if (value && typeof value === "object" && "increment" in value) current[key] = Number(current[key] ?? 0) + Number(value.increment); else current[key] = value; } return structuredClone(state.run); },
     },
@@ -49,6 +68,15 @@ async function setup() {
   const client = new AmazonSpApiClient(getAmazonSpApiServerConfiguration({ AMAZON_SP_API_LWA_CLIENT_ID: "fixture-client", AMAZON_SP_API_LWA_CLIENT_SECRET: "fixture-secret", AMAZON_SP_API_REFRESH_TOKEN: "fixture-refresh" }), { onResponse: e => events.push(e), fetch: async (input, init) => {
     const url = new URL(String(input)); state.apiCalls.push(`${init?.method} ${url.pathname}`);
     if (url.hostname === "api.amazon.com") return Response.json({ access_token: "fixture-access", expires_in: 3600 });
+    if (url.pathname === "/reports/2021-06-30/reports" && init?.method === "GET") {
+      const report = { reportId: "report", reportType: "GET_SALES_AND_TRAFFIC_REPORT", marketplaceIds: [site], createdTime: new Date().toISOString(), dataStartTime: `${range.from}T00:00:00Z`, dataEndTime: `${range.to}T23:59:59Z` };
+      if (state.reconcileMode === "empty") return Response.json({ reports: [] });
+      if (state.reconcileMode === "mismatch") return Response.json({ reports: [{ ...report, dataStartTime: "2026-10-01T00:00:00Z" }] });
+      if (state.reconcileMode === "ambiguous") return Response.json({ reports: [report, { ...report, reportId: "other" }] });
+      if (state.reconcileMode === "pagination" && !url.searchParams.has("nextToken")) return Response.json({ reports: [], nextToken: "reconcile-next" });
+      if (url.searchParams.has("nextToken")) assert.equal(url.searchParams.size, 1);
+      return Response.json({ reports: [report] });
+    }
     if (url.pathname === "/reports/2021-06-30/reports") { assert.equal(JSON.parse(init!.body as string).dataStartTime, `${range.from}T00:00:00Z`); if (state.uncertain) throw new Error("private-signed-url"); return Response.json({ reportId: "report" }); }
     if (url.pathname === "/reports/2021-06-30/reports/report") return Response.json({ reportId: "report", reportType: "GET_SALES_AND_TRAFFIC_REPORT", marketplaceIds: [site], processingStatus: "DONE", reportDocumentId: "document" });
     if (url.pathname === "/reports/2021-06-30/documents/document") return Response.json({ reportDocumentId: "document", url: "https://fixture.s3.us-east-1.amazonaws.com/report" });
@@ -77,7 +105,34 @@ test("revoked grant, changed source and revoked actor/approver all stop before a
     await assert.rejects(slice); assert.equal(state.apiCalls.length, 0); assert.equal(state.source.activeRunId, "old-good");
   });
 });
-test("an uncertain create is persisted and never automatically replayed", async () => fixture(async ({ state, slice }) => {
-  state.uncertain = true; await assert.rejects(slice, /不确定/); const count = state.apiCalls.length;
-  state.uncertain = false; await assert.rejects(slice, /不确定/); assert.equal(state.apiCalls.length, count); assert.equal(state.source.activeRunId, "old-good");
+test("lost create response reconciles a unique existing report without repeating POST", async () => fixture(async ({ state, slice }) => {
+  state.uncertain = true; await slice(); assert.equal(state.run.status, "WAITING");
+  assert.equal(JSON.parse(decryptCheckpoint(state.run.checkpointCiphertext, scope, "task")!).creating, true);
+  await slice();
+  assert.equal(JSON.parse(decryptCheckpoint(state.run.checkpointCiphertext, scope, "task")!).reportId, "report");
+  await slice(); await slice(); assert.equal(state.run.status, "SUCCEEDED"); assert.equal(state.rows.length, 2);
+  assert.equal(state.apiCalls.filter(call => call === "POST /reports/2021-06-30/reports").length, 1);
 }));
+test("report reconciliation rejects ambiguity, excludes different windows and continues list pagination", async () => {
+  for (const mode of ["empty", "mismatch", "ambiguous", "pagination"]) await fixture(async ({ state, slice }) => {
+    state.uncertain = true; state.reconcileMode = mode; await slice();
+    if (mode === "ambiguous") await assert.rejects(slice, /多个匹配/);
+    else {
+      await slice();
+      const checkpoint = JSON.parse(decryptCheckpoint(state.run.checkpointCiphertext, scope, "task")!);
+      if (mode === "pagination") { assert.equal(checkpoint.reconcileToken, "reconcile-next"); await slice(); assert.equal(JSON.parse(decryptCheckpoint(state.run.checkpointCiphertext, scope, "task")!).reportId, "report"); }
+      else assert.equal(checkpoint.reportId, undefined);
+    }
+    assert.equal(state.apiCalls.filter(call => call === "POST /reports/2021-06-30/reports").length, 1);
+    assert.equal(state.source.activeRunId, "old-good"); assert.equal(state.rows.length, 0);
+  });
+});
+test("unresolved report reconciliation has bounded polling and pagination", async () => {
+  for (const limit of [{ polls: 99 }, { reconcilePages: 100 }]) await fixture(async ({ state, slice }) => {
+    state.uncertain = true; state.reconcileMode = "empty"; await slice();
+    const checkpoint = JSON.parse(decryptCheckpoint(state.run.checkpointCiphertext, scope, "task")!);
+    state.run.checkpointCiphertext = encryptCheckpoint(JSON.stringify({ ...checkpoint, ...limit }), scope, "task");
+    await assert.rejects(slice, /无法确认|安全上限/);
+    assert.equal(state.source.activeRunId, "old-good"); assert.equal(state.apiCalls.filter(call => call === "POST /reports/2021-06-30/reports").length, 1);
+  });
+});

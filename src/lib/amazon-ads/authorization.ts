@@ -1,3 +1,4 @@
+import { assertAmazonCloudExecution } from "@/lib/amazon/execution-role";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -33,6 +34,7 @@ export async function assertAdsSettingsManager(scope: AdsAuthScope, actor: strin
 }
 
 export async function startAmazonAdsOAuth(scope: AdsAuthScope, actor: string, region: AdsRegion) {
+  assertAmazonCloudExecution();
   if (!regions.includes(region)) throw new Error("Amazon Ads 登录区域无效。");
   await assertAdsSettingsManager(scope, actor);
   const settings = oauthSettings();
@@ -60,6 +62,7 @@ function normalizedProfile(profile: AmazonAdsProfilePayload, region: AdsRegion) 
 }
 
 export async function finishAmazonAdsOAuth(input: { scope: AdsAuthScope; actor: string; params: URLSearchParams; transport?: AmazonAdsOAuthTransport }) {
+  assertAmazonCloudExecution();
   await assertAdsSettingsManager(input.scope, input.actor);
   const state = input.params.get("state") ?? "";
   const attempt = state ? await prisma.amazonAdsOAuthAttempt.findUnique({ where: { stateHash: stateHash(state) } }) : null;

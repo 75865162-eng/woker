@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { getStorageDriver, getStorageType } from "@/lib/storage";
 import { getAmazonSyncQueue } from "@/lib/queue/redis-queue";
-import { assertChangePermission } from "./change-approval";
+import { amazonAccountReadAccess } from "./read-account";
 import { scopeLock } from "./service";
 import { parseSalesQuery, readSalesTraffic } from "./sales-query";
 import { canonical } from "./approval-policy";
@@ -12,23 +12,25 @@ import { requiredText, syncCenterEnabled, SyncInputError, type SyncScope } from 
 
 export async function assertExportAccess(tx: Prisma.TransactionClient, scope: SyncScope, actor: string) {
   if (!syncCenterEnabled(scope)) throw new SyncInputError("同步中心已关闭。", 409);
-  await assertChangePermission(scope, actor, "view", tx);
-  await assertChangePermission(scope, actor, "export", tx);
+  await amazonDataAccess(scope, actor, tx, "export");
 }
 export async function assertExportJobAccess(tx: Prisma.TransactionClient, scope: SyncScope, actor: string, query: Prisma.JsonValue) {
   await assertExportAccess(tx, scope, actor);
-  const access = await amazonDataAccess(scope, actor, tx, "export"), frozen = query as Record<string, unknown>;
-  if (Array.isArray(frozen._scopeSourceIds)) {
-    if (frozen._scopeSourceIds.some(id => typeof id !== "string")) throw new SyncInputError("导出范围无效。", 403);
-    const sources = await tx.amazonSyncDataSource.findMany({ where: { AND: [scope, sellerAccessWhere(access), { id: { in: frozen._scopeSourceIds as string[] } }] }, select: { id: true } });
-    if (sources.length !== frozen._scopeSourceIds.length) throw new SyncInputError("导出原始站点授权已撤销。", 403);
-    return;
+  const frozen = query as Record<string, unknown>;
+  // Stored files are cached business data: every status/download/worker read
+  // must revalidate the frozen single account and its current official auth.
+  if (!frozen || frozen._scopeAll === true || !Array.isArray(frozen._scopeSellerIds) || frozen._scopeSellerIds.length !== 1 || typeof frozen._scopeSellerIds[0] !== "string") throw new SyncInputError("导出缺少唯一账号范围，请重新申请。", 403);
+  const sellerAccountId = frozen._scopeSellerIds[0];
+  if (frozen.sellerAccountId !== undefined && frozen.sellerAccountId !== sellerAccountId) throw new SyncInputError("导出账号范围不一致。", 403);
+  const params = new URLSearchParams({ sellerAccountId, ...(typeof frozen.marketplaceId === "string" ? { marketplaceId: frozen.marketplaceId } : {}) });
+  await amazonAccountReadAccess(scope, actor, params, tx, "sales_traffic");
+  if (frozen._scopeSourceIds !== undefined) {
+    if (!Array.isArray(frozen._scopeSourceIds) || !frozen._scopeSourceIds.length || frozen._scopeSourceIds.some(id => typeof id !== "string") || new Set(frozen._scopeSourceIds).size !== frozen._scopeSourceIds.length) throw new SyncInputError("导出来源范围无效。", 403);
+    const sources = await tx.amazonSyncDataSource.findMany({ where: { ...scope, sellerAccountId, resource: "sales_traffic", id: { in: frozen._scopeSourceIds as string[] }, ...(typeof frozen.marketplaceId === "string" ? { marketplaceId: frozen.marketplaceId } : {}) }, select: { id: true } });
+    if (sources.length !== frozen._scopeSourceIds.length) throw new SyncInputError("导出原始账号或来源绑定已变化。", 403);
+    for (const source of sources) await amazonAccountReadAccess(scope, actor, new URLSearchParams({ sellerAccountId, sourceId: source.id }), tx, "sales_traffic");
   }
-  // Legacy exports lack a site fence and must be recreated by restricted members.
-  if (!access.allSellers && access.scopes) throw new SyncInputError("旧导出缺少站点范围，请重新申请。", 403);
-  if (frozen._scopeAll === true) { if (!access.allSellers) throw new SyncInputError("导出原始范围授权已撤销。", 403); return; }
-  if (!Array.isArray(frozen._scopeSellerIds) || frozen._scopeSellerIds.some(id => typeof id !== "string")) throw new SyncInputError("导出缺少冻结范围授权，请重新申请。", 403);
-  if (!access.allSellers && frozen._scopeSellerIds.some(id => !access.sellerIds.includes(id as string))) throw new SyncInputError("导出原始 Seller 授权已撤销。", 403);
+
 }
 export async function requestSalesExport(scope: SyncScope, actor: string, body: Record<string, unknown>) {
   if (process.env.QUEUE_DRIVER !== "redis") throw new SyncInputError("导出需要 Redis Worker，不能在请求内执行。", 503);
@@ -43,10 +45,10 @@ export async function requestSalesExport(scope: SyncScope, actor: string, body: 
   return prisma.$transaction(async tx => {
     await scopeLock(tx, scope); await assertExportAccess(tx, scope, actor);
     if (typeof filtersQuery.sellerAccountId === "string") await assertSellerAccess(scope, actor, [filtersQuery.sellerAccountId], tx, "export");
-    const access = await amazonDataAccess(scope, actor, tx, "export");
+    const access = await amazonAccountReadAccess(scope, actor, params, tx, "sales_traffic");
     const sources = await tx.amazonSyncDataSource.findMany({ where: { AND: [scope, sellerAccessWhere(access), { resource: "sales_traffic", ...(typeof filtersQuery.sellerAccountId === "string" ? { sellerAccountId: filtersQuery.sellerAccountId } : {}), ...(typeof filtersQuery.marketplaceId === "string" ? { marketplaceId: filtersQuery.marketplaceId } : {}) }] }, select: { id: true }, take: 201 });
     if (sources.length > 200) throw new SyncInputError("导出数据源超过安全上限。", 409);
-    const query: Prisma.InputJsonObject = { ...filtersQuery, _scopeSourceIds: sources.map(s => s.id).sort(), _scopeAll: access.allSellers && !filtersQuery.sellerAccountId, _scopeSellerIds: typeof filtersQuery.sellerAccountId === "string" ? [filtersQuery.sellerAccountId] : [...access.sellerIds].sort() };
+    const query: Prisma.InputJsonObject = { ...filtersQuery, sellerAccountId: access.sellerIds[0], _scopeSourceIds: sources.map(s => s.id).sort(), _scopeAll: access.allSellers && !filtersQuery.sellerAccountId, _scopeSellerIds: typeof filtersQuery.sellerAccountId === "string" ? [filtersQuery.sellerAccountId] : [...access.sellerIds].sort() };
     const prior = await tx.amazonDataExport.findUnique({ where: { organizationId_workspaceId_requestedByUserId_idempotencyKey: { ...scope, requestedByUserId: actor, idempotencyKey: key } } });
     if (prior) { if (canonical(prior.query) !== canonical(query) || (body.asOf !== undefined && prior.cutoff.getTime() !== cutoff.getTime())) throw new SyncInputError("导出幂等键已用于其他筛选。", 409); return { id: prior.id, status: prior.status }; }
     const job = await tx.amazonDataExport.create({ data: { ...scope, id: randomUUID(), requestedByUserId: actor, idempotencyKey: key, query, cutoff } });

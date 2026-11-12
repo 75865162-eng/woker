@@ -1,5 +1,8 @@
 ﻿﻿"use client";
 
+import { ProductManagementFields } from "./product-management-fields";
+import { stripAmazonProductObservations } from "@/lib/products/amazon-field-policy";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Bell, ExternalLink, FileDown, FileUp, History, LoaderCircle, PackagePlus, Save, Video, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -88,6 +91,7 @@ import { ProductVersionModal } from "./product-version-modal";
 import { TrialProductEditor as ExtractedTrialProductEditor } from "./trial-product-editor";
 import { ProductPatentInformationSection } from "./product-patent-information";
 import { ProductMeetingNotes } from "./product-meeting-notes";
+import { defaultProductListSort, type ProductListSort, type ProductListSortField } from "@/lib/products/list-sort";
 
 type ProductWorkbenchCache = {
   products: Product[];
@@ -109,8 +113,6 @@ let productWorkbenchCache: ProductWorkbenchCache | null = null;
 let productWorkbenchCacheWorkspaceId: string | null = null;
 const productDetailCache = new Map<string, Product>();
 const productDetailInflight = new Map<string, Promise<Product>>();
-const productListResponseCache = new Map<string, { cachedAt: number; data: { products?: Array<Product | ProductListItem>; pagination?: { total?: number; pageCount?: number }; summary?: ProductListSummary; error?: string } }>();
-const productListInflight = new Map<string, Promise<{ products?: Array<Product | ProductListItem>; pagination?: { total?: number; pageCount?: number }; summary?: ProductListSummary; error?: string }>>();
 const productSummaryResponseCache = new Map<string, { cachedAt: number; data: { summary?: ProductListSummary; error?: string } }>();
 const productSummaryInflight = new Map<string, Promise<{ summary?: ProductListSummary; error?: string }>>();
 const REQUEST_CACHE_TTL_MS = 30_000;
@@ -210,12 +212,18 @@ function getProductListRequestCacheKey(input: {
   filters: ProductFilters;
   page: number;
   pageSize: number;
+  sort?: ProductListSort;
   includeSummary?: boolean;
   detail?: boolean;
+  sellerAccountId?: string;
 }) {
   const params = new URLSearchParams({
+    workspaceId: readCurrentWorkspaceId(),
+    ...(input.sellerAccountId ? { sellerAccountId: input.sellerAccountId } : {}),
     page: String(input.page),
     pageSize: String(input.pageSize),
+    sortBy: (input.sort ?? defaultProductListSort).field,
+    sortDirection: (input.sort ?? defaultProductListSort).direction,
     detail: "list",
     includeSummary: input.includeSummary === false ? "false" : "true",
   });
@@ -239,8 +247,6 @@ function getProductSummaryRequestCacheKey() {
 }
 
 function invalidateProductRequestCaches() {
-  productListResponseCache.clear();
-  productListInflight.clear();
   productSummaryResponseCache.clear();
   productSummaryInflight.clear();
 }
@@ -272,7 +278,7 @@ function readCachedProductWorkbench() {
   const workspaceId = readCurrentWorkspaceId();
 
   if (productWorkbenchCache && productWorkbenchCacheWorkspaceId === workspaceId) {
-    return productWorkbenchCache;
+    return { ...productWorkbenchCache, products: productWorkbenchCache.products.map(stripAmazonProductObservations) };
   }
 
   if (typeof window === "undefined") {
@@ -290,7 +296,7 @@ function readCachedProductWorkbench() {
       return null;
     }
 
-    const lightweightProducts = parsed.products.map((product) => toLightweightProduct(product));
+    const lightweightProducts = parsed.products.map((product) => stripAmazonProductObservations(toLightweightProduct(product)));
     for (const product of lightweightProducts) {
       if (hasWorkbookDetail(product)) {
         productDetailCache.set(getProductDetailCacheKeyWithMode(workspaceId, product.sku, true), product);
@@ -310,6 +316,7 @@ function readCachedProductWorkbench() {
 }
 
 function writeCachedProductWorkbench(cache: ProductWorkbenchCache) {
+  cache = { ...cache, products: cache.products.map(stripAmazonProductObservations) };
   productWorkbenchCache = cache;
   productWorkbenchCacheWorkspaceId = readCurrentWorkspaceId();
   for (const product of cache.products) {
@@ -330,6 +337,8 @@ function writeCachedProductWorkbench(cache: ProductWorkbenchCache) {
 }
 
 export function ProductWorkbench({ initialData }: { initialData?: ProductWorkbenchInitialData }) {
+  const [amazonAccounts, setAmazonAccounts] = useState<Array<{ id: string; displayName: string }>>([]);
+  const [amazonAccountId, setAmazonAccountId] = useState("");
   const searchParams = useSearchParams();
   const shellUser = useAppShellUser();
   const canEditProducts = roleCanPerformAction(shellUser?.userRole, "products", "edit", shellUser?.rolePermissions);
@@ -340,7 +349,7 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
       && (typeof window === "undefined" || readCurrentWorkspaceId() === initialData.workspaceId),
   );
   const [products, setProducts] = useState<Product[]>(() => (
-    hasServerInitialData ? (initialData?.products as unknown as Product[]) : initialCachedWorkbench?.products ?? []
+    (hasServerInitialData ? (initialData?.products as unknown as Product[]) : initialCachedWorkbench?.products ?? []).map(stripAmazonProductObservations)
   ));
   const [, setTrialProducts] = useState<TrialProductDraft[]>([]);
   const [filters, setFilters] = useState<ProductFilters>(() => (
@@ -356,6 +365,7 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
   const [versionProduct, setVersionProduct] = useState<Product | null>(null);
   const [page, setPage] = useState(() => (hasServerInitialData ? initialData?.pagination.page : initialCachedWorkbench?.page) ?? 1);
   const [pageSize, setPageSize] = useState(() => (hasServerInitialData ? initialData?.pagination.pageSize : initialCachedWorkbench?.pageSize) ?? 20);
+  const [sort, setSort] = useState<ProductListSort>(defaultProductListSort);
   const [productsTotalCount, setProductsTotalCount] = useState(() => (
     hasServerInitialData ? initialData?.pagination.total : initialCachedWorkbench?.totalCount
   ) ?? 0);
@@ -463,47 +473,25 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
     filters: ProductFilters;
     page: number;
     pageSize: number;
+    sort?: ProductListSort;
     includeSummary?: boolean;
     detail?: boolean;
     signal?: AbortSignal;
   }) => {
-    const requestCacheKey = getProductListRequestCacheKey(input);
-    const cached = productListResponseCache.get(requestCacheKey);
-    if (cached && Date.now() - cached.cachedAt < REQUEST_CACHE_TTL_MS) {
-      return cached.data;
-    }
-
-    const inFlight = productListInflight.get(requestCacheKey);
-    if (inFlight) {
-      return inFlight;
-    }
-
+    const requestCacheKey = getProductListRequestCacheKey({ ...input, sort: input.sort ?? defaultProductListSort, sellerAccountId: amazonAccountId });
     const params = requestCacheKey.split("::").slice(1).join("::");
-    const promise = (async () => {
-      const response = await fetch(`/api/products?${params}`, { cache: "no-store", signal: input.signal });
-      const data = (await response.json()) as {
-        products?: Array<Product | ProductListItem>;
-        pagination?: { total?: number; pageCount?: number };
-        summary?: ProductListSummary;
-        error?: string;
-      };
-
-      if (!response.ok) {
-        throw new Error(data.error || "商品数据读取失败");
-      }
-
-      productListResponseCache.set(requestCacheKey, { cachedAt: Date.now(), data });
-      return data;
-    })();
-
-    productListInflight.set(requestCacheKey, promise);
-
-    try {
-      return await promise;
-    } finally {
-      productListInflight.delete(requestCacheKey);
-    }
-  }, []);
+    const response = await fetch(`/api/products?${params}`, { cache: "no-store", signal: input.signal });
+    const data = (await response.json()) as {
+      products?: Array<Product | ProductListItem>;
+      pagination?: { total?: number; pageCount?: number };
+      summary?: ProductListSummary;
+      amazonAccounts?: Array<{ id: string; displayName: string }>;
+      error?: string;
+    };
+    if (!response.ok) throw new Error(data.error || "商品数据读取失败");
+    if (!input.signal?.aborted) setAmazonAccounts(data.amazonAccounts ?? []);
+    return data;
+  }, [amazonAccountId]);
 
   const loadProductSummary = useCallback(async (signal?: AbortSignal) => {
     const requestId = ++summaryRequestSeq.current;
@@ -661,22 +649,7 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
 
   useEffect(() => {
     const isFirstLoad = !initialDataConsumedRef.current;
-    const hasMatchingServerData =
-      isFirstLoad
-      && Boolean(initialData)
-      && readCurrentWorkspaceId() === initialData?.workspaceId
-      && page === initialData?.pagination.page
-      && pageSize === initialData?.pagination.pageSize
-      && !hasActiveProductListFilters(filters);
-
     initialDataConsumedRef.current = true;
-
-    if (hasMatchingServerData) {
-      previousFiltersRef.current = filters;
-      previousPageRef.current = page;
-      previousPageSizeRef.current = pageSize;
-      return;
-    }
 
     const filtersChanged = previousFiltersRef.current !== null
       && JSON.stringify(previousFiltersRef.current) !== JSON.stringify(filters);
@@ -696,6 +669,7 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
             filters,
             page,
             pageSize,
+            sort,
             includeSummary: true,
             detail: true,
             signal: controller.signal,
@@ -758,7 +732,7 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [fetchProducts, filters, initialData, loadProductSummary, page, pageSize]);
+  }, [fetchProducts, filters, initialData, loadProductSummary, page, pageSize, sort]);
 
   async function reloadProducts(input?: { filters?: ProductFilters; page?: number; pageSize?: number }) {
     const nextFilters = input?.filters ?? filters;
@@ -1301,6 +1275,24 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
           <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
             <div>
               <CardTitle>产品列表</CardTitle>
+              {amazonAccounts.length > 0 && (
+                <label className="mt-2 flex items-center gap-2 text-xs">
+                  Amazon 快照账号
+                  <select
+                    aria-label="Amazon 快照账号"
+                    value={amazonAccountId}
+                    onChange={event => {
+                      setProducts(rows => rows.map(stripAmazonProductObservations));
+                      setActiveProduct(row => row ? stripAmazonProductObservations(row) : null);
+                      setAmazonAccountId(event.target.value);
+                    }}
+                    className="h-8 border border-border bg-white px-2"
+                  >
+                    <option value="">{amazonAccounts.length === 1 ? "自动选择已分配账号" : "请选择账号"}</option>
+                    {amazonAccounts.map(account => <option key={account.id} value={account.id}>{account.displayName || account.id}</option>)}
+                  </select>
+                </label>
+              )}
               <p className="mt-1 text-xs font-medium text-muted">新增 SKU 默认待开发；流转后超过 3 天且未上架、未取消的商品会自动进入超期预警。</p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -1350,6 +1342,11 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
               products={products}
               totalCount={productsTotalCount}
               loading={productsLoading}
+              sort={sort}
+              onSortChange={(field: ProductListSortField) => {
+                setSort(current => ({ field, direction: current.field === field && current.direction === "asc" ? "desc" : "asc" }));
+                setPage(1);
+              }}
               onOpenProduct={(sku) => void openProduct(sku)}
               onOpenHistory={setVersionProduct}
               onPrefetchProduct={prefetchProduct}
@@ -2201,7 +2198,10 @@ export function ProductEditor({
             <Card>
               <CardContent className="grid gap-5 p-5 lg:grid-cols-[280px_minmax(0,1fr)]">
                 <fieldset disabled={!showHeavyDetail} className="min-w-0">
-                {!showHeavyDetail ? <p className="text-xs text-muted">完整图片附件待详情对齐</p> : null}
+                <fieldset disabled={!showHeavyDetail} className="min-w-0">
+              <ProductManagementFields value={draft.management} onChange={(management) => setField("management", management)} workspaceId={editorWorkspaceId} />
+            </fieldset>
+            {!showHeavyDetail ? <p className="text-xs text-muted">完整图片附件待详情对齐</p> : null}
                 <ProductEditorImagePanel
                   imageAssets={draft.imageAssets}
                   uploadingFiles={imageUploads}

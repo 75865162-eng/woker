@@ -47,7 +47,7 @@ export const researchBearerDependencies: ResearchBearerDependencies = {
     const member = await prisma.organizationMember.findUnique({ where: { organizationId_userId: { organizationId: identity.organizationId, userId: identity.userId } }, select: { role: true, user: { select: { id: true, name: true, email: true, status: true } }, organization: { select: { name: true } } } });
     if (!member || member.user.status !== "active" || !await assertWorkspaceAccess(identity.organizationId, identity.workspaceId)) return denied();
     // The MCP live checker fails closed on DB errors and does not seed role settings on read.
-    try { await assertAmazonAction(identity, identity.userId, action, prisma, moduleId); }
+    try { if (moduleId !== "amazon_account" || action !== "view") await assertAmazonAction(identity, identity.userId, action, prisma, moduleId); }
     catch (error) { if (error instanceof SyncInputError && error.status === 403) return denied(); throw error; }
     return { ok: true, user: { id: member.user.id, organizationId: identity.organizationId, organizationName: member.organization.name, role: member.role, email: member.user.email, name: member.user.name } };
   },

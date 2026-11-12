@@ -2,7 +2,8 @@ import { SyncInputError } from "@/lib/amazon-sync/policy";
 import { auditAmazonDataRead } from "@/lib/amazon-sync/read-audit";
 import { publishedSnapshotScopes, inventoryPublishedWhere, oldestSnapshot } from "@/lib/amazon-sync/read";
 import { NextResponse } from "next/server";
-import { requireApiPermission } from "@/lib/auth/api-permissions";
+import { requireAmazonReadSession } from "@/lib/auth/amazon-read-session";
+import { amazonAccountReadAccess, AmazonReadError } from "@/lib/amazon-sync/read-account";
 import { prisma } from "@/lib/db/prisma";
 import { inventorySnapshotStatus } from "@/lib/operations/readiness";
 import { parseInventorySnapshotFilters } from "@/lib/operations/read-models";
@@ -12,7 +13,7 @@ export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   try {
-    const permission = await requireApiPermission("operations", "view", request);
+    const permission = await requireAmazonReadSession(request);
     if (!permission.ok) return permission.response;
 
     const scope = workspaceScopeFromRequest(request);
@@ -26,7 +27,9 @@ export async function GET(request: Request) {
     }
     const tenantScope = { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId };
     await auditAmazonDataRead(tenantScope, permission.user.id, "inventory", permission.user.role);
-    const heads = await publishedSnapshotScopes(tenantScope, "inventory", permission.user.id);
+    const params = new URL(request.url).searchParams;
+    const access = await amazonAccountReadAccess(tenantScope, permission.user.id, params, prisma, "inventory");
+    const heads = await publishedSnapshotScopes(tenantScope, "inventory", permission.user.id, { sellerAccountId: access.sellerIds[0], ...(params.get("marketplaceId") ? { marketplaceId: params.get("marketplaceId")! } : {}) });
     if (!heads.length) {
       return NextResponse.json({
         rows: [],
@@ -46,6 +49,7 @@ export async function GET(request: Request) {
         take: filters.pageSize,
       }),
     ]);
+    await amazonAccountReadAccess(tenantScope, permission.user.id, params, prisma, "inventory");
     const capturedAt = oldestSnapshot(heads);
     return NextResponse.json({
       rows,
@@ -57,6 +61,6 @@ export async function GET(request: Request) {
       },
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof SyncInputError ? "数据范围不可访问。" : "库存快照读取失败。" }, { status: error instanceof SyncInputError ? error.status : 500, headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ error: error instanceof SyncInputError ? error.message : "库存快照读取失败。", ...(error instanceof AmazonReadError ? { code: error.businessCode } : {}) }, { status: error instanceof SyncInputError ? error.status : 500, headers: { "Cache-Control": "no-store" } });
   }
 }

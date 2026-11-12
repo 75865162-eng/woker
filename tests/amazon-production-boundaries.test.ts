@@ -10,23 +10,23 @@ import { withApprovedChange } from "@/lib/amazon-sync/approved-context";
 import { getAmazonSyncQueueName, amazonSyncQueueName } from "@/lib/queue/redis-queue";
 
 const scope = { organizationId: "fixture-org", workspaceId: "fixture-ws" };
-test("scope grants require a live member, workspace and exact seller; admins retain access", async () => {
+test("scope grants require a live member, workspace and exact seller; admins also require account assignment", async () => {
   let role = "operations", active = true, workspace = true, sellers = ["seller-a"];
   const db = {
     amazonRoleDataAccessGrant: { findMany: async () => [] },
     organizationRosterRole: { findMany: async () => [{ id: "operations", permissions: { operations: ["view"] } }] },
     organizationMember: { findUnique: async (arg: { where: { organizationId_userId: { organizationId: string } } }) => { assert.equal(arg.where.organizationId_userId.organizationId, scope.organizationId); return { role, user: { status: active ? "active" : "disabled" } }; } },
     workspaceScope: { findUnique: async (arg: { where: { organizationId_id: object } }) => { assert.deepEqual(arg.where.organizationId_id, { organizationId: scope.organizationId, id: scope.workspaceId }); return workspace ? { id: scope.workspaceId } : null; } },
-    amazonDataAccessGrant: { findMany: async (arg: { where: object }) => { assert.deepEqual(arg.where, { ...scope, userId: "user", enabled: true }); return sellers.map(sellerAccountId => ({ sellerAccountId })); } },
+    amazonDataAccessGrant: { findMany: async (arg: { where: object }) => { assert.deepEqual(arg.where, { ...scope, userId: "user", enabled: true, seller: { status: "active" } }); return sellers.map(sellerAccountId => ({ sellerAccountId })); } },
   };
   const tx = db as never;
   await assert.rejects(() => amazonDataAccess(scope, undefined, tx), /缺少/);
   assert.deepEqual(sellerAccessWhere(await amazonDataAccess(scope, "user", tx)), { sellerAccountId: { in: ["seller-a"] } });
   await assertSellerAccess(scope, "user", ["seller-a"], tx);
   await assert.rejects(() => assertSellerAccess(scope, "user", ["seller-b"], tx), /超出/);
-  role = "unknown-role"; await assert.rejects(() => amazonDataAccess(scope, "user", tx), /不可访问/); role = "operations";
-  sellers = []; await assert.rejects(() => amazonDataAccess(scope, "user", tx), /没有有效/);
-  role = "owner"; assert.equal((await amazonDataAccess(scope, "user", tx)).allSellers, true);
+  role = "unknown-role"; assert.equal((await amazonDataAccess(scope, "user", tx)).allSellers, false); role = "operations";
+  sellers = []; await assert.rejects(() => amazonDataAccess(scope, "user", tx), /没有已分配/);
+  role = "owner"; await assert.rejects(() => amazonDataAccess(scope, "user", tx), /没有已分配/);
   active = false; await assert.rejects(() => amazonDataAccess(scope, "user", tx), /不可访问/);
   active = true; workspace = false; await assert.rejects(() => amazonDataAccess(scope, "user", tx), /不可访问/);
 });
@@ -106,6 +106,7 @@ test("narrowed grants cannot download an export that was created with wider perm
   const prior = process.env.AMAZON_SYNC_CENTER_SCOPES;
   process.env.AMAZON_SYNC_CENTER_SCOPES = JSON.stringify([[scope.organizationId, scope.workspaceId]]);
   const tx = {
+    amazonSyncDataSource: { findMany: async () => [{ authorization: { status: "CONFIGURED", identityVerifiedAt: new Date() } }] },
     workspaceScope: { findUnique: async () => ({ id: scope.workspaceId }) },
     organizationMember: { findUnique: async () => ({ role: "operations", user: { status: "active" } }) },
     amazonRoleDataAccessGrant: { findMany: async () => [] },
@@ -114,8 +115,8 @@ test("narrowed grants cannot download an export that was created with wider perm
   } as never;
   try {
     await assertExportJobAccess(tx, scope, "user", { _scopeAll: false, _scopeSellerIds: ["seller-a"] });
-    await assert.rejects(() => assertExportJobAccess(tx, scope, "user", { _scopeAll: true, _scopeSellerIds: [] }), /撤销/);
-    await assert.rejects(() => assertExportJobAccess(tx, scope, "user", { _scopeAll: false, _scopeSellerIds: ["seller-a", "seller-b"] }), /撤销/);
-    await assert.rejects(() => assertExportJobAccess(tx, scope, "user", {}), /缺少冻结/);
+    await assert.rejects(() => assertExportJobAccess(tx, scope, "user", { _scopeAll: true, _scopeSellerIds: [] }), /唯一账号/);
+    await assert.rejects(() => assertExportJobAccess(tx, scope, "user", { _scopeAll: false, _scopeSellerIds: ["seller-a", "seller-b"] }), /唯一账号/);
+    await assert.rejects(() => assertExportJobAccess(tx, scope, "user", {}), /缺少唯一账号/);
   } finally { if (prior === undefined) delete process.env.AMAZON_SYNC_CENTER_SCOPES; else process.env.AMAZON_SYNC_CENTER_SCOPES = prior; }
 });

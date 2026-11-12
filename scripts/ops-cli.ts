@@ -2,7 +2,9 @@ import { auditAmazonDataRead } from "../src/lib/amazon-sync/read-audit";
 import { applyRuntimeEnvironment } from "./runtime/environment.mjs";
 import { prisma } from "../src/lib/db/prisma";
 import { PpcReadError } from "../src/lib/operations/ppc-read";
-import { OpsError, opsHelp, parseOpsArgs, opsIdentity, runOpsCommand, formatOpsOutput } from "../src/lib/operations/cli";
+import { OpsError, opsHelp, parseOpsArgs, opsIdentity, runOpsCommand, assertOpsReadAccess, formatOpsOutput } from "../src/lib/operations/cli";
+import { SyncInputError } from "../src/lib/amazon-sync/policy";
+import { AmazonReadError } from "../src/lib/amazon-sync/read-account";
 
 async function main() {
   const args = process.argv.slice(2);
@@ -12,16 +14,20 @@ async function main() {
   const input = parseOpsArgs(args);
   const identity = opsIdentity(input, process.env);
   if (!process.env.DATABASE_URL) throw new OpsError("DATABASE_REQUIRED", "DATABASE_URL is required.", 4);
+  const access = await assertOpsReadAccess(prisma, identity, input);
+  if (access) input.options["seller-account"] = access.sellerIds[0];
   const result = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SET TRANSACTION READ ONLY`;
     return runOpsCommand(tx, identity, input);
   }, { timeout: 30000, isolationLevel: "RepeatableRead" });
   await auditAmazonDataRead(identity, identity.actorUserId, `cli:${input.command}`);
+  // Outside the RepeatableRead snapshot: do not print data after revocation.
+  await assertOpsReadAccess(prisma, identity, input);
   console.log(formatOpsOutput(result, input.json));
 }
 main().catch((error: unknown) => {
   const known = error instanceof OpsError || error instanceof PpcReadError;
-  const payload = { error: { code: known ? error.code : "READ_FAILED", message: known ? error.message : "本地数据库读取/分析失败；请检查数据、连接及权限。未执行 Amazon 写入。" } };
+  const payload = { error: { code: known ? error.code : error instanceof AmazonReadError ? error.businessCode : error instanceof SyncInputError ? "FORBIDDEN" : "READ_FAILED", message: known || error instanceof SyncInputError ? error.message : "本地数据库读取/分析失败；请检查数据、连接及权限。未执行 Amazon 写入。" } };
   console.error(process.argv.includes("--json") ? JSON.stringify(payload) : `${payload.error.code}: ${payload.error.message}`);
   process.exitCode = known ? error.exitCode : 4;
 }).finally(async () => { if (process.env.DATABASE_URL) await prisma.$disconnect(); });

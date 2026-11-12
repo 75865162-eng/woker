@@ -1,0 +1,2876 @@
+{
+  "provenance": {
+    "apiVersion": "2024-03-20",
+    "source": "Wimoor bundled Java SDK",
+    "sourceGeneratedAt": "2024-11-13",
+    "apiSha256": "181f9a04f7e1f99aed03ce68de4f0b05f1e26a01ae634bf3f4a321eff19ae362",
+    "currentOfficialParityVerified": false,
+    "networkAccess": false
+  },
+  "operations": {
+    "cancelInboundPlan": {
+      "responseType": "CancelInboundPlanResponse",
+      "responseSourceSha256": "916907e89304aa5067d9c880085e643559079a5e0625f94c5f0778ffd8594fad",
+      "asynchronous": true,
+      "method": "PUT",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/cancellation",
+      "pathParameters": [
+        "inboundPlanId"
+      ],
+      "query": {},
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "cancelSelfShipAppointment": {
+      "responseType": "CancelSelfShipAppointmentResponse",
+      "responseSourceSha256": "15adff9822b8e16a65cb5cdc3fb2170f300dd5e0888803a5fef8052b65483651",
+      "asynchronous": true,
+      "method": "PUT",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/selfShipAppointmentCancellation",
+      "pathParameters": [
+        "inboundPlanId",
+        "shipmentId"
+      ],
+      "query": {},
+      "bodyType": "CancelSelfShipAppointmentRequest",
+      "bodyRequired": true
+    },
+    "confirmDeliveryWindowOptions": {
+      "responseType": "ConfirmDeliveryWindowOptionsResponse",
+      "responseSourceSha256": "cd07e1368f9da2048129d24087c330117a7ffc1c4b054160417a3cda2201a22b",
+      "asynchronous": true,
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/deliveryWindowOptions/{deliveryWindowOptionId}/confirmation",
+      "pathParameters": [
+        "inboundPlanId",
+        "shipmentId",
+        "deliveryWindowOptionId"
+      ],
+      "query": {},
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "confirmPackingOption": {
+      "responseType": "ConfirmPackingOptionResponse",
+      "responseSourceSha256": "52e2826925f17b4a17352053ee5666fff9f172a898762521c797741979b55c7f",
+      "asynchronous": true,
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/packingOptions/{packingOptionId}/confirmation",
+      "pathParameters": [
+        "inboundPlanId",
+        "packingOptionId"
+      ],
+      "query": {},
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "confirmPlacementOption": {
+      "responseType": "ConfirmPlacementOptionResponse",
+      "responseSourceSha256": "d2b6253a427140270e7ceb38323d4f6ccafeb07067cff00fb9c16e89d33df7ef",
+      "asynchronous": true,
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/placementOptions/{placementOptionId}/confirmation",
+      "pathParameters": [
+        "inboundPlanId",
+        "placementOptionId"
+      ],
+      "query": {},
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "confirmShipmentContentUpdatePreview": {
+      "responseType": "ConfirmShipmentContentUpdatePreviewResponse",
+      "responseSourceSha256": "c94ab41ac363b599f2d339074c48c64a70c278d045f8e08ca6a75f15d95b4190",
+      "asynchronous": true,
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/contentUpdatePreviews/{contentUpdatePreviewId}/confirmation",
+      "pathParameters": [
+        "inboundPlanId",
+        "shipmentId",
+        "contentUpdatePreviewId"
+      ],
+      "query": {},
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "confirmTransportationOptions": {
+      "responseType": "ConfirmTransportationOptionsResponse",
+      "responseSourceSha256": "bf96abc6e11c5f5f0b197aeafb3f44c1a2eb8309ac0bcde75a37a26b4fadc841",
+      "asynchronous": true,
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/transportationOptions/confirmation",
+      "pathParameters": [
+        "inboundPlanId"
+      ],
+      "query": {},
+      "bodyType": "ConfirmTransportationOptionsRequest",
+      "bodyRequired": true
+    },
+    "createInboundPlan": {
+      "responseType": "CreateInboundPlanResponse",
+      "responseSourceSha256": "3c3193210a9e30926c2e6c339a269ffc39ffef80bb25b3ab4d64dd84f22c3482",
+      "asynchronous": true,
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/inboundPlans",
+      "pathParameters": [],
+      "query": {},
+      "bodyType": "CreateInboundPlanRequest",
+      "bodyRequired": true
+    },
+    "createMarketplaceItemLabels": {
+      "responseType": "CreateMarketplaceItemLabelsResponse",
+      "responseSourceSha256": "9135cef349e2820b6c3169d81a71b4517f56a7f7bef71d06533b1bc743db7e21",
+      "asynchronous": false,
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/items/labels",
+      "pathParameters": [],
+      "query": {},
+      "bodyType": "CreateMarketplaceItemLabelsRequest",
+      "bodyRequired": true
+    },
+    "generateDeliveryWindowOptions": {
+      "responseType": "GenerateDeliveryWindowOptionsResponse",
+      "responseSourceSha256": "b8f004e7d92941d81fa6ce9a25a6e27e0296818ae48e94cf98d6bc75919658a3",
+      "asynchronous": true,
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/deliveryWindowOptions",
+      "pathParameters": [
+        "inboundPlanId",
+        "shipmentId"
+      ],
+      "query": {},
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "generatePackingOptions": {
+      "responseType": "GeneratePackingOptionsResponse",
+      "responseSourceSha256": "d9172946a262c9e2a4895734f2ba51219909115f45a9c66457cf1df903f3b5b1",
+      "asynchronous": true,
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/packingOptions",
+      "pathParameters": [
+        "inboundPlanId"
+      ],
+      "query": {},
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "generatePlacementOptions": {
+      "responseType": "GeneratePlacementOptionsResponse",
+      "responseSourceSha256": "f1d413931d2ef74e52851271a8be7ad7e229c4f6bcbcea2289e6c3cc10d54b73",
+      "asynchronous": true,
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/placementOptions",
+      "pathParameters": [
+        "inboundPlanId"
+      ],
+      "query": {},
+      "bodyType": "GeneratePlacementOptionsRequest",
+      "bodyRequired": true
+    },
+    "generateSelfShipAppointmentSlots": {
+      "responseType": "GenerateSelfShipAppointmentSlotsResponse",
+      "responseSourceSha256": "f14ed86e73283306784f715fda72e12eec28f6fcfa765d097f727bf349b9d79b",
+      "asynchronous": true,
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/selfShipAppointmentSlots",
+      "pathParameters": [
+        "inboundPlanId",
+        "shipmentId"
+      ],
+      "query": {},
+      "bodyType": "GenerateSelfShipAppointmentSlotsRequest",
+      "bodyRequired": true
+    },
+    "generateShipmentContentUpdatePreviews": {
+      "responseType": "GenerateShipmentContentUpdatePreviewsResponse",
+      "responseSourceSha256": "edea0a106ae6e7c32ef742ab3b5d4f277c113bfb0d005c76da05b26461a831fa",
+      "asynchronous": true,
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/contentUpdatePreviews",
+      "pathParameters": [
+        "inboundPlanId",
+        "shipmentId"
+      ],
+      "query": {},
+      "bodyType": "GenerateShipmentContentUpdatePreviewsRequest",
+      "bodyRequired": true
+    },
+    "generateTransportationOptions": {
+      "responseType": "GenerateTransportationOptionsResponse",
+      "responseSourceSha256": "05b5514e9eb63dbe9024dcc000105aec05f86142c0d21ae50deb234fe3a58fc0",
+      "asynchronous": true,
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/transportationOptions",
+      "pathParameters": [
+        "inboundPlanId"
+      ],
+      "query": {},
+      "bodyType": "GenerateTransportationOptionsRequest",
+      "bodyRequired": true
+    },
+    "getDeliveryChallanDocument": {
+      "responseType": "GetDeliveryChallanDocumentResponse",
+      "responseSourceSha256": "0f50941b256358f6f28b165919b0ad47424bff38039cbed47d0fa2544cf9bb42",
+      "asynchronous": false,
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/deliveryChallanDocument",
+      "pathParameters": [
+        "inboundPlanId",
+        "shipmentId"
+      ],
+      "query": {},
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "getInboundOperationStatus": {
+      "responseType": "InboundOperationStatus",
+      "responseSourceSha256": "102515de0eb0f7fffd8a15e0e643b1c1ab33bcfaddc28e814581f3865b206063",
+      "asynchronous": false,
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/operations/{operationId}",
+      "pathParameters": [
+        "operationId"
+      ],
+      "query": {},
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "getInboundPlan": {
+      "responseType": "InboundPlan",
+      "responseSourceSha256": "4647efe47bd6145b681490f930b005c75f2174eae820de33c1cf60f7ace2652a",
+      "asynchronous": false,
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}",
+      "pathParameters": [
+        "inboundPlanId"
+      ],
+      "query": {},
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "getSelfShipAppointmentSlots": {
+      "responseType": "GetSelfShipAppointmentSlotsResponse",
+      "responseSourceSha256": "0b11becdbb4a21aa5d66c68332271ba7b8c8157c9ba8beb371776afa8dce9d18",
+      "asynchronous": false,
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/selfShipAppointmentSlots",
+      "pathParameters": [
+        "inboundPlanId",
+        "shipmentId"
+      ],
+      "query": {
+        "pageSize": {
+          "type": "Integer",
+          "required": false
+        },
+        "paginationToken": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "getShipment": {
+      "responseType": "Shipment",
+      "responseSourceSha256": "8dac291cc7e3ee0b55539314d425f45d1308edf876a677aa0265f8d40c37bf09",
+      "asynchronous": false,
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}",
+      "pathParameters": [
+        "inboundPlanId",
+        "shipmentId"
+      ],
+      "query": {},
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "getShipmentContentUpdatePreview": {
+      "responseType": "ContentUpdatePreview",
+      "responseSourceSha256": "49ad5df6501c33870e1f7d5ec7ba122c688f653fc0f9d2d0a0dae4aa781ad70e",
+      "asynchronous": false,
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/contentUpdatePreviews/{contentUpdatePreviewId}",
+      "pathParameters": [
+        "inboundPlanId",
+        "shipmentId",
+        "contentUpdatePreviewId"
+      ],
+      "query": {},
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "listDeliveryWindowOptions": {
+      "responseType": "ListDeliveryWindowOptionsResponse",
+      "responseSourceSha256": "3466dd05f48f16981750c65b0692e77f04fc50cfee9e9dc0a812ae010fbb5d5f",
+      "asynchronous": false,
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/deliveryWindowOptions",
+      "pathParameters": [
+        "inboundPlanId",
+        "shipmentId"
+      ],
+      "query": {
+        "pageSize": {
+          "type": "Integer",
+          "required": false
+        },
+        "paginationToken": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "listInboundPlanBoxes": {
+      "responseType": "ListInboundPlanBoxesResponse",
+      "responseSourceSha256": "1b56c9af4dfc0b2536ba260742e69287901f99a58d2b25f23740e5a910f1198d",
+      "asynchronous": false,
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/boxes",
+      "pathParameters": [
+        "inboundPlanId"
+      ],
+      "query": {
+        "pageSize": {
+          "type": "Integer",
+          "required": false
+        },
+        "paginationToken": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "listInboundPlanItems": {
+      "responseType": "ListInboundPlanItemsResponse",
+      "responseSourceSha256": "b0955a58eb4426e750d71cd33023354b545c46a881cc97cf0613e4b70d276451",
+      "asynchronous": false,
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/items",
+      "pathParameters": [
+        "inboundPlanId"
+      ],
+      "query": {
+        "pageSize": {
+          "type": "Integer",
+          "required": false
+        },
+        "paginationToken": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "listInboundPlanPallets": {
+      "responseType": "ListInboundPlanPalletsResponse",
+      "responseSourceSha256": "2a1aebd440854c24f2084b02f7b773df5ea89776a63f19e206d9b53e643289d1",
+      "asynchronous": false,
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/pallets",
+      "pathParameters": [
+        "inboundPlanId"
+      ],
+      "query": {
+        "pageSize": {
+          "type": "Integer",
+          "required": false
+        },
+        "paginationToken": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "listInboundPlans": {
+      "responseType": "ListInboundPlansResponse",
+      "responseSourceSha256": "1a43c25ba2a5023f0280fea4657463b938d770d16389e0518558606b1f4d648f",
+      "asynchronous": false,
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans",
+      "pathParameters": [],
+      "query": {
+        "pageSize": {
+          "type": "Integer",
+          "required": false
+        },
+        "paginationToken": {
+          "type": "String",
+          "required": false
+        },
+        "status": {
+          "type": "String",
+          "required": false
+        },
+        "sortBy": {
+          "type": "String",
+          "required": false
+        },
+        "sortOrder": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "listItemComplianceDetails": {
+      "responseType": "ListItemComplianceDetailsResponse",
+      "responseSourceSha256": "d77a1bf5af025138a919a1ff117da31deda001d3cb3387c03130e6fe353a709d",
+      "asynchronous": false,
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/items/compliance",
+      "pathParameters": [],
+      "query": {
+        "marketplaceId": {
+          "type": "String",
+          "required": true
+        },
+        "mskus": {
+          "type": "List<String>",
+          "collection": "multi",
+          "required": true
+        }
+      },
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "listPackingGroupBoxes": {
+      "responseType": "ListPackingGroupBoxesResponse",
+      "responseSourceSha256": "21f964a541bdb96378c471f17511577e790de86ee076b89ff723bc2a3e7c6eb6",
+      "asynchronous": false,
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/packingGroups/{packingGroupId}/boxes",
+      "pathParameters": [
+        "inboundPlanId",
+        "packingGroupId"
+      ],
+      "query": {
+        "pageSize": {
+          "type": "Integer",
+          "required": false
+        },
+        "paginationToken": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "listPackingGroupItems": {
+      "responseType": "ListPackingGroupItemsResponse",
+      "responseSourceSha256": "7b5ac9034167f1770165499435998b63e550b7721ade371be972f2fb94afa19e",
+      "asynchronous": false,
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/packingGroups/{packingGroupId}/items",
+      "pathParameters": [
+        "inboundPlanId",
+        "packingGroupId"
+      ],
+      "query": {
+        "pageSize": {
+          "type": "Integer",
+          "required": false
+        },
+        "paginationToken": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "listPackingOptions": {
+      "responseType": "ListPackingOptionsResponse",
+      "responseSourceSha256": "d4cd2c1224fc9b1c26f0ceae327ea3bfdaaf0765a0d577e33f3a72f62c6035e0",
+      "asynchronous": false,
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/packingOptions",
+      "pathParameters": [
+        "inboundPlanId"
+      ],
+      "query": {
+        "pageSize": {
+          "type": "Integer",
+          "required": false
+        },
+        "paginationToken": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "listPlacementOptions": {
+      "responseType": "ListPlacementOptionsResponse",
+      "responseSourceSha256": "f512dce036ae86df6b9f18424541308249cb82c64c83b9f62cda24232b7ff826",
+      "asynchronous": false,
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/placementOptions",
+      "pathParameters": [
+        "inboundPlanId"
+      ],
+      "query": {
+        "pageSize": {
+          "type": "Integer",
+          "required": false
+        },
+        "paginationToken": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "listPrepDetails": {
+      "responseType": "ListPrepDetailsResponse",
+      "responseSourceSha256": "e106c18025d8ff32cef71eb70a2394ca0a41f090432729492845802195784096",
+      "asynchronous": false,
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/items/prepDetails",
+      "pathParameters": [],
+      "query": {
+        "marketplaceId": {
+          "type": "String",
+          "required": true
+        },
+        "mskus": {
+          "type": "List<String>",
+          "collection": "multi",
+          "required": true
+        }
+      },
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "listShipmentBoxes": {
+      "responseType": "ListShipmentBoxesResponse",
+      "responseSourceSha256": "d8d6b047c6e8bd6f8caba27b8459c1c2c58022a75468eee48770520a4ec02b38",
+      "asynchronous": false,
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/boxes",
+      "pathParameters": [
+        "inboundPlanId",
+        "shipmentId"
+      ],
+      "query": {
+        "pageSize": {
+          "type": "Integer",
+          "required": false
+        },
+        "paginationToken": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "listShipmentContentUpdatePreviews": {
+      "responseType": "ListShipmentContentUpdatePreviewsResponse",
+      "responseSourceSha256": "974b97a8f712a7e092ba2c36ec4471c4e9d568bc75735b472558737894f5ff66",
+      "asynchronous": false,
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/contentUpdatePreviews",
+      "pathParameters": [
+        "inboundPlanId",
+        "shipmentId"
+      ],
+      "query": {
+        "pageSize": {
+          "type": "Integer",
+          "required": false
+        },
+        "paginationToken": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "listShipmentItems": {
+      "responseType": "ListShipmentItemsResponse",
+      "responseSourceSha256": "95b777b1ecdf46d2382b3e2525fcd78b59137f4460be4f9785eb5385573c75ac",
+      "asynchronous": false,
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/items",
+      "pathParameters": [
+        "inboundPlanId",
+        "shipmentId"
+      ],
+      "query": {
+        "pageSize": {
+          "type": "Integer",
+          "required": false
+        },
+        "paginationToken": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "listShipmentPallets": {
+      "responseType": "ListShipmentPalletsResponse",
+      "responseSourceSha256": "006030d0153ed38ed96486c95e4a51d32af22a1ba5f9254f77f9f235bc75adbf",
+      "asynchronous": false,
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/pallets",
+      "pathParameters": [
+        "inboundPlanId",
+        "shipmentId"
+      ],
+      "query": {
+        "pageSize": {
+          "type": "Integer",
+          "required": false
+        },
+        "paginationToken": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "listTransportationOptions": {
+      "responseType": "ListTransportationOptionsResponse",
+      "responseSourceSha256": "5784f5771234c929927b7be3409914c496ac217420df65f72950e36363fdce8d",
+      "asynchronous": false,
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/transportationOptions",
+      "pathParameters": [
+        "inboundPlanId"
+      ],
+      "query": {
+        "pageSize": {
+          "type": "Integer",
+          "required": false
+        },
+        "paginationToken": {
+          "type": "String",
+          "required": false
+        },
+        "placementOptionId": {
+          "type": "String",
+          "required": false
+        },
+        "shipmentId": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "bodyType": null,
+      "bodyRequired": false
+    },
+    "scheduleSelfShipAppointment": {
+      "responseType": "ScheduleSelfShipAppointmentResponse",
+      "responseSourceSha256": "0ab7243e06140e211c0499227181655d581b1193df8d4cb50d0a39f9b2629870",
+      "asynchronous": false,
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/selfShipAppointmentSlots/{slotId}/schedule",
+      "pathParameters": [
+        "inboundPlanId",
+        "shipmentId",
+        "slotId"
+      ],
+      "query": {},
+      "bodyType": "ScheduleSelfShipAppointmentRequest",
+      "bodyRequired": true
+    },
+    "setPackingInformation": {
+      "responseType": "SetPackingInformationResponse",
+      "responseSourceSha256": "0edfe14610c3fc21c29c5040b57066e682f0b69a064028955c6a44d2b2aff5c4",
+      "asynchronous": true,
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/packingInformation",
+      "pathParameters": [
+        "inboundPlanId"
+      ],
+      "query": {},
+      "bodyType": "SetPackingInformationRequest",
+      "bodyRequired": true
+    },
+    "setPrepDetails": {
+      "responseType": "SetPrepDetailsResponse",
+      "responseSourceSha256": "0b9680f32352d2816fa2b677c108641747ac3bc611b27f5c6e35936882a16cc7",
+      "asynchronous": true,
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/items/prepDetails",
+      "pathParameters": [],
+      "query": {},
+      "bodyType": "SetPrepDetailsRequest",
+      "bodyRequired": true
+    },
+    "updateInboundPlanName": {
+      "responseType": "Void",
+      "responseSourceSha256": null,
+      "asynchronous": false,
+      "method": "PUT",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/name",
+      "pathParameters": [
+        "inboundPlanId"
+      ],
+      "query": {},
+      "bodyType": "UpdateInboundPlanNameRequest",
+      "bodyRequired": true
+    },
+    "updateItemComplianceDetails": {
+      "responseType": "UpdateItemComplianceDetailsResponse",
+      "responseSourceSha256": "06a220d018966a9c4fc2a823684c29f3c705b823fb69afcff828b4a0bddbdf32",
+      "asynchronous": true,
+      "method": "PUT",
+      "path": "/inbound/fba/2024-03-20/items/compliance",
+      "pathParameters": [],
+      "query": {
+        "marketplaceId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "bodyType": "UpdateItemComplianceDetailsRequest",
+      "bodyRequired": true
+    },
+    "updateShipmentName": {
+      "responseType": "Void",
+      "responseSourceSha256": null,
+      "asynchronous": false,
+      "method": "PUT",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/name",
+      "pathParameters": [
+        "inboundPlanId",
+        "shipmentId"
+      ],
+      "query": {},
+      "bodyType": "UpdateShipmentNameRequest",
+      "bodyRequired": true
+    },
+    "updateShipmentSourceAddress": {
+      "responseType": "UpdateShipmentSourceAddressResponse",
+      "responseSourceSha256": "0b6211bcc9ba551e313dcd6730cbbcde92a38937d7627b8017b6d0b3436de167",
+      "asynchronous": true,
+      "method": "PUT",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/sourceAddress",
+      "pathParameters": [
+        "inboundPlanId",
+        "shipmentId"
+      ],
+      "query": {},
+      "bodyType": "UpdateShipmentSourceAddressRequest",
+      "bodyRequired": true
+    },
+    "updateShipmentTrackingDetails": {
+      "responseType": "UpdateShipmentTrackingDetailsResponse",
+      "responseSourceSha256": "b07a03472511f10746964ed100e32cc07df5adf615448c30904ba5d6b320ea45",
+      "asynchronous": true,
+      "method": "PUT",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/trackingDetails",
+      "pathParameters": [
+        "inboundPlanId",
+        "shipmentId"
+      ],
+      "query": {},
+      "bodyType": "UpdateShipmentTrackingDetailsRequest",
+      "bodyRequired": true
+    }
+  },
+  "models": {
+    "UpdateShipmentTrackingDetailsResponse": {
+      "fields": {
+        "operationId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "b07a03472511f10746964ed100e32cc07df5adf615448c30904ba5d6b320ea45"
+    },
+    "UpdateShipmentTrackingDetailsRequest": {
+      "fields": {
+        "trackingDetails": {
+          "type": "TrackingDetailsInput",
+          "required": true
+        }
+      },
+      "sourceSha256": "2379c4c168a93be89740f673165f76d77af2606be648b4c57333e5a866a35a3a"
+    },
+    "TrackingDetailsInput": {
+      "fields": {
+        "ltlTrackingDetail": {
+          "type": "LtlTrackingDetailInput",
+          "required": false
+        },
+        "spdTrackingDetail": {
+          "type": "SpdTrackingDetailInput",
+          "required": false
+        }
+      },
+      "sourceSha256": "51d8a762e03cbec6bbbec9b5d16f991e7352843a5be5d9fe78a4e6d8dab639e7"
+    },
+    "SpdTrackingDetailInput": {
+      "fields": {
+        "spdTrackingItems": {
+          "type": "List<SpdTrackingItemInput>",
+          "required": true
+        }
+      },
+      "sourceSha256": "480fb09a597ae019681af89e1c420edc683adaed62c57c7c5d23d1c4f4088a1f"
+    },
+    "SpdTrackingItemInput": {
+      "fields": {
+        "boxId": {
+          "type": "String",
+          "required": true
+        },
+        "trackingId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "8606123b86deac3662759c66f390b0b17d0e273891257edd4d5deb642c945e6b"
+    },
+    "LtlTrackingDetailInput": {
+      "fields": {
+        "billOfLadingNumber": {
+          "type": "String",
+          "required": false
+        },
+        "freightBillNumber": {
+          "type": "List<String>",
+          "required": true
+        }
+      },
+      "sourceSha256": "21a3749a9d3bab48996f9c3d1e3075aaf90e9f662f406df43d5997094b588fae"
+    },
+    "UpdateShipmentSourceAddressResponse": {
+      "fields": {
+        "operationId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "0b6211bcc9ba551e313dcd6730cbbcde92a38937d7627b8017b6d0b3436de167"
+    },
+    "UpdateShipmentSourceAddressRequest": {
+      "fields": {
+        "address": {
+          "type": "AddressInput",
+          "required": true
+        }
+      },
+      "sourceSha256": "a2bd1764c0e801f41354b82d1dd001aa324e59c23f5a512def86c5997fcf7f0f"
+    },
+    "AddressInput": {
+      "fields": {
+        "addressLine1": {
+          "type": "String",
+          "required": true
+        },
+        "addressLine2": {
+          "type": "String",
+          "required": false
+        },
+        "city": {
+          "type": "String",
+          "required": true
+        },
+        "companyName": {
+          "type": "String",
+          "required": false
+        },
+        "countryCode": {
+          "type": "String",
+          "required": true
+        },
+        "email": {
+          "type": "String",
+          "required": false
+        },
+        "name": {
+          "type": "String",
+          "required": true
+        },
+        "phoneNumber": {
+          "type": "String",
+          "required": true
+        },
+        "postalCode": {
+          "type": "String",
+          "required": true
+        },
+        "stateOrProvinceCode": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "sourceSha256": "6f7e644f78f0be2e65ecf775b403c4505e45488c0395064e982b660c013b7c48"
+    },
+    "UpdateShipmentNameRequest": {
+      "fields": {
+        "name": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "c64d5d845246e48d7de91350ac74e960a60b531b81b22d78115a5b2ac7f58491"
+    },
+    "UpdateItemComplianceDetailsResponse": {
+      "fields": {
+        "operationId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "06a220d018966a9c4fc2a823684c29f3c705b823fb69afcff828b4a0bddbdf32"
+    },
+    "UpdateItemComplianceDetailsRequest": {
+      "fields": {
+        "msku": {
+          "type": "String",
+          "required": true
+        },
+        "taxDetails": {
+          "type": "TaxDetails",
+          "required": true
+        }
+      },
+      "sourceSha256": "42c551ac7583f6911a7e6ee29e3997983820fa7a14e376407110602cce2a29c8"
+    },
+    "TaxDetails": {
+      "fields": {
+        "declaredValue": {
+          "type": "Currency",
+          "required": false
+        },
+        "hsnCode": {
+          "type": "String",
+          "required": false
+        },
+        "taxRates": {
+          "type": "List<TaxRate>",
+          "required": false
+        }
+      },
+      "sourceSha256": "06084693001bd27ca258ce65341872cea13d57d144fa63d5ac79633c8f8a4796"
+    },
+    "TaxRate": {
+      "fields": {
+        "cessRate": {
+          "type": "BigDecimal",
+          "required": false
+        },
+        "gstRate": {
+          "type": "BigDecimal",
+          "required": false
+        },
+        "taxType": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "sourceSha256": "be7c5aab977def62130d7cb96283086000d838fbb2b78da3256622010952e0e7"
+    },
+    "Currency": {
+      "fields": {
+        "amount": {
+          "type": "BigDecimal",
+          "required": true
+        },
+        "code": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "7291ac83dd340bfcb7b7dd2dbba847975e0464424b00092b015e0916a79c5419"
+    },
+    "UpdateInboundPlanNameRequest": {
+      "fields": {
+        "name": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "2010d4aa22abed8843e95d6f4c8fbe38be9ddabe255e5ae4a1adde198b0c3f51"
+    },
+    "SetPrepDetailsResponse": {
+      "fields": {
+        "operationId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "0b9680f32352d2816fa2b677c108641747ac3bc611b27f5c6e35936882a16cc7"
+    },
+    "SetPrepDetailsRequest": {
+      "fields": {
+        "marketplaceId": {
+          "type": "String",
+          "required": true
+        },
+        "mskuPrepDetails": {
+          "type": "List<MskuPrepDetailInput>",
+          "required": true
+        }
+      },
+      "sourceSha256": "d18fa5b036b601500e8c9e9f7e2ec4e1d72e6b3492c7cd674e48756a0336b4bd"
+    },
+    "MskuPrepDetailInput": {
+      "fields": {
+        "msku": {
+          "type": "String",
+          "required": true
+        },
+        "prepCategory": {
+          "type": "PrepCategory",
+          "required": true
+        },
+        "prepTypes": {
+          "type": "List<PrepType>",
+          "required": true
+        }
+      },
+      "sourceSha256": "71bf1941d37f6d6b0a025aab7c72c96db72299869771bbd277f6b8ffca9bd9b0"
+    },
+    "PrepType": {
+      "enum": [
+        "ITEM_BLACK_SHRINKWRAP",
+        "ITEM_BLANKSTK",
+        "ITEM_BOXING",
+        "ITEM_BUBBLEWRAP",
+        "ITEM_CAP_SEALING",
+        "ITEM_DEBUNDLE",
+        "ITEM_HANG_GARMENT",
+        "ITEM_LABELING",
+        "ITEM_NO_PREP",
+        "ITEM_POLYBAGGING",
+        "ITEM_RMOVHANG",
+        "ITEM_SETCREAT",
+        "ITEM_SETSTK",
+        "ITEM_SIOC",
+        "ITEM_SUFFOSTK",
+        "ITEM_TAPING"
+      ],
+      "sourceSha256": "aab24598c6fed449550c2a4c8dbfd63cf3cbe3c0f0bc4c95742df409cfc13ab6"
+    },
+    "PrepCategory": {
+      "enum": [
+        "ADULT",
+        "BABY",
+        "FC_PROVIDED",
+        "FRAGILE",
+        "GRANULAR",
+        "HANGER",
+        "LIQUID",
+        "PERFORATED",
+        "SET",
+        "SHARP",
+        "SMALL",
+        "TEXTILE",
+        "UNKNOWN",
+        "NONE"
+      ],
+      "sourceSha256": "437b6b47b690a88fb68f097231b22e49d8a36deae45aaac1c83d0f1c83c99f56"
+    },
+    "SetPackingInformationResponse": {
+      "fields": {
+        "operationId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "0edfe14610c3fc21c29c5040b57066e682f0b69a064028955c6a44d2b2aff5c4"
+    },
+    "SetPackingInformationRequest": {
+      "fields": {
+        "packageGroupings": {
+          "type": "List<PackageGroupingInput>",
+          "required": true
+        }
+      },
+      "sourceSha256": "225906c2910613beef62ab6570b18c96f811e7f6e7e24f347c707c9d32298793"
+    },
+    "PackageGroupingInput": {
+      "fields": {
+        "boxes": {
+          "type": "List<BoxInput>",
+          "required": true
+        },
+        "packingGroupId": {
+          "type": "String",
+          "required": false
+        },
+        "shipmentId": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "sourceSha256": "a5ad0d8cf1e3e10217cca0617537f833438c07a22262ced8770b190f351db38f"
+    },
+    "BoxInput": {
+      "fields": {
+        "contentInformationSource": {
+          "type": "BoxContentInformationSource",
+          "required": true
+        },
+        "dimensions": {
+          "type": "Dimensions",
+          "required": true
+        },
+        "items": {
+          "type": "List<ItemInput>",
+          "required": false
+        },
+        "quantity": {
+          "type": "Integer",
+          "required": true
+        },
+        "weight": {
+          "type": "Weight",
+          "required": true
+        }
+      },
+      "sourceSha256": "9198f63a10062b4c8e54fdc889782874ba902a33405091e56981c45217420759"
+    },
+    "Weight": {
+      "fields": {
+        "unit": {
+          "type": "UnitOfWeight",
+          "required": true
+        },
+        "value": {
+          "type": "BigDecimal",
+          "required": true
+        }
+      },
+      "sourceSha256": "f55dc3f2655b32ed6ec7c8cc1b1fb38e0188b668a63ceac2a9c7bc778d9a0f29"
+    },
+    "UnitOfWeight": {
+      "enum": [
+        "LB",
+        "KG"
+      ],
+      "sourceSha256": "4b13be0fb123cfbb77a6feb21095631e0e567074dee55091501054d53d3340a1"
+    },
+    "ItemInput": {
+      "fields": {
+        "expiration": {
+          "type": "String",
+          "required": false
+        },
+        "labelOwner": {
+          "type": "LabelOwner",
+          "required": true
+        },
+        "manufacturingLotCode": {
+          "type": "String",
+          "required": false
+        },
+        "msku": {
+          "type": "String",
+          "required": true
+        },
+        "prepOwner": {
+          "type": "PrepOwner",
+          "required": true
+        },
+        "quantity": {
+          "type": "Integer",
+          "required": true
+        }
+      },
+      "sourceSha256": "45f85721de02c92297e2684cf526c4c050b4c3ccf1bc0b93bc8f335bf82a5df1"
+    },
+    "PrepOwner": {
+      "enum": [
+        "AMAZON",
+        "SELLER",
+        "NONE"
+      ],
+      "sourceSha256": "52a1862149ffe1c489c56d95dd65e3161b14e8380c5d449f9676eed70849f632"
+    },
+    "LabelOwner": {
+      "enum": [
+        "AMAZON",
+        "SELLER",
+        "NONE"
+      ],
+      "sourceSha256": "2d38c233e7ac48c210eefa635697dbc4d94c7c6b4603f6bba26b9e71af84cc22"
+    },
+    "Dimensions": {
+      "fields": {
+        "height": {
+          "type": "BigDecimal",
+          "required": true
+        },
+        "length": {
+          "type": "BigDecimal",
+          "required": true
+        },
+        "unitOfMeasurement": {
+          "type": "UnitOfMeasurement",
+          "required": true
+        },
+        "width": {
+          "type": "BigDecimal",
+          "required": true
+        }
+      },
+      "sourceSha256": "05a5e02a9219c598743201661d475dcc51b796b8c37214416a53915fb75979be"
+    },
+    "UnitOfMeasurement": {
+      "enum": [
+        "IN",
+        "CM"
+      ],
+      "sourceSha256": "8c0f001ca04de58472c56b7a0910b01ec0f49244bd9a8fb3886e8dd10abea0ad"
+    },
+    "BoxContentInformationSource": {
+      "enum": [
+        "BOX_CONTENT_PROVIDED",
+        "MANUAL_PROCESS",
+        "BARCODE_2D"
+      ],
+      "sourceSha256": "94d6d472419e3626dd342a9ca35f4cfe80658fde9ae0b0bc304ce127480bcd24"
+    },
+    "ScheduleSelfShipAppointmentResponse": {
+      "fields": {
+        "selfShipAppointmentDetails": {
+          "type": "SelfShipAppointmentDetails",
+          "required": true
+        }
+      },
+      "sourceSha256": "0ab7243e06140e211c0499227181655d581b1193df8d4cb50d0a39f9b2629870"
+    },
+    "SelfShipAppointmentDetails": {
+      "fields": {
+        "appointmentId": {
+          "type": "BigDecimal",
+          "required": false
+        },
+        "appointmentSlotTime": {
+          "type": "AppointmentSlotTime",
+          "required": false
+        },
+        "appointmentStatus": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "sourceSha256": "18c7d13ebb023389cee1c0cedb20bf898627bf95d1d5620ad9772456f3eaff38"
+    },
+    "AppointmentSlotTime": {
+      "fields": {
+        "endTime": {
+          "type": "OffsetDateTime",
+          "required": true
+        },
+        "startTime": {
+          "type": "OffsetDateTime",
+          "required": true
+        }
+      },
+      "sourceSha256": "4bf02d8eb63ce1549ae81adefc9a0374dc8df014c474520624b23150861e79aa"
+    },
+    "ScheduleSelfShipAppointmentRequest": {
+      "fields": {
+        "reasonComment": {
+          "type": "ReasonComment",
+          "required": false
+        }
+      },
+      "sourceSha256": "ccd6442c03a1323cdfee7d6306a825cdc2c949e4b92ceba2fef5e54917cc329c"
+    },
+    "ReasonComment": {
+      "enum": [
+        "APPOINTMENT_REQUESTED_BY_MISTAKE",
+        "VEHICLE_DELAY",
+        "SLOT_NOT_SUITABLE",
+        "OUTSIDE_CARRIER_BUSINESS_HOURS",
+        "UNFAVOURABLE_EXTERNAL_CONDITIONS",
+        "PROCUREMENT_DELAY",
+        "SHIPPING_PLAN_CHANGED",
+        "INCREASED_QUANTITY",
+        "OTHER"
+      ],
+      "sourceSha256": "b8ba479cdf2aff7af22d88e411161c4ca8fa438a2b9686f484830123ac3b60fb"
+    },
+    "ListTransportationOptionsResponse": {
+      "fields": {
+        "pagination": {
+          "type": "Pagination",
+          "required": false
+        },
+        "transportationOptions": {
+          "type": "List<TransportationOption>",
+          "required": true
+        }
+      },
+      "sourceSha256": "5784f5771234c929927b7be3409914c496ac217420df65f72950e36363fdce8d"
+    },
+    "TransportationOption": {
+      "fields": {
+        "carrier": {
+          "type": "Carrier",
+          "required": true
+        },
+        "carrierAppointment": {
+          "type": "CarrierAppointment",
+          "required": false
+        },
+        "preconditions": {
+          "type": "List<String>",
+          "required": true
+        },
+        "quote": {
+          "type": "Quote",
+          "required": false
+        },
+        "shipmentId": {
+          "type": "String",
+          "required": true
+        },
+        "shippingMode": {
+          "type": "String",
+          "required": true
+        },
+        "shippingSolution": {
+          "type": "String",
+          "required": true
+        },
+        "transportationOptionId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "a271ffd1b90a14b17ccd9f2c7915c24a2e90f9b7c97982a90029e75784c37e20"
+    },
+    "Quote": {
+      "fields": {
+        "cost": {
+          "type": "Currency",
+          "required": true
+        },
+        "expiration": {
+          "type": "OffsetDateTime",
+          "required": false
+        },
+        "voidableUntil": {
+          "type": "OffsetDateTime",
+          "required": false
+        }
+      },
+      "sourceSha256": "db5b88c80b09754800f3658eb802ae6865c5f960fbfc5a2646bc03b769e121a7"
+    },
+    "CarrierAppointment": {
+      "fields": {
+        "endTime": {
+          "type": "OffsetDateTime",
+          "required": true
+        },
+        "startTime": {
+          "type": "OffsetDateTime",
+          "required": true
+        }
+      },
+      "sourceSha256": "4fcd687438be9f25891907f1ed41b232e04ae9f2cd4ad0c6d8703d7c0e7d0376"
+    },
+    "Carrier": {
+      "fields": {
+        "alphaCode": {
+          "type": "String",
+          "required": false
+        },
+        "name": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "sourceSha256": "021cef88e2826137875f7fa9664ad4d4d442852e33e93c948ab13027e2eddc9e"
+    },
+    "Pagination": {
+      "fields": {
+        "nextToken": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "sourceSha256": "5804e8623881888ff8b675ed0fbbf1fffb0936f47f2bc97bcbf69d1890f63699"
+    },
+    "ListShipmentPalletsResponse": {
+      "fields": {
+        "pagination": {
+          "type": "Pagination",
+          "required": false
+        },
+        "pallets": {
+          "type": "List<Pallet>",
+          "required": true
+        }
+      },
+      "sourceSha256": "006030d0153ed38ed96486c95e4a51d32af22a1ba5f9254f77f9f235bc75adbf"
+    },
+    "Pallet": {
+      "fields": {
+        "dimensions": {
+          "type": "Dimensions",
+          "required": false
+        },
+        "packageId": {
+          "type": "String",
+          "required": true
+        },
+        "quantity": {
+          "type": "Integer",
+          "required": false
+        },
+        "stackability": {
+          "type": "Stackability",
+          "required": false
+        },
+        "weight": {
+          "type": "Weight",
+          "required": false
+        }
+      },
+      "sourceSha256": "5930b6783e0d154580fcd0fd32f5af3590370c2ded44b1b9b976a23e8ce08240"
+    },
+    "Stackability": {
+      "enum": [
+        "STACKABLE",
+        "NON_STACKABLE"
+      ],
+      "sourceSha256": "b10283d83897f0899d9dfe1edcefa9f1091bc9818ba12bfbf6ce047fd5b4325b"
+    },
+    "ListShipmentItemsResponse": {
+      "fields": {
+        "items": {
+          "type": "List<Item>",
+          "required": true
+        },
+        "pagination": {
+          "type": "Pagination",
+          "required": false
+        }
+      },
+      "sourceSha256": "95b777b1ecdf46d2382b3e2525fcd78b59137f4460be4f9785eb5385573c75ac"
+    },
+    "Item": {
+      "fields": {
+        "asin": {
+          "type": "String",
+          "required": true
+        },
+        "expiration": {
+          "type": "String",
+          "required": false
+        },
+        "fnsku": {
+          "type": "String",
+          "required": true
+        },
+        "labelOwner": {
+          "type": "String",
+          "required": true
+        },
+        "manufacturingLotCode": {
+          "type": "String",
+          "required": false
+        },
+        "msku": {
+          "type": "String",
+          "required": true
+        },
+        "prepInstructions": {
+          "type": "List<PrepInstruction>",
+          "required": true
+        },
+        "quantity": {
+          "type": "Integer",
+          "required": true
+        }
+      },
+      "sourceSha256": "ca078b22bcf20255266af98336caedadca25c5e6643d6113708e4bf8a81332b1"
+    },
+    "PrepInstruction": {
+      "fields": {
+        "fee": {
+          "type": "Currency",
+          "required": false
+        },
+        "prepOwner": {
+          "type": "String",
+          "required": false
+        },
+        "prepType": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "sourceSha256": "ba052d598f9a7c2b6281ff4884c4dede902f3ab836e531040205c13f71ef1e2a"
+    },
+    "ListShipmentContentUpdatePreviewsResponse": {
+      "fields": {
+        "contentUpdatePreviews": {
+          "type": "List<ContentUpdatePreview>",
+          "required": true
+        },
+        "pagination": {
+          "type": "Pagination",
+          "required": false
+        }
+      },
+      "sourceSha256": "974b97a8f712a7e092ba2c36ec4471c4e9d568bc75735b472558737894f5ff66"
+    },
+    "ContentUpdatePreview": {
+      "fields": {
+        "contentUpdatePreviewId": {
+          "type": "String",
+          "required": true
+        },
+        "expiration": {
+          "type": "OffsetDateTime",
+          "required": true
+        },
+        "requestedUpdates": {
+          "type": "RequestedUpdates",
+          "required": true
+        },
+        "transportationOption": {
+          "type": "TransportationOption",
+          "required": true
+        }
+      },
+      "sourceSha256": "49ad5df6501c33870e1f7d5ec7ba122c688f653fc0f9d2d0a0dae4aa781ad70e"
+    },
+    "RequestedUpdates": {
+      "fields": {
+        "boxes": {
+          "type": "List<BoxUpdateInput>",
+          "required": false
+        },
+        "items": {
+          "type": "List<ItemInput>",
+          "required": false
+        }
+      },
+      "sourceSha256": "2f7ab5327d80c57cfc9546cd4af60097ba1a8b4e12dc4234f29e3a5f35d9f137"
+    },
+    "BoxUpdateInput": {
+      "fields": {
+        "contentInformationSource": {
+          "type": "BoxContentInformationSource",
+          "required": true
+        },
+        "dimensions": {
+          "type": "Dimensions",
+          "required": true
+        },
+        "items": {
+          "type": "List<ItemInput>",
+          "required": false
+        },
+        "packageId": {
+          "type": "String",
+          "required": false
+        },
+        "quantity": {
+          "type": "Integer",
+          "required": true
+        },
+        "weight": {
+          "type": "Weight",
+          "required": true
+        }
+      },
+      "sourceSha256": "ca5943799c67cfbf7913770bb86239b7670242540fcaca8d84a49af90fce70f5"
+    },
+    "ListShipmentBoxesResponse": {
+      "fields": {
+        "boxes": {
+          "type": "List<Box>",
+          "required": true
+        },
+        "pagination": {
+          "type": "Pagination",
+          "required": false
+        }
+      },
+      "sourceSha256": "d8d6b047c6e8bd6f8caba27b8459c1c2c58022a75468eee48770520a4ec02b38"
+    },
+    "Box": {
+      "fields": {
+        "boxId": {
+          "type": "String",
+          "required": false
+        },
+        "contentInformationSource": {
+          "type": "BoxContentInformationSource",
+          "required": false
+        },
+        "destinationRegion": {
+          "type": "Region",
+          "required": false
+        },
+        "dimensions": {
+          "type": "Dimensions",
+          "required": false
+        },
+        "items": {
+          "type": "List<Item>",
+          "required": false
+        },
+        "packageId": {
+          "type": "String",
+          "required": true
+        },
+        "quantity": {
+          "type": "Integer",
+          "required": false
+        },
+        "templateName": {
+          "type": "String",
+          "required": false
+        },
+        "weight": {
+          "type": "Weight",
+          "required": false
+        }
+      },
+      "sourceSha256": "ba9e1b772dc0b63399fbcf80728074b7a8d4b1c454acee81895ddc2adb6fb93f"
+    },
+    "Region": {
+      "fields": {
+        "countryCode": {
+          "type": "String",
+          "required": false
+        },
+        "state": {
+          "type": "String",
+          "required": false
+        },
+        "warehouseId": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "sourceSha256": "a2d7f65edb26fd498f934bc94f4dad9e07c76a0b2b7c701c2466064097fa41b3"
+    },
+    "ListPrepDetailsResponse": {
+      "fields": {
+        "mskuPrepDetails": {
+          "type": "List<MskuPrepDetail>",
+          "required": true
+        }
+      },
+      "sourceSha256": "e106c18025d8ff32cef71eb70a2394ca0a41f090432729492845802195784096"
+    },
+    "MskuPrepDetail": {
+      "fields": {
+        "allOwnersConstraint": {
+          "type": "AllOwnersConstraint",
+          "required": false
+        },
+        "labelOwnerConstraint": {
+          "type": "OwnerConstraint",
+          "required": false
+        },
+        "msku": {
+          "type": "String",
+          "required": true
+        },
+        "prepCategory": {
+          "type": "PrepCategory",
+          "required": true
+        },
+        "prepOwnerConstraint": {
+          "type": "OwnerConstraint",
+          "required": false
+        },
+        "prepTypes": {
+          "type": "List<PrepType>",
+          "required": true
+        }
+      },
+      "sourceSha256": "9baef709d84d61843326169694d00b8ddb76cc9f97366fc2bf2210806f22a166"
+    },
+    "OwnerConstraint": {
+      "enum": [
+        "AMAZON_ONLY",
+        "NONE_ONLY",
+        "SELLER_ONLY"
+      ],
+      "sourceSha256": "83b7bde2d5ca3872231475fa3134e2b11d471b3a200b054e0b1123ec102dbbef"
+    },
+    "AllOwnersConstraint": {
+      "enum": [
+        "MUST_MATCH"
+      ],
+      "sourceSha256": "7ab3f567d693977ee691cd89a376c7c251bfac64c77c37c405b5e51afdf97eed"
+    },
+    "ListPlacementOptionsResponse": {
+      "fields": {
+        "pagination": {
+          "type": "Pagination",
+          "required": false
+        },
+        "placementOptions": {
+          "type": "List<PlacementOption>",
+          "required": true
+        }
+      },
+      "sourceSha256": "f512dce036ae86df6b9f18424541308249cb82c64c83b9f62cda24232b7ff826"
+    },
+    "PlacementOption": {
+      "fields": {
+        "discounts": {
+          "type": "List<Incentive>",
+          "required": true
+        },
+        "expiration": {
+          "type": "OffsetDateTime",
+          "required": false
+        },
+        "fees": {
+          "type": "List<Incentive>",
+          "required": true
+        },
+        "placementOptionId": {
+          "type": "String",
+          "required": true
+        },
+        "shipmentIds": {
+          "type": "List<String>",
+          "required": true
+        },
+        "status": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "2b6284cd454d18371b321ac931d076df1698328b1cd15ce96d15828195ca9a0e"
+    },
+    "Incentive": {
+      "fields": {
+        "description": {
+          "type": "String",
+          "required": true
+        },
+        "target": {
+          "type": "String",
+          "required": true
+        },
+        "type": {
+          "type": "String",
+          "required": true
+        },
+        "value": {
+          "type": "Currency",
+          "required": true
+        }
+      },
+      "sourceSha256": "096f6029fb295e8e84f702b9d7af344ac3af42e13abe94b0d6aee95a216d64c3"
+    },
+    "ListPackingOptionsResponse": {
+      "fields": {
+        "packingOptions": {
+          "type": "List<PackingOption>",
+          "required": true
+        },
+        "pagination": {
+          "type": "Pagination",
+          "required": false
+        }
+      },
+      "sourceSha256": "d4cd2c1224fc9b1c26f0ceae327ea3bfdaaf0765a0d577e33f3a72f62c6035e0"
+    },
+    "PackingOption": {
+      "fields": {
+        "discounts": {
+          "type": "List<Incentive>",
+          "required": true
+        },
+        "expiration": {
+          "type": "OffsetDateTime",
+          "required": false
+        },
+        "fees": {
+          "type": "List<Incentive>",
+          "required": true
+        },
+        "packingGroups": {
+          "type": "List<String>",
+          "required": true
+        },
+        "packingOptionId": {
+          "type": "String",
+          "required": true
+        },
+        "status": {
+          "type": "String",
+          "required": true
+        },
+        "supportedShippingConfigurations": {
+          "type": "List<ShippingConfiguration>",
+          "required": true
+        }
+      },
+      "sourceSha256": "8ea63de66eb42aca735b11d1024d70e739941520d2d70af2bd99184bb14926ad"
+    },
+    "ShippingConfiguration": {
+      "fields": {
+        "shippingMode": {
+          "type": "String",
+          "required": false
+        },
+        "shippingSolution": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "sourceSha256": "bc6362b07c838fc8646b3e3649576eccf7c8e06ab56641cf7096ea69906112ab"
+    },
+    "ListPackingGroupItemsResponse": {
+      "fields": {
+        "items": {
+          "type": "List<Item>",
+          "required": true
+        },
+        "pagination": {
+          "type": "Pagination",
+          "required": false
+        }
+      },
+      "sourceSha256": "7b5ac9034167f1770165499435998b63e550b7721ade371be972f2fb94afa19e"
+    },
+    "ListPackingGroupBoxesResponse": {
+      "fields": {
+        "boxes": {
+          "type": "List<Box>",
+          "required": true
+        },
+        "pagination": {
+          "type": "Pagination",
+          "required": false
+        }
+      },
+      "sourceSha256": "21f964a541bdb96378c471f17511577e790de86ee076b89ff723bc2a3e7c6eb6"
+    },
+    "ListItemComplianceDetailsResponse": {
+      "fields": {
+        "complianceDetails": {
+          "type": "List<ComplianceDetail>",
+          "required": false
+        }
+      },
+      "sourceSha256": "d77a1bf5af025138a919a1ff117da31deda001d3cb3387c03130e6fe353a709d"
+    },
+    "ComplianceDetail": {
+      "fields": {
+        "asin": {
+          "type": "String",
+          "required": false
+        },
+        "fnsku": {
+          "type": "String",
+          "required": false
+        },
+        "msku": {
+          "type": "String",
+          "required": false
+        },
+        "taxDetails": {
+          "type": "TaxDetails",
+          "required": false
+        }
+      },
+      "sourceSha256": "2fccb3a63765e79f1786b174d20c1631e62403c857e73a26c9f6ccdb583052ed"
+    },
+    "ListInboundPlansResponse": {
+      "fields": {
+        "inboundPlans": {
+          "type": "List<InboundPlanSummary>",
+          "required": false
+        },
+        "pagination": {
+          "type": "Pagination",
+          "required": false
+        }
+      },
+      "sourceSha256": "1a43c25ba2a5023f0280fea4657463b938d770d16389e0518558606b1f4d648f"
+    },
+    "InboundPlanSummary": {
+      "fields": {
+        "createdAt": {
+          "type": "OffsetDateTime",
+          "required": true
+        },
+        "inboundPlanId": {
+          "type": "String",
+          "required": true
+        },
+        "lastUpdatedAt": {
+          "type": "OffsetDateTime",
+          "required": true
+        },
+        "marketplaceIds": {
+          "type": "List<String>",
+          "required": true
+        },
+        "name": {
+          "type": "String",
+          "required": true
+        },
+        "sourceAddress": {
+          "type": "Address",
+          "required": true
+        },
+        "status": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "3249d97a2949f847981eb59f3ca791add01e2831f4055274a84720d98840acf1"
+    },
+    "Address": {
+      "fields": {
+        "addressLine1": {
+          "type": "String",
+          "required": true
+        },
+        "addressLine2": {
+          "type": "String",
+          "required": false
+        },
+        "city": {
+          "type": "String",
+          "required": true
+        },
+        "companyName": {
+          "type": "String",
+          "required": false
+        },
+        "countryCode": {
+          "type": "String",
+          "required": true
+        },
+        "email": {
+          "type": "String",
+          "required": false
+        },
+        "name": {
+          "type": "String",
+          "required": true
+        },
+        "phoneNumber": {
+          "type": "String",
+          "required": false
+        },
+        "postalCode": {
+          "type": "String",
+          "required": true
+        },
+        "stateOrProvinceCode": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "sourceSha256": "eed5d89d21851a86ddc78e2bc52ee8bbda0fa731fac9031cdd4c89a953026138"
+    },
+    "ListInboundPlanPalletsResponse": {
+      "fields": {
+        "pagination": {
+          "type": "Pagination",
+          "required": false
+        },
+        "pallets": {
+          "type": "List<Pallet>",
+          "required": true
+        }
+      },
+      "sourceSha256": "2a1aebd440854c24f2084b02f7b773df5ea89776a63f19e206d9b53e643289d1"
+    },
+    "ListInboundPlanItemsResponse": {
+      "fields": {
+        "items": {
+          "type": "List<Item>",
+          "required": true
+        },
+        "pagination": {
+          "type": "Pagination",
+          "required": false
+        }
+      },
+      "sourceSha256": "b0955a58eb4426e750d71cd33023354b545c46a881cc97cf0613e4b70d276451"
+    },
+    "ListInboundPlanBoxesResponse": {
+      "fields": {
+        "boxes": {
+          "type": "List<Box>",
+          "required": true
+        },
+        "pagination": {
+          "type": "Pagination",
+          "required": false
+        }
+      },
+      "sourceSha256": "1b56c9af4dfc0b2536ba260742e69287901f99a58d2b25f23740e5a910f1198d"
+    },
+    "ListDeliveryWindowOptionsResponse": {
+      "fields": {
+        "deliveryWindowOptions": {
+          "type": "List<DeliveryWindowOption>",
+          "required": true
+        },
+        "pagination": {
+          "type": "Pagination",
+          "required": false
+        }
+      },
+      "sourceSha256": "3466dd05f48f16981750c65b0692e77f04fc50cfee9e9dc0a812ae010fbb5d5f"
+    },
+    "DeliveryWindowOption": {
+      "fields": {
+        "availabilityType": {
+          "type": "String",
+          "required": true
+        },
+        "deliveryWindowOptionId": {
+          "type": "String",
+          "required": true
+        },
+        "endDate": {
+          "type": "OffsetDateTime",
+          "required": true
+        },
+        "startDate": {
+          "type": "OffsetDateTime",
+          "required": true
+        },
+        "validUntil": {
+          "type": "OffsetDateTime",
+          "required": true
+        }
+      },
+      "sourceSha256": "d96fb9f4ae2400b067c9778bd0104ee1a9b3781103d82ad9be381508cf51338f"
+    },
+    "Shipment": {
+      "fields": {
+        "amazonReferenceId": {
+          "type": "String",
+          "required": false
+        },
+        "contactInformation": {
+          "type": "ContactInformation",
+          "required": false
+        },
+        "dates": {
+          "type": "Dates",
+          "required": false
+        },
+        "destination": {
+          "type": "ShipmentDestination",
+          "required": true
+        },
+        "freightInformation": {
+          "type": "FreightInformation",
+          "required": false
+        },
+        "name": {
+          "type": "String",
+          "required": false
+        },
+        "placementOptionId": {
+          "type": "String",
+          "required": true
+        },
+        "selectedDeliveryWindow": {
+          "type": "SelectedDeliveryWindow",
+          "required": false
+        },
+        "selectedTransportationOptionId": {
+          "type": "String",
+          "required": false
+        },
+        "selfShipAppointmentDetails": {
+          "type": "List<SelfShipAppointmentDetails>",
+          "required": false
+        },
+        "shipmentConfirmationId": {
+          "type": "String",
+          "required": false
+        },
+        "shipmentId": {
+          "type": "String",
+          "required": true
+        },
+        "source": {
+          "type": "ShipmentSource",
+          "required": true
+        },
+        "status": {
+          "type": "String",
+          "required": false
+        },
+        "trackingDetails": {
+          "type": "TrackingDetails",
+          "required": false
+        }
+      },
+      "sourceSha256": "8dac291cc7e3ee0b55539314d425f45d1308edf876a677aa0265f8d40c37bf09"
+    },
+    "TrackingDetails": {
+      "fields": {
+        "ltlTrackingDetail": {
+          "type": "LtlTrackingDetail",
+          "required": false
+        },
+        "spdTrackingDetail": {
+          "type": "SpdTrackingDetail",
+          "required": false
+        }
+      },
+      "sourceSha256": "c1eead563eb0f1d2f3c1b964b3cd11b807780567a9575fb56d4d49b0b0c13a0f"
+    },
+    "SpdTrackingDetail": {
+      "fields": {
+        "spdTrackingItems": {
+          "type": "List<SpdTrackingItem>",
+          "required": false
+        }
+      },
+      "sourceSha256": "bfa6f3ecf3e4b585f5e22aee073f43296f24f681feac44c444d06a7106d04054"
+    },
+    "SpdTrackingItem": {
+      "fields": {
+        "boxId": {
+          "type": "String",
+          "required": false
+        },
+        "trackingId": {
+          "type": "String",
+          "required": false
+        },
+        "trackingNumberValidationStatus": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "sourceSha256": "bbeac29c284a44137782e566f1885c3b518ec2fbc1aa72a7cfd5930a34bb4bcb"
+    },
+    "LtlTrackingDetail": {
+      "fields": {
+        "billOfLadingNumber": {
+          "type": "String",
+          "required": false
+        },
+        "freightBillNumber": {
+          "type": "List<String>",
+          "required": false
+        }
+      },
+      "sourceSha256": "be98277d13345776c3a8be1d9b74f6d9da8544c4d8e0e64f44734da66a3c3d5a"
+    },
+    "ShipmentSource": {
+      "fields": {
+        "address": {
+          "type": "Address",
+          "required": false
+        },
+        "sourceType": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "1739a5aa620a753e8e2c1565b720226a5109977a09aeb2895e0eb6028dbfbc83"
+    },
+    "SelectedDeliveryWindow": {
+      "fields": {
+        "availabilityType": {
+          "type": "String",
+          "required": true
+        },
+        "deliveryWindowOptionId": {
+          "type": "String",
+          "required": true
+        },
+        "editableUntil": {
+          "type": "OffsetDateTime",
+          "required": false
+        },
+        "endDate": {
+          "type": "OffsetDateTime",
+          "required": true
+        },
+        "startDate": {
+          "type": "OffsetDateTime",
+          "required": true
+        }
+      },
+      "sourceSha256": "28d63a7c04ffcf529f5adb9f9c994c2878702e157fafdd5cd927243b947d28ac"
+    },
+    "FreightInformation": {
+      "fields": {
+        "declaredValue": {
+          "type": "Currency",
+          "required": false
+        },
+        "freightClass": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "sourceSha256": "721cb2fd9d3e8e56cb4499be9c63bbb143b8732751da3c9a7304084204bdfaa1"
+    },
+    "ShipmentDestination": {
+      "fields": {
+        "address": {
+          "type": "Address",
+          "required": false
+        },
+        "destinationType": {
+          "type": "String",
+          "required": true
+        },
+        "warehouseId": {
+          "type": "String",
+          "required": false
+        }
+      },
+      "sourceSha256": "6bcad80e5508c6b2433648a6d1e26f3585429a1e626404bcf88b9cd5107b1586"
+    },
+    "Dates": {
+      "fields": {
+        "readyToShipWindow": {
+          "type": "Window",
+          "required": false
+        }
+      },
+      "sourceSha256": "15c84bea36c6e032a1137e3e30c381933ecf9094265c98a1ac532ccbda9b7d7a"
+    },
+    "Window": {
+      "fields": {
+        "editableUntil": {
+          "type": "OffsetDateTime",
+          "required": false
+        },
+        "end": {
+          "type": "OffsetDateTime",
+          "required": true
+        },
+        "start": {
+          "type": "OffsetDateTime",
+          "required": true
+        }
+      },
+      "sourceSha256": "099d4929ca88d4dbd1ca22ce6a798346ebc9ec744c6c0864c1d3545bea0c18de"
+    },
+    "ContactInformation": {
+      "fields": {
+        "email": {
+          "type": "String",
+          "required": false
+        },
+        "name": {
+          "type": "String",
+          "required": true
+        },
+        "phoneNumber": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "60d59cdda4522424d0cd5ab0e670350c5a80015c62b4b37382b633e3fbd333f3"
+    },
+    "GetSelfShipAppointmentSlotsResponse": {
+      "fields": {
+        "pagination": {
+          "type": "Pagination",
+          "required": false
+        },
+        "selfShipAppointmentSlotsAvailability": {
+          "type": "SelfShipAppointmentSlotsAvailability",
+          "required": true
+        }
+      },
+      "sourceSha256": "0b11becdbb4a21aa5d66c68332271ba7b8c8157c9ba8beb371776afa8dce9d18"
+    },
+    "SelfShipAppointmentSlotsAvailability": {
+      "fields": {
+        "expiresAt": {
+          "type": "OffsetDateTime",
+          "required": false
+        },
+        "slots": {
+          "type": "List<AppointmentSlot>",
+          "required": false
+        }
+      },
+      "sourceSha256": "239a83e0bd9b81c59aac51e09f416e11991466a39a5dd6acb336a9571f409cab"
+    },
+    "AppointmentSlot": {
+      "fields": {
+        "slotId": {
+          "type": "String",
+          "required": true
+        },
+        "slotTime": {
+          "type": "AppointmentSlotTime",
+          "required": true
+        }
+      },
+      "sourceSha256": "c5f83e1adc733f679735ea2524842554dd2fc16286184f3abf641f18d9f84f53"
+    },
+    "InboundPlan": {
+      "fields": {
+        "createdAt": {
+          "type": "OffsetDateTime",
+          "required": true
+        },
+        "inboundPlanId": {
+          "type": "String",
+          "required": true
+        },
+        "lastUpdatedAt": {
+          "type": "OffsetDateTime",
+          "required": true
+        },
+        "marketplaceIds": {
+          "type": "List<String>",
+          "required": true
+        },
+        "name": {
+          "type": "String",
+          "required": true
+        },
+        "packingOptions": {
+          "type": "List<PackingOptionSummary>",
+          "required": false
+        },
+        "placementOptions": {
+          "type": "List<PlacementOptionSummary>",
+          "required": false
+        },
+        "shipments": {
+          "type": "List<ShipmentSummary>",
+          "required": false
+        },
+        "sourceAddress": {
+          "type": "Address",
+          "required": true
+        },
+        "status": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "4647efe47bd6145b681490f930b005c75f2174eae820de33c1cf60f7ace2652a"
+    },
+    "ShipmentSummary": {
+      "fields": {
+        "shipmentId": {
+          "type": "String",
+          "required": true
+        },
+        "status": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "166dd93c96ddf59e726b7ce9a86488d9624a14b6a71f1abc4551dfed5f00ec3f"
+    },
+    "PlacementOptionSummary": {
+      "fields": {
+        "placementOptionId": {
+          "type": "String",
+          "required": true
+        },
+        "status": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "695ffa0ff23dc84007c2ea35eb01af26f2c0081a6185b2eb61c6c644b3c2c276"
+    },
+    "PackingOptionSummary": {
+      "fields": {
+        "packingOptionId": {
+          "type": "String",
+          "required": true
+        },
+        "status": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "4d9ad74895e95e511d85dd31c40d1d0c9747e8bd8ce89f049721d646b6e2703c"
+    },
+    "InboundOperationStatus": {
+      "fields": {
+        "operation": {
+          "type": "String",
+          "required": true
+        },
+        "operationId": {
+          "type": "String",
+          "required": true
+        },
+        "operationProblems": {
+          "type": "List<OperationProblem>",
+          "required": true
+        },
+        "operationStatus": {
+          "type": "OperationStatus",
+          "required": true
+        }
+      },
+      "sourceSha256": "102515de0eb0f7fffd8a15e0e643b1c1ab33bcfaddc28e814581f3865b206063"
+    },
+    "OperationStatus": {
+      "enum": [
+        "SUCCESS",
+        "FAILED",
+        "IN_PROGRESS"
+      ],
+      "sourceSha256": "ecf5592b3133bd86435218452261f0950dabeadf64dec3a87d2cb28927cc6f47"
+    },
+    "OperationProblem": {
+      "fields": {
+        "code": {
+          "type": "String",
+          "required": true
+        },
+        "details": {
+          "type": "String",
+          "required": false
+        },
+        "message": {
+          "type": "String",
+          "required": true
+        },
+        "severity": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "e5f362b25be6180ef6188dc0dd7a8f10bc017bdf27d7e39edb041a11bf6fdf6f"
+    },
+    "GetDeliveryChallanDocumentResponse": {
+      "fields": {
+        "documentDownload": {
+          "type": "DocumentDownload",
+          "required": true
+        }
+      },
+      "sourceSha256": "0f50941b256358f6f28b165919b0ad47424bff38039cbed47d0fa2544cf9bb42"
+    },
+    "DocumentDownload": {
+      "fields": {
+        "downloadType": {
+          "type": "String",
+          "required": true
+        },
+        "expiration": {
+          "type": "OffsetDateTime",
+          "required": false
+        },
+        "uri": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "09b8be0c08020217748e6ee66d8c7e56cd808350559b49dc140e9f64636567b8"
+    },
+    "GenerateTransportationOptionsResponse": {
+      "fields": {
+        "operationId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "05b5514e9eb63dbe9024dcc000105aec05f86142c0d21ae50deb234fe3a58fc0"
+    },
+    "GenerateTransportationOptionsRequest": {
+      "fields": {
+        "placementOptionId": {
+          "type": "String",
+          "required": true
+        },
+        "shipmentTransportationConfigurations": {
+          "type": "List<ShipmentTransportationConfiguration>",
+          "required": true
+        }
+      },
+      "sourceSha256": "ae3214e8998d36d38bf1614b9a1b12a31bc28a880ab42b348c9b9b57ed05d7fa"
+    },
+    "ShipmentTransportationConfiguration": {
+      "fields": {
+        "contactInformation": {
+          "type": "ContactInformation",
+          "required": false
+        },
+        "freightInformation": {
+          "type": "FreightInformation",
+          "required": false
+        },
+        "pallets": {
+          "type": "List<PalletInput>",
+          "required": false
+        },
+        "readyToShipWindow": {
+          "type": "WindowInput",
+          "required": true
+        },
+        "shipmentId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "c509e28a8b7dfeddcb6769311b2a74c1357eb9e2e8e5a14d5f3120fc29a7d846"
+    },
+    "WindowInput": {
+      "fields": {
+        "start": {
+          "type": "OffsetDateTime",
+          "required": true
+        }
+      },
+      "sourceSha256": "c6e56e41bce0f255425272d10c92777f8675d842299833cb76a2483d7dba049e"
+    },
+    "PalletInput": {
+      "fields": {
+        "dimensions": {
+          "type": "Dimensions",
+          "required": false
+        },
+        "quantity": {
+          "type": "Integer",
+          "required": true
+        },
+        "stackability": {
+          "type": "Stackability",
+          "required": false
+        },
+        "weight": {
+          "type": "Weight",
+          "required": false
+        }
+      },
+      "sourceSha256": "105d6e2b8057664cfe78e26ba45f20b1e5852f08233635c34a03e269f9c9a3c5"
+    },
+    "GenerateShipmentContentUpdatePreviewsResponse": {
+      "fields": {
+        "operationId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "edea0a106ae6e7c32ef742ab3b5d4f277c113bfb0d005c76da05b26461a831fa"
+    },
+    "GenerateShipmentContentUpdatePreviewsRequest": {
+      "fields": {
+        "boxes": {
+          "type": "List<BoxUpdateInput>",
+          "required": true
+        },
+        "items": {
+          "type": "List<ItemInput>",
+          "required": true
+        }
+      },
+      "sourceSha256": "5e35a631fcd7c35e61ffd01563dc3fdabcd3a03aff6ffc5c1a0b7180af171005"
+    },
+    "GenerateSelfShipAppointmentSlotsResponse": {
+      "fields": {
+        "operationId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "f14ed86e73283306784f715fda72e12eec28f6fcfa765d097f727bf349b9d79b"
+    },
+    "GenerateSelfShipAppointmentSlotsRequest": {
+      "fields": {
+        "desiredEndDate": {
+          "type": "OffsetDateTime",
+          "required": false
+        },
+        "desiredStartDate": {
+          "type": "OffsetDateTime",
+          "required": false
+        }
+      },
+      "sourceSha256": "f65cb1acfab61d9e798897fc15e679aa494dad5118715162bd732e9997221d92"
+    },
+    "GeneratePlacementOptionsResponse": {
+      "fields": {
+        "operationId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "f1d413931d2ef74e52851271a8be7ad7e229c4f6bcbcea2289e6c3cc10d54b73"
+    },
+    "GeneratePlacementOptionsRequest": {
+      "fields": {
+        "customPlacement": {
+          "type": "List<CustomPlacementInput>",
+          "required": false
+        }
+      },
+      "sourceSha256": "c806009303cedff1882b913475eaafda38b02d50a02bb6d4696d51ce83f1a99a"
+    },
+    "CustomPlacementInput": {
+      "fields": {
+        "items": {
+          "type": "List<ItemInput>",
+          "required": true
+        },
+        "warehouseId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "6cfc1c873afbdb85dbc883e59d46cee165a4b5eabc5c05480ef060e069330f21"
+    },
+    "GeneratePackingOptionsResponse": {
+      "fields": {
+        "operationId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "d9172946a262c9e2a4895734f2ba51219909115f45a9c66457cf1df903f3b5b1"
+    },
+    "GenerateDeliveryWindowOptionsResponse": {
+      "fields": {
+        "operationId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "b8f004e7d92941d81fa6ce9a25a6e27e0296818ae48e94cf98d6bc75919658a3"
+    },
+    "CreateMarketplaceItemLabelsResponse": {
+      "fields": {
+        "documentDownloads": {
+          "type": "List<DocumentDownload>",
+          "required": true
+        }
+      },
+      "sourceSha256": "9135cef349e2820b6c3169d81a71b4517f56a7f7bef71d06533b1bc743db7e21"
+    },
+    "CreateMarketplaceItemLabelsRequest": {
+      "fields": {
+        "height": {
+          "type": "BigDecimal",
+          "required": false
+        },
+        "labelType": {
+          "type": "LabelPrintType",
+          "required": true
+        },
+        "localeCode": {
+          "type": "String",
+          "required": false
+        },
+        "marketplaceId": {
+          "type": "String",
+          "required": true
+        },
+        "mskuQuantities": {
+          "type": "List<MskuQuantity>",
+          "required": true
+        },
+        "pageType": {
+          "type": "ItemLabelPageType",
+          "required": false
+        },
+        "width": {
+          "type": "BigDecimal",
+          "required": false
+        }
+      },
+      "sourceSha256": "f990581ebe72e6bb18cb98a01f4d9473707962543368584279c7a8a260b63977"
+    },
+    "ItemLabelPageType": {
+      "enum": [
+        "A4_21",
+        "A4_24",
+        "A4_24_64x33",
+        "A4_24_66x35",
+        "A4_24_70x36",
+        "A4_24_70x37",
+        "A4_24i",
+        "A4_27",
+        "A4_40_52x29",
+        "A4_44_48x25",
+        "Letter_30"
+      ],
+      "sourceSha256": "4f446e393383b209c0f20c21f6ad5f77ee7fd114fb5d1e800c3b8cab70ed2664"
+    },
+    "MskuQuantity": {
+      "fields": {
+        "msku": {
+          "type": "String",
+          "required": true
+        },
+        "quantity": {
+          "type": "Integer",
+          "required": true
+        }
+      },
+      "sourceSha256": "2bfc04d5f7b7a474c76ec4c18afdee3cccc12df1bfb270eb835408b433d2b0d5"
+    },
+    "LabelPrintType": {
+      "enum": [
+        "STANDARD_FORMAT",
+        "THERMAL_PRINTING"
+      ],
+      "sourceSha256": "5fec1a7f4148623c084f1434a116be425f2501115daa66abe27d68a6f227d024"
+    },
+    "CreateInboundPlanResponse": {
+      "fields": {
+        "inboundPlanId": {
+          "type": "String",
+          "required": true
+        },
+        "operationId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "3c3193210a9e30926c2e6c339a269ffc39ffef80bb25b3ab4d64dd84f22c3482"
+    },
+    "CreateInboundPlanRequest": {
+      "fields": {
+        "destinationMarketplaces": {
+          "type": "List<String>",
+          "required": true
+        },
+        "items": {
+          "type": "List<ItemInput>",
+          "required": true
+        },
+        "name": {
+          "type": "String",
+          "required": false
+        },
+        "sourceAddress": {
+          "type": "AddressInput",
+          "required": true
+        }
+      },
+      "sourceSha256": "b7d9aa426edf9d54eeec32a8705969ed49c5ff4f3c8f8a6c46ef0ba60dfab0b7"
+    },
+    "ConfirmTransportationOptionsResponse": {
+      "fields": {
+        "operationId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "bf96abc6e11c5f5f0b197aeafb3f44c1a2eb8309ac0bcde75a37a26b4fadc841"
+    },
+    "ConfirmTransportationOptionsRequest": {
+      "fields": {
+        "transportationSelections": {
+          "type": "List<TransportationSelection>",
+          "required": true
+        }
+      },
+      "sourceSha256": "e88b5744331961fceb8afae7f6bf8200efd5f8bae003ab9b79da628f427e0a4a"
+    },
+    "TransportationSelection": {
+      "fields": {
+        "contactInformation": {
+          "type": "ContactInformation",
+          "required": false
+        },
+        "shipmentId": {
+          "type": "String",
+          "required": true
+        },
+        "transportationOptionId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "f24557d5c3085f45667fb2c3da9e2a6065904e9e78ad4266db8327628946b6ca"
+    },
+    "ConfirmShipmentContentUpdatePreviewResponse": {
+      "fields": {
+        "operationId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "c94ab41ac363b599f2d339074c48c64a70c278d045f8e08ca6a75f15d95b4190"
+    },
+    "ConfirmPlacementOptionResponse": {
+      "fields": {
+        "operationId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "d2b6253a427140270e7ceb38323d4f6ccafeb07067cff00fb9c16e89d33df7ef"
+    },
+    "ConfirmPackingOptionResponse": {
+      "fields": {
+        "operationId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "52e2826925f17b4a17352053ee5666fff9f172a898762521c797741979b55c7f"
+    },
+    "ConfirmDeliveryWindowOptionsResponse": {
+      "fields": {
+        "operationId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "cd07e1368f9da2048129d24087c330117a7ffc1c4b054160417a3cda2201a22b"
+    },
+    "CancelSelfShipAppointmentResponse": {
+      "fields": {
+        "operationId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "15adff9822b8e16a65cb5cdc3fb2170f300dd5e0888803a5fef8052b65483651"
+    },
+    "CancelSelfShipAppointmentRequest": {
+      "fields": {
+        "reasonComment": {
+          "type": "ReasonComment",
+          "required": false
+        }
+      },
+      "sourceSha256": "8c564dfb76154b5fc6167072a0502db429357863fa8795004fe548e2922c224e"
+    },
+    "CancelInboundPlanResponse": {
+      "fields": {
+        "operationId": {
+          "type": "String",
+          "required": true
+        }
+      },
+      "sourceSha256": "916907e89304aa5067d9c880085e643559079a5e0625f94c5f0778ffd8594fad"
+    }
+  }
+}

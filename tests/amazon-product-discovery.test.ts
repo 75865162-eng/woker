@@ -8,7 +8,7 @@ import { safeState } from "../src/lib/amazon-sync/approval-policy";
 const fields = { resource: "listing_details", sellerSkus: [], applicationId: "app", maxRequests: 500, maxRows: 1000, requestsPerSecond: .2, discovery: { mode: "catalog_snapshot", sourceId: "catalog", maxObjects: 1000, batchSize: 100 } };
 test("discovery allows bounded manifests beyond static 100, rejects drift, invalid IDs and exhausted budget", () => {
   const p = parseObservationPolicy(fields); if (p.resource !== "listing_details") throw Error();
-  for (const n of [1, 100, 101, 224]) {
+  for (const n of [0, 1, 100, 101, 224]) {
     const ids = Array.from({ length: n }, (_, i) => `sku-${String(i).padStart(4, "0")}`);
     const m = { sourceId: "catalog", sourceRevision: 1, authorizationRevision: 3, runId: "published", total: n, batchSize: 100, ids, digest: createHash("sha256").update(JSON.stringify(ids)).digest("hex") };
     assert.equal(validateProductManifest(m, p).total, n);

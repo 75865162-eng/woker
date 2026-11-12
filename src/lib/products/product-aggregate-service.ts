@@ -1,3 +1,4 @@
+import { validateProductManagement } from "./management-service";
 import { Prisma } from "@prisma/client";
 import type { Product } from "@/lib/products/types";
 import { collectProductAttachmentReferences } from "@/lib/products/attachment-bindings";
@@ -30,8 +31,9 @@ export async function saveProductAggregate(
       ? await findProductRecordBySku(tx, input.scope, input.product.sku)
       : input.existingRecord;
   const existingProduct = existingRecord?.payload as Partial<Product> | undefined;
+  const validatedProduct = await validateProductManagement(tx, { product: input.product, existing: existingProduct, scope: input.scope, actor: input.user.id });
   const productToSave = stampProductAuditIdentity({
-    product: input.product,
+    product: validatedProduct,
     existingProduct,
     user: input.user,
     eventType: input.eventType,

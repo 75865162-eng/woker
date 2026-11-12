@@ -1,3 +1,5 @@
+import { tickFbaRemoteActions } from "@/lib/fba-local/remote-action-executor";
+import { amazonCloudExecutionEnabled } from "../src/lib/amazon/execution-role";
 import "./runtime/worker-bootstrap.mjs";
 import { continuityGrant } from "@/lib/amazon-sync/continuity-access";
 import { createHeartbeatWriter } from "@/lib/runtime/heartbeat-writer";
@@ -53,10 +55,11 @@ async function recoverQueuedRuns() {
       const result = await tickSyncCenter(new Date(), policy.mode === "approved-only" ? { taskIds: policy.taskIds!, exportIds: policy.exportIds! } : undefined);
       recoveryState = { ...recoveryState, spApi: result, lastSuccessAt: new Date().toISOString() };
     } catch { recoveryState.lastErrorAt = new Date().toISOString(); console.error("[amazon-sync-worker] SP-API recovery deferred; retrying next tick"); }
-    if (policy.mode === "standard") {
+    if (policy.mode === "standard" && amazonCloudExecutionEnabled()) {
+      try { await tickFbaRemoteActions(); } catch { console.error("[amazon-sync-worker] FBA remote recovery deferred"); }
       try { await tickAmazonAds(); recoveryState.adsHealthy = true; }
       catch { recoveryState.adsHealthy = false; console.error("[amazon-sync-worker] Ads recovery deferred; SP-API remains independent"); }
-    }
+    } else if (!amazonCloudExecutionEnabled()) recoveryState.adsHealthy = null;
     if (policy.runReplenishment) {
       try { await refreshDueReplenishmentPlans(); }
       catch { console.error("[amazon-sync-worker] replenishment refresh deferred; sync recovery remains independent"); }
@@ -77,14 +80,14 @@ async function persistHeartbeat(status: "online" | "stopping") {
       status,
       concurrency,
       lastSeenAt: new Date(),
-      metadata: { ...runtimeHeartbeatMetadata(), pid: process.pid, hostname: process.env.HOSTNAME, mode: policy.mode, recovery: { ...recoveryState, spApi: recoveryState.spApi ?? null, inProgress: recovering } } satisfies Prisma.InputJsonValue,
+      metadata: { ...runtimeHeartbeatMetadata(), pid: process.pid, hostname: process.env.HOSTNAME, mode: policy.mode, amazonApiExecutionRole: amazonCloudExecutionEnabled() ? "cloud" : "local", recovery: { ...recoveryState, spApi: recoveryState.spApi ?? null, inProgress: recovering } } satisfies Prisma.InputJsonValue,
     },
     update: {
       queueName: amazonSyncQueueName,
       status,
       concurrency,
       lastSeenAt: new Date(),
-      metadata: { ...runtimeHeartbeatMetadata(), pid: process.pid, hostname: process.env.HOSTNAME, mode: policy.mode, recovery: { ...recoveryState, spApi: recoveryState.spApi ?? null, inProgress: recovering } } satisfies Prisma.InputJsonValue,
+      metadata: { ...runtimeHeartbeatMetadata(), pid: process.pid, hostname: process.env.HOSTNAME, mode: policy.mode, amazonApiExecutionRole: amazonCloudExecutionEnabled() ? "cloud" : "local", recovery: { ...recoveryState, spApi: recoveryState.spApi ?? null, inProgress: recovering } } satisfies Prisma.InputJsonValue,
     },
   });
 }

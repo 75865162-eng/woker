@@ -1,0 +1,8 @@
+'use client';
+import {useState} from 'react';
+import {Button} from '@/components/ui/button';
+export function FinanceStructurePanel({bookId,periodId,headers}:{bookId:string;periodId:string;headers:()=>Headers}){
+ const [typeId,setTypeId]=useState(''),[voucherId,setVoucherId]=useState(''),[data,setData]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+ async function load(inventory=false){setBusy(true);setError('');try{const params=new URLSearchParams({bookId,periodId,...(inventory?{voucherId}:{typeId})}),response=await fetch('/api/operations/finance-structure?'+params,{headers:headers(),cache:'no-store'}),result=await response.json();if(!response.ok)throw Error(result.error);setData(JSON.stringify(result,null,2));}catch(cause){setError(cause instanceof Error?cause.message:'读取失败。');}finally{setBusy(false);}}
+ return <details className="space-y-2 border-b border-border py-4"><summary className="cursor-pointer text-sm font-semibold">项目账户月汇总与库存凭证依据</summary><p className="text-xs text-muted">项目分类复用辅助类型，项目复用辅助项目。月收支来自已过账银行科目及逐行项目归属，期初来自当前期间正式期初余额；未分类保留空值。库存明细来自来源交接时保存的成本证据，冲销沿用原依据。</p>{error&&<p role="alert">{error}</p>}<input aria-label="项目分类辅助类型 ID" value={typeId} onChange={e=>setTypeId(e.target.value)}/><Button size="sm" disabled={busy||!typeId||!periodId} onClick={()=>void load()}>读取项目账户月汇总</Button><input aria-label="库存依据正式凭证 ID" value={voucherId} onChange={e=>setVoucherId(e.target.value)}/><Button size="sm" disabled={busy||!voucherId||!periodId} onClick={()=>void load(true)}>读取库存凭证依据</Button><pre className="max-h-80 overflow-auto text-xs">{data}</pre></details>;
+}

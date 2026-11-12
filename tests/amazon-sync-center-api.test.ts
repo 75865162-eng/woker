@@ -5,6 +5,7 @@ import { createLocalSession } from "@/lib/auth/session";
 
 test("sync center requires authentication before reading state or accepting task/credential changes", async () => {
   assert.equal((await GET(new Request("http://localhost/api/operations/sync-center"))).status, 401);
+  assert.equal((await GET(new Request("http://localhost/api/operations/sync-center?section=report-attribution-preview&sourceId=foreign-source"))).status, 401);
   assert.equal((await POST(new Request("http://localhost/api/operations/sync-center", { method: "POST", body: JSON.stringify({ action: "run", sourceIds: ["other-tenant"] }) }))).status, 401);
 });
 test("feature gating fails closed and never reports successful persistence without a database", async () => {

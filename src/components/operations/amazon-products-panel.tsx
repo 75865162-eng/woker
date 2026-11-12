@@ -5,17 +5,37 @@ import type { AmazonProductReadRow } from "@/lib/operations/amazon-products";
 export function AmazonProductsPanel({ headers }: { headers: () => Headers }) {
   const [rows, setRows] = useState<AmazonProductReadRow[]>([]);
   const [sku, setSku] = useState("");
+  const [skuInput, setSkuInput] = useState("");
+  const [sellerAccountId, setSellerAccountId] = useState("");
+  const [marketplaceId, setMarketplaceId] = useState("");
+  const [scopeReady, setScopeReady] = useState(false);
   const [page, setPage] = useState(1);
   const [hasNext, setHasNext] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    const readLocation = () => {
+      const params = new URLSearchParams(window.location.search);
+      const nextSku = params.get("sku") ?? "";
+      setSku(nextSku); setSkuInput(nextSku);
+      setSellerAccountId(params.get("sellerAccountId") ?? "");
+      setMarketplaceId(params.get("marketplaceId") ?? "");
+      setPage(1); setScopeReady(true);
+    };
+    readLocation(); window.addEventListener("popstate", readLocation);
+    return () => window.removeEventListener("popstate", readLocation);
+  }, []);
+
+  useEffect(() => {
+    if (!scopeReady) return;
     let canceled = false;
     setLoading(true);
     setError("");
     const params = new URLSearchParams({ page: String(page) });
     if (sku) params.set("sku", sku);
+    if (sellerAccountId) params.set("sellerAccountId", sellerAccountId);
+    if (marketplaceId) params.set("marketplaceId", marketplaceId);
     void fetch(`/api/operations/products?${params}`, { headers: headers(), cache: "no-store" })
       .then(async response => {
         const data = await response.json();
@@ -28,7 +48,7 @@ export function AmazonProductsPanel({ headers }: { headers: () => Headers }) {
       .catch(reason => { if (!canceled) setError(reason.message); })
       .finally(() => { if (!canceled) setLoading(false); });
     return () => { canceled = true; };
-  }, [headers, page, sku]);
+  }, [headers, page, sku, sellerAccountId, marketplaceId, scopeReady]);
 
   return <section className="space-y-3">
     <div>
@@ -38,9 +58,13 @@ export function AmazonProductsPanel({ headers }: { headers: () => Headers }) {
     <form className="flex gap-2" onSubmit={event => {
       event.preventDefault();
       setPage(1);
-      setSku(new FormData(event.currentTarget).get("sku")?.toString().trim() ?? "");
+      const nextSku = skuInput.trim();
+      setSku(nextSku);
+      const params = new URL(window.location.href).searchParams;
+      if (nextSku) params.set("sku", nextSku); else params.delete("sku");
+      window.history.pushState(null, "", `${window.location.pathname}?${params}`);
     }}>
-      <input name="sku" aria-label="按 Seller SKU 查询" placeholder="Seller SKU" className="h-9 border border-border px-3" />
+      <input name="sku" aria-label="按 Seller SKU 查询" placeholder="Seller SKU" value={skuInput} onChange={event => setSkuInput(event.target.value)} className="h-9 border border-border px-3" />
       <Button size="sm" variant="secondary">搜索</Button>
     </form>
     {error && <p role="alert" className="text-sm text-red-700">{error}</p>}

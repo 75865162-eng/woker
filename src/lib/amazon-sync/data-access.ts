@@ -10,7 +10,7 @@ export const isAmazonScopeAdmin = (role: string) => role === "owner" || role ===
 export type AmazonDataAction = "view" | "sync" | "export" | "edit";
 export type AmazonAccessScope = { sellerAccountId: string; marketplaceIds: string[] };
 export type AmazonDataAccess = { allSellers: boolean; sellerIds: string[]; scopes?: AmazonAccessScope[] };
-type Boundary = { organizationId: string; workspaceId: string; userId: string; credentialId: string; tool: string; action: AmazonDataAction };
+type Boundary = { organizationId: string; workspaceId: string; userId: string; credentialId?: string; tool: string; action: AmazonDataAction };
 const boundary = new AsyncLocalStorage<Boundary>();
 export function withAmazonMcpBoundary<T>(value: Boundary, work: () => Promise<T>) { return boundary.run(value, work); }
 export function parseAccessScopes(value: unknown): AmazonAccessScope[] {
@@ -22,8 +22,17 @@ export function parseAccessScopes(value: unknown): AmazonAccessScope[] {
   });
 }
 export async function explicitAmazonDataAccess(scope: SyncScope, actor: string, db: Prisma.TransactionClient, action: AmazonDataAction = "view", mcp = false): Promise<AmazonDataAccess> {
+  scope = { organizationId: scope.organizationId, workspaceId: scope.workspaceId };
   const member = await db.organizationMember.findUnique({ where: { organizationId_userId: { organizationId: scope.organizationId, userId: actor } }, include: { user: { select: { status: true } } } });
   if (!member || member.user.status !== "active" || !await db.workspaceScope.findUnique({ where: { organizationId_id: { organizationId: scope.organizationId, id: scope.workspaceId } }, select: { id: true } })) throw new SyncInputError("Amazon 数据范围不可访问。", 403);
+  // An enabled user/account assignment grants every Amazon business read.
+  // Legacy module, tool, action and marketplace settings apply only to mutations.
+  if (action === "view" || action === "export") {
+    const grants = await db.amazonDataAccessGrant.findMany({ where: { ...scope, userId: actor, enabled: true, seller: { status: "active" } }, select: { sellerAccountId: true }, take: 201 });
+    if (grants.length > 200) throw new SyncInputError("授权超过安全上限。", 403);
+    if (!grants.length) throw new SyncInputError("当前用户没有已分配的 Amazon 账号。", 403);
+    return { allSellers: false, sellerIds: [...new Set(grants.map(grant => grant.sellerAccountId))] };
+  }
   await assertAmazonAction(scope, actor, action === "sync" ? "create" : action, db);
   const filter = { ...scope, enabled: true, ...(mcp ? { mcpEnabled: true } : {}) };
   const grants = await db.amazonDataAccessGrant.findMany({ where: { ...filter, userId: actor }, select: { sellerAccountId: true, marketplaceIds: true, actions: true }, take: 201 });
@@ -40,6 +49,11 @@ export async function amazonDataAccess(scope: SyncScope, actor: string | undefin
   const current = boundary.getStore();
   if (current) {
     if (current.organizationId !== scope.organizationId || current.workspaceId !== scope.workspaceId || current.userId !== actor) throw new SyncInputError("数据范围不可访问。", 403);
+    const effectiveAction = action === "view" && current.action !== "view" ? current.action : action;
+    if (!current.credentialId) {
+      if (effectiveAction !== "view" && effectiveAction !== "export") throw new SyncInputError("会话数据接口只允许读取。", 403);
+      return explicitAmazonDataAccess(scope, actor, db, effectiveAction);
+    }
     const credential = await db.amazonMcpCredential.findFirst({ where: { id: current.credentialId, ...scope, userId: actor, status: "ACTIVE", expiresAt: { gt: new Date() } }, select: { id: true, scopes: true, name: true, rotatedFromId: true, tools: true } });
     if (!credential || !await credentialAllowsTool(credential, current.tool, db)) throw new SyncInputError("数据范围不可访问。", 403);
     if (credential.name.startsWith("Lili device: ")) {
@@ -49,30 +63,43 @@ export async function amazonDataAccess(scope: SyncScope, actor: string | undefin
         if (seen.has(parentId) || seen.size > 20) throw new SyncInputError("数据范围不可访问。", 403);
         seen.add(parentId);
         const parent = await db.amazonMcpCredential.findFirst({ where: { id: parentId, ...scope, userId: actor, status: "ACTIVE", expiresAt: { gt: new Date() } }, select: { scopes: true, tools: true, name: true, rotatedFromId: true } });
-        if (!parent || JSON.stringify(credential.scopes) !== JSON.stringify(parent.scopes)) throw new SyncInputError("数据范围不可访问。", 403);
+        if (!parent || (effectiveAction !== "view" && effectiveAction !== "export" && JSON.stringify(credential.scopes) !== JSON.stringify(parent.scopes))) throw new SyncInputError("数据范围不可访问。", 403);
         parentId = parent.name.startsWith("Lili device: ") ? parent.rotatedFromId : null;
       }
     }
-    const erp = await explicitAmazonDataAccess(scope, actor, db, current.action, true);
+    const erp = await explicitAmazonDataAccess(scope, actor, db, effectiveAction, true);
+    if (effectiveAction === "view" || effectiveAction === "export") return erp;
     const scopes = parseAccessScopes(credential.scopes).map(s => ({ ...s, marketplaceIds: s.marketplaceIds.filter(m => (erp.scopes ?? erp.sellerIds.map(sellerAccountId => ({ sellerAccountId, marketplaceIds: [] as string[] }))).some(g => g.sellerAccountId === s.sellerAccountId && (!g.marketplaceIds.length || g.marketplaceIds.includes(m)))) })).filter(s => s.marketplaceIds.length);
     if (!scopes.length) throw new SyncInputError("数据范围不可访问。", 403);
     return { allSellers: false, sellerIds: [...new Set(scopes.map(s => s.sellerAccountId))], scopes };
   }
   const member = await db.organizationMember.findUnique({ where: { organizationId_userId: { organizationId: scope.organizationId, userId: actor } }, include: { user: { select: { status: true } } } });
   if (!member || member.user.status !== "active" || !await db.workspaceScope.findUnique({ where: { organizationId_id: { organizationId: scope.organizationId, id: scope.workspaceId } }, select: { id: true } })) throw new SyncInputError("Amazon 数据范围不可访问。", 403);
-  if (isAmazonScopeAdmin(member.role)) return { allSellers: true, sellerIds: [] };
+  if (action !== "view" && action !== "export" && isAmazonScopeAdmin(member.role)) return { allSellers: true, sellerIds: [] };
   return explicitAmazonDataAccess(scope, actor, db, action);
 }
 export function sellerAccessWhere(access: AmazonDataAccess) { return access.allSellers ? {} : { sellerAccountId: { in: access.sellerIds }, ...(access.scopes ? { OR: access.scopes.map(s => ({ sellerAccountId: s.sellerAccountId, ...(s.marketplaceIds.length ? { marketplaceId: { in: s.marketplaceIds } } : {}) })) } : {}) }; }
-/** Seller-wide finance and notification evidence cannot be exposed by a site-only grant or MCP scope. */
-export function sourceAccessWhere(access: AmazonDataAccess) { return { ...sellerAccessWhere(access), ...(access.allSellers ? {} : { resource: { notIn: ["finance", "notifications"] } }) }; }
+/** Every business domain inherits the same account assignment. */
+export const sourceAccessWhere = sellerAccessWhere;
 export async function assertSellerAccess(scope: SyncScope, actor: string, sellers: string[], db: Prisma.TransactionClient = prisma, action: AmazonDataAction = "view") {
   const access = await amazonDataAccess(scope, actor, db, action);
   if (!access.allSellers && (!sellers.length || sellers.some(id => !access.sellerIds.includes(id)))) throw new SyncInputError("操作超出成员的 Seller 数据授权。", 403);
   return access;
 }
+/** Management authority is separate from business data access. */
 export async function assertAmazonScopeAdmin(scope: SyncScope, actor: string, db: Prisma.TransactionClient = prisma) {
-  if (!(await amazonDataAccess(scope, actor, db)).allSellers) throw new SyncInputError("授权及范围管理仅限组织管理员。", 403);
+  if (boundary.getStore()) throw new SyncInputError("数据接口不能管理账号授权。", 403);
+  const member = await db.organizationMember.findUnique({ where: { organizationId_userId: { organizationId: scope.organizationId, userId: actor } }, include: { user: { select: { status: true } } } });
+  if (!member || member.user.status !== "active" || !isAmazonScopeAdmin(member.role)
+    || !await db.workspaceScope.findUnique({ where: { organizationId_id: { organizationId: scope.organizationId, id: scope.workspaceId } }, select: { id: true } })) {
+    throw new SyncInputError("授权及范围管理仅限组织管理员。", 403);
+  }
+}
+
+/** Finance reads inherit the account assignment; callers must still filter that account. */
+export async function assertAmazonFinanceAccess(scope: SyncScope, actor: string, db: Prisma.TransactionClient = prisma) {
+  await amazonDataAccess(scope, actor, db);
+  return true;
 }
 
 /** Live RBAC for background work as well as HTTP. Never trust a session role snapshot. */

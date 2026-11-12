@@ -1,3 +1,5 @@
+import { amazonBusinessData } from "@/lib/amazon-sync/business-data";
+import { amazonAdsAccountReadAccess } from "./read-access";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { amazonDataAccess, sellerAccessWhere } from "@/lib/amazon-sync/data-access";
@@ -9,7 +11,7 @@ import { publishedReportFreshness, selectReportDomainState, summarizeReportFresh
 import { reportCompleteness, type ReportMetricField } from "./report-completeness";
 
 type Pair = { sellerAccountId: string; marketplaceId: string };
-type Fact = { id: string; profileId: string; reportDate: Date; publishedAt: Date; syncedAt: Date; versionId: string; sourceTaskId: string; factKey: string; reportType: string; adProduct: string; apiVersion: string; currencyCode: string | null; attributionWindow: string | null; campaignId: string | null; adGroupId: string | null; targetingId: string | null; advertisedAsin: string | null; searchTerm: string | null; placement: string | null; impressions: bigint | null; clicks: bigint | null; orders: bigint | null; units: bigint | null; spend: Prisma.Decimal | null; sales: Prisma.Decimal | null };
+type Fact = { rawDimensions: Prisma.JsonValue; id: string; profileId: string; reportDate: Date; publishedAt: Date; syncedAt: Date; versionId: string; sourceTaskId: string; factKey: string; reportType: string; adProduct: string; apiVersion: string; currencyCode: string | null; attributionWindow: string | null; campaignId: string | null; adGroupId: string | null; targetingId: string | null; advertisedAsin: string | null; searchTerm: string | null; placement: string | null; impressions: bigint | null; clicks: bigint | null; orders: bigint | null; units: bigint | null; spend: Prisma.Decimal | null; sales: Prisma.Decimal | null };
 // PostgreSQL SUM(bigint) returns numeric: a valid aggregate can exceed a row's bigint range.
 type Totals = Pick<Fact, "currencyCode" | "attributionWindow" | "apiVersion" | "reportType" | "adProduct"> & Record<"impressions" | "clicks" | "orders" | "units" | "spend" | "sales", Prisma.Decimal | null> & { observedFactCount: bigint } & Record<`${ReportMetricField}ProvidedCount`, bigint>;
 const sorts = new Set(["reportDate", "campaignId", "adGroupId", "impressions", "clicks", "spend", "orders", "sales", "searchTerm"]);
@@ -25,7 +27,7 @@ export async function queryPublishedAdsReports(scope: SyncScope, actor: string, 
   const result = await prisma.$transaction(async tx => {
     await tx.$executeRaw`SET TRANSACTION READ ONLY`;
     await tx.$executeRaw`SET LOCAL statement_timeout = '8000ms'`;
-    const access = await amazonDataAccess(scope, actor, tx);
+    const access = await amazonAdsAccountReadAccess(scope, actor, input, tx);
     const sellers = await tx.sellerAccount.findMany({ where: { ...scope, status: "active" }, select: { id: true, displayName: true } });
     const where: Prisma.AmazonAdsProfileWhereInput = { ...scope, ...sellerAccessWhere(access), authorization: { status: "CONNECTED" },
       AND: [{ sellerAccountId: { in: sellers.map(s => s.id) } }, ...(sourceScopes ? [{ OR: sourceScopes }] : [])],
@@ -71,6 +73,7 @@ export async function queryPublishedAdsReports(scope: SyncScope, actor: string, 
   if (result.profiles.length && await prisma.amazonAdsProfile.count({ where: { ...scope, ...sellerAccessWhere(access), authorization: { status: "CONNECTED" }, AND: [{ sellerAccountId: { in: sellers.map(s => s.id) } }, { OR: result.profiles.map(p => ({ id: p.id, authorizationId: p.authorizationId, profileId: p.profileId, sellerAccountId: p.sellerAccountId, marketplaceId: p.marketplaceId })) }] } }) !== result.profiles.length) throw new AdsQueryError("Ads 数据范围已变化。", 403);
   const profileMap = new Map(result.profiles.map(p => [p.id, p]));
   const rows = result.rows.map(row => ({
+    rawDimensions: amazonBusinessData(row.rawDimensions),
     id: row.id, reportType: row.reportType, adProduct: row.adProduct, factKey: row.factKey,
     campaignId: row.campaignId, adGroupId: row.adGroupId, targetingId: row.targetingId,
     advertisedAsin: row.advertisedAsin, searchTerm: row.searchTerm, placement: row.placement,

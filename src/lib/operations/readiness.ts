@@ -66,8 +66,9 @@ export async function getOperationsReadiness(input: {
   actorUserId?: string;
   organizationId: string;
   scope: WorkspaceScopeInput;
+  params?: URLSearchParams;
 }): Promise<OperationsReadiness> {
-  if (process.env.DATABASE_URL) return centerCompatibilityReadiness({ organizationId: input.organizationId, workspaceId: input.scope.workspaceId }, input.scope, input.actorUserId);
+  if (process.env.DATABASE_URL) return centerCompatibilityReadiness({ organizationId: input.organizationId, workspaceId: input.scope.workspaceId }, input.scope, input.actorUserId, input.params);
   const inventory = emptyInventorySummary();
   return { scope: input.scope, generatedAt: new Date().toISOString(), connection: toConnection(null, { configured: false, missingEnvironmentVariables: [], region: "按授权路由" }), runs: [], inventory, domains: emptyDomainFreshnessSummaries(inventory) };
 }

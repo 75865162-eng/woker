@@ -1,4 +1,5 @@
-import { amazonDataAccess, sourceAccessWhere } from "./data-access";
+import { amazonAccountReadAccess } from "./read-account";
+import { assertAmazonScopeAdmin, amazonDataAccess, sourceAccessWhere } from "./data-access";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { safeState } from "./approval-policy";
@@ -6,8 +7,8 @@ import { inventorySnapshotStatus } from "@/lib/operations/readiness";
 import { SyncInputError, isIncrementalResource, type SyncScope } from "./policy";
 
 export type SnapshotScope = { runId: string; sellerAccountId?: string; marketplaceId?: string; freshnessMinutes?: number; capturedAt: Date | null };
-export async function publishedSnapshotScopes(scope: SyncScope, resource: "inventory" | "catalog", actor?: string, target?: { sellerAccountId: string; marketplaceId: string }): Promise<SnapshotScope[]> {
-  const allowed = sourceAccessWhere(await amazonDataAccess(scope, actor));
+export async function publishedSnapshotScopes(scope: SyncScope, resource: "inventory" | "catalog", actor?: string, target?: { sellerAccountId: string; marketplaceId?: string }): Promise<SnapshotScope[]> {
+  const allowed = sourceAccessWhere(await amazonAccountReadAccess(scope, actor, new URLSearchParams(target ? Object.entries(target).filter((entry): entry is [string, string] => typeof entry[1] === "string") : [])));
   const sources = await prisma.amazonSyncDataSource.findMany({ where: { ...scope, ...allowed, resource, enabled: true, publishedRun: { status: "SUCCEEDED", executionVersion: 2, resource, finishedAt: { not: null }, stage: { not: "PURGED" } }, activeRunId: { not: null }, ...(target ? { AND: [target] } : {}) }, select: { activeRunId: true, sellerAccountId: true, marketplaceId: true, lastSuccessAt: true, freshnessMinutes: true }, take: 201 });
   if (sources.length > 200) throw new SyncInputError("当前试点超过 200 个数据源，需要先完成容量评审。", 409);
   return sources.map(s => ({ runId: s.activeRunId!, sellerAccountId: s.sellerAccountId, marketplaceId: s.marketplaceId, capturedAt: s.lastSuccessAt, freshnessMinutes: s.freshnessMinutes }));
@@ -29,9 +30,13 @@ export function sourceHealth(source: { enabled: boolean; lastSuccessAt: Date | n
   if (status === "FAILED" || status === "BLOCKED" || status === "PARTIAL_SUCCESS") return status;
   return source.activeRunId ? inventorySnapshotStatus(source.lastSuccessAt, new Date(), source.freshnessMinutes) : "NOT_SYNCED";
 }
-const sourceInclude = { resourceCursor: { select: { resource: true, watermarkFrom: true, watermarkTo: true, status: true, lastSuccessAt: true, updatedAt: true } }, targets: { select: { schedule: { select: { enabled: true, nextRunAt: true } } } }, authorization: { select: { id: true, name: true, status: true, amazonSellerId: true, awsRegion: true, lastValidatedAt: true } }, seller: { select: { id: true, displayName: true, accountKey: true, status: true } } } satisfies Prisma.AmazonSyncDataSourceInclude;
-export async function listSources(scope: SyncScope, filters: { sellerAccountId?: string; marketplaceId?: string; resource?: string } = {}, actor?: string) {
-  const allowed = sourceAccessWhere(await amazonDataAccess(scope, actor));
+const sourceInclude = { publishedRun: { select: { status: true, executionVersion: true, resource: true, sourceId: true, finishedAt: true, stage: true } }, resourceCursor: { select: { resource: true, watermarkFrom: true, watermarkTo: true, status: true, lastSuccessAt: true, updatedAt: true } }, targets: { select: { schedule: { select: { enabled: true, nextRunAt: true } } } }, authorization: { select: { id: true, name: true, status: true, amazonSellerId: true, awsRegion: true, lastValidatedAt: true } }, seller: { select: { id: true, displayName: true, accountKey: true, status: true } } } satisfies Prisma.AmazonSyncDataSourceInclude;
+export async function listSources(scope: SyncScope, filters: { sellerAccountId?: string; marketplaceId?: string; resource?: string } = {}, actor?: string, configurationOnly = false) {
+  if (configurationOnly) {
+    if (!actor) throw new SyncInputError("缺少账号管理操作人。", 403);
+    await assertAmazonScopeAdmin(scope, actor);
+  }
+  const allowed = configurationOnly ? {} : sourceAccessWhere(await amazonDataAccess(scope, actor));
   const sources = await prisma.amazonSyncDataSource.findMany({ where: { AND: [{ ...scope, ...filters }, allowed] }, include: sourceInclude, orderBy: { createdAt: "asc" }, take: 201 });
   if (sources.length > 200) throw new SyncInputError("数据源超过试点容量，需要容量评审。", 409);
   const latest = sources.length ? await prisma.amazonSyncRun.findMany({ where: { ...scope, executionVersion: 2, sourceId: { in: sources.map(s => s.id) } }, orderBy: [{ startedAt: "desc" }, { id: "desc" }], distinct: ["sourceId"] }) : [];

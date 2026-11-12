@@ -22,7 +22,7 @@ function readiness(workspaceId: string): OperationsReadiness {
 }
 
 async function setup(page: Page, tab = "overview") {
-  const calls: Array<{ path: string; method: string; workspace: string | undefined; body: unknown }> = [];
+  const calls: Array<{ path: string; query: string; method: string; workspace: string | undefined; body: unknown }> = [];
   const state = { canEdit: false, stale: false, denied: false, delayPath: "", releaseInventory: () => {}, inventoryStarted: false, enabled: false, policyRows: [] as Record<string, unknown>[], salesComplete: false, sellfoxDenied: false, productImages: false };
   await page.route("**/*", async (route) => {
     const request = route.request(); const url = new URL(request.url());
@@ -32,7 +32,7 @@ async function setup(page: Page, tab = "overview") {
     if (!url.pathname.startsWith("/api/")) return route.fulfill({ contentType: "text/html", body: '<html><head><link rel="stylesheet" href="/styles.css"></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>' });
     const workspace = request.headers()["x-workspace-id"];
     expect(request.headers()["authorization"]).toBeUndefined();
-    calls.push({ path: url.pathname, method: request.method(), workspace, body: request.method() === "GET" ? null : request.postDataJSON() });
+    calls.push({ path: url.pathname, query: url.searchParams.toString(), method: request.method(), workspace, body: request.method() === "GET" ? null : request.postDataJSON() });
     if (state.denied) return route.fulfill({ status: 403, json: { error: "无经营中台权限" } });
     if (state.delayPath === url.pathname && workspace === "workspace-a") {
       state.inventoryStarted = true;
@@ -90,7 +90,7 @@ test("overview shows six domains, stale reason/action and honest orders/ads plac
   for (const label of ["广告", "订单", "库存", "商品目录", "财务", "履约"]) await expect(page.locator("p").getByText(label, { exact: true })).toBeVisible();
   await expect(page.getByText(/今日广告花费：未接通日投影/)).toBeVisible();
   await page.getByRole("link", { name: "订单", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "订单 · NOT_SYNCED" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Amazon 订单" })).toBeVisible();
   await page.getByRole("link", { name: "广告联看", exact: true }).click();
   await expect(page.getByRole("link", { name: "广告优化工作台" })).toHaveAttribute("href", "/workspace");
   await expect(page.getByText("缺少同步数据", { exact: true })).toBeVisible();
@@ -98,12 +98,28 @@ test("overview shows six domains, stale reason/action and honest orders/ads plac
 
 test("unsynced inventory quantities and catalog fields stay unknown", async ({ page }) => {
   await setup(page, "inventory");
-  await expect(page.getByText(/可售 未同步 · 在途 未同步 · 预留 未同步 · 不可售 未同步/)).toBeVisible();
+  await expect(page.getByText(/可售 未同步 · 入库合计 未同步 · 预留 未同步 · 不可售 未同步/)).toBeVisible();
   await page.getByRole("link", { name: "在线产品", exact: true }).click();
   const row = page.getByRole("row").filter({ hasText: "TEST-SKU" });
   await expect(row).toBeVisible();
   await expect(row.getByRole("cell").nth(5)).toHaveText("未同步");
   await expect(row.getByRole("cell").nth(3)).toHaveText("未同步");
+});
+
+test("product and order links open one seller-site catalog snapshot and keep the SKU filter on refresh", async ({ page }) => {
+  const { calls } = await setup(page, "catalog&sku=TEST-SKU&sellerAccountId=store-7&marketplaceId=ATVPDKIKX0DER");
+  await expect(page.getByLabel("按 Seller SKU 查询", { exact: true })).toHaveValue("TEST-SKU");
+  await expect.poll(() => calls.find(call => call.path.endsWith("/products"))?.query).toContain("sellerAccountId=store-7");
+  const request = new URLSearchParams(calls.find(call => call.path.endsWith("/products"))!.query);
+  expect(request.get("sku")).toBe("TEST-SKU");
+  expect(request.get("sellerAccountId")).toBe("store-7");
+  expect(request.get("marketplaceId")).toBe("ATVPDKIKX0DER");
+  await page.reload();
+  await expect(page.getByLabel("按 Seller SKU 查询", { exact: true })).toHaveValue("TEST-SKU");
+  await page.getByLabel("按 Seller SKU 查询", { exact: true }).fill("NEXT-SKU");
+  await page.getByRole("button", { name: "搜索", exact: true }).click();
+  await expect(page).toHaveURL(/tab=catalog&sku=NEXT-SKU&sellerAccountId=store-7&marketplaceId=ATVPDKIKX0DER/);
+  await expect.poll(() => calls.filter(call => call.path.endsWith("/products")).at(-1)?.query).toContain("sku=NEXT-SKU");
 });
 
 test("catalog displays persisted main images at 150px and reuses the URL for duplicate ASINs", async ({ page }) => {
@@ -123,34 +139,34 @@ test("catalog displays persisted main images at 150px and reuses the URL for dup
   expect(calls.every(call => call.method === "GET")).toBe(true);
 });
 
-test("read-only schedules cannot be edited; manual sync uses scope and idempotency", async ({ page }) => {
+test("legacy schedules lead to the unified center without parallel writes", async ({ page }) => {
   const { calls } = await setup(page, "sync");
-  await expect(page.getByLabel("库存同步间隔")).toBeDisabled();
+  await expect(page.getByRole("heading", { name: "Amazon 同步计划已归并" })).toBeVisible();
+  await expect(page.getByLabel("库存同步间隔")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "启用", exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "立即同步库存", exact: true }).click();
-  await expect(page.getByText("未配置 Seller ID，已阻断", { exact: true })).toBeVisible();
-  const call = calls.find((call) => call.path.endsWith("/sync-runs"));
-  expect(call?.workspace).toBe("workspace-a");
-  expect(call?.body).toMatchObject({ resource: "inventory", idempotencyKey: expect.stringMatching(/^manual-inventory-/) });
-  expect(calls.some((call) => call.method === "PATCH")).toBe(false);
+  await page.getByRole("button", { name: "打开 Amazon 数据处理中心" }).click();
+  await expect(page).toHaveURL(/operations\?view=plans/);
+  expect(calls.every(call => call.method === "GET")).toBe(true);
+  expect(calls.some(call => call.path.endsWith("/schedules"))).toBe(false);
+});
+test("legacy manual sync opens current configuration without starting a second task", async ({ page }) => {
+  const { calls } = await setup(page);
+  await page.getByRole("button", { name: "请求只读同步", exact: true }).click();
+  await expect(page).toHaveURL(/operations\?view=connections/);
+  expect(calls.some(call => call.path.endsWith("/sync-runs"))).toBe(false);
+  expect(calls.every(call => call.method === "GET")).toBe(true);
+});
+test("legacy order panel links to the existing order route", async ({ page }) => {
+  const { calls } = await setup(page, "orders");
+  await expect(page.getByRole("link", { name: "打开订单管理" })).toHaveAttribute("href", "/operations?view=orders");
+  expect(calls.every(call => call.method === "GET")).toBe(true);
 });
 
-test("edit schedules persist explicit domain/interval and unsupported domains stay closed", async ({ page }) => {
-  const { state, calls } = await setup(page);
-  state.canEdit = true;
-  await page.getByRole("link", { name: "同步与计划", exact: true }).click();
-  const inventory = page.getByRole("row").filter({ has: page.getByLabel("库存同步间隔") });
-  await expect(page.getByLabel("订单同步间隔")).toBeDisabled();
-  await inventory.getByRole("button", { name: "启用", exact: true }).click();
-  await expect(inventory.getByRole("button", { name: "停用", exact: true })).toBeVisible();
-  expect(calls.find((call) => call.method === "PATCH")?.body).toEqual({ resource: "inventory", intervalMinutes: 60, enabled: true });
-});
-
-for (const path of ["/inventory/snapshots", "/metrics/daily", "/freshness", "/sync-runs"]) {
+for (const path of ["/inventory/snapshots", "/metrics/daily", "/freshness"]) {
  test(`late ${path} failures cannot contaminate the current workspace`, async ({ page }) => {
   const { state } = await setup(page);
   state.delayPath = `/api/operations${path}`;
-  await page.getByRole("button", { name: path === "/sync-runs" ? "请求只读同步" : "刷新数据", exact: true }).click();
+  await page.getByRole("button", { name: "刷新数据", exact: true }).click();
   await expect.poll(() => state.inventoryStarted).toBe(true);
   await page.evaluate(() => {
     localStorage.setItem("amazon_bulk_ad_workspace_scope", JSON.stringify({ workspaceId: "workspace-b", marketplace: "US" }));
@@ -163,7 +179,7 @@ for (const path of ["/inventory/snapshots", "/metrics/daily", "/freshness", "/sy
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   await expect(page.getByRole("status")).toHaveCount(0);
   await page.getByRole("link", { name: "补货计划", exact: true }).click();
-  await expect(page.getByText("尚无人工维护的补货策略。", { exact: true })).toBeVisible();
+  await expect(page.getByText("当前账号暂无 Amazon 补货策略。", { exact: true })).toBeVisible();
 });
 }
 
@@ -175,44 +191,41 @@ test("403 is visible and does not become a successful empty-data state", async (
 });
 
 
-test("TK dropdown and exact MSKU save without UUID entry, with missing-day evidence and scoped deep links", async ({ page }) => {
+test("Amazon replenishment stays on Amazon account data and links Sellfox suggestions separately", async ({ page }) => {
   const { state, calls } = await setup(page);
   state.canEdit = true;
   await page.getByRole("link", { name: "补货计划", exact: true }).click();
-  await page.getByLabel("赛狐数据店铺", { exact: true }).selectOption({ label: "TK店-US" });
+  await expect(page.getByRole("heading", { name: "Amazon 补货计划 · 只读建议" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "赛狐补货建议", exact: true })).toHaveAttribute("href", "/sellfox/restock");
   await page.getByLabel("策略归属店铺", { exact: true }).selectOption("actual-seller-id");
   await expect(page.getByLabel("补货站点")).toHaveValue("ATVPDKIKX0DER");
-  await page.getByLabel("补货 MSKU", { exact: true }).selectOption("TK-EXACT-MSKU");
-  await expect(page.getByRole("status")).toContainText("NEEDS_DATA · 最近28日缺失或无效 1 天");
-  await page.getByText("查看缺失日期", { exact: true }).click();
-  await expect(page.getByRole("status")).toContainText("不补0");
-  const link = page.getByRole("link", { name: "打开赛狐销量", exact: true }).filter({ visible: true });
-  await expect(link).toHaveAttribute("href", /workspaceId=workspace-a&shopExternalId=124687/);
-  await expect(link).toHaveAttribute("href", /search=TK-EXACT-MSKU&searchType=msku&exactMatch=1/);
+  await page.getByLabel("补货 MSKU", { exact: true }).fill("AMAZON-SKU");
+  await page.getByLabel("成熟品日需求模型", { exact: true }).selectOption("WIMOOR_7_15_30");
   await page.getByLabel("生产天数", { exact: true }).fill("5");
   await page.getByLabel("国内运输天数", { exact: true }).fill("3");
   await page.getByLabel("海运天数", { exact: true }).fill("20");
-  await page.getByLabel("来源说明", { exact: true }).fill("赛狐精确 MSKU 日销与供应商确认周期");
+  await page.getByLabel("来源说明", { exact: true }).fill("Amazon 账号库存快照与供应商确认周期");
   await page.getByRole("button", { name: "保存并启用", exact: true }).click();
   await expect(page.getByRole("status").first()).toContainText("参数已保存");
   const save = calls.find(call => call.method === "PATCH" && call.path.endsWith("/replenishment"));
   expect(save?.workspace).toBe("workspace-a");
-  expect(save?.body).toMatchObject({ sellerAccountId: "actual-seller-id", marketplaceId: "ATVPDKIKX0DER", sellerSku: "TK-EXACT-MSKU", inputs: { historicalSource: { storeId: "tk-local-us" }, salesHistory: [] }, enabled: true });
+  expect(save?.body).toMatchObject({ sellerAccountId: "actual-seller-id", marketplaceId: "ATVPDKIKX0DER", sellerSku: "AMAZON-SKU", inputs: { matureDemandModel: "WIMOOR_7_15_30", historicalSource: null, salesHistory: [] }, enabled: true });
+  expect(calls.some(call => ["/api/sellfox/listings", "/api/sellfox/sales"].includes(call.path))).toBe(false);
   expect(calls.some(call => call.path.includes("/sync") && call.method !== "GET")).toBe(false);
   await page.screenshot({ path: "tmp/operations-round-f-form.png", fullPage: true });
   await page.setViewportSize({ width: 360, height: 800 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test("result rows show READY source, NEEDS_DATA inputs, urgency and expandable reasons", async ({ page }) => {
+test("Amazon result rows show READY source, NEEDS_DATA inputs, urgency and expandable reasons", async ({ page }) => {
   const { state } = await setup(page);
   const date = "2026-10-25T00:00:00Z";
-  const policy = { id: "ready", sellerAccountId: "actual-seller-id", marketplaceId: "ATVPDKIKX0DER", sellerSku: "READY-SKU", enabled: true, updatedAt: date, inputs: {}, plan: { policyUpdatedAt: date, nextCalculationAt: "2099-01-01", generatedAt: date, lastError: null, result: { status: "READY", urgency: "URGENT", inventorySource: "sellfox_inventory_current", daysOfCover: 2, suggestedQuantity: 20, missingInputs: [], reasons: ["周期与来源已验证", "库存将在到货前不足"] } } };
+  const policy = { id: "ready", sellerAccountId: "actual-seller-id", marketplaceId: "ATVPDKIKX0DER", sellerSku: "READY-SKU", enabled: true, updatedAt: date, inputs: {}, plan: { policyUpdatedAt: date, nextCalculationAt: "2099-01-01", generatedAt: date, lastError: null, result: { status: "READY", urgency: "URGENT", inventorySource: "AmazonInventorySnapshot", daysOfCover: 2, suggestedQuantity: 20, missingInputs: [], reasons: ["周期与来源已验证", "库存将在到货前不足"] } } };
   state.policyRows = [policy, { ...policy, id: "needs", sellerSku: "NEEDS-SKU", plan: { ...policy.plan, result: { ...policy.plan.result, status: "NEEDS_DATA", urgency: "UNKNOWN", inventorySource: "AmazonInventorySnapshot", suggestedQuantity: null, missingInputs: ["最近完整 28 天销量（缺失日不视为零）"] } } }];
   await page.getByRole("link", { name: "补货计划", exact: true }).click();
   const ready = page.getByRole("row").filter({ hasText: "READY-SKU" });
   await expect(ready).toContainText("READY · URGENT");
-  await expect(ready).toContainText("sellfox_inventory_current");
+  await expect(ready).toContainText("AmazonInventorySnapshot");
   await expect(ready.locator("span.bg-red-500")).toBeVisible();
   await ready.locator("summary").click();
   await expect(ready.getByText("库存将在到货前不足", { exact: true })).toBeVisible();
@@ -223,37 +236,25 @@ test("result rows show READY source, NEEDS_DATA inputs, urgency and expandable r
   await page.screenshot({ path: "tmp/operations-round-f-results.png", fullPage: true });
 });
 
-test("blank manual quantity is rejected instead of becoming zero; read errors stay NEEDS_DATA", async ({ page }) => {
+test("blank Amazon sales quantity is rejected instead of becoming zero", async ({ page }) => {
   const { state, calls } = await setup(page);
-  state.canEdit = true; state.sellfoxDenied = true;
+  state.canEdit = true;
   await page.getByRole("link", { name: "补货计划", exact: true }).click();
-  await page.getByLabel("赛狐数据店铺", { exact: true }).selectOption("tk-local-us");
-  await page.getByLabel("补货 MSKU", { exact: true }).selectOption("TK-EXACT-MSKU");
-  await expect(page.getByRole("status")).toContainText("NEEDS_DATA · 无赛狐读取权限");
-  await page.getByLabel("赛狐数据店铺", { exact: true }).selectOption("");
   await page.getByLabel("策略归属店铺", { exact: true }).selectOption("actual-seller-id");
-  await page.getByLabel("补货 MSKU", { exact: true }).fill("MANUAL");
-  await page.getByText("高级兜底：手工每日销量", { exact: true }).click();
+  await page.getByLabel("补货 MSKU", { exact: true }).fill("AMAZON-SKU");
+  await page.getByText("成熟品历史销量", { exact: true }).click();
   await page.getByLabel("手工每日销量", { exact: true }).fill("2026-10-24,");
   await page.getByRole("button", { name: "保存并启用", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("销量件数缺失，不可按0保存");
   expect(calls.some(call => call.method === "PATCH")).toBe(false);
 });
 
-test("complete daily sales preview does not prematurely claim READY and overview links stay scoped", async ({ page }) => {
-  const { state } = await setup(page);
+test("Amazon replenishment has no Sellfox sales preview and retains a separate Sellfox route", async ({ page }) => {
+  const { calls } = await setup(page);
   const links = page.getByRole("navigation", { name: "赛狐只读入口" }).filter({ visible: true });
   await links.getByLabel("TK 快捷店铺").selectOption("245097");
   await expect(links.getByRole("link", { name: "打开赛狐FBA库存" })).toHaveAttribute("href", /workspaceId=workspace-a&shopExternalId=245097/);
-  state.canEdit = true; state.salesComplete = true;
   await page.getByRole("link", { name: "补货计划", exact: true }).click();
-  await page.getByLabel("赛狐数据店铺", { exact: true }).selectOption("tk-local-us");
-  await page.getByLabel("补货 MSKU", { exact: true }).selectOption("TK-EXACT-MSKU");
-  await expect(page.getByRole("status")).toContainText("最近28日销量完整 · 仍须库存新鲜与周期齐全");
-  await page.evaluate(() => {
-    localStorage.setItem("amazon_bulk_ad_workspace_scope", JSON.stringify({ workspaceId: "workspace-b", marketplace: "US" }));
-    window.dispatchEvent(new Event("amazon-bulk-ad:workspace-scope-changed"));
-  });
-  await expect(page.getByLabel("补货 MSKU", { exact: true })).toHaveValue("");
-  await expect(page.getByRole("status")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "赛狐补货建议", exact: true })).toHaveAttribute("href", "/sellfox/restock");
+  expect(calls.some(call => ["/api/sellfox/listings", "/api/sellfox/sales"].includes(call.path))).toBe(false);
 });

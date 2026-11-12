@@ -5,16 +5,20 @@ import { useEffect, useRef, useState } from "react";
 import type { RuntimeTool, ProviderStatus } from "@/lib/lili/runtime-tools";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
 
+type ErpCredentialOption = { id: string; name: string };
+
 export function LiveTools() {
   const [tools, setTools] = useState<RuntimeTool[]>([]);
   const [providers, setProviders] = useState<ProviderStatus[]>([]);
+  const [erpCredentials, setErpCredentials] = useState<ErpCredentialOption[]>([]);
+  const [erpCredentialId, setErpCredentialId] = useState("");
   const [selected, setSelected] = useState("");
   const [input, setInput] = useState("{}");
   const [result, setResult] = useState("");
   const [busy, setBusy] = useState(false);
   const generation = useRef(0);
   useEffect(() => {
-    const changed = () => { generation.current++; setTools([]); setProviders([]); setSelected(""); setInput("{}"); setResult(""); };
+    const changed = () => { generation.current++; setTools([]); setProviders([]); setErpCredentials([]); setErpCredentialId(""); setSelected(""); setInput("{}"); setResult(""); };
     window.addEventListener(workspaceScopeChangedEventName, changed);
     return () => window.removeEventListener(workspaceScopeChangedEventName, changed);
   }, []);
@@ -26,14 +30,21 @@ export function LiveTools() {
       const current = generation.current;
       setBusy(true); setResult("");
       try {
-        const response = await fetch("/api/lili/mcp", { cache: "no-store" });
+        const query = erpCredentialId ? `?erpCredentialId=${encodeURIComponent(erpCredentialId)}` : "";
+        const response = await fetch(`/api/lili/mcp${query}`, { cache: "no-store" });
         const data = await response.json();
         if (!response.ok) throw new Error("在线目录读取失败，请检查登录与授权。");
         if (current !== generation.current) return;
+        const options = Array.isArray(data.erpCredentialOptions) ? data.erpCredentialOptions.filter((item: unknown): item is ErpCredentialOption => !!item && typeof item === "object" && typeof (item as ErpCredentialOption).id === "string" && typeof (item as ErpCredentialOption).name === "string") : [];
+        setErpCredentials(options);
+        if (!erpCredentialId && options.length === 1) setErpCredentialId(options[0].id);
         setTools(data.tools); setProviders(data.providers); setSelected("");
       } catch { if (current === generation.current) setResult("在线目录读取失败，请检查登录与授权。"); }
       finally { setBusy(false); }
     }}>发现真实工具</button>
+    {erpCredentials.length > 0 && <label className="block text-sm">ERP MCP 凭证<select aria-label="ERP MCP 凭证" className="lili-field ml-3" value={erpCredentialId} onChange={event => { setErpCredentialId(event.target.value); setTools([]); setProviders([]); setSelected(""); setResult(""); }}>
+      <option value="">选择凭证</option>{erpCredentials.map(credential => <option key={credential.id} value={credential.id}>{credential.name}</option>)}
+    </select></label>}
     {providers.map(provider => <p className="text-sm" key={provider.provider}>{provider.provider}：{provider.status} · {provider.toolCount} 个工具 {provider.reason}</p>)}
     {tools.length > 0 && <label className="block text-sm">选择在线工具<select aria-label="选择在线工具" className="lili-field ml-3" value={selected} onChange={event => { setSelected(event.target.value); setInput("{}"); setResult(""); }}>
       <option value="">请选择</option>{tools.map(tool => <option key={tool.name} value={tool.name}>{tool.name} · {tool.permission} · {tool.availability}</option>)}
@@ -47,7 +58,7 @@ export function LiveTools() {
         setBusy(true);
         try {
           const args = JSON.parse(input);
-          const response = await fetch("/api/lili/tools/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: tool.name, input: args }) });
+          const response = await fetch("/api/lili/tools/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: tool.name, input: args, ...(erpCredentialId ? { erpCredentialId } : {}) }) });
           const data = await response.json();
           if (current === generation.current) setResult(JSON.stringify(data, null, 2));
         } catch { if (current === generation.current) setResult("调用失败，请检查 JSON 参数及当前工具授权。"); }

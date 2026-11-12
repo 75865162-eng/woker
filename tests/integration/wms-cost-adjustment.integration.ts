@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import { prisma } from '../../src/lib/db/prisma';
+import { mutateCostAdjustment, queryCostAdjustments, readWmsCostAdjustmentSource } from '../../src/lib/wms/cost-adjustment-service';
+import type { WmsScope } from '../../src/lib/wms/contracts';
+export async function verifyCostAdjustments(scope:WmsScope,supervisor:WmsScope,costEntryId:string){
+  const original=await prisma.wmsCostEntry.findUniqueOrThrow({where:{id:costEntryId}});
+  const movement=await prisma.wmsMovement.findUniqueOrThrow({where:{id:original.movementId}});
+  const input={action:'create',costEntryId,delta:'1.000001',date:movement.occurredAt.toISOString().slice(0,10),policyReference:'Target policy fixture only',evidence:'Synthetic late landed cost source',idempotencyKey:'fixture-cost-correction'};
+  const created=await Promise.all(Array.from({length:6},()=>mutateCostAdjustment(scope,input)));
+  const id=created[0].item.id;created.forEach(row=>assert.equal(row.item.id,id));
+  const approve={action:'review',id,revision:1,approve:true,evidence:'Synthetic independent policy review'};
+  await assert.rejects(()=>mutateCostAdjustment(scope,approve));
+  await assert.rejects(()=>mutateCostAdjustment({...scope,workspaceId:'other'},approve));
+  await assert.rejects(()=>prisma.$transaction(tx=>readWmsCostAdjustmentSource(tx,scope,id)));
+  await mutateCostAdjustment(supervisor,approve);
+  assert.equal((await mutateCostAdjustment(supervisor,approve)).reused,true);
+  const source=await prisma.$transaction(tx=>readWmsCostAdjustmentSource(tx,scope,id));
+  assert.equal(source.lines[0].debit,'1.000001');assert.equal(source.lines[1].credit,'1.000001');assert.equal(source.kind,'WMS_COST_ADJUSTMENT');
+  await assert.rejects(()=>prisma.wmsCostAdjustment.update({where:{id},data:{delta:'9'}}));
+  assert.deepEqual(await prisma.wmsCostEntry.findUniqueOrThrow({where:{id:costEntryId}}),original);
+  assert.deepEqual(await prisma.wmsMovement.findUniqueOrThrow({where:{id:original.movementId}}),movement);
+  const tooLow=await mutateCostAdjustment(scope,{...input,idempotencyKey:'fixture-negative-excess',delta:'-999999'});
+  await assert.rejects(()=>mutateCostAdjustment(supervisor,{...approve,id:tooLow.item.id}));
+  const negative=await mutateCostAdjustment(scope,{...input,idempotencyKey:'fixture-negative',delta:'-0.000001'});
+  await mutateCostAdjustment(supervisor,{...approve,id:negative.item.id});
+  const negativeSource=await prisma.$transaction(tx=>readWmsCostAdjustmentSource(tx,scope,negative.item.id));
+  assert.equal(negativeSource.lines[0].account,original.creditAccount);
+  assert.equal((await queryCostAdjustments(scope,new URLSearchParams({costEntryId}))).items.length,3);
+  console.log('PASS: WMS value-only correction, six-way deduplication, independent approval, signed account mapping, scoped reads, negative-cost cap and unchanged original movement/cost');
+}

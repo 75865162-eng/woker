@@ -1,3 +1,5 @@
+import { AmazonReadError } from "@/lib/amazon-sync/read-account";
+import { SyncInputError } from "@/lib/amazon-sync/policy";
 import { researchMcpTools, callResearchMcpTool } from "./research-tools";
 import { NextResponse } from "next/server";
 import type { PermissionAction } from "@/lib/accounts/permissions";
@@ -89,7 +91,11 @@ export async function handleLiliRequest(request: Request, parts: string[], autho
     if (publicResult?.terminal) return publicResult.response;
     const authorizationRequest = parsedBody ? new Request(request.url, { method: request.method, headers: request.headers, body: JSON.stringify(parsedBody) }) : request;
     let permission: Authorization;
-    try { permission = await authorize(moduleId, "view", authorizationRequest); }
+    try {
+      permission = authorize === defaultAuthorize && ["mcp", "tools/run", "tools"].includes(key)
+        ? await (await import("@/lib/auth/amazon-read-session")).requireAmazonReadSession(authorizationRequest)
+        : await authorize(moduleId, "view", authorizationRequest);
+    }
     catch (error) { if (publicResult) return publicResult.response; throw error; }
     if (!permission.ok) {
       if (publicResult) return publicResult.response;
@@ -132,14 +138,23 @@ export async function handleLiliRequest(request: Request, parts: string[], autho
     const requireReviewedMarketCall = (name: string) => {
       if (name.startsWith("sellersprite__") || name.startsWith("xiyou__")) throw new Error("RESEARCH_REQUEST_REQUIRES_HUMAN_REVIEW");
     };
+    const runtimeBody = parsedBody ?? (request.method === "GET" ? { erpCredentialId: new URL(request.url).searchParams.get("erpCredentialId") ?? undefined } : {});
     const getRuntime = async () => runtimeTools ?? (permission.user
-      ? (await import("./runtime-server")).runtimeToolsForUser(permission.user, authorizationRequest, parsedBody)
+      ? (await import("./runtime-server")).runtimeToolsForUser(permission.user, authorizationRequest, runtimeBody)
       : createRuntimeTools([]));
     const discover = async () => {
       const registered = await (await getRuntime()).discover();
       return { ...registered, tools: [...registered.tools, ...publicResearchTools, ...researchMcpTools] };
     };
-    if (key === "mcp" && request.method === "GET") return json({ source: "runtime-registry", scope: "authenticated-ERP-session", ...await discover() });
+    if (key === "mcp" && request.method === "GET") {
+      const runtime = await getRuntime();
+      const credentialMetadata = "erpCredentialId" in runtime ? {
+        erpCredentialId: runtime.erpCredentialId ?? null,
+        erpCredentialOptions: runtime.erpCredentialOptions ?? [],
+      } : {};
+      return json({ source: "runtime-registry", scope: "authenticated-ERP-session", ...await discover(),
+        ...credentialMetadata });
+    }
     if (key === "mcp" || key === "tools/run") {
       const body = parsedBody ?? await boundedJson(request);
       if (key === "tools/run") {
@@ -165,7 +180,7 @@ export async function handleLiliRequest(request: Request, parts: string[], autho
           requireReviewedMarketCall(args.name as string);
           const output = await (await getRuntime()).call(args.name as string, (args.arguments ?? {}) as never, request.signal);
           return json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(output) }], isError: false } });
-        } catch (error) { return json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify({ error: error instanceof RuntimeToolError ? error.code : "RUNTIME_TOOL_UNAVAILABLE_OR_FORBIDDEN", message: "请检查真实 Schema、当前授权；外部市场请求请通过 research_start/research_step 执行，审批在 Codex 对话里确认。" }) }], isError: true } }); }
+        } catch (error) { return json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify({ error: error instanceof AmazonReadError ? error.businessCode : error instanceof RuntimeToolError ? error.code : "RUNTIME_TOOL_UNAVAILABLE_OR_FORBIDDEN", message: error instanceof AmazonReadError ? error.message : "请检查真实 Schema、当前授权；外部市场请求请通过 research_start/research_step 执行，审批在 Codex 对话里确认。" }) }], isError: true } }); }
       }
       return json({ jsonrpc: "2.0", id, error: { code: -32601, message: "Method not found" } });
     }
@@ -176,6 +191,8 @@ export async function handleLiliRequest(request: Request, parts: string[], autho
       nextAction: { kind: "UNSUPPORTED_EXECUTOR", channel: "codex_chat", browserRequired: false }, message: "此步骤执行器尚未接入。请在对话中说明未执行部分并保留分析或草稿；无需返回浏览器。没有修改配置、创建业务记录、启动任务或调用外部服务。" }, 501);
   } catch (error) {
     // Never echo provider errors, credentials, raw bodies or connection strings.
+    if (error instanceof AmazonReadError) return json({ ok: false, error: error.businessCode, code: error.businessCode, message: error.message }, error.status);
+    if (error instanceof SyncInputError && [401, 403].includes(error.status)) return json({ ok: false, error: error.status === 401 ? "AUTHENTICATED_DATA_SCOPE_REQUIRED" : "ACCOUNT_ACCESS_DENIED", message: error.status === 401 ? "ERP 登录会话已失效，请重新登录。" : "当前用户不能访问请求的账号数据。" }, error.status);
     if (error instanceof RuntimeToolError) {
       const invalid = error.code === "INVALID_TOOL_ARGUMENTS";
       return json({ ok: false, error: error.code, message: invalid ? "参数不符合当前真实 Schema，请展开参数定义后修正。" : "工具不可用、权限不足或 Schema 已改变，请重新发现工具。" }, invalid ? 400 : error.code === "RUNTIME_TOOL_UNAVAILABLE_OR_FORBIDDEN" ? 403 : 409);

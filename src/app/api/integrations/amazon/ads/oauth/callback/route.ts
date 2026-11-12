@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { AmazonCloudExecutionError } from "@/lib/amazon/execution-role";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { finishAmazonAdsOAuth } from "@/lib/amazon-ads/authorization";
@@ -12,6 +13,7 @@ export async function GET(request: Request) {
     await finishAmazonAdsOAuth({ scope, actor: permission.user.id, params: new URL(request.url).searchParams });
     return new Response(null, { status: 303, headers: { Location: "/amazon-ads/accounts", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
   } catch (error) {
+    if (error instanceof AmazonCloudExecutionError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status, headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
     return NextResponse.json({ error: error instanceof Error ? error.message : "Amazon Ads 授权失败。" }, { status: 400, headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
   }
 }

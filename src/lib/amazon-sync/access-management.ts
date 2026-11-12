@@ -21,7 +21,7 @@ export async function saveAccessGrant(scope: SyncScope, actor: string, command: 
     if (!member || (command.enabled && member.user.status !== "active")) throw new SyncInputError("成员或 Seller 不属于当前范围。", 403);
   }
   if (!await tx.sellerAccount.findFirst({ where: { ...scope, id: sellerAccountId }, select: { id: true } })) throw new SyncInputError("成员或 Seller 不属于当前范围。", 403);
-  const actions = command.actions ?? prior?.actions ?? ["view", "sync", "export", "edit"];
+  const actions = command.actions ?? prior?.actions ?? ["view", "export"];
   const marketplaceIds = command.marketplaceIds ?? prior?.marketplaceIds ?? [];
   const mcpEnabled = command.mcpEnabled ?? prior?.mcpEnabled ?? false;
   if (!Array.isArray(actions) || actions.length > 4 || actions.some(a => !["view", "sync", "export", "edit"].includes(a)) || !Array.isArray(marketplaceIds) || marketplaceIds.length > 30 || marketplaceIds.some(m => typeof m !== "string" || !m || m.length > 200) || typeof mcpEnabled !== "boolean") throw new SyncInputError("范围或操作权限无效。");

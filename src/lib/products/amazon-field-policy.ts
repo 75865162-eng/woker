@@ -6,5 +6,6 @@ export function stripAmazonProductObservations<T extends object>(product: T): T 
   const clean = { ...product };
   Reflect.deleteProperty(clean, "amazonSnapshots");
   Reflect.deleteProperty(clean, "amazonSnapshotError");
+  Reflect.deleteProperty(clean, "amazonSnapshotErrorCode");
   return clean;
 }

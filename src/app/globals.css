@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import "tailwindcss" source("../");
 /* Exclude the old documentation placeholder retained by incremental scans. */
 @source not inline("text-[length:var(--sf-*)]");
 

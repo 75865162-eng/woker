@@ -29,16 +29,25 @@ const workspacesCache = new Map<string, CachedResponse<WorkspacesResponse>>();
 const workspacesInflight = new Map<string, Promise<WorkspacesResponse>>();
 const teamAccountsCache = new Map<string, CachedResponse<TeamAccountsResponse>>();
 const teamAccountsInflight = new Map<string, Promise<TeamAccountsResponse>>();
+let identityScope = "unbound";
+let cacheGeneration = 0;
+
+export function setWorkspaceApiCacheScope(scope: string) {
+  if (scope === identityScope) return;
+  identityScope = scope;
+  invalidateWorkspaceApiCache();
+}
 
 function getWorkspaceCacheKey() {
-  return "workspaces";
+  return `${identityScope}:${cacheGeneration}:workspaces`;
 }
 
 function getTeamAccountsCacheKey() {
-  return "team-accounts";
+  return `${identityScope}:${cacheGeneration}:team-accounts`;
 }
 
 export function invalidateWorkspaceApiCache() {
+  cacheGeneration++;
   workspacesCache.clear();
   workspacesInflight.clear();
   teamAccountsCache.clear();
@@ -67,7 +76,7 @@ export async function fetchWorkspacesCached(options?: { signal?: AbortSignal; fo
     }
 
     const nextData = { workspaces: Array.isArray(data.workspaces) ? data.workspaces : [] };
-    workspacesCache.set(cacheKey, { cachedAt: Date.now(), data: nextData });
+    if (cacheKey === getWorkspaceCacheKey()) workspacesCache.set(cacheKey, { cachedAt: Date.now(), data: nextData });
     return nextData;
   })();
 
@@ -113,13 +122,13 @@ export async function fetchTeamAccountsCached(options?: { force?: boolean }) {
     const response = await fetch("/api/accounts/team-members");
     if (!response.ok) {
       const nextData = { accounts: [] };
-      teamAccountsCache.set(cacheKey, { cachedAt: Date.now(), data: nextData });
+      if (cacheKey === getTeamAccountsCacheKey()) teamAccountsCache.set(cacheKey, { cachedAt: Date.now(), data: nextData });
       return nextData;
     }
 
     const data = (await response.json()) as { accounts?: unknown };
     const nextData = { accounts: normalizeTeamAccounts(data.accounts) };
-    teamAccountsCache.set(cacheKey, { cachedAt: Date.now(), data: nextData });
+    if (cacheKey === getTeamAccountsCacheKey()) teamAccountsCache.set(cacheKey, { cachedAt: Date.now(), data: nextData });
     return nextData;
   })();
 

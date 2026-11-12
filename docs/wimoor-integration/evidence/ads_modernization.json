@@ -1,0 +1,61 @@
+[
+  {
+    "domain": "SP",
+    "area": "Campaign/AdGroup/Keyword/Target/ProductAd LIST/GET",
+    "target": "Sponsored Products v3 list endpoints per current capability catalog; writes remain unimplemented",
+    "erp": "src/lib/amazon-ads/capabilities.ts; src/lib/amazon-ads/sync-adapter.ts; src/lib/amazon-ads/query-service.ts",
+    "source": "see API inventory for Wimoor methods; SDK names not official evidence",
+    "fields_roles_limits_pagination": "UNCERTAIN",
+    "schema": "NOT_ACQUIRED; no online access",
+    "decision": "Reuse existing shared entity query/service and SP reader; do not equate a listing/report read with campaign writes",
+    "status": "TARGET_REUSE_LOCAL_CODE_VERIFIED"
+  },
+  {
+    "domain": "SB",
+    "area": "Campaign/AdGroup/Ads LIST/GET v3/v4",
+    "target": "per operation v3/v4; do not upgrade whole domain blindly",
+    "erp": "src/lib/amazon-ads/reporting-v1-transport.ts; src/lib/amazon-ads/entity-replica.ts; src/lib/amazon-ads/query-service.ts",
+    "source": "see API inventory for Wimoor methods; SDK names not official evidence",
+    "fields_roles_limits_pagination": "UNCERTAIN",
+    "schema": "NOT_ACQUIRED; no online access",
+    "decision": "P0-B no Ads change; removed-operation impact not established",
+    "status": "INITIAL_MATRIX"
+  },
+  {
+    "domain": "SD",
+    "area": "Campaign/AdGroup/Target/Ads LIST/GET",
+    "target": "schema/media type verification pending",
+    "erp": "src/lib/amazon-ads/reporting-v1-transport.ts; src/lib/amazon-ads/entity-replica.ts; src/lib/amazon-ads/query-service.ts",
+    "source": "see API inventory for Wimoor methods; SDK names not official evidence",
+    "fields_roles_limits_pagination": "UNCERTAIN",
+    "schema": "NOT_ACQUIRED; no online access",
+    "decision": "P0-B no Ads change; removed-operation impact not established",
+    "status": "INITIAL_MATRIX"
+  },
+  {
+    "domain": "Reporting",
+    "area": "createReport/getReport/download v3",
+    "target": "Keep Reporting v3 and Ads API Reporting v1 as separate operation contracts; never a unified Ads v3.1",
+    "erp": "src/lib/amazon-ads/reporting-v1-transport.ts; src/lib/amazon-ads/campaign-reporting-v1-contract.ts; src/lib/amazon-ads/report-query.ts; src/lib/finance/external-source-service.ts",
+    "source": "see API inventory for Wimoor methods; SDK names not official evidence",
+    "fields_roles_limits_pagination": "UNCERTAIN",
+    "schema": "NOT_ACQUIRED; no online access",
+    "decision": "Finance consumes published facts through shared report-query; economic identity deduplicates reports/revisions, mixed API contracts rejected, no automatic posting",
+    "status": "LOCAL_FINANCE_ADAPTER_ISOLATED_VALIDATED",
+    "evidence": [
+      "tests/finance-external-source.test.ts",
+      "tests/integration/finance-external-source.integration.ts"
+    ]
+  },
+  {
+    "domain": "Export",
+    "area": "Snapshot -> Export/create/get/download",
+    "target": "P2; operation+retirement proof pending",
+    "erp": "src/lib/amazon-ads/reporting-v1-transport.ts; src/lib/amazon-ads/entity-replica.ts; src/lib/amazon-ads/query-service.ts",
+    "source": "see API inventory for Wimoor methods; SDK names not official evidence",
+    "fields_roles_limits_pagination": "UNCERTAIN",
+    "schema": "NOT_ACQUIRED; no online access",
+    "decision": "P0-B no Ads change; removed-operation impact not established",
+    "status": "INITIAL_MATRIX"
+  }
+]

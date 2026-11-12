@@ -1,3 +1,5 @@
+// Cloud role for injected offline task fixtures; no real Amazon calls.
+process.env.AMAZON_API_EXECUTION_ROLE = "cloud";
 import assert from "node:assert/strict";
 import test, { before, after } from "node:test";
 import { randomUUID } from "node:crypto";
@@ -12,6 +14,9 @@ import { decryptCheckpoint } from "@/lib/amazon-sync/checkpoint";
 import { parseReturnState } from "@/lib/amazon-sync/returns";
 import { digest, unseal } from "@/lib/amazon-sync/approval-policy";
 import { readReturns } from "@/lib/amazon-sync/returns-query";
+import { controlTask } from "@/lib/amazon-sync/service";
+import { createTask, scopeLock } from "@/lib/amazon-sync/service";
+import { automaticMarketplaces, automaticPlanKey } from "@/lib/amazon-sync/automatic-schedule";
 if (process.env.AMAZON_SYNC_OFFLINE_FIXTURE !== "1" || new URL(process.env.DATABASE_URL!).hostname !== "127.0.0.1" || new URL(process.env.DATABASE_URL!).pathname !== "/amazon_sync_test") throw new Error("Disposable offline database required");
 const raw = (name: string) => readFileSync(new URL(`../fixtures/amazon/returns/${name}`, import.meta.url), "utf8");
 const policy = JSON.parse(raw("policy.json")), site = "fixture-marketplace", region = "returns-fixture-region";
@@ -26,6 +31,7 @@ async function fresh() {
   await prisma.workspaceScope.create({ data: { organizationId: scope.organizationId, id: scope.workspaceId, name: "Returns fixture" } });
   for (const id of [actor, approver]) await prisma.user.create({ data: { id, email: `${id}@fixture.invalid`, name: "Fixture", passwordHash: "not-login", memberships: { create: { organizationId: scope.organizationId, role: "owner" } } } });
   await prisma.sellerAccount.create({ data: { ...scope, id: store, accountKey: store, displayName: "Returns fixture", marketplaceCode: "FX" } });
+  for (const userId of [actor, approver]) await prisma.amazonDataAccessGrant.create({ data: { ...scope, id: randomUUID(), userId, sellerAccountId: store, marketplaceIds: [site], actions: ["view", "sync", "export", "edit"] } });
   await prisma.amazonSpApiAuthorization.create({ data: { ...scope, id: authId, name: "Returns fixture", amazonSellerId: "fixture-seller", awsRegion: region, endpoint: endpoints[region], status: "CONFIGURED", approvedRoles: ["Amazon Fulfillment"], rolesAttestedAt: new Date(), marketplaceParticipations: [{ marketplaceId: site, countryCode: "FX" }], updatedByUserId: actor, credentialsCiphertext: encryptAmazonSpApiCredentials({ lwaClientId: "fixture-client", lwaClientSecret: "fixture-secret", refreshToken: "fixture-refresh", awsAccessKeyId: "", awsSecretAccessKey: "" }, { ...scope, authorizationId: authId }) } });
   async function approved(command: Record<string, unknown>) {
     const request = await requestChange(scope, actor, command), id = String(request.id);
@@ -109,12 +115,96 @@ test("same report raw replay is idempotent; different reports never accumulate i
   assert.equal(await prisma.amazonReturnRecord.count({ where: f.scope }), 4);
   const view = await readReturns(f.scope, new URLSearchParams(), f.actor); assert.equal(view.pagination.total, 2); assert.equal(view.reportId, "fixture-report-2");
 });
+
+test("Returns historical window replay keeps its report cursor and publication head unchanged", async () => {
+  const f = await fresh(), first = await f.request();
+  assert.equal((await f.finish(first.id)).status, "SUCCEEDED");
+  const window = (first.frozenScope as { returnWindow: { from: string; to: string } }).returnWindow;
+  const cursorBefore = await prisma.amazonSyncResourceCursor.findUniqueOrThrow({ where: { sourceId: f.source.id } });
+  const sourceBefore = await prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: f.source.id } });
+  const schedule = await prisma.amazonSyncSchedule.create({ data: { ...f.scope, id: randomUUID(), resource: "returns", executionVersion: 2,
+    planKey: automaticPlanKey(f.source.id), name: "Returns history replay fixture", revision: 1, mode: "incremental", intervalMinutes: 60,
+    enabled: true, updatedByUserId: f.actor, nextRunAt: new Date() } });
+  await prisma.amazonSyncPlanTarget.create({ data: { ...f.scope, scheduleId: schedule.id, sourceId: f.source.id } });
+  const wasAllowed = automaticMarketplaces.has(site); automaticMarketplaces.add(site);
+  try {
+    const replay = await prisma.$transaction(async tx => {
+      await scopeLock(tx, f.scope);
+      return createTask(tx, f.scope, f.actor, f.source.id, { key: `returns-history:${randomUUID()}`, trigger: "schedule", scheduleId: schedule.id,
+        scheduleRevision: schedule.revision, returnWindow: window, returnHistoryReplay: true });
+    });
+    assert.equal((await f.finish(replay.id)).status, "SUCCEEDED");
+    assert.equal((replay.frozenScope as Record<string, unknown>).returnHistoryReplay, true);
+    assert.deepEqual(await prisma.amazonSyncResourceCursor.findUniqueOrThrow({ where: { sourceId: f.source.id } }), cursorBefore);
+    const sourceAfter = await prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: f.source.id } });
+    assert.equal(sourceAfter.activeRunId, sourceBefore.activeRunId);
+    assert.equal(sourceAfter.lastSuccessAt?.getTime(), sourceBefore.lastSuccessAt?.getTime());
+    assert.equal(sourceAfter.rowCount, sourceBefore.rowCount);
+  } finally { if (!wasAllowed) automaticMarketplaces.delete(site); }
+});
+
+test("approved retry resets a terminal historical replay on its task checkpoint only", async () => {
+  const f = await fresh(), first = await f.request();
+  assert.equal((await f.finish(first.id)).status, "SUCCEEDED");
+  const window = (first.frozenScope as { returnWindow: { from: string; to: string } }).returnWindow;
+  const cursorBefore = await prisma.amazonSyncResourceCursor.findUniqueOrThrow({ where: { sourceId: f.source.id } });
+  const schedule = await prisma.amazonSyncSchedule.create({ data: { ...f.scope, id: randomUUID(), resource: "returns", executionVersion: 2,
+    planKey: automaticPlanKey(f.source.id), name: "Returns history retry fixture", revision: 1, mode: "incremental", intervalMinutes: 60,
+    enabled: true, updatedByUserId: f.actor, nextRunAt: new Date() } });
+  await prisma.amazonSyncPlanTarget.create({ data: { ...f.scope, scheduleId: schedule.id, sourceId: f.source.id } });
+  const wasAllowed = automaticMarketplaces.has(site); automaticMarketplaces.add(site);
+  try {
+    const replay = await prisma.$transaction(async tx => {
+      await scopeLock(tx, f.scope);
+      return createTask(tx, f.scope, f.actor, f.source.id, { key: `returns-history-retry:${randomUUID()}`, trigger: "schedule", scheduleId: schedule.id,
+        scheduleRevision: schedule.revision, returnWindow: window, returnHistoryReplay: true });
+    });
+    f.setPending("FATAL");
+    assert.equal((await f.finish(replay.id)).status, "FAILED");
+    assert.equal((await prisma.amazonSyncResourceCursor.findUniqueOrThrow({ where: { sourceId: f.source.id } })).status, "SUCCEEDED");
+    await f.approved({ action: "control-task", id: replay.id, control: "retry" });
+    assert.deepEqual(parseReturnState(decryptCheckpoint((await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: replay.id } })).checkpointCiphertext, f.scope, replay.id)), { polls: 0, offset: 0 });
+    assert.deepEqual(await prisma.amazonSyncResourceCursor.findUniqueOrThrow({ where: { sourceId: f.source.id } }), cursorBefore);
+    f.setPending("DONE"); f.newReport();
+    assert.equal((await f.finish(replay.id)).status, "SUCCEEDED");
+    assert.deepEqual(await prisma.amazonSyncResourceCursor.findUniqueOrThrow({ where: { sourceId: f.source.id } }), cursorBefore);
+  } finally { if (!wasAllowed) automaticMarketplaces.delete(site); }
+});
 for (const status of [400, 403, 429, 500]) test(`return poll ${status} follows bounded retry contract`, async () => {
   const f = await fresh(), run = await f.request(); await f.slice(run.id); f.setFault(status);
   const r = await f.slice(run.id); assert.equal(r.status, [429, 500].includes(status) ? "RETRY_WAIT" : "FAILED");
   assert.equal(r.throttles, status === 429 ? 1 : 0); assert.ok(!r.error?.includes("fixture-secret"));
   if (status === 429) assert.ok((await prisma.amazonSyncTokenBucket.findFirstOrThrow({ where: { bucketKey: digest(["getReport.2021-06-30", "fixture-seller", `fixture-${f.authId}`]), blockedUntil: { not: null } } })).blockedUntil! > new Date());
   if (status === 500) { await f.slice(run.id); assert.equal((await f.slice(run.id)).status, "FAILED"); }
+});
+for (const terminalStatus of ["FATAL", "CANCELLED"]) test(`approved retry replaces ${terminalStatus} report for the same window and preserves published data`, async () => {
+  const f = await fresh(), first = await f.request();
+  assert.equal((await f.finish(first.id)).status, "SUCCEEDED");
+  const published = await prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: f.source.id } });
+  // Fixture replay of the same window, retaining the existing published version.
+  await prisma.amazonSyncResourceCursor.update({ where: { sourceId: f.source.id }, data: { status: "FAILED", reportStateCiphertext: null } });
+  const run = await f.request(); f.setPending(terminalStatus);
+  const failed = await f.finish(run.id);
+  assert.equal(failed.status, "FAILED"); assert.equal(failed.stage, `RETURN_REPORT_${terminalStatus}`);
+  const before = await f.state();
+  assert.equal(before.state.terminalStatus, terminalStatus); assert.equal(before.state.reportId, "fixture-report");
+  assert.equal((await prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: f.source.id } })).activeRunId, published.activeRunId);
+  const createCount = () => f.calls.filter(u => u.pathname === "/reports/2021-06-30/reports").length;
+  assert.equal(createCount(), 2);
+  await assert.rejects(() => controlTask(f.scope, f.actor, run.id, "retry"), /APPROVAL_REQUIRED/);
+  assert.equal((await f.state()).cursor.reportStateCiphertext, before.cursor.reportStateCiphertext);
+  f.calls.length = 0;
+  await f.slice(run.id); assert.equal(f.calls.length, 0); // Failed dispatch cannot create another report.
+  await f.approved({ action: "control-task", id: run.id, control: "retry" });
+  const reset = await f.state(); assert.deepEqual(reset.state, { polls: 0, offset: 0 });
+  assert.equal(reset.cursor.watermarkFrom.getTime(), before.cursor.watermarkFrom.getTime());
+  assert.equal(reset.cursor.watermarkTo.getTime(), before.cursor.watermarkTo.getTime());
+  const audit = await prisma.auditLog.findFirstOrThrow({ where: { organizationId: f.scope.organizationId, entityId: run.id, action: "amazon.sync.returns.report.restart" } });
+  assert.equal((audit.metadata as { terminalStatus: string }).terminalStatus, terminalStatus);
+  f.setPending("DONE"); f.newReport();
+  assert.equal((await f.finish(run.id)).status, "SUCCEEDED"); assert.equal(createCount(), 1);
+  const result = await readReturns(f.scope, new URLSearchParams(), f.actor);
+  assert.equal(result.reportId, "fixture-report-2"); assert.equal(result.pagination.total, 2);
 });
 test("404/pending retries stop at configured polling limit", async () => {
   const f = await fresh(), run = await f.request(); await f.slice(run.id); f.setFault(404);
@@ -144,6 +234,25 @@ test("wrong report manifest and invalid TSV never publish", async () => {
     assert.equal((await f.finish(run.id)).status, "FAILED"); assert.equal(await prisma.amazonReturnRecord.count({ where: f.scope }), 0);
   }
 });
+test("invalid returns retain encrypted raw and retry parses the same archive with zero HTTP", async () => {
+  const f = await fresh(), run = await f.request(); f.setInvalid();
+  assert.equal((await f.finish(run.id)).status, "FAILED");
+  const { state } = await f.state();
+  assert.equal(state.archiveTaskId, run.id); assert.equal(state.offset, 0);
+  const archive = await prisma.amazonSyncRawPage.findFirstOrThrow({ where: { ...f.scope, taskId: run.id, resource: "returns" } });
+  const rawText = unseal(archive.rawCiphertext, f.scope, `${run.id}:1`, "amazon-returns-raw.v1").rawText;
+  assert.equal(typeof rawText, "string"); assert.ok(String(rawText).includes("ambiguous-time"));
+  assert.ok(!archive.rawCiphertext.includes("ambiguous-time"));
+  assert.equal(await prisma.amazonReturnRecord.count({ where: f.scope }), 0);
+  const prior = await prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: f.source.id } });
+  await f.approved({ action: "control-task", id: run.id, control: "retry" });
+  f.calls.length = 0;
+  assert.equal((await f.slice(run.id)).status, "FAILED");
+  assert.equal(f.calls.length, 0);
+  assert.equal(await prisma.amazonSyncRawPage.count({ where: { taskId: run.id, resource: "returns" } }), 1);
+  assert.equal((await f.state()).state.offset, 0);
+  assert.equal((await prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: f.source.id } })).activeRunId, prior.activeRunId);
+});
 test("empty report is complete zero evidence, not a missing-date failure", async () => {
   const f = await fresh(), run = await f.request(); f.setEmpty(); assert.equal((await f.finish(run.id)).status, "SUCCEEDED");
   const view = await readReturns(f.scope, new URLSearchParams(), f.actor); assert.equal(view.pagination.total, 0); assert.equal(view.reportId, "fixture-report");
@@ -171,7 +280,8 @@ test("returns reads enforce live membership and exact seller/site grants", async
   await assert.rejects(readReturns(other.scope, new URLSearchParams({ sourceId: f.source.id }), other.actor), /不可访问/);
   await prisma.organizationMember.update({ where: { organizationId_userId: { organizationId: f.scope.organizationId, userId: f.actor } }, data: { role: "operations" } });
   await prisma.organizationRosterRole.update({ where: { organizationId_id: { organizationId: f.scope.organizationId, id: "operations" } }, data: { permissions: { operations: ["view"] } } });
-  const grant = await prisma.amazonDataAccessGrant.create({ data: { ...f.scope, id: randomUUID(), userId: f.actor, sellerAccountId: f.store, marketplaceIds: ["fixture-other-site"], actions: ["view"] } });
+  const grant = await prisma.amazonDataAccessGrant.findFirstOrThrow({ where: { ...f.scope, userId: f.actor, sellerAccountId: f.store } });
+  await prisma.amazonDataAccessGrant.update({ where: { id: grant.id }, data: { marketplaceIds: ["fixture-other-site"], actions: ["view"] } });
   assert.equal((await readReturns(f.scope, new URLSearchParams(), f.actor)).sources.length, 0);
   await assert.rejects(readReturns(f.scope, new URLSearchParams({ sourceId: f.source.id }), f.actor), /不可访问/);
   await prisma.amazonDataAccessGrant.update({ where: { id: grant.id }, data: { marketplaceIds: [site] } });

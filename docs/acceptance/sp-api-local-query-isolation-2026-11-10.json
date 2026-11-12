@@ -1,0 +1,1507 @@
+{
+  "observedAt": "2026-11-10T04:43:44.938Z",
+  "environment": "existing local database",
+  "database": "amazon_sync_live_local",
+  "databaseReadOnly": true,
+  "authorizationId": "3895911f-89c4-4ebd-8212-dc58bede447e",
+  "identityVerified": true,
+  "actorBasis": "existing authorization administrator; current service permissions enforced",
+  "scope": "stored data query service only; no HTTP ERP endpoint, MCP protocol or native Skill acceptance",
+  "networkAttempts": 0,
+  "realAmazonRequests": 0,
+  "workerStarted": false,
+  "sourceBindings": 4,
+  "isolation": [
+    {
+      "boundary": "sellerAccountId",
+      "denied": true
+    },
+    {
+      "boundary": "marketplaceId",
+      "denied": true
+    }
+  ],
+  "results": [
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2Q3Y263D00KWC",
+      "table": "orders",
+      "resource": "orders",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 0,
+      "firstRows": 0,
+      "lastPage": 1,
+      "lastRows": 0,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "c673f4ba-d892-43c7-9257-c45d910a84ce",
+          "publishedTaskId": "9057328a-fbbe-446a-bcf9-aef87410955f",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "FAILED",
+          "lastSuccessAt": "2026-11-07T07:35:05.923Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2Q3Y263D00KWC",
+      "table": "order_items",
+      "resource": "orders",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 0,
+      "firstRows": 0,
+      "lastPage": 1,
+      "lastRows": 0,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "c673f4ba-d892-43c7-9257-c45d910a84ce",
+          "publishedTaskId": "9057328a-fbbe-446a-bcf9-aef87410955f",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "FAILED",
+          "lastSuccessAt": "2026-11-07T07:35:05.923Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2Q3Y263D00KWC",
+      "table": "returns",
+      "resource": "returns",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 6,
+      "firstRows": 6,
+      "lastPage": 1,
+      "lastRows": 6,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "784c74ed-0dcc-4d4e-b375-fbb60b0b87a4",
+          "publishedTaskId": "69749a69-eeb8-4b44-80a3-a2c9b20869f3",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "FAILED",
+          "lastSuccessAt": "2026-11-07T19:57:09.607Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2Q3Y263D00KWC",
+      "table": "settlements_v2",
+      "resource": "settlements",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 12,
+      "firstRows": 12,
+      "lastPage": 1,
+      "lastRows": 12,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "6f93830f-77a7-4ef1-a327-ff6e93603fcf",
+          "publishedTaskId": "a7195360-86a5-46cd-8e1d-605f52561cd8",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": "2026-11-09T12:15:53.986Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2Q3Y263D00KWC",
+      "table": "reimbursements",
+      "resource": "reimbursements",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 0,
+      "firstRows": 0,
+      "lastPage": 1,
+      "lastRows": 0,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "4d487abd-644a-4c34-a932-00356ca210ce",
+          "publishedTaskId": null,
+          "publishedTaskStatus": null,
+          "latestTaskStatus": "BLOCKED",
+          "lastSuccessAt": null
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2Q3Y263D00KWC",
+      "table": "inventory_age",
+      "resource": "inventory_age",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 111,
+      "firstRows": 50,
+      "lastPage": 3,
+      "lastRows": 11,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "a7fb7fd2-1ec8-47dc-9236-b9615027d09d",
+          "publishedTaskId": "464581f9-3cd7-493a-93b3-61b888d883c7",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": "2026-11-09T13:32:10.876Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2Q3Y263D00KWC",
+      "table": "inventory_events",
+      "resource": "inventory_events",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 0,
+      "firstRows": 0,
+      "lastPage": 1,
+      "lastRows": 0,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "91bc44f4-36ed-47e9-af2d-0817e083328c",
+          "publishedTaskId": null,
+          "publishedTaskStatus": null,
+          "latestTaskStatus": "BLOCKED",
+          "lastSuccessAt": null
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2Q3Y263D00KWC",
+      "table": "fulfillment",
+      "resource": "fulfillment",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 0,
+      "firstRows": 0,
+      "lastPage": 1,
+      "lastRows": 0,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "effa5588-caed-48ba-9ec3-17280ba1ac86",
+          "publishedTaskId": "c1d6125e-51cb-4fa9-89f9-480747f40d27",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "QUEUED",
+          "lastSuccessAt": "2026-11-10T02:08:37.348Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2Q3Y263D00KWC",
+      "table": "listing_details",
+      "resource": "listing_details",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 114,
+      "firstRows": 50,
+      "lastPage": 3,
+      "lastRows": 14,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "b9ef5ff2-87e7-4fe3-8550-921c92996031",
+          "publishedTaskId": "f5347041-f587-4865-b3dd-cb0198495313",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": "2026-11-09T21:26:17.284Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2Q3Y263D00KWC",
+      "table": "catalog_items",
+      "resource": "catalog_items",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 114,
+      "firstRows": 50,
+      "lastPage": 3,
+      "lastRows": 14,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "137bc632-3d3e-4084-8d31-ef9d2fd15a6c",
+          "publishedTaskId": "d672f3ba-9eab-424a-9409-f148a4084cd5",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": "2026-11-06T18:15:02.444Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2Q3Y263D00KWC",
+      "table": "pricing",
+      "resource": "pricing",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 228,
+      "firstRows": 50,
+      "lastPage": 5,
+      "lastRows": 28,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "9187cbda-4cb3-4f5e-aaa2-4b6d9d96f09f",
+          "publishedTaskId": "4c454da5-33f0-4d98-96be-e4035cb86ec2",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "QUEUED",
+          "lastSuccessAt": "2026-11-10T02:47:39.172Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2Q3Y263D00KWC",
+      "table": "buy_box_history",
+      "resource": "buy_box_history",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 1,
+      "firstRows": 1,
+      "lastPage": 1,
+      "lastRows": 1,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "5de340ef-760f-445d-8558-ca27619c3aef",
+          "publishedTaskId": "7592b3ad-174b-4ff2-adc3-b11857a29385",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "WAITING",
+          "lastSuccessAt": "2026-11-10T04:42:16.526Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2Q3Y263D00KWC",
+      "table": "brand_analytics",
+      "resource": "brand_analytics",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 0,
+      "firstRows": 0,
+      "lastPage": 1,
+      "lastRows": 0,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {
+        "reportKind": "search_terms"
+      },
+      "sourceEvidence": [
+        {
+          "sourceId": "23c456ec-66fa-429f-b79e-588f05c4a33f",
+          "publishedTaskId": "40e04e60-6467-43de-ae23-2c119edded00",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "FAILED",
+          "lastSuccessAt": "2026-11-07T11:58:36.950Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2Q3Y263D00KWC",
+      "table": "inventory",
+      "resource": "inventory",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 201,
+      "firstRows": 50,
+      "lastPage": 5,
+      "lastRows": 1,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "50eb8c0d-0443-4a43-bab2-127a059f2e8c",
+          "publishedTaskId": "2dbdeb39-afa6-4270-9f96-ec9b6552ca7c",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": "2026-11-09T13:27:12.360Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2Q3Y263D00KWC",
+      "table": "listings",
+      "resource": "catalog",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 114,
+      "firstRows": 50,
+      "lastPage": 3,
+      "lastRows": 14,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "95ee07f3-7034-4756-b615-b5468cc13b64",
+          "publishedTaskId": "64c6a45d-4815-4f71-b330-285ffa9efed3",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": "2026-11-09T13:28:29.614Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2Q3Y263D00KWC",
+      "table": "sales_traffic_daily",
+      "resource": "sales_traffic",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 0,
+      "firstRows": 0,
+      "lastPage": 1,
+      "lastRows": 0,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "5fdbe9a5-2f9d-46ca-a20c-62aa46b21b2b",
+          "publishedTaskId": "bbb6be14-7a4c-4e1e-aab0-009b745f8c67",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "PARTIAL_SUCCESS",
+          "lastSuccessAt": "2026-11-09T16:24:03.437Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A1AM78C64UM0Y8",
+      "table": "orders",
+      "resource": "orders",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 145,
+      "firstRows": 50,
+      "lastPage": 3,
+      "lastRows": 45,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "98e1fb54-970c-441a-9a0a-a5b285a6f361",
+          "publishedTaskId": "f0ecb625-a8cc-442a-87a5-0ea340eaa363",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "FAILED",
+          "lastSuccessAt": "2026-11-09T02:06:54.995Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A1AM78C64UM0Y8",
+      "table": "order_items",
+      "resource": "orders",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 154,
+      "firstRows": 50,
+      "lastPage": 4,
+      "lastRows": 4,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "98e1fb54-970c-441a-9a0a-a5b285a6f361",
+          "publishedTaskId": "f0ecb625-a8cc-442a-87a5-0ea340eaa363",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "FAILED",
+          "lastSuccessAt": "2026-11-09T02:06:54.995Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A1AM78C64UM0Y8",
+      "table": "finance_transactions",
+      "resource": "finance",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 253,
+      "firstRows": 50,
+      "lastPage": 6,
+      "lastRows": 3,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "publishedTaskId": "000537c3-94a4-4cd3-9cca-ade78ed48197",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "FAILED",
+          "lastSuccessAt": "2026-11-09T16:57:02.819Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A1AM78C64UM0Y8",
+      "table": "returns",
+      "resource": "returns",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 6,
+      "firstRows": 6,
+      "lastPage": 1,
+      "lastRows": 6,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "868d0b05-09cc-46bb-a736-14ef68af2254",
+          "publishedTaskId": "a52732c6-ebc2-4359-a191-ac454c592bf2",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "FAILED",
+          "lastSuccessAt": "2026-11-07T20:33:05.903Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A1AM78C64UM0Y8",
+      "table": "settlements_v2",
+      "resource": "settlements",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 114,
+      "firstRows": 50,
+      "lastPage": 3,
+      "lastRows": 14,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "2f4f1145-45dd-4454-aea6-2ad01aa0f2d4",
+          "publishedTaskId": "4a828bbd-695a-4096-b865-fafb70d7e964",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": "2026-11-09T11:11:29.182Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A1AM78C64UM0Y8",
+      "table": "reimbursements",
+      "resource": "reimbursements",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 0,
+      "firstRows": 0,
+      "lastPage": 1,
+      "lastRows": 0,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "535f1c34-44b9-4f0d-b5da-e2bc9499ded8",
+          "publishedTaskId": "d60bb969-4c55-47ef-ae97-034d2419d625",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "BLOCKED",
+          "lastSuccessAt": "2026-11-06T13:21:40.454Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A1AM78C64UM0Y8",
+      "table": "inventory_age",
+      "resource": "inventory_age",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 0,
+      "firstRows": 0,
+      "lastPage": 1,
+      "lastRows": 0,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "73846cb5-3ddc-495e-b720-933ef3ee31f4",
+          "publishedTaskId": null,
+          "publishedTaskStatus": null,
+          "latestTaskStatus": "FAILED",
+          "lastSuccessAt": null
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A1AM78C64UM0Y8",
+      "table": "inventory_events",
+      "resource": "inventory_events",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 0,
+      "firstRows": 0,
+      "lastPage": 1,
+      "lastRows": 0,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "39a9039c-478e-4cfb-8465-730bd68743df",
+          "publishedTaskId": null,
+          "publishedTaskStatus": null,
+          "latestTaskStatus": "BLOCKED",
+          "lastSuccessAt": null
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A1AM78C64UM0Y8",
+      "table": "fulfillment",
+      "resource": "fulfillment",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 0,
+      "firstRows": 0,
+      "lastPage": 1,
+      "lastRows": 0,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "e4895a6b-8bd3-4067-85d3-2e6a0ffc8ba2",
+          "publishedTaskId": "8fc0917e-af4a-4d33-a4cc-12bbc984e01b",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": "2026-11-10T04:41:19.948Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A1AM78C64UM0Y8",
+      "table": "listing_details",
+      "resource": "listing_details",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 165,
+      "firstRows": 50,
+      "lastPage": 4,
+      "lastRows": 15,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "f59edded-69dd-45ea-bd66-8a9694b1fe85",
+          "publishedTaskId": "240d1604-b7ac-4c3a-87d5-997454b48bb2",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": "2026-11-09T18:54:42.200Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A1AM78C64UM0Y8",
+      "table": "catalog_items",
+      "resource": "catalog_items",
+      "status": "UNPUBLISHED",
+      "total": null
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A1AM78C64UM0Y8",
+      "table": "pricing",
+      "resource": "pricing",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 328,
+      "firstRows": 50,
+      "lastPage": 7,
+      "lastRows": 28,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "251b53f5-3cbc-42f9-80de-066911eb5c0c",
+          "publishedTaskId": "62f94d6c-663b-4c6a-8abb-d49ee41a7398",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "QUEUED",
+          "lastSuccessAt": "2026-11-10T04:43:13.243Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A1AM78C64UM0Y8",
+      "table": "buy_box_history",
+      "resource": "buy_box_history",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 7,
+      "firstRows": 7,
+      "lastPage": 1,
+      "lastRows": 7,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "900fb51c-1a9a-4641-ab8e-b386d56be4e4",
+          "publishedTaskId": "2c03d0ab-ec27-486b-bebf-64a573959945",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "QUEUED",
+          "lastSuccessAt": "2026-11-10T04:38:18.712Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A1AM78C64UM0Y8",
+      "table": "brand_analytics",
+      "resource": "brand_analytics",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 0,
+      "firstRows": 0,
+      "lastPage": 1,
+      "lastRows": 0,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {
+        "reportKind": "search_terms"
+      },
+      "sourceEvidence": [
+        {
+          "sourceId": "cc6bbaa8-f8d7-4a96-95bb-6ce9fb7ec9ea",
+          "publishedTaskId": "275ceeae-0cb3-48f1-8b7f-9a3d5f9d03ce",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "FAILED",
+          "lastSuccessAt": "2026-11-07T16:57:26.659Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A1AM78C64UM0Y8",
+      "table": "notifications",
+      "resource": "notifications",
+      "status": "UNPUBLISHED",
+      "total": null
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A1AM78C64UM0Y8",
+      "table": "inventory",
+      "resource": "inventory",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 201,
+      "firstRows": 50,
+      "lastPage": 5,
+      "lastRows": 1,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "c6f7963d-b395-4e7a-82b1-2a2e668f6888",
+          "publishedTaskId": "aca216e8-d6ed-436a-a269-fc9d3b120001",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": "2026-11-09T13:27:51.173Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A1AM78C64UM0Y8",
+      "table": "listings",
+      "resource": "catalog",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 165,
+      "firstRows": 50,
+      "lastPage": 4,
+      "lastRows": 15,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "1419b876-4036-4594-8392-ed1ff9380d0a",
+          "publishedTaskId": "14b89166-3d2e-473c-b0dc-d0bac6f50fe1",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": "2026-11-09T13:28:25.106Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A1AM78C64UM0Y8",
+      "table": "sales_traffic_daily",
+      "resource": "sales_traffic",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 5,
+      "firstRows": 5,
+      "lastPage": 1,
+      "lastRows": 5,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "e312ee79-54d1-4311-8515-ee01c9a7407b",
+          "publishedTaskId": "f02b8bce-5e19-4c8d-a1d3-826b87c83ab0",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": "2026-11-09T21:12:05.345Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2EUQ1WTGCTBG2",
+      "table": "orders",
+      "resource": "orders",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 982,
+      "firstRows": 50,
+      "lastPage": 20,
+      "lastRows": 32,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "8133a1dc-c3c0-40c5-891f-eebe609413d3",
+          "publishedTaskId": "c9007d97-377a-47ed-a9a8-215bcd95f061",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "FAILED",
+          "lastSuccessAt": "2026-11-07T01:45:30.577Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2EUQ1WTGCTBG2",
+      "table": "order_items",
+      "resource": "orders",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 978,
+      "firstRows": 50,
+      "lastPage": 20,
+      "lastRows": 28,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "8133a1dc-c3c0-40c5-891f-eebe609413d3",
+          "publishedTaskId": "c9007d97-377a-47ed-a9a8-215bcd95f061",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "FAILED",
+          "lastSuccessAt": "2026-11-07T01:45:30.577Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2EUQ1WTGCTBG2",
+      "table": "returns",
+      "resource": "returns",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 2,
+      "firstRows": 2,
+      "lastPage": 1,
+      "lastRows": 2,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "e61220df-e35d-4aa1-90dd-8393c295eaac",
+          "publishedTaskId": "60be127d-cc0b-4ce5-9c8f-46dd142fd530",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "FAILED",
+          "lastSuccessAt": "2026-11-08T19:50:50.096Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2EUQ1WTGCTBG2",
+      "table": "settlements_v2",
+      "resource": "settlements",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 7717,
+      "firstRows": 50,
+      "lastPage": 155,
+      "lastRows": 17,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "4d1ff1ca-bd06-4a00-926e-d0f1f0d6fd7b",
+          "publishedTaskId": null,
+          "publishedTaskStatus": null,
+          "latestTaskStatus": "FAILED",
+          "lastSuccessAt": null
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2EUQ1WTGCTBG2",
+      "table": "reimbursements",
+      "resource": "reimbursements",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 0,
+      "firstRows": 0,
+      "lastPage": 1,
+      "lastRows": 0,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "24eb5f76-3b6c-4fc0-8e69-a836983c59e0",
+          "publishedTaskId": "727e6c2e-2510-4af5-b384-5323f2cab55f",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "BLOCKED",
+          "lastSuccessAt": "2026-11-06T13:17:01.500Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2EUQ1WTGCTBG2",
+      "table": "inventory_age",
+      "resource": "inventory_age",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 147,
+      "firstRows": 50,
+      "lastPage": 3,
+      "lastRows": 47,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "ca989e9c-7f6d-42f5-8342-bca8a0b873e7",
+          "publishedTaskId": "e21b6cf0-41d4-4bbc-8b8c-b2f00b3d2cd4",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": "2026-11-09T13:33:13.545Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2EUQ1WTGCTBG2",
+      "table": "inventory_events",
+      "resource": "inventory_events",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 0,
+      "firstRows": 0,
+      "lastPage": 1,
+      "lastRows": 0,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "116f668e-659b-4d89-8d48-3fbaef67e7af",
+          "publishedTaskId": null,
+          "publishedTaskStatus": null,
+          "latestTaskStatus": "BLOCKED",
+          "lastSuccessAt": null
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2EUQ1WTGCTBG2",
+      "table": "fulfillment",
+      "resource": "fulfillment",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 157,
+      "firstRows": 50,
+      "lastPage": 4,
+      "lastRows": 7,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "821f0c46-e0c3-45cb-a589-ca80909234a7",
+          "publishedTaskId": "9bb62a69-59c4-4f1a-b3f5-5f73ce7539de",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "FAILED",
+          "lastSuccessAt": "2026-11-10T02:55:07.461Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2EUQ1WTGCTBG2",
+      "table": "listing_details",
+      "resource": "listing_details",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 166,
+      "firstRows": 50,
+      "lastPage": 4,
+      "lastRows": 16,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "f82178dc-c4f9-4b83-8483-c6ecd5f329c8",
+          "publishedTaskId": "7d62730c-783f-43b6-9925-8bf2b85bca4f",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": "2026-11-09T21:35:24.365Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2EUQ1WTGCTBG2",
+      "table": "catalog_items",
+      "resource": "catalog_items",
+      "status": "UNPUBLISHED",
+      "total": null
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2EUQ1WTGCTBG2",
+      "table": "pricing",
+      "resource": "pricing",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 318,
+      "firstRows": 50,
+      "lastPage": 7,
+      "lastRows": 18,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "b13ceb47-7b5a-4904-b466-c6226014d66c",
+          "publishedTaskId": "a000dec9-4387-4fa9-ac48-3dcd6df5ac4d",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "RUNNING",
+          "lastSuccessAt": "2026-11-10T02:56:37.412Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2EUQ1WTGCTBG2",
+      "table": "buy_box_history",
+      "resource": "buy_box_history",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 38,
+      "firstRows": 38,
+      "lastPage": 1,
+      "lastRows": 38,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "027bce1f-28cc-4b38-a3a4-11da528289f0",
+          "publishedTaskId": "a6fe8cc9-75a1-41a9-9593-76451d56608e",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "QUEUED",
+          "lastSuccessAt": "2026-11-10T04:40:19.320Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2EUQ1WTGCTBG2",
+      "table": "brand_analytics",
+      "resource": "brand_analytics",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 0,
+      "firstRows": 0,
+      "lastPage": 1,
+      "lastRows": 0,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {
+        "reportKind": "search_terms"
+      },
+      "sourceEvidence": [
+        {
+          "sourceId": "1299517d-fefa-433e-9342-bfc12bfe0b62",
+          "publishedTaskId": "1533f9d1-4dc8-4532-b825-5681e832d989",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "FAILED",
+          "lastSuccessAt": "2026-11-07T16:55:25.468Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2EUQ1WTGCTBG2",
+      "table": "inventory",
+      "resource": "inventory",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 201,
+      "firstRows": 50,
+      "lastPage": 5,
+      "lastRows": 1,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "089a2971-7e5f-48b0-97fd-e14bd70c3ba8",
+          "publishedTaskId": "f5926b1a-d3db-499e-b775-cb316860d450",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": "2026-11-09T13:27:33.145Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2EUQ1WTGCTBG2",
+      "table": "listings",
+      "resource": "catalog",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 166,
+      "firstRows": 50,
+      "lastPage": 4,
+      "lastRows": 16,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "e12fc7d8-d461-4d5b-b5a1-42ef1d487ae9",
+          "publishedTaskId": "1f9e6fe1-8e7b-4234-ba68-84defc1f6c6c",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": "2026-11-09T13:28:16.934Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2EUQ1WTGCTBG2",
+      "table": "sales_traffic_daily",
+      "resource": "sales_traffic",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 5,
+      "firstRows": 5,
+      "lastPage": 1,
+      "lastRows": 5,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "84e1144a-d009-42e9-b97e-5b5b4dba2b0d",
+          "publishedTaskId": "2e319a65-718f-4461-8081-2b4024301b7e",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": "2026-11-09T21:33:08.056Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "table": "orders",
+      "resource": "orders",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 2423,
+      "firstRows": 50,
+      "lastPage": 49,
+      "lastRows": 23,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+          "publishedTaskId": "ea3dff12-be66-4f1c-8c87-1ca679400888",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "FAILED",
+          "lastSuccessAt": "2026-11-09T15:13:17.438Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "table": "order_items",
+      "resource": "orders",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 2474,
+      "firstRows": 50,
+      "lastPage": 50,
+      "lastRows": 24,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+          "publishedTaskId": "ea3dff12-be66-4f1c-8c87-1ca679400888",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "FAILED",
+          "lastSuccessAt": "2026-11-09T15:13:17.438Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "table": "returns",
+      "resource": "returns",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 3,
+      "firstRows": 3,
+      "lastPage": 1,
+      "lastRows": 3,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "9cbf4a37-280a-4aef-842d-a848761f86ce",
+          "publishedTaskId": "b10b8e69-be19-4fec-a443-ec82170c6d0c",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": "2026-11-09T20:30:11.380Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "table": "settlements_v2",
+      "resource": "settlements",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 64217,
+      "firstRows": 50,
+      "lastPage": 1285,
+      "lastRows": 17,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "636d327e-8da0-499a-9322-d6c375475ca5",
+          "publishedTaskId": "a321796a-bd91-4c45-bc04-b08e4119ce21",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": "2026-11-09T11:36:29.664Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "table": "reimbursements",
+      "resource": "reimbursements",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 16,
+      "firstRows": 16,
+      "lastPage": 1,
+      "lastRows": 16,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "7ec967f0-d1d2-49fc-b264-6b64d8980e94",
+          "publishedTaskId": "4ebcd7f5-aedf-436a-a53e-18797943234f",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": "2026-11-06T13:19:49.164Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "table": "inventory_age",
+      "resource": "inventory_age",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 150,
+      "firstRows": 50,
+      "lastPage": 3,
+      "lastRows": 50,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "57cb5529-680c-4d0b-a30f-b22f0b589ad6",
+          "publishedTaskId": "9109cfbf-b3ab-400a-8291-71d31edbbc5e",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": "2026-11-09T13:34:42.716Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "table": "inventory_events",
+      "resource": "inventory_events",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 0,
+      "firstRows": 0,
+      "lastPage": 1,
+      "lastRows": 0,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "0f4918c4-8fc4-4e17-a696-4bb6a13d4a76",
+          "publishedTaskId": null,
+          "publishedTaskStatus": null,
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": null
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "table": "fulfillment",
+      "resource": "fulfillment",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 3229,
+      "firstRows": 50,
+      "lastPage": 65,
+      "lastRows": 29,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "7367dd0a-b896-4db9-baef-7e2c600dd85f",
+          "publishedTaskId": "010c5403-7e2f-4ae7-8d5a-08d5a7b7cba9",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "QUEUED",
+          "lastSuccessAt": "2026-11-09T17:01:51.236Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "table": "listing_details",
+      "resource": "listing_details",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 230,
+      "firstRows": 50,
+      "lastPage": 5,
+      "lastRows": 30,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "8b82d84b-17f5-4245-8d8f-6b3e12a9d359",
+          "publishedTaskId": "0ce3dd51-8f7c-444b-87e1-a99318bb1709",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": "2026-11-09T21:40:28.778Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "table": "catalog_items",
+      "resource": "catalog_items",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 227,
+      "firstRows": 50,
+      "lastPage": 5,
+      "lastRows": 27,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "9cff8618-c1af-4116-9de7-f8faecb98f6f",
+          "publishedTaskId": "e7571aca-1c91-421a-8c55-04bee66edb0d",
+          "publishedTaskStatus": "PARTIAL_SUCCESS",
+          "latestTaskStatus": "CANCELLED",
+          "lastSuccessAt": null
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "table": "pricing",
+      "resource": "pricing",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 456,
+      "firstRows": 50,
+      "lastPage": 10,
+      "lastRows": 6,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "8abf2860-90cc-4fb4-b487-10596801015e",
+          "publishedTaskId": "d324e85e-e53c-495b-9f58-0d6019176ade",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "QUEUED",
+          "lastSuccessAt": "2026-11-10T04:35:13.265Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "table": "buy_box_history",
+      "resource": "buy_box_history",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 71,
+      "firstRows": 50,
+      "lastPage": 2,
+      "lastRows": 21,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "acca0c07-4c55-4131-97a7-29af5b2dc288",
+          "publishedTaskId": "7780625a-bbf5-4224-8cb5-41049cd077e6",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "QUEUED",
+          "lastSuccessAt": "2026-11-10T04:32:18.774Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "table": "brand_analytics",
+      "resource": "brand_analytics",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 0,
+      "firstRows": 0,
+      "lastPage": 1,
+      "lastRows": 0,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {
+        "reportKind": "search_terms"
+      },
+      "sourceEvidence": [
+        {
+          "sourceId": "82d40e01-0dbe-4e83-9ec5-129f3264b570",
+          "publishedTaskId": "ad732ce8-d484-420c-9509-f546aa845537",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "FAILED",
+          "lastSuccessAt": "2026-11-07T17:16:24.509Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "table": "inventory",
+      "resource": "inventory",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 201,
+      "firstRows": 50,
+      "lastPage": 5,
+      "lastRows": 1,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "f67200d5-4ba5-40e1-b217-230878a051c0",
+          "publishedTaskId": "5da936ff-fadb-4e33-bc76-eb21e5df69f5",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": "2026-11-09T13:26:44.286Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "table": "listings",
+      "resource": "catalog",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 230,
+      "firstRows": 50,
+      "lastPage": 5,
+      "lastRows": 30,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "ddeb51c4-d483-4fd5-85d8-baacf9894ca1",
+          "publishedTaskId": "cbb95e50-b531-4fa6-87ae-a02fd0c7c0c3",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "SUCCEEDED",
+          "lastSuccessAt": "2026-11-09T13:28:35.780Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "table": "sales_traffic_daily",
+      "resource": "sales_traffic",
+      "status": "SERVICE_QUERY_VERIFIED",
+      "total": 1,
+      "firstRows": 1,
+      "lastPage": 1,
+      "lastRows": 1,
+      "evidence": "existing stored data via shared ERP/MCP query service",
+      "filters": {},
+      "sourceEvidence": [
+        {
+          "sourceId": "c7f48221-c28d-47a9-b0c5-da2db1192d33",
+          "publishedTaskId": "d8a1b66d-8c92-43d2-be06-86004fde111d",
+          "publishedTaskStatus": "SUCCEEDED",
+          "latestTaskStatus": "PARTIAL_SUCCESS",
+          "lastSuccessAt": "2026-11-09T20:59:06.669Z"
+        }
+      ],
+      "zeroRowsProveNoData": false
+    }
+  ]
+}

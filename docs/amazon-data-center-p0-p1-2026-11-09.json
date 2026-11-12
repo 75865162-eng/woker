@@ -1,0 +1,227 @@
+{
+  "recordedAt": "2026-11-09 05:54:51 UTC",
+  "scope": {
+    "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+    "marketplaceId": "ATVPDKIKX0DER",
+    "displayName": "aoocy-us"
+  },
+  "method": "Connected ERP MCP read only; no new Amazon request or sync task",
+  "inventory": {
+    "requestId": "ff1b3fd3-1863-45dc-ba53-90e7572ce2b0",
+    "toolVersion": "2.0.0",
+    "source": "AmazonInventorySnapshot",
+    "isSandbox": false,
+    "total": 201,
+    "sampleRows": 3,
+    "returnedFields": [
+      "sellerAccountId",
+      "marketplaceId",
+      "sellerSku",
+      "asin",
+      "fnSku",
+      "condition",
+      "fulfillableQuantity",
+      "inboundWorkingQuantity",
+      "inboundShippedQuantity",
+      "inboundReceivingQuantity",
+      "reservedQuantity",
+      "unfulfillableQuantity",
+      "researchingQuantity",
+      "sourceUpdatedAt",
+      "capturedAt",
+      "syncRunId"
+    ],
+    "sources": [
+      {
+        "sourceId": "f67200d5-4ba5-40e1-b217-230878a051c0",
+        "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+        "marketplaceId": "ATVPDKIKX0DER",
+        "syncRunId": "9667b798-90c3-408b-ad25-d06440a44773",
+        "lastSyncAt": "2026-11-08T13:22:33.547Z"
+      }
+    ],
+    "freshness": "stale",
+    "snapshotCapturedAt": "2026-11-08T13:22:26.743Z"
+  },
+  "coverage": {
+    "registeredDomains": 18,
+    "completedDomains": 3,
+    "domainCoveragePercent": 16.66,
+    "complete": false,
+    "fieldCoveragePercent": null,
+    "officialSchemaCoverageVerified": false
+  },
+  "domainStates": [
+    {
+      "resource": "inventory_events",
+      "lastSyncedAt": null,
+      "latestTask": {
+        "id": "7dd47b7d-9d25-4d9f-96b1-0290005d8e08",
+        "status": "SUCCEEDED",
+        "stage": "ARCHIVED_SITE_PENDING",
+        "processedCount": 217,
+        "pagesCompleted": 2,
+        "nextAttemptAt": "2026-11-09T05:28:00.700Z"
+      }
+    },
+    {
+      "resource": "orders",
+      "lastSyncedAt": "2026-11-06T19:31:55.166Z",
+      "latestTask": {
+        "id": "266118a2-dba3-44a8-bc40-03260b827a34",
+        "status": "FAILED",
+        "stage": "FETCHING_DETAILS",
+        "processedCount": 0,
+        "pagesCompleted": 0,
+        "nextAttemptAt": "2026-11-06T22:10:29.896Z"
+      }
+    },
+    {
+      "resource": "inventory_age",
+      "lastSyncedAt": "2026-11-08T13:24:12.904Z",
+      "latestTask": {
+        "id": "4534458a-4088-4418-a16e-31f27c0c696d",
+        "status": "SUCCEEDED",
+        "stage": "COMPLETED",
+        "processedCount": 150,
+        "pagesCompleted": 2,
+        "nextAttemptAt": "2026-11-08T13:24:08.097Z"
+      }
+    },
+    {
+      "resource": "settlements",
+      "lastSyncedAt": "2026-11-08T15:52:08.875Z",
+      "latestTask": {
+        "id": "201ba49f-57ef-4661-a8a6-3920f1ca83e8",
+        "status": "SUCCEEDED",
+        "stage": "COMPLETED",
+        "processedCount": 61280,
+        "pagesCompleted": 138,
+        "nextAttemptAt": "2026-11-08T15:52:08.874Z"
+      }
+    },
+    {
+      "resource": "fulfillment",
+      "lastSyncedAt": null,
+      "latestTask": {
+        "id": "b390d0a6-23a8-4c94-859e-f16ffcdac33a",
+        "status": "FAILED",
+        "stage": "FETCHING",
+        "processedCount": 0,
+        "pagesCompleted": 15,
+        "nextAttemptAt": "2026-11-09T05:18:35.657Z"
+      }
+    },
+    {
+      "resource": "reimbursements",
+      "lastSyncedAt": "2026-11-06T13:19:49.164Z",
+      "latestTask": {
+        "id": "7eb2d7f2-3bad-46af-b606-e148b5d0c7ec",
+        "status": "FAILED",
+        "stage": "REPORT_CREATE_REJECTED",
+        "processedCount": 0,
+        "pagesCompleted": 0,
+        "nextAttemptAt": "2026-11-06T20:35:25.346Z"
+      }
+    },
+    {
+      "resource": "brand_analytics",
+      "lastSyncedAt": "2026-11-07T17:16:24.509Z",
+      "latestTask": {
+        "id": "c162a67d-e5a4-45a4-a499-13e37382f43d",
+        "status": "FAILED",
+        "stage": "FETCHING",
+        "processedCount": 0,
+        "pagesCompleted": 6,
+        "nextAttemptAt": "2026-11-07T17:25:32.738Z"
+      }
+    },
+    {
+      "resource": "pricing",
+      "lastSyncedAt": "2026-11-09T05:17:00.055Z",
+      "latestTask": {
+        "id": "ebd093e2-0da7-4842-a677-987d0582f667",
+        "status": "SUCCEEDED",
+        "stage": "COMPLETED",
+        "processedCount": 456,
+        "pagesCompleted": 24,
+        "nextAttemptAt": "2026-11-09T05:16:32.210Z"
+      }
+    },
+    {
+      "resource": "listing_details",
+      "lastSyncedAt": "2026-11-07T21:07:36.176Z",
+      "latestTask": {
+        "id": "39f4e9dc-56d3-429d-9fb2-54f8a8b527ba",
+        "status": "FAILED",
+        "stage": "FETCHING",
+        "processedCount": 14,
+        "pagesCompleted": 14,
+        "nextAttemptAt": "2026-11-08T21:02:08.350Z"
+      }
+    },
+    {
+      "resource": "returns",
+      "lastSyncedAt": "2026-11-07T19:54:51.023Z",
+      "latestTask": {
+        "id": "51272cb2-3831-4d9f-8554-adb4265e9127",
+        "status": "FAILED",
+        "stage": "RETURN_REPORT_POLLING",
+        "processedCount": 0,
+        "pagesCompleted": 0,
+        "nextAttemptAt": "2026-11-08T20:28:03.701Z"
+      }
+    },
+    {
+      "resource": "catalog_items",
+      "lastSyncedAt": null,
+      "latestTask": {
+        "id": "e7571aca-1c91-421a-8c55-04bee66edb0d",
+        "status": "BLOCKED",
+        "stage": "FETCHING",
+        "processedCount": 47,
+        "pagesCompleted": 47,
+        "nextAttemptAt": "2026-11-07T15:31:57.484Z"
+      }
+    },
+    {
+      "resource": "sales_traffic",
+      "lastSyncedAt": "2026-11-06T19:26:06.331Z",
+      "latestTask": {
+        "id": "28567ef1-03a5-4c9d-9d01-a57a8130e709",
+        "status": "PARTIAL_SUCCESS",
+        "stage": "QUALITY_FAILED",
+        "processedCount": 18,
+        "pagesCompleted": 1,
+        "nextAttemptAt": "2026-11-08T19:52:03.183Z"
+      }
+    },
+    {
+      "resource": "catalog",
+      "lastSyncedAt": "2026-11-08T13:24:03.533Z",
+      "latestTask": {
+        "id": "3102757a-3bfe-46a3-b810-78a926e233fd",
+        "status": "SUCCEEDED",
+        "stage": "COMPLETED",
+        "processedCount": 230,
+        "pagesCompleted": 12,
+        "nextAttemptAt": "2026-11-08T13:23:32.493Z"
+      }
+    },
+    {
+      "resource": "inventory",
+      "lastSyncedAt": "2026-11-08T13:22:33.547Z",
+      "latestTask": {
+        "id": "9667b798-90c3-408b-ad25-d06440a44773",
+        "status": "SUCCEEDED",
+        "stage": "COMPLETED",
+        "processedCount": 201,
+        "pagesCompleted": 5,
+        "nextAttemptAt": "2026-11-08T13:21:38.440Z"
+      }
+    }
+  ],
+  "newRowsInsertedThisRound": 0,
+  "localReplicaVerified": false,
+  "amazonTransportExecutedThisRound": false
+}

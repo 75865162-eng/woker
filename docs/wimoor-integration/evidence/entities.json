@@ -1,0 +1,4290 @@
+[
+  {
+    "path": "wimoor-admin/admin-api/src/main/java/com/wimoor/admin/pojo/dto/SysUserRoleDTO.java",
+    "line": 16,
+    "table": "t_user_role",
+    "class_name": "SysUserRoleDTO",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/domain/BaseResponse.java",
+    "line": 1,
+    "table": null,
+    "class_name": "BaseResponse",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/BaseEntity.java",
+    "line": 1,
+    "table": null,
+    "class_name": "BaseEntity",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/NotifyTarget.java",
+    "line": 1,
+    "table": null,
+    "class_name": "NotifyTarget",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/NotifyType.java",
+    "line": 1,
+    "table": null,
+    "class_name": "NotifyType",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SysCompany.java",
+    "line": 13,
+    "table": "t_shop",
+    "class_name": "SysCompany",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SysDept.java",
+    "line": 10,
+    "table": "t_sys_dept",
+    "class_name": "SysDept",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SysDict.java",
+    "line": 10,
+    "table": "t_sys_dict",
+    "class_name": "SysDict",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SysDictItem.java",
+    "line": 12,
+    "table": "t_sys_dict_item",
+    "class_name": "SysDictItem",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SysLocalHoliday.java",
+    "line": 10,
+    "table": "t_sys_local_holiday",
+    "class_name": "SysLocalHoliday",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SysMenu.java",
+    "line": 19,
+    "table": "t_sys_menu",
+    "class_name": "SysMenu",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SysMenuFavorite.java",
+    "line": 25,
+    "table": "t_sys_menu_favorite",
+    "class_name": "SysMenuFavorite",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SysOauthClient.java",
+    "line": 1,
+    "table": null,
+    "class_name": "SysOauthClient",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SysPermission.java",
+    "line": 14,
+    "table": "t_sys_permission",
+    "class_name": "SysPermission",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SysRole.java",
+    "line": 15,
+    "table": "t_role",
+    "class_name": "SysRole",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SysRoleMenu.java",
+    "line": 12,
+    "table": "t_sys_role_menu",
+    "class_name": "SysRoleMenu",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SysRolePermission.java",
+    "line": 11,
+    "table": "t_sys_role_permission",
+    "class_name": "SysRolePermission",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SysUser.java",
+    "line": 16,
+    "table": "t_user",
+    "class_name": "SysUser",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SysUserBind.java",
+    "line": 22,
+    "table": "t_sys_user_bind",
+    "class_name": "SysUserBind",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SysUserDatalimit.java",
+    "line": 22,
+    "table": "t_sys_user_datalimit",
+    "class_name": "SysUserDatalimit",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SysUserGroup.java",
+    "line": 22,
+    "table": "t_sys_user_group",
+    "class_name": "SysUserGroup",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SysUserInfo.java",
+    "line": 13,
+    "table": "t_userinfo",
+    "class_name": "SysUserInfo",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SysUserRole.java",
+    "line": 15,
+    "table": "t_user_role",
+    "class_name": "SysUserRole",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SysUserShop.java",
+    "line": 13,
+    "table": "t_user_shop",
+    "class_name": "SysUserShop",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SysUserWechatMP.java",
+    "line": 9,
+    "table": "t_user_wechat_mp",
+    "class_name": "SysUserWechatMP",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SystemMessageTemplate.java",
+    "line": 12,
+    "table": "t_sys_message_template",
+    "class_name": "SystemMessageTemplate",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SystemNotify.java",
+    "line": 12,
+    "table": "t_sys_notify",
+    "class_name": "SystemNotify",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SystemSubscription.java",
+    "line": 15,
+    "table": "t_sys_subscription",
+    "class_name": "SystemSubscription",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SystemTarget.java",
+    "line": 10,
+    "table": "t_sys_target",
+    "class_name": "SystemTarget",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/admin/pojo/entity/SystemUserNotify.java",
+    "line": 15,
+    "table": "t_sys_usernotify",
+    "class_name": "SystemUserNotify",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/feishu/pojo/entity/Auth.java",
+    "line": 23,
+    "table": "t_sys_feishu_auth",
+    "class_name": "Auth",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/feishu/pojo/entity/CopyAndPasteByRangeRequest.java",
+    "line": 1,
+    "table": null,
+    "class_name": "CopyAndPasteByRangeRequest",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/feishu/pojo/entity/CopyAndPasteRangeResponse.java",
+    "line": 1,
+    "table": null,
+    "class_name": "CopyAndPasteRangeResponse",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/feishu/pojo/entity/CreateAppAndTablesRequest.java",
+    "line": 1,
+    "table": null,
+    "class_name": "CreateAppAndTablesRequest",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/feishu/pojo/entity/CreateAppAndTablesResponse.java",
+    "line": 1,
+    "table": null,
+    "class_name": "CreateAppAndTablesResponse",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/feishu/pojo/entity/LeaveCalendar.java",
+    "line": 21,
+    "table": "t_sys_feishu_leave_calendar",
+    "class_name": "LeaveCalendar",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/feishu/pojo/entity/SpreadsheetResp.java",
+    "line": 1,
+    "table": null,
+    "class_name": "SpreadsheetResp",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/feishu/pojo/entity/SysFeishuTable.java",
+    "line": 13,
+    "table": "t_sys_feishu_table",
+    "class_name": "SysFeishuTable",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/pojo/entity/ManagerLimit.java",
+    "line": 27,
+    "table": "t_manager_limit",
+    "class_name": "ManagerLimit",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/pojo/entity/ManagerLimitAppend.java",
+    "line": 25,
+    "table": "t_manager_limit_append",
+    "class_name": "ManagerLimitAppend",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/pojo/entity/Shop.java",
+    "line": 22,
+    "table": "t_shop",
+    "class_name": "Shop",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/pojo/entity/SysCustomerInvoice.java",
+    "line": 25,
+    "table": "t_sys_customer_invoice",
+    "class_name": "SysCustomerInvoice",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/pojo/entity/SysCustomerOrder.java",
+    "line": 25,
+    "table": "t_sys_customer_order",
+    "class_name": "SysCustomerOrder",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/pojo/entity/SysCustomerOrderRefund.java",
+    "line": 24,
+    "table": "t_sys_customer_order_refund",
+    "class_name": "SysCustomerOrderRefund",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/pojo/entity/SysTariffPackages.java",
+    "line": 27,
+    "table": "t_sys_tariff_packages",
+    "class_name": "SysTariffPackages",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/pojo/entity/SysTariffPackagesAppend.java",
+    "line": 22,
+    "table": "t_sys_tariff_packages_append",
+    "class_name": "SysTariffPackagesAppend",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/manager/pojo/entity/SysTariffPackagesAppendDiscount.java",
+    "line": 20,
+    "table": "t_sys_tariff_packages_append_discount",
+    "class_name": "SysTariffPackagesAppendDiscount",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/email/pojo/entity/SysMailTemplate.java",
+    "line": 24,
+    "table": "t_sys_mail_template",
+    "class_name": "SysMailTemplate",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/pojo/entity/DeepSeekMessage.java",
+    "line": 1,
+    "table": null,
+    "class_name": "DeepSeekMessage",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/pojo/entity/DeepseekChatMessages.java",
+    "line": 14,
+    "table": "t_sys_tool_deepseek_chat_messages",
+    "class_name": "DeepseekChatMessages",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/pojo/entity/DeepseekChatSessions.java",
+    "line": 16,
+    "table": "t_sys_tool_deepseek_chat_sessions",
+    "class_name": "DeepseekChatSessions",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/pojo/entity/LargeFile.java",
+    "line": 14,
+    "table": "t_sys_tool_large_file",
+    "class_name": "LargeFile",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/pojo/entity/LargeFileUser.java",
+    "line": 14,
+    "table": "t_sys_tool_large_file_user",
+    "class_name": "LargeFileUser",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/pojo/entity/Notepad.java",
+    "line": 14,
+    "table": "t_sys_tool_notepad",
+    "class_name": "Notepad",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/pojo/entity/ResponseFormat.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ResponseFormat",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/pojo/entity/SysQueryField.java",
+    "line": 23,
+    "table": "t_sys_query_field",
+    "class_name": "SysQueryField",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/pojo/entity/SysQueryUserVersion.java",
+    "line": 23,
+    "table": "t_sys_query_user_version",
+    "class_name": "SysQueryUserVersion",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/pojo/entity/SysQueryVersionFeild.java",
+    "line": 20,
+    "table": "t_sys_query_version_feild",
+    "class_name": "SysQueryVersionFeild",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/pojo/entity/SysTags.java",
+    "line": 23,
+    "table": "t_sys_tags",
+    "class_name": "SysTags",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/pojo/entity/SysTagsGroups.java",
+    "line": 23,
+    "table": "t_sys_tags_groups",
+    "class_name": "SysTagsGroups",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/pojo/entity/SysTemplateFile.java",
+    "line": 15,
+    "table": "t_sys_template_file",
+    "class_name": "SysTemplateFile",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sb/pojo/AmzAdvReportAdgroupsHsaAttributedAll.java",
+    "line": 19,
+    "table": "t_amz_adv_rpt2_hsa_adgroups_attributed_all",
+    "class_name": "AmzAdvReportAdgroupsHsaAttributedAll",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sb/pojo/AmzAdvReportAdsHsaAttributedAll.java",
+    "line": 16,
+    "table": "t_amz_adv_rpt2_hsa_ads_attributed_all",
+    "class_name": "AmzAdvReportAdsHsaAttributedAll",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sb/pojo/AmzAdvReportCampaignsHsaAttributedAll.java",
+    "line": 16,
+    "table": "t_amz_adv_rpt2_hsa_campaigns_attributed_all",
+    "class_name": "AmzAdvReportCampaignsHsaAttributedAll",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sb/pojo/AmzAdvReportCampaignsPlaceHsaAttributedAll.java",
+    "line": 16,
+    "table": "t_amz_adv_rpt2_hsa_campaigns_place_attributed_all",
+    "class_name": "AmzAdvReportCampaignsPlaceHsaAttributedAll",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sb/pojo/AmzAdvReportKeywordsHsaAttributedAll.java",
+    "line": 16,
+    "table": "t_amz_adv_rpt2_hsa_keywords_attributed_all",
+    "class_name": "AmzAdvReportKeywordsHsaAttributedAll",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sb/pojo/AmzAdvReportProductTargetsHsaAttributedAll.java",
+    "line": 16,
+    "table": "t_amz_adv_rpt2_hsa_product_targets_attributed_all",
+    "class_name": "AmzAdvReportProductTargetsHsaAttributedAll",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sd/pojo/AmzAdvReportAdgroupsSDAttributedAll.java",
+    "line": 16,
+    "table": "t_amz_adv_rpt2_sd_adgroups_attributed_all",
+    "class_name": "AmzAdvReportAdgroupsSDAttributedAll",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sd/pojo/AmzAdvReportProductTargetsSDAttributedAll.java",
+    "line": 16,
+    "table": "t_amz_adv_rpt2_sd_product_targets_attributed_all",
+    "class_name": "AmzAdvReportProductTargetsSDAttributedAll",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sd/pojo/AmzAdvReportProductadsSDAttributedAll.java",
+    "line": 19,
+    "table": "t_amz_adv_rpt2_sd_productads_attributed_all",
+    "class_name": "AmzAdvReportProductadsSDAttributedAll",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-api/src/main/java/com/wimoor/amazon/inbound/pojo/dto/ShipInboundItemDTO.java",
+    "line": 18,
+    "table": "t_erp_ship_inbounditem",
+    "class_name": "ShipInboundItemDTO",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-api/src/main/java/com/wimoor/amazon/inbound/pojo/dto/ShipInboundPlanDTO.java",
+    "line": 23,
+    "table": "t_erp_ship_inboundplan",
+    "class_name": "ShipInboundPlanDTO",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-api/src/main/java/com/wimoor/amazon/inbound/pojo/dto/ShipInboundShipmentDTO.java",
+    "line": 23,
+    "table": "t_erp_ship_inboundshipment",
+    "class_name": "ShipInboundShipmentDTO",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-api/src/main/java/com/wimoor/amazon/inbound/pojo/dto/ShipInboundTransDTO.java",
+    "line": 18,
+    "table": "t_erp_ship_inboundtrans",
+    "class_name": "ShipInboundTransDTO",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-api/src/main/java/com/wimoor/amazon/inbound/pojo/vo/WarehouseShelfInventoryOptRecordVo.java",
+    "line": 28,
+    "table": "t_erp_warehouse_shelf_inventory_opt_record",
+    "class_name": "WarehouseShelfInventoryOptRecordVo",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/auth/pojo/entity/AmazonAuthority.java",
+    "line": 27,
+    "table": "t_amazon_auth",
+    "class_name": "AmazonAuthority",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/auth/pojo/entity/AmazonGroup.java",
+    "line": 17,
+    "table": "t_amazon_group",
+    "class_name": "AmazonGroup",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/auth/pojo/entity/AmazonGroupInfo.java",
+    "line": 14,
+    "table": "t_amazon_group_info",
+    "class_name": "AmazonGroupInfo",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/auth/pojo/entity/AmazonSellerMarket.java",
+    "line": 24,
+    "table": "t_amazonseller_market",
+    "class_name": "AmazonSellerMarket",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/auth/pojo/entity/AmazonSellerMarketPlace.java",
+    "line": 10,
+    "table": "t_amazonseller_market",
+    "class_name": "AmazonSellerMarketPlace",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/auth/pojo/entity/AmzAuthApiTimelimit.java",
+    "line": 27,
+    "table": "t_amz_auth_api_timelimit",
+    "class_name": "AmzAuthApiTimelimit",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/auth/pojo/entity/FollowOffer.java",
+    "line": 11,
+    "table": "t_amz_follow_offer",
+    "class_name": "FollowOffer",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/auth/pojo/entity/MarketPriority.java",
+    "line": 15,
+    "table": "t_erp_market_priority",
+    "class_name": "MarketPriority",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/auth/pojo/entity/Marketplace.java",
+    "line": 12,
+    "table": "t_marketplace",
+    "class_name": "Marketplace",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/pojo/entity/AmazonBaseEntity.java",
+    "line": 1,
+    "table": null,
+    "class_name": "AmazonBaseEntity",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/pojo/entity/AmzAmountDescription.java",
+    "line": 11,
+    "table": "t_amz_settlement_amount_description",
+    "class_name": "AmzAmountDescription",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/pojo/entity/BaseEntity.java",
+    "line": 1,
+    "table": null,
+    "class_name": "BaseEntity",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/pojo/entity/DaysalesFormula.java",
+    "line": 15,
+    "table": "t_daysales_formula",
+    "class_name": "DaysalesFormula",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/pojo/entity/DimensionsInfo.java",
+    "line": 19,
+    "table": "t_amz_dimensions",
+    "class_name": "DimensionsInfo",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/pojo/entity/EstimatedSales.java",
+    "line": 15,
+    "table": "t_erp_estimated_sales",
+    "class_name": "EstimatedSales",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/pojo/entity/ExchangeRate.java",
+    "line": 15,
+    "table": "t_exchangerate",
+    "class_name": "ExchangeRate",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/pojo/entity/ExchangeRateCustomer.java",
+    "line": 15,
+    "table": "t_exchangerate_customer",
+    "class_name": "ExchangeRateCustomer",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/pojo/entity/ExchangeRateHis.java",
+    "line": 16,
+    "table": "t_exchangerate_his",
+    "class_name": "ExchangeRateHis",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/pojo/entity/FBAEstimatedFeeKey.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FBAEstimatedFeeKey",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/pojo/entity/ImportRecord.java",
+    "line": 14,
+    "table": "t_sys_importrecord",
+    "class_name": "ImportRecord",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/pojo/entity/QueryApiPageDTO.java",
+    "line": 1,
+    "table": null,
+    "class_name": "QueryApiPageDTO",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/pojo/entity/SummaryData.java",
+    "line": 14,
+    "table": "t_erp_summary_data",
+    "class_name": "SummaryData",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/common/pojo/entity/UserSalesRank.java",
+    "line": 12,
+    "table": "t_erp_usersales_rank",
+    "class_name": "UserSalesRank",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/feed/pojo/entity/AmazonFeedStatus.java",
+    "line": 17,
+    "table": "t_erp_amazon_feedstatus",
+    "class_name": "AmazonFeedStatus",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/feed/pojo/entity/AmzSubmitFeedQueue.java",
+    "line": 16,
+    "table": "t_amz_submitfeed_queue",
+    "class_name": "AmzSubmitFeedQueue",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/feed/pojo/entity/Submitfeed.java",
+    "line": 16,
+    "table": "t_amz_submitfeed",
+    "class_name": "Submitfeed",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/pojo/entity/AmazonSettlementOpen.java",
+    "line": 15,
+    "table": "t_amz_settlement_open",
+    "class_name": "AmazonSettlementOpen",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/pojo/entity/AmzFinAccount.java",
+    "line": 25,
+    "table": "t_amz_fin_account",
+    "class_name": "AmzFinAccount",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/pojo/entity/AmzFinSettlementFormula.java",
+    "line": 18,
+    "table": "t_amz_fin_settlement_formula",
+    "class_name": "AmzFinSettlementFormula",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/pojo/entity/AmzFinUserItem.java",
+    "line": 15,
+    "table": "t_amz_fin_user_item",
+    "class_name": "AmzFinUserItem",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/pojo/entity/AmzFinUserItemData.java",
+    "line": 16,
+    "table": "t_amz_fin_user_item_data",
+    "class_name": "AmzFinUserItemData",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/pojo/entity/AmzSettlementAccReport.java",
+    "line": 15,
+    "table": "t_amz_settlement_acc_report",
+    "class_name": "AmzSettlementAccReport",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/pojo/entity/AmzSettlementAccStatement.java",
+    "line": 17,
+    "table": "t_amz_settlement_acc_statement",
+    "class_name": "AmzSettlementAccStatement",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/pojo/entity/AmzSettlementReport.java",
+    "line": 15,
+    "table": "t_amz_settlement_report",
+    "class_name": "AmzSettlementReport",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/pojo/entity/AmzSettlementReportSummaryDay.java",
+    "line": 17,
+    "table": "t_amz_settlement_summary_day",
+    "class_name": "AmzSettlementReportSummaryDay",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/pojo/entity/AmzSettlementReportSummaryMonth.java",
+    "line": 18,
+    "table": "t_amz_settlement_summary_month",
+    "class_name": "AmzSettlementReportSummaryMonth",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/pojo/entity/AmzSettlementSummaryReturns.java",
+    "line": 17,
+    "table": "t_amz_settlement_summary_returns",
+    "class_name": "AmzSettlementSummaryReturns",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/pojo/entity/AmzSettlementSummarySku.java",
+    "line": 18,
+    "table": "t_amz_settlement_summary_sku",
+    "class_name": "AmzSettlementSummarySku",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/pojo/entity/AmzSettlementSummarySkuMonth.java",
+    "line": 26,
+    "table": "t_amz_settlement_summary_sku_month",
+    "class_name": "AmzSettlementSummarySkuMonth",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/pojo/entity/FBAEstimatedFee.java",
+    "line": 15,
+    "table": "t_fba_estimated_fees",
+    "class_name": "FBAEstimatedFee",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/pojo/entity/FBALongTermStorageFeeReport.java",
+    "line": 20,
+    "table": "t_fba_longterm_storage_fee_report",
+    "class_name": "FBALongTermStorageFeeReport",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/pojo/entity/FBAReimbursementsFeeReport.java",
+    "line": 23,
+    "table": "t_fba_reimbursements_fee_report",
+    "class_name": "FBAReimbursementsFeeReport",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/pojo/entity/FBAStorageFeeReport.java",
+    "line": 15,
+    "table": "t_fba_storage_fee_report",
+    "class_name": "FBAStorageFeeReport",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/pojo/entity/OrdersFinancial.java",
+    "line": 29,
+    "table": "t_orders_financial",
+    "class_name": "OrdersFinancial",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/finances/pojo/entity/PaymentReport.java",
+    "line": 18,
+    "table": "t_amz_payment_report",
+    "class_name": "PaymentReport",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/pojo/entity/AmzInboundFbaCycle.java",
+    "line": 25,
+    "table": "t_amz_inbound_fba_cycle",
+    "class_name": "AmzInboundFbaCycle",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/pojo/entity/AmzShipFulfillmentCenter.java",
+    "line": 20,
+    "table": "t_amz_ship_fulfillment_center",
+    "class_name": "AmzShipFulfillmentCenter",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/pojo/entity/FBAShipCycle.java",
+    "line": 14,
+    "table": "t_erp_shipcycle",
+    "class_name": "FBAShipCycle",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/pojo/entity/ShipAddress.java",
+    "line": 19,
+    "table": "t_erp_ship_address",
+    "class_name": "ShipAddress",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/pojo/entity/ShipAddressTo.java",
+    "line": 13,
+    "table": "t_erp_ship_addressto",
+    "class_name": "ShipAddressTo",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/pojo/entity/ShipInboundBox.java",
+    "line": 15,
+    "table": "t_erp_ship_inboundbox",
+    "class_name": "ShipInboundBox",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/pojo/entity/ShipInboundCase.java",
+    "line": 17,
+    "table": "t_erp_ship_inboundcase",
+    "class_name": "ShipInboundCase",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/pojo/entity/ShipInboundItem.java",
+    "line": 18,
+    "table": "t_erp_ship_inbounditem",
+    "class_name": "ShipInboundItem",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/pojo/entity/ShipInboundPlan.java",
+    "line": 22,
+    "table": "t_erp_ship_inboundplan",
+    "class_name": "ShipInboundPlan",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/pojo/entity/ShipInboundShipment.java",
+    "line": 24,
+    "table": "t_erp_ship_inboundshipment",
+    "class_name": "ShipInboundShipment",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/pojo/entity/ShipInboundShipmentRecord.java",
+    "line": 14,
+    "table": "t_erp_ship_inboundshipment_record",
+    "class_name": "ShipInboundShipmentRecord",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/pojo/entity/ShipInboundTrans.java",
+    "line": 20,
+    "table": "t_erp_ship_inboundtrans",
+    "class_name": "ShipInboundTrans",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/pojo/entity/ShipInboundTransHis.java",
+    "line": 18,
+    "table": "t_erp_ship_inboundtrans_his",
+    "class_name": "ShipInboundTransHis",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inbound/pojo/entity/ShipInboundshipmentTraceupload.java",
+    "line": 22,
+    "table": "t_erp_ship_inboundshipment_traceupload",
+    "class_name": "ShipInboundshipmentTraceupload",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/CustomData.java",
+    "line": 16,
+    "table": "t_erp_ship_custom_data",
+    "class_name": "CustomData",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/ProductCustomsSetting.java",
+    "line": 10,
+    "table": "t_product_customs_setting",
+    "class_name": "ProductCustomsSetting",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/ShipInboundBox.java",
+    "line": 17,
+    "table": "t_erp_ship_v2_inboundbox",
+    "class_name": "ShipInboundBox",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/ShipInboundCase.java",
+    "line": 17,
+    "table": "t_erp_ship_v2_inboundcase",
+    "class_name": "ShipInboundCase",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/ShipInboundCustomsXml.java",
+    "line": 21,
+    "table": "t_erp_ship_v2_inboundshipment_customs_xml",
+    "class_name": "ShipInboundCustomsXml",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/ShipInboundCustomsXmlItem.java",
+    "line": 21,
+    "table": "t_erp_ship_v2_inboundshipment_customs_xml_item",
+    "class_name": "ShipInboundCustomsXmlItem",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/ShipInboundDestinationAddress.java",
+    "line": 19,
+    "table": "t_erp_ship_v2_destination_address",
+    "class_name": "ShipInboundDestinationAddress",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/ShipInboundItem.java",
+    "line": 17,
+    "table": "t_erp_ship_v2_inbounditem",
+    "class_name": "ShipInboundItem",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/ShipInboundOperation.java",
+    "line": 15,
+    "table": "t_erp_ship_v2_inboundoperation",
+    "class_name": "ShipInboundOperation",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/ShipInboundPlan.java",
+    "line": 24,
+    "table": "t_erp_ship_v2_inboundplan",
+    "class_name": "ShipInboundPlan",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/ShipInboundPlanDeliveryOptions.java",
+    "line": 15,
+    "table": "t_erp_ship_v2_inboundplan_delivery_options",
+    "class_name": "ShipInboundPlanDeliveryOptions",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/ShipInboundPlanPackingGroupItem.java",
+    "line": 14,
+    "table": "t_erp_ship_v2_inboundplan_packing_options_group_item",
+    "class_name": "ShipInboundPlanPackingGroupItem",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/ShipInboundPlanPackingOptions.java",
+    "line": 16,
+    "table": "t_erp_ship_v2_inboundplan_packing_options",
+    "class_name": "ShipInboundPlanPackingOptions",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/ShipInboundPlanPlacementOptions.java",
+    "line": 16,
+    "table": "t_erp_ship_v2_inboundplan_placement_options",
+    "class_name": "ShipInboundPlanPlacementOptions",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/ShipInboundPlanTransportationOptions.java",
+    "line": 15,
+    "table": "t_erp_ship_v2_inboundplan_transportation_options",
+    "class_name": "ShipInboundPlanTransportationOptions",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/ShipInboundShipment.java",
+    "line": 24,
+    "table": "t_erp_ship_v2_inboundshipment",
+    "class_name": "ShipInboundShipment",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/ShipInboundShipmentBox.java",
+    "line": 17,
+    "table": "t_erp_ship_v2_inboundshipment_box",
+    "class_name": "ShipInboundShipmentBox",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/ShipInboundShipmentBoxItem.java",
+    "line": 17,
+    "table": "t_erp_ship_v2_inboundshipment_boxitem",
+    "class_name": "ShipInboundShipmentBoxItem",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/ShipInboundShipmentCustom.java",
+    "line": 18,
+    "table": "t_erp_ship_v2_inboundshipment_custom",
+    "class_name": "ShipInboundShipmentCustom",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/ShipInboundShipmentCustoms.java",
+    "line": 19,
+    "table": "t_erp_ship_v2_inboundshipment_customs",
+    "class_name": "ShipInboundShipmentCustoms",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/ShipInboundShipmentDelivery.java",
+    "line": 15,
+    "table": "t_erp_ship_v2_inboundshipment_delivery",
+    "class_name": "ShipInboundShipmentDelivery",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/ShipInboundShipmentItem.java",
+    "line": 18,
+    "table": "t_erp_ship_v2_inboundshipment_item",
+    "class_name": "ShipInboundShipmentItem",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/ShipInboundShipmentRecord.java",
+    "line": 12,
+    "table": "t_erp_ship_v2_inbound_record",
+    "class_name": "ShipInboundShipmentRecord",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/ShipInboundShipmentTemplateFile.java",
+    "line": 15,
+    "table": "t_erp_ship_shipment_template_file",
+    "class_name": "ShipInboundShipmentTemplateFile",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inboundV2/pojo/entity/ShipV2InboundplanPallet.java",
+    "line": 17,
+    "table": "t_erp_ship_v2_inboundplan_pallet",
+    "class_name": "ShipV2InboundplanPallet",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inventory/pojo/entity/AmzInventoryCountryReport.java",
+    "line": 23,
+    "table": "t_amz_rpt_inventory_country",
+    "class_name": "AmzInventoryCountryReport",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inventory/pojo/entity/AmzInventoryPlanning.java",
+    "line": 23,
+    "table": "t_amz_inventory_planning",
+    "class_name": "AmzInventoryPlanning",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inventory/pojo/entity/AmzRptInventoryAge.java",
+    "line": 26,
+    "table": "t_amz_rpt_inventory_age",
+    "class_name": "AmzRptInventoryAge",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inventory/pojo/entity/InventoryDetailReport.java",
+    "line": 16,
+    "table": "t_amz_rpt_inventory_detail",
+    "class_name": "InventoryDetailReport",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inventory/pojo/entity/InventoryHealth.java",
+    "line": 24,
+    "table": "t_amz_inventory_health",
+    "class_name": "InventoryHealth",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inventory/pojo/entity/InventoryReport.java",
+    "line": 18,
+    "table": "t_inventory_report",
+    "class_name": "InventoryReport",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inventory/pojo/entity/InventoryReportHis.java",
+    "line": 15,
+    "table": "t_inventory_report_his",
+    "class_name": "InventoryReportHis",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inventory/pojo/entity/InventoryReservedReport.java",
+    "line": 17,
+    "table": "t_inventory_reserved_report",
+    "class_name": "InventoryReservedReport",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inventory/pojo/entity/InventorySummaryReport.java",
+    "line": 23,
+    "table": "t_amz_rpt_inventory_summary",
+    "class_name": "InventorySummaryReport",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/inventory/pojo/vo/AmzInventoryPlanningVo.java",
+    "line": 23,
+    "table": "t_amz_inventory_planning",
+    "class_name": "AmzInventoryPlanningVo",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/notifications/pojo/entity/AmzNotifications.java",
+    "line": 23,
+    "table": "t_amz_notifications",
+    "class_name": "AmzNotifications",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/notifications/pojo/entity/AmzNotificationsDestination.java",
+    "line": 24,
+    "table": "t_amz_notifications_destination",
+    "class_name": "AmzNotificationsDestination",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/notifications/pojo/entity/AmzNotificationsSubscriptions.java",
+    "line": 25,
+    "table": "t_amz_notifications_subscriptions",
+    "class_name": "AmzNotificationsSubscriptions",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/pojo/entity/AmzOrderBuyerShipAddress.java",
+    "line": 20,
+    "table": "t_amz_orders_address",
+    "class_name": "AmzOrderBuyerShipAddress",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/pojo/entity/AmzOrderFBMReturns.java",
+    "line": 14,
+    "table": "t_amz_fbm_returns_report",
+    "class_name": "AmzOrderFBMReturns",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/pojo/entity/AmzOrderItem.java",
+    "line": 16,
+    "table": "t_amz_order_item",
+    "class_name": "AmzOrderItem",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/pojo/entity/AmzOrderMain.java",
+    "line": 20,
+    "table": "t_amz_order_main",
+    "class_name": "AmzOrderMain",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/pojo/entity/AmzOrderRemoves.java",
+    "line": 14,
+    "table": "t_amz_order_remove_report",
+    "class_name": "AmzOrderRemoves",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/pojo/entity/AmzOrderReturns.java",
+    "line": 13,
+    "table": "t_amz_returns_report",
+    "class_name": "AmzOrderReturns",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/pojo/entity/AmzOrdersInvoice.java",
+    "line": 16,
+    "table": "t_order_invoice",
+    "class_name": "AmzOrdersInvoice",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/pojo/entity/AmzOrdersInvoiceReport.java",
+    "line": 23,
+    "table": "t_amz_orders_invoice_report",
+    "class_name": "AmzOrdersInvoiceReport",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/pojo/entity/AmzOrdersInvoiceVat.java",
+    "line": 16,
+    "table": "t_order_invoice_vat",
+    "class_name": "AmzOrdersInvoiceVat",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/pojo/entity/AmzOrdersRemark.java",
+    "line": 13,
+    "table": "t_orders_remark",
+    "class_name": "AmzOrdersRemark",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/pojo/entity/FulfillmentOutboundOrder.java",
+    "line": 12,
+    "table": "t_amz_fulfillment_order",
+    "class_name": "FulfillmentOutboundOrder",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/pojo/entity/FulfillmentOutboundOrderItems.java",
+    "line": 12,
+    "table": "t_amz_fulfillment_order_items",
+    "class_name": "FulfillmentOutboundOrderItems",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/pojo/entity/FulfillmentOutboundOrderPayment.java",
+    "line": 11,
+    "table": "t_amz_fulfillment_order_payment",
+    "class_name": "FulfillmentOutboundOrderPayment",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/pojo/entity/FulfillmentOutboundOrderReturnAuthorization.java",
+    "line": 10,
+    "table": "t_amz_fulfillment_order_return_authorization",
+    "class_name": "FulfillmentOutboundOrderReturnAuthorization",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/pojo/entity/FulfillmentOutboundOrderReturnItem.java",
+    "line": 12,
+    "table": "t_amz_fulfillment_order_return_item",
+    "class_name": "FulfillmentOutboundOrderReturnItem",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/pojo/entity/FulfillmentOutboundOrderShipment.java",
+    "line": 11,
+    "table": "t_amz_fulfillment_order_shipment",
+    "class_name": "FulfillmentOutboundOrderShipment",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/pojo/entity/OrdersFulfilledShipmentsFee.java",
+    "line": 21,
+    "table": "t_amz_rpt_orders_fulfilled_shipments_fee",
+    "class_name": "OrdersFulfilledShipmentsFee",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/pojo/entity/OrdersFulfilledShipmentsReport.java",
+    "line": 14,
+    "table": "t_amz_rpt_orders_fulfilled_shipments_report",
+    "class_name": "OrdersFulfilledShipmentsReport",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/pojo/entity/OrdersReport.java",
+    "line": 15,
+    "table": "t_orders_report",
+    "class_name": "OrdersReport",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/pojo/entity/OrdersSummary.java",
+    "line": 15,
+    "table": "t_orders_summary",
+    "class_name": "OrdersSummary",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/orders/pojo/entity/SummaryAll.java",
+    "line": 14,
+    "table": "t_summaryall",
+    "class_name": "SummaryAll",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/performance/pojo/entity/AmazonAuthMarketPerformance.java",
+    "line": 15,
+    "table": "t_amazon_auth_market_performance",
+    "class_name": "AmazonAuthMarketPerformance",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/performance/pojo/entity/AmzCouponAsin.java",
+    "line": 10,
+    "table": "t_amz_coupon_asin",
+    "class_name": "AmzCouponAsin",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/performance/pojo/entity/AmzCouponPerformanceReport.java",
+    "line": 13,
+    "table": "t_amz_coupon_performance_report",
+    "class_name": "AmzCouponPerformanceReport",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/performance/pojo/entity/AmzOrderFeedback.java",
+    "line": 14,
+    "table": "t_amz_order_feedback",
+    "class_name": "AmzOrderFeedback",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/performance/pojo/entity/AmzPromotionsAsin.java",
+    "line": 12,
+    "table": "t_amz_promotions_asin",
+    "class_name": "AmzPromotionsAsin",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/performance/pojo/entity/AmzPromotionsPerformanceReport.java",
+    "line": 13,
+    "table": "t_amz_promotions_performance_report",
+    "class_name": "AmzPromotionsPerformanceReport",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/AmazonDeclareRate.java",
+    "line": 12,
+    "table": "t_amazon_declare_rate",
+    "class_name": "AmazonDeclareRate",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/AmzProductPageviews.java",
+    "line": 26,
+    "table": "t_amz_product_pageviews_download",
+    "class_name": "AmzProductPageviews",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/AmzProductPriceOpt.java",
+    "line": 17,
+    "table": "t_amz_pdt_price_opt",
+    "class_name": "AmzProductPriceOpt",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/AmzProductPriceRecord.java",
+    "line": 25,
+    "table": "t_amz_product_price_record",
+    "class_name": "AmzProductPriceRecord",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/AmzProductRefresh.java",
+    "line": 25,
+    "table": "t_amz_product_refresh",
+    "class_name": "AmzProductRefresh",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/AmzProductSalesPlan.java",
+    "line": 24,
+    "table": "t_amz_product_sales_plan",
+    "class_name": "AmzProductSalesPlan",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/AmzProductSalesPlanShipItem.java",
+    "line": 25,
+    "table": "t_amz_product_sales_plan_ship_item",
+    "class_name": "AmzProductSalesPlanShipItem",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/DataKioskRequest.java",
+    "line": 17,
+    "table": "t_amz_data_kiosk_request",
+    "class_name": "DataKioskRequest",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/FollowOfferChange.java",
+    "line": 17,
+    "table": "t_amz_follow_offerchange",
+    "class_name": "FollowOfferChange",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/MerchantShippingGroup.java",
+    "line": 22,
+    "table": "t_amz_merchant_shipping_group",
+    "class_name": "MerchantShippingGroup",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/ProductCategory.java",
+    "line": 13,
+    "table": "t_product_category",
+    "class_name": "ProductCategory",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/ProductFollow.java",
+    "line": 16,
+    "table": "t_product_follow",
+    "class_name": "ProductFollow",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/ProductInAftersale.java",
+    "line": 22,
+    "table": "t_product_in_aftersale",
+    "class_name": "ProductInAftersale",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/ProductInAutoprice.java",
+    "line": 24,
+    "table": "t_product_in_autoprice",
+    "class_name": "ProductInAutoprice",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/ProductInOpt.java",
+    "line": 25,
+    "table": "t_product_in_opt",
+    "class_name": "ProductInOpt",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/ProductInOrder.java",
+    "line": 27,
+    "table": "t_product_in_order",
+    "class_name": "ProductInOrder",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/ProductInPresale.java",
+    "line": 14,
+    "table": "t_product_in_presale",
+    "class_name": "ProductInPresale",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/ProductInProfit.java",
+    "line": 16,
+    "table": "t_product_in_profit",
+    "class_name": "ProductInProfit",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/ProductInReview.java",
+    "line": 14,
+    "table": "t_product_in_review",
+    "class_name": "ProductInReview",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/ProductInTags.java",
+    "line": 14,
+    "table": "t_product_in_tags",
+    "class_name": "ProductInTags",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/ProductInfo.java",
+    "line": 26,
+    "table": "t_product_info",
+    "class_name": "ProductInfo",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/ProductInfoStatusDefine.java",
+    "line": 15,
+    "table": "t_product_info_status_define",
+    "class_name": "ProductInfoStatusDefine",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/ProductPrice.java",
+    "line": 15,
+    "table": "t_product_price",
+    "class_name": "ProductPrice",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/ProductPriceLocked.java",
+    "line": 16,
+    "table": "t_product_price_locked",
+    "class_name": "ProductPriceLocked",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/ProductPriceType.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ProductPriceType",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/ProductRank.java",
+    "line": 24,
+    "table": "t_product_rank",
+    "class_name": "ProductRank",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/ProductRemarkHistory.java",
+    "line": 15,
+    "table": "t_product_remark_his",
+    "class_name": "ProductRemarkHistory",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/entity/ProductTypes.java",
+    "line": 13,
+    "table": "t_product_type",
+    "class_name": "ProductTypes",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/product/pojo/vo/AmzProductPageviewsVo.java",
+    "line": 26,
+    "table": "t_amz_product_pageviews_download",
+    "class_name": "AmzProductPageviewsVo",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/pojo/entity/FBAFormat.java",
+    "line": 17,
+    "table": "t_fbaformat",
+    "class_name": "FBAFormat",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/pojo/entity/FBALabelingFee.java",
+    "line": 17,
+    "table": "t_fba_labeling_service_fee",
+    "class_name": "FBALabelingFee",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/pojo/entity/FBASipp.java",
+    "line": 14,
+    "table": "t_fba_fbasipp",
+    "class_name": "FBASipp",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/pojo/entity/FixedClosingFee.java",
+    "line": 12,
+    "table": "t_fixed_closingfee",
+    "class_name": "FixedClosingFee",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/pojo/entity/IndividualFee.java",
+    "line": 10,
+    "table": "t_individualfee",
+    "class_name": "IndividualFee",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/pojo/entity/InplaceFee.java",
+    "line": 10,
+    "table": "t_inplacefee",
+    "class_name": "InplaceFee",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/pojo/entity/InplaceFeeFormat.java",
+    "line": 13,
+    "table": "t_inplacefeeformat",
+    "class_name": "InplaceFeeFormat",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/pojo/entity/InventoryStorageFee.java",
+    "line": 12,
+    "table": "t_inventoryStorageFee",
+    "class_name": "InventoryStorageFee",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/pojo/entity/ManualProcessingFee.java",
+    "line": 11,
+    "table": "t_manual_processing_fee",
+    "class_name": "ManualProcessingFee",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/pojo/entity/OutboundWeightFormat.java",
+    "line": 13,
+    "table": "t_outbound_weightformat",
+    "class_name": "OutboundWeightFormat",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/pojo/entity/PrepServiceFee.java",
+    "line": 13,
+    "table": "t_prepservicefee",
+    "class_name": "PrepServiceFee",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/pojo/entity/ProductFormat.java",
+    "line": 12,
+    "table": "t_productformat",
+    "class_name": "ProductFormat",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/pojo/entity/ProductTier.java",
+    "line": 15,
+    "table": "t_producttier",
+    "class_name": "ProductTier",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/pojo/entity/ProfitConfig.java",
+    "line": 25,
+    "table": "t_profitcfg",
+    "class_name": "ProfitConfig",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/pojo/entity/ProfitConfigCountry.java",
+    "line": 14,
+    "table": "t_profitcfgcountry",
+    "class_name": "ProfitConfigCountry",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/pojo/entity/ReferralFee.java",
+    "line": 19,
+    "table": "t_referralfee",
+    "class_name": "ReferralFee",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/profit/pojo/entity/VariableClosingFee.java",
+    "line": 11,
+    "table": "t_variable_closing_fee",
+    "class_name": "VariableClosingFee",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/pojo/entity/AmazonEprMonthlyReport.java",
+    "line": 12,
+    "table": "t_amz_epr_monthly_report",
+    "class_name": "AmazonEprMonthlyReport",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/pojo/entity/AmazonProductSales.java",
+    "line": 14,
+    "table": "t_amz_po_rpt_day",
+    "class_name": "AmazonProductSales",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/pojo/entity/AmzBrowseNode.java",
+    "line": 18,
+    "table": "t_amz_adv_browsenode",
+    "class_name": "AmzBrowseNode",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/pojo/entity/AmzProductActive.java",
+    "line": 15,
+    "table": "t_amz_product_active",
+    "class_name": "AmzProductActive",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/pojo/entity/AmzProductActiveDayNum.java",
+    "line": 18,
+    "table": "t_amz_product_active_daynum",
+    "class_name": "AmzProductActiveDayNum",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/pojo/entity/AmzVatTransaction.java",
+    "line": 14,
+    "table": "t_amz_vat_transaction",
+    "class_name": "AmzVatTransaction",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/pojo/entity/ProductRecommended.java",
+    "line": 18,
+    "table": "t_product_recommended",
+    "class_name": "ProductRecommended",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/pojo/entity/ProductRecommendedExt.java",
+    "line": 16,
+    "table": "t_product_recommended_ext",
+    "class_name": "ProductRecommendedExt",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/pojo/entity/ReportRequestRecord.java",
+    "line": 16,
+    "table": "t_report_requestrecord",
+    "class_name": "ReportRequestRecord",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/pojo/entity/ReportRequestType.java",
+    "line": 21,
+    "table": "t_amz_report_request_type",
+    "class_name": "ReportRequestType",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/report/pojo/entity/ReportType.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ReportType",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/transparency/pojo/dto/TransparencyDTO.java",
+    "line": 13,
+    "table": "t_amz_transparency_skuinfo",
+    "class_name": "TransparencyDTO",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/transparency/pojo/entity/TransparencyAuthority.java",
+    "line": 14,
+    "table": "t_amz_transparency_authority",
+    "class_name": "TransparencyAuthority",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/transparency/pojo/entity/TransparencySkuinfo.java",
+    "line": 15,
+    "table": "t_amz_transparency_skuinfo",
+    "class_name": "TransparencySkuinfo",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/transparency/pojo/entity/TransparencyTask.java",
+    "line": 14,
+    "table": "t_amz_transparency_task",
+    "class_name": "TransparencyTask",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/transparency/pojo/entity/TransparencyTcode.java",
+    "line": 14,
+    "table": "t_amz_transparency_tcode",
+    "class_name": "TransparencyTcode",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-api/wimoor-api-quote/src/main/java/com/wimoor/quote/api/dto/QuoteOrderDTO.java",
+    "line": 18,
+    "table": "t_order",
+    "class_name": "QuoteOrderDTO",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-api/wimoor-api-quote/src/main/java/com/wimoor/quote/api/dto/ShipmentBoxDTO.java",
+    "line": 15,
+    "table": "t_shipment_box",
+    "class_name": "ShipmentBoxDTO",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-api/wimoor-api-quote/src/main/java/com/wimoor/quote/api/dto/ShipmentDTO.java",
+    "line": 16,
+    "table": "t_shipment",
+    "class_name": "ShipmentDTO",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-api/wimoor-api-quote/src/main/java/com/wimoor/quote/api/dto/ShipmentDestinationAddressDTO.java",
+    "line": 16,
+    "table": "t_shipment_destination_address",
+    "class_name": "ShipmentDestinationAddressDTO",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-api/wimoor-api-quote/src/main/java/com/wimoor/quote/api/dto/ShipmentItemDTO.java",
+    "line": 12,
+    "table": "t_shipment_item",
+    "class_name": "ShipmentItemDTO",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-common/common-core-ext/src/main/java/com/wimoor/common/core/domain/Result.java",
+    "line": 1,
+    "table": null,
+    "class_name": "Result",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-common/common-core-ext/src/main/java/com/wimoor/common/core/web/domain/BaseEntity.java",
+    "line": 1,
+    "table": null,
+    "class_name": "BaseEntity",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-common/common-core-ext/src/main/java/com/wimoor/common/core/web/domain/Result.java",
+    "line": 1,
+    "table": null,
+    "class_name": "Result",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-common/common-core-ext/src/main/java/com/wimoor/common/core/web/domain/TreeEntity.java",
+    "line": 1,
+    "table": null,
+    "class_name": "TreeEntity",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-common/common-entity/src/main/java/com/wimoor/common/pojo/entity/BaseEntity.java",
+    "line": 1,
+    "table": null,
+    "class_name": "BaseEntity",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-common/common-entity/src/main/java/com/wimoor/common/pojo/entity/BasePageQuery.java",
+    "line": 1,
+    "table": null,
+    "class_name": "BasePageQuery",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-common/common-entity/src/main/java/com/wimoor/common/pojo/entity/BizBaseEntity.java",
+    "line": 1,
+    "table": null,
+    "class_name": "BizBaseEntity",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-common/common-entity/src/main/java/com/wimoor/common/pojo/entity/OperationLog.java",
+    "line": 11,
+    "table": "t_sys_operationlog",
+    "class_name": "OperationLog",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-common/common-entity/src/main/java/com/wimoor/common/pojo/entity/Picture.java",
+    "line": 17,
+    "table": "t_picture",
+    "class_name": "Picture",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-common/common-entity/src/main/java/com/wimoor/common/pojo/entity/QuartzJobsVO.java",
+    "line": 1,
+    "table": null,
+    "class_name": "QuartzJobsVO",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-common/common-entity/src/main/java/com/wimoor/common/pojo/entity/QuartzTask.java",
+    "line": 13,
+    "table": "t_sys_quartz_task",
+    "class_name": "QuartzTask",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-common/common-entity/src/main/java/com/wimoor/common/pojo/entity/SerialNum.java",
+    "line": 13,
+    "table": "t_erp_serial_num",
+    "class_name": "SerialNum",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-common/common-storage/src/main/java/com/wimoor/common/pojo/entity/StorageType.java",
+    "line": 1,
+    "table": null,
+    "class_name": "StorageType",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-erp/erp-api/src/main/java/com/wimoor/erp/common/pojo/entity/BaseEntity.java",
+    "line": 1,
+    "table": null,
+    "class_name": "BaseEntity",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-erp/erp-api/src/main/java/com/wimoor/erp/common/pojo/entity/ErpBaseEntity.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ErpBaseEntity",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-erp/erp-api/src/main/java/com/wimoor/erp/material/pojo/vo/DimensionsInfoVo.java",
+    "line": 19,
+    "table": "t_dimensions",
+    "class_name": "DimensionsInfoVo",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-api/src/main/java/com/wimoor/erp/material/pojo/vo/MaterialVO.java",
+    "line": 31,
+    "table": "t_erp_material",
+    "class_name": "MaterialVO",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-api/src/main/java/com/wimoor/erp/ship/pojo/dto/ShipInboundItemDTO.java",
+    "line": 18,
+    "table": "t_erp_ship_inbounditem",
+    "class_name": "ShipInboundItemDTO",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-api/src/main/java/com/wimoor/erp/ship/pojo/dto/ShipInboundPlanDTO.java",
+    "line": 22,
+    "table": "t_erp_ship_inboundplan",
+    "class_name": "ShipInboundPlanDTO",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-api/src/main/java/com/wimoor/erp/ship/pojo/dto/ShipInboundShipmentDTO.java",
+    "line": 23,
+    "table": "t_erp_ship_inboundshipment",
+    "class_name": "ShipInboundShipmentDTO",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-api/src/main/java/com/wimoor/erp/ship/pojo/dto/ShipInboundTransDTO.java",
+    "line": 20,
+    "table": "t_erp_ship_inboundtrans",
+    "class_name": "ShipInboundTransDTO",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-api/src/main/java/com/wimoor/erp/warehouse/pojo/vo/WarehouseShelfInventoryOptRecordVo.java",
+    "line": 28,
+    "table": "t_erp_warehouse_shelf_inventory_opt_record",
+    "class_name": "WarehouseShelfInventoryOptRecordVo",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/common/pojo/entity/Chart.java",
+    "line": 1,
+    "table": null,
+    "class_name": "Chart",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/common/pojo/entity/ChartLine.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ChartLine",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/common/pojo/entity/ChartPoint.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ChartPoint",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/common/pojo/entity/DownloadReport.java",
+    "line": 12,
+    "table": "t_erp_download_report",
+    "class_name": "DownloadReport",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/common/pojo/entity/ERPBizException.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ERPBizException",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/common/pojo/entity/EnumByFormType.java",
+    "line": 1,
+    "table": null,
+    "class_name": "EnumByFormType",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/common/pojo/entity/EnumByInventory.java",
+    "line": 1,
+    "table": null,
+    "class_name": "EnumByInventory",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/common/pojo/entity/ErpBaseForm.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ErpBaseForm",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/common/pojo/entity/ErpBaseFormEntry.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ErpBaseFormEntry",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/common/pojo/entity/FormType.java",
+    "line": 14,
+    "table": "t_erp_formtype",
+    "class_name": "FormType",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/common/pojo/entity/ImportRecord.java",
+    "line": 14,
+    "table": "t_sys_importrecord",
+    "class_name": "ImportRecord",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/common/pojo/entity/Operate.java",
+    "line": 1,
+    "table": null,
+    "class_name": "Operate",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/common/pojo/entity/Status.java",
+    "line": 1,
+    "table": null,
+    "class_name": "Status",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/common/pojo/entity/SummaryData.java",
+    "line": 14,
+    "table": "t_erp_summary_data",
+    "class_name": "SummaryData",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/common/pojo/entity/UserSalesRank.java",
+    "line": 12,
+    "table": "t_erp_usersales_rank",
+    "class_name": "UserSalesRank",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/customer/pojo/entity/Customer.java",
+    "line": 14,
+    "table": "t_erp_customer",
+    "class_name": "Customer",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/finance/pojo/entity/FinAccount.java",
+    "line": 16,
+    "table": "t_erp_fin_account",
+    "class_name": "FinAccount",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/finance/pojo/entity/FinJournalAccount.java",
+    "line": 17,
+    "table": "t_erp_fin_journalaccount",
+    "class_name": "FinJournalAccount",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/finance/pojo/entity/FinJournalDaily.java",
+    "line": 15,
+    "table": "t_erp_fin_journaldaily",
+    "class_name": "FinJournalDaily",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/finance/pojo/entity/FinTypeJournalMonthly.java",
+    "line": 16,
+    "table": "t_erp_fin_type_journalmonthly",
+    "class_name": "FinTypeJournalMonthly",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/finance/pojo/entity/FinanceProject.java",
+    "line": 15,
+    "table": "t_erp_fin_project",
+    "class_name": "FinanceProject",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/inventory/pojo/entity/Inventory.java",
+    "line": 12,
+    "table": "t_erp_inventory",
+    "class_name": "Inventory",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/inventory/pojo/entity/InventoryHis.java",
+    "line": 14,
+    "table": "t_erp_inventory_his",
+    "class_name": "InventoryHis",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/inventory/pojo/entity/InventoryHisDay.java",
+    "line": 13,
+    "table": "t_erp_inventory_his_day",
+    "class_name": "InventoryHisDay",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/inventory/pojo/entity/InventoryMonthSummary.java",
+    "line": 18,
+    "table": "t_erp_inventory_month_summary",
+    "class_name": "InventoryMonthSummary",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/inventory/pojo/entity/InventoryParameter.java",
+    "line": 1,
+    "table": null,
+    "class_name": "InventoryParameter",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/inventory/pojo/entity/InventoryRecord.java",
+    "line": 15,
+    "table": "t_erp_inventory_record",
+    "class_name": "InventoryRecord",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/pojo/entity/Assembly.java",
+    "line": 16,
+    "table": "t_erp_assembly",
+    "class_name": "Assembly",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/pojo/entity/AssemblyEntryInstock.java",
+    "line": 16,
+    "table": "t_erp_assembly_from_instock",
+    "class_name": "AssemblyEntryInstock",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/pojo/entity/AssemblyForm.java",
+    "line": 20,
+    "table": "t_erp_assembly_form",
+    "class_name": "AssemblyForm",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/pojo/entity/AssemblyFormEntry.java",
+    "line": 19,
+    "table": "t_erp_assembly_form_entry",
+    "class_name": "AssemblyFormEntry",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/pojo/entity/DimensionsInfo.java",
+    "line": 19,
+    "table": "t_dimensions",
+    "class_name": "DimensionsInfo",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/pojo/entity/ERPGroup.java",
+    "line": 16,
+    "table": "t_erp_m_group",
+    "class_name": "ERPGroup",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/pojo/entity/ERPMaterialHistory.java",
+    "line": 12,
+    "table": "t_erp_material_his",
+    "class_name": "ERPMaterialHistory",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/pojo/entity/Material.java",
+    "line": 26,
+    "table": "t_erp_material",
+    "class_name": "Material",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/pojo/entity/MaterialBrand.java",
+    "line": 18,
+    "table": "t_erp_material_brand",
+    "class_name": "MaterialBrand",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/pojo/entity/MaterialCategory.java",
+    "line": 17,
+    "table": "t_erp_material_category",
+    "class_name": "MaterialCategory",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/pojo/entity/MaterialConsumable.java",
+    "line": 16,
+    "table": "t_erp_material_consumable",
+    "class_name": "MaterialConsumable",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/pojo/entity/MaterialConsumableInventory.java",
+    "line": 22,
+    "table": "t_erp_material_consumable_inventory",
+    "class_name": "MaterialConsumableInventory",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/pojo/entity/MaterialConsumableSafetyStock.java",
+    "line": 19,
+    "table": "t_erp_material_consumable_safety_stock",
+    "class_name": "MaterialConsumableSafetyStock",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/pojo/entity/MaterialCustom.java",
+    "line": 15,
+    "table": "t_erp_material_custom",
+    "class_name": "MaterialCustom",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/pojo/entity/MaterialCustoms.java",
+    "line": 15,
+    "table": "t_erp_material_customs",
+    "class_name": "MaterialCustoms",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/pojo/entity/MaterialCustomsFile.java",
+    "line": 18,
+    "table": "t_erp_material_customs_file",
+    "class_name": "MaterialCustomsFile",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/pojo/entity/MaterialGroup.java",
+    "line": 13,
+    "table": "t_erp_material_group",
+    "class_name": "MaterialGroup",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/pojo/entity/MaterialMark.java",
+    "line": 15,
+    "table": "t_erp_material_mark",
+    "class_name": "MaterialMark",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/pojo/entity/MaterialMarkHis.java",
+    "line": 14,
+    "table": "t_erp_material_mark_his",
+    "class_name": "MaterialMarkHis",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/pojo/entity/MaterialSupplier.java",
+    "line": 19,
+    "table": "t_erp_material_supplier",
+    "class_name": "MaterialSupplier",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/pojo/entity/MaterialSupplierStepwise.java",
+    "line": 18,
+    "table": "t_erp_material_supplier_stepwise",
+    "class_name": "MaterialSupplierStepwise",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/pojo/entity/MaterialTags.java",
+    "line": 14,
+    "table": "t_erp_material_tags",
+    "class_name": "MaterialTags",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/pojo/entity/StepWisePrice.java",
+    "line": 17,
+    "table": "t_erp_stepwise_quotn",
+    "class_name": "StepWisePrice",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/material/pojo/entity/StockCycle.java",
+    "line": 14,
+    "table": "t_erp_stockCycle",
+    "class_name": "StockCycle",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/pojo/entity/ErpOverseaCycle.java",
+    "line": 24,
+    "table": "t_erp_oversea_cycle",
+    "class_name": "ErpOverseaCycle",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/pojo/entity/Order.java",
+    "line": 15,
+    "table": "t_erp_order",
+    "class_name": "Order",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/pojo/entity/OrderInvoice.java",
+    "line": 17,
+    "table": "t_erp_order_invoice",
+    "class_name": "OrderInvoice",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/pojo/entity/OrderListing.java",
+    "line": 14,
+    "table": "t_erp_order_listing",
+    "class_name": "OrderListing",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/pojo/entity/OrderPlan.java",
+    "line": 12,
+    "table": "t_erp_order_plan",
+    "class_name": "OrderPlan",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/pojo/entity/OrderPlatform.java",
+    "line": 13,
+    "table": "t_erp_order_platform",
+    "class_name": "OrderPlatform",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/pojo/entity/OrderShipCycle.java",
+    "line": 15,
+    "table": "t_erp_order_shipcycle",
+    "class_name": "OrderShipCycle",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/pojo/entity/OrderShipPlan.java",
+    "line": 10,
+    "table": "t_erp_order_ship_plan",
+    "class_name": "OrderShipPlan",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/pojo/entity/OrderShipPlanForm.java",
+    "line": 19,
+    "table": "t_erp_order_ship_plan_form",
+    "class_name": "OrderShipPlanForm",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/pojo/entity/OrderShipPlanFormEntry.java",
+    "line": 14,
+    "table": "t_erp_order_ship_plan_form_entry",
+    "class_name": "OrderShipPlanFormEntry",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/order/pojo/entity/OrderSkuPresale.java",
+    "line": 13,
+    "table": "t_erp_order_sku_presale",
+    "class_name": "OrderSkuPresale",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/pojo/entity/AlibabaTradeGetLogisticsInfosBuyerViewParam.java",
+    "line": 1,
+    "table": null,
+    "class_name": "AlibabaTradeGetLogisticsInfosBuyerViewParam",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/pojo/entity/AlibabaTradeGetLogisticsTraceInfoBuyerViewParam.java",
+    "line": 1,
+    "table": null,
+    "class_name": "AlibabaTradeGetLogisticsTraceInfoBuyerViewParam",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/pojo/entity/ErpPurchaseAlibabaContact.java",
+    "line": 22,
+    "table": "t_erp_purchase_alibaba_contact",
+    "class_name": "ErpPurchaseAlibabaContact",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/pojo/entity/ErpPurchaseAlibabaOrderBaseinfo.java",
+    "line": 25,
+    "table": "t_erp_purchase_alibaba_order_baseinfo",
+    "class_name": "ErpPurchaseAlibabaOrderBaseinfo",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/pojo/entity/ErpPurchaseAlibabaOrderProductitems.java",
+    "line": 26,
+    "table": "t_erp_purchase_alibaba_order_productitems",
+    "class_name": "ErpPurchaseAlibabaOrderProductitems",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/pojo/entity/ErpPurchaseAlibabaOrderReceiverinfo.java",
+    "line": 23,
+    "table": "t_erp_purchase_alibaba_order_receiverinfo",
+    "class_name": "ErpPurchaseAlibabaOrderReceiverinfo",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/pojo/entity/ErpPurchaseAlibabaOrderTradeterms.java",
+    "line": 25,
+    "table": "t_erp_purchase_alibaba_order_tradeterms",
+    "class_name": "ErpPurchaseAlibabaOrderTradeterms",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/pojo/entity/ErpPurchaseAlibabaProductitems.java",
+    "line": 25,
+    "table": "t_erp_purchase_alibaba_productitems",
+    "class_name": "ErpPurchaseAlibabaProductitems",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/pojo/entity/Open1688Message.java",
+    "line": 17,
+    "table": "t_erp_purchase_alibaba_message",
+    "class_name": "Open1688Message",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/pojo/entity/PurchaseAlibabaAuth.java",
+    "line": 17,
+    "table": "t_erp_purchase_alibaba_auth",
+    "class_name": "PurchaseAlibabaAuth",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/pojo/entity/PurchaseAlibabaSettlement.java",
+    "line": 23,
+    "table": "t_erp_purchase_alibaba_settlement",
+    "class_name": "PurchaseAlibabaSettlement",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/pojo/entity/PurchaseAlibabaSettlementOrder.java",
+    "line": 24,
+    "table": "t_erp_purchase_alibaba_settlement_order",
+    "class_name": "PurchaseAlibabaSettlementOrder",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/pojo/entity/PurchaseAlibabaSettlementOrderReturn.java",
+    "line": 23,
+    "table": "t_erp_purchase_alibaba_settlement_order_return",
+    "class_name": "PurchaseAlibabaSettlementOrderReturn",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/pojo/entity/PurchaseAlibabaSettlementPay.java",
+    "line": 22,
+    "table": "t_erp_purchase_alibaba_settlement_pay",
+    "class_name": "PurchaseAlibabaSettlementPay",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/pojo/entity/PurchaseAlibabaSettlementPayReturn.java",
+    "line": 22,
+    "table": "t_erp_purchase_alibaba_settlement_pay_return",
+    "class_name": "PurchaseAlibabaSettlementPayReturn",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/pojo/entity/PurchaseFormEntryAlibabaInfo.java",
+    "line": 12,
+    "table": "t_erp_purchase_form_entry_alibabainfo",
+    "class_name": "PurchaseFormEntryAlibabaInfo",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/pojo/entity/PurchaseFormEntryAlibabaInfoExt.java",
+    "line": 13,
+    "table": "t_erp_purchase_form_entry_alibabainfo_ext",
+    "class_name": "PurchaseFormEntryAlibabaInfoExt",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/alibaba/pojo/entity/PurchaseFormEntryLogistics.java",
+    "line": 12,
+    "table": "t_erp_purchase_form_entry_logistics",
+    "class_name": "PurchaseFormEntryLogistics",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/pojo/entity/PreprocessForm.java",
+    "line": 13,
+    "table": "t_erp_preprocessing_form",
+    "class_name": "PreprocessForm",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/pojo/entity/PurchaseFinanceForm.java",
+    "line": 14,
+    "table": "t_erp_purchase_fin_form",
+    "class_name": "PurchaseFinanceForm",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/pojo/entity/PurchaseFinanceFormPayment.java",
+    "line": 15,
+    "table": "t_erp_purchase_fin_form_payment",
+    "class_name": "PurchaseFinanceFormPayment",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/pojo/entity/PurchaseForm.java",
+    "line": 21,
+    "table": "t_erp_purchase_form",
+    "class_name": "PurchaseForm",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/pojo/entity/PurchaseFormEntry.java",
+    "line": 18,
+    "table": "t_erp_purchase_form_entry",
+    "class_name": "PurchaseFormEntry",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/pojo/entity/PurchaseFormEntryChange.java",
+    "line": 24,
+    "table": "t_erp_purchase_form_entry_change",
+    "class_name": "PurchaseFormEntryChange",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/pojo/entity/PurchaseFormEntryChangeAttachment.java",
+    "line": 21,
+    "table": "t_erp_purchase_form_entry_change_attachment",
+    "class_name": "PurchaseFormEntryChangeAttachment",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/pojo/entity/PurchaseFormEntryChangeReceive.java",
+    "line": 22,
+    "table": "t_erp_purchase_form_entry_change_receive",
+    "class_name": "PurchaseFormEntryChangeReceive",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/pojo/entity/PurchaseFormEntryHistory.java",
+    "line": 15,
+    "table": "t_erp_purchase_form_entry_history",
+    "class_name": "PurchaseFormEntryHistory",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/pojo/entity/PurchaseFormPayment.java",
+    "line": 18,
+    "table": "t_erp_purchase_form_payment",
+    "class_name": "PurchaseFormPayment",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/pojo/entity/PurchaseFormPaymentMethod.java",
+    "line": 12,
+    "table": "t_erp_purchase_form_payment_method",
+    "class_name": "PurchaseFormPaymentMethod",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/pojo/entity/PurchaseFormPrintIP.java",
+    "line": 11,
+    "table": "t_erp_purchase_form_print_ip",
+    "class_name": "PurchaseFormPrintIP",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/pojo/entity/PurchaseFormReceive.java",
+    "line": 16,
+    "table": "t_erp_purchase_form_receive",
+    "class_name": "PurchaseFormReceive",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/pojo/entity/PurchasePlan.java",
+    "line": 15,
+    "table": "t_erp_v3_purchase_plan",
+    "class_name": "PurchasePlan",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/pojo/entity/PurchasePlanConsumableItem.java",
+    "line": 20,
+    "table": "t_erp_v3_purchase_plan_consumable_item",
+    "class_name": "PurchasePlanConsumableItem",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/pojo/entity/PurchasePlanItem.java",
+    "line": 13,
+    "table": "t_erp_v3_purchase_plan_item",
+    "class_name": "PurchasePlanItem",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/pojo/entity/PurchasePlanSub.java",
+    "line": 13,
+    "table": "t_erp_purchase_plansub",
+    "class_name": "PurchasePlanSub",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/pojo/entity/PurchasePlanWareHouse.java",
+    "line": 10,
+    "table": "t_erp_v3_purchase_plan_warehouse",
+    "class_name": "PurchasePlanWareHouse",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/pojo/entity/PurchaseWareHouseMaterial.java",
+    "line": 9,
+    "table": "t_erp_v3_purchase_plan_warehouse_material",
+    "class_name": "PurchaseWareHouseMaterial",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/pojo/entity/PurchaseWareHouseStatus.java",
+    "line": 12,
+    "table": "t_erp_purchase_warahouse_status",
+    "class_name": "PurchaseWareHouseStatus",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/purchase/pojo/vo/PurchaseFormEntryVo.java",
+    "line": 17,
+    "table": "t_erp_purchase_form_entry",
+    "class_name": "PurchaseFormEntryVo",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/ship/pojo/dto/ShipAmazonShipmentDTO.java",
+    "line": 20,
+    "table": "t_erp_ship_inboundshipment",
+    "class_name": "ShipAmazonShipmentDTO",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/ship/pojo/entity/ErpShipTransType.java",
+    "line": 15,
+    "table": "t_erp_transtype",
+    "class_name": "ErpShipTransType",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/ship/pojo/entity/ErpShipTransTypeDay.java",
+    "line": 10,
+    "table": "t_erp_ship_transtype_day",
+    "class_name": "ErpShipTransTypeDay",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/ship/pojo/entity/ShipPlanItem.java",
+    "line": 17,
+    "table": "t_erp_ship_planitem",
+    "class_name": "ShipPlanItem",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/ship/pojo/entity/ShipTransChannel.java",
+    "line": 14,
+    "table": "t_erp_ship_transchannel",
+    "class_name": "ShipTransChannel",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/ship/pojo/entity/ShipTransCompany.java",
+    "line": 18,
+    "table": "t_erp_ship_transcompany",
+    "class_name": "ShipTransCompany",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/ship/pojo/entity/ShipTransCompayServicesZhihui.java",
+    "line": 10,
+    "table": "t_erp_ship_transcompany_services_zhihui",
+    "class_name": "ShipTransCompayServicesZhihui",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/ship/pojo/entity/ShipTransDetail.java",
+    "line": 17,
+    "table": "t_erp_ship_transdetail",
+    "class_name": "ShipTransDetail",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/ship/pojo/entity/ShipTransDetailHis.java",
+    "line": 18,
+    "table": "t_erp_ship_transdetail_his",
+    "class_name": "ShipTransDetailHis",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/pojo/entity/ChangeWhForm.java",
+    "line": 15,
+    "table": "t_erp_changewh_form",
+    "class_name": "ChangeWhForm",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/pojo/entity/ChangeWhFormEntry.java",
+    "line": 13,
+    "table": "t_erp_changewh_form_entry",
+    "class_name": "ChangeWhFormEntry",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/pojo/entity/DispatchForm.java",
+    "line": 15,
+    "table": "t_erp_dispatch_form",
+    "class_name": "DispatchForm",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/pojo/entity/DispatchFormEntry.java",
+    "line": 14,
+    "table": "t_erp_dispatch_form_entry",
+    "class_name": "DispatchFormEntry",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/pojo/entity/DispatchFormRecord.java",
+    "line": 13,
+    "table": "t_erp_dispatch_form_record",
+    "class_name": "DispatchFormRecord",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/pojo/entity/ErpDispatchOverseaBox.java",
+    "line": 17,
+    "table": "t_erp_dispatch_oversea_box",
+    "class_name": "ErpDispatchOverseaBox",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/pojo/entity/ErpDispatchOverseaCase.java",
+    "line": 16,
+    "table": "t_erp_dispatch_oversea_case",
+    "class_name": "ErpDispatchOverseaCase",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/pojo/entity/ErpDispatchOverseaForm.java",
+    "line": 23,
+    "table": "t_erp_dispatch_oversea_form",
+    "class_name": "ErpDispatchOverseaForm",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/pojo/entity/ErpDispatchOverseaFormEntry.java",
+    "line": 22,
+    "table": "t_erp_dispatch_oversea_form_entry",
+    "class_name": "ErpDispatchOverseaFormEntry",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/pojo/entity/ErpDispatchOverseaTrans.java",
+    "line": 25,
+    "table": "t_erp_dispatch_oversea_trans",
+    "class_name": "ErpDispatchOverseaTrans",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/pojo/entity/InWarehouseForm.java",
+    "line": 14,
+    "table": "t_erp_inwh_form",
+    "class_name": "InWarehouseForm",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/pojo/entity/InWarehouseFormEntry.java",
+    "line": 14,
+    "table": "t_erp_inwh_form_entry",
+    "class_name": "InWarehouseFormEntry",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/pojo/entity/OutWarehouseForm.java",
+    "line": 13,
+    "table": "t_erp_outwh_form",
+    "class_name": "OutWarehouseForm",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/pojo/entity/OutWarehouseFormEntry.java",
+    "line": 12,
+    "table": "t_erp_outwh_form_entry",
+    "class_name": "OutWarehouseFormEntry",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/pojo/entity/OutwhFormConsumable.java",
+    "line": 17,
+    "table": "t_erp_outwh_form_consumable",
+    "class_name": "OutwhFormConsumable",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/pojo/entity/StockTaking.java",
+    "line": 18,
+    "table": "t_erp_stocktaking",
+    "class_name": "StockTaking",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/pojo/entity/StockTakingItem.java",
+    "line": 12,
+    "table": "t_erp_stocktaking_item",
+    "class_name": "StockTakingItem",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/pojo/entity/StockTakingItemShelf.java",
+    "line": 22,
+    "table": "t_erp_stocktaking_item_shelf",
+    "class_name": "StockTakingItemShelf",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/pojo/entity/StocktakingShelf.java",
+    "line": 21,
+    "table": "t_erp_stocktaking_shelf",
+    "class_name": "StocktakingShelf",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/stock/pojo/entity/StocktakingWarehouse.java",
+    "line": 21,
+    "table": "t_erp_stocktaking_warehouse",
+    "class_name": "StocktakingWarehouse",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/thirdparty/pojo/entity/ThirdPartyAPI.java",
+    "line": 13,
+    "table": "t_erp_thirdparty_api",
+    "class_name": "ThirdPartyAPI",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/thirdparty/pojo/entity/ThirdPartyQuoteBuyer.java",
+    "line": 13,
+    "table": "t_erp_thirdparty_quote_buyer",
+    "class_name": "ThirdPartyQuoteBuyer",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/thirdparty/pojo/entity/ThirdPartySystem.java",
+    "line": 12,
+    "table": "t_erp_thirdparty_system",
+    "class_name": "ThirdPartySystem",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/thirdparty/pojo/entity/ThirdPartyWarehouse.java",
+    "line": 9,
+    "table": "t_erp_thirdparty_warehouse",
+    "class_name": "ThirdPartyWarehouse",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/thirdparty/pojo/entity/ThirdPartyWarehouseBind.java",
+    "line": 11,
+    "table": "t_erp_thirdparty_warehouse_bind",
+    "class_name": "ThirdPartyWarehouseBind",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/thirdparty/pojo/entity/ThirdPartyWarehouseInventoryK5.java",
+    "line": 11,
+    "table": "t_erp_thirdparty_inventory_k5",
+    "class_name": "ThirdPartyWarehouseInventoryK5",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/thirdparty/pojo/entity/ThirdPartyWarehouseInventoryOps.java",
+    "line": 12,
+    "table": "t_erp_thirdparty_inventory_ops",
+    "class_name": "ThirdPartyWarehouseInventoryOps",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/thirdparty/pojo/entity/ThirdPartyWarehouseInventoryXL.java",
+    "line": 12,
+    "table": "t_erp_thirdparty_inventory_xl",
+    "class_name": "ThirdPartyWarehouseInventoryXL",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/thirdparty/pojo/entity/ThirdPartyWarehouseInventoryYC.java",
+    "line": 12,
+    "table": "t_erp_thirdparty_inventory_yc",
+    "class_name": "ThirdPartyWarehouseInventoryYC",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/warehouse/pojo/entity/ErpWarehouseAddress.java",
+    "line": 27,
+    "table": "t_erp_warehouse_address",
+    "class_name": "ErpWarehouseAddress",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/warehouse/pojo/entity/Warehouse.java",
+    "line": 24,
+    "table": "t_erp_warehouse",
+    "class_name": "Warehouse",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/warehouse/pojo/entity/WarehouseShelf.java",
+    "line": 30,
+    "table": "t_erp_warehouse_shelf",
+    "class_name": "WarehouseShelf",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/warehouse/pojo/entity/WarehouseShelfInventory.java",
+    "line": 30,
+    "table": "t_erp_warehouse_shelf_inventory",
+    "class_name": "WarehouseShelfInventory",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/warehouse/pojo/entity/WarehouseShelfInventoryOptRecord.java",
+    "line": 31,
+    "table": "t_erp_warehouse_shelf_inventory_opt_record",
+    "class_name": "WarehouseShelfInventoryOptRecord",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/warehouse/pojo/entity/WarehouseType.java",
+    "line": 18,
+    "table": "t_erp_warehouse_type",
+    "class_name": "WarehouseType",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/warehouse/pojo/entity/WhseUnsalableReport.java",
+    "line": 12,
+    "table": "t_erp_whse_unsalable_rpt",
+    "class_name": "WhseUnsalableReport",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-erp/erp-boot/src/main/java/com/wimoor/erp/warehouse/pojo/vo/WarehouseShelfVo.java",
+    "line": 30,
+    "table": "t_erp_warehouse_shelf",
+    "class_name": "WarehouseShelfVo",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-modules/wimoor-data/src/main/java/com/wimoor/data/pojo/entity/DataQuery.java",
+    "line": 1,
+    "table": null,
+    "class_name": "DataQuery",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/BalanceStatus.java",
+    "line": 1,
+    "table": null,
+    "class_name": "BalanceStatus",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/CalculationDetail.java",
+    "line": 1,
+    "table": null,
+    "class_name": "CalculationDetail",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/CalculationMethod.java",
+    "line": 1,
+    "table": null,
+    "class_name": "CalculationMethod",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/CalculationStep.java",
+    "line": 1,
+    "table": null,
+    "class_name": "CalculationStep",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/CheckLevel.java",
+    "line": 1,
+    "table": null,
+    "class_name": "CheckLevel",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/CheckStatistics.java",
+    "line": 1,
+    "table": null,
+    "class_name": "CheckStatistics",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/ClosingCheckItem.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ClosingCheckItem",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/ClosingContext.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ClosingContext",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/ClosingReport.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ClosingReport",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/ClosingResult.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ClosingResult",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/ClosingVoucherInfo.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ClosingVoucherInfo",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/ContinuityIssue.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ContinuityIssue",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/ContinuityIssueType.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ContinuityIssueType",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/DeletedVoucherInfo.java",
+    "line": 1,
+    "table": null,
+    "class_name": "DeletedVoucherInfo",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/EndBalanceResult.java",
+    "line": 1,
+    "table": null,
+    "class_name": "EndBalanceResult",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/ErrorType.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ErrorType",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/FinClosingTemplate.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinClosingTemplate",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/FinClosingTemplateAmazon.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinClosingTemplateAmazon",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/FinClosingTemplateFeishu.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinClosingTemplateFeishu",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/FinClosingTemplateItem.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinClosingTemplateItem",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/FinClosingTemplateProfitLoss.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinClosingTemplateProfitLoss",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/FinClosingTemplateVouchers.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinClosingTemplateVouchers",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/IssueSeverity.java",
+    "line": 1,
+    "table": null,
+    "class_name": "IssueSeverity",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/PreClosingCheckResult.java",
+    "line": 1,
+    "table": null,
+    "class_name": "PreClosingCheckResult",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/PreReverseCheckResult.java",
+    "line": 1,
+    "table": null,
+    "class_name": "PreReverseCheckResult",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/ProfitLossCheckResult.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ProfitLossCheckResult",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/ProfitLossTransferResult.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ProfitLossTransferResult",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/ProfitStatus.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ProfitStatus",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/RestoredSubjectInfo.java",
+    "line": 1,
+    "table": null,
+    "class_name": "RestoredSubjectInfo",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/ReverseClosingException.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ReverseClosingException",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/ReverseClosingRequest.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ReverseClosingRequest",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/ReverseClosingResult.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ReverseClosingResult",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/SubjectBalanceInfo.java",
+    "line": 1,
+    "table": null,
+    "class_name": "SubjectBalanceInfo",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/TransferDetail.java",
+    "line": 1,
+    "table": null,
+    "class_name": "TransferDetail",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/TransferDirection.java",
+    "line": 1,
+    "table": null,
+    "class_name": "TransferDirection",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/TransferError.java",
+    "line": 1,
+    "table": null,
+    "class_name": "TransferError",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/TransferResult.java",
+    "line": 1,
+    "table": null,
+    "class_name": "TransferResult",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/TransferStatistics.java",
+    "line": 1,
+    "table": null,
+    "class_name": "TransferStatistics",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/TransferSummary.java",
+    "line": 1,
+    "table": null,
+    "class_name": "TransferSummary",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/TransferType.java",
+    "line": 1,
+    "table": null,
+    "class_name": "TransferType",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/TransferVoucherEntry.java",
+    "line": 1,
+    "table": null,
+    "class_name": "TransferVoucherEntry",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/TransferVoucherInfo.java",
+    "line": 1,
+    "table": null,
+    "class_name": "TransferVoucherInfo",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/ValidationResult.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ValidationResult",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/closing/domain/VoucherSequenceInfo.java",
+    "line": 1,
+    "table": null,
+    "class_name": "VoucherSequenceInfo",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/ledger/domain/FinDetailLedger.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinDetailLedger",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/ledger/domain/FinGeneralLedger.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinGeneralLedger",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/ledger/domain/dto/FinLedgerDTO.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinLedgerDTO",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/ledger/domain/dto/SubjectBalanceDTO.java",
+    "line": 1,
+    "table": null,
+    "class_name": "SubjectBalanceDTO",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/ledger/domain/dto/SubjectBalanceQueryDTO.java",
+    "line": 1,
+    "table": null,
+    "class_name": "SubjectBalanceQueryDTO",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/ledger/domain/dto/SubjectBalanceTableDTO.java",
+    "line": 1,
+    "table": null,
+    "class_name": "SubjectBalanceTableDTO",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/report/domain/FinReportItems.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinReportItems",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/report/domain/FinReportMappingRules.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinReportMappingRules",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/report/domain/FinReportTemplates.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinReportTemplates",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/report/domain/dto/BalanceQueryRequest.java",
+    "line": 1,
+    "table": null,
+    "class_name": "BalanceQueryRequest",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/report/domain/dto/ReportGenerateRequest.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ReportGenerateRequest",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/report/domain/dto/ReportGenerateResponse.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ReportGenerateResponse",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/report/domain/dto/ReportItemValueDTO.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ReportItemValueDTO",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/setting/domain/FinAccountingPeriods.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinAccountingPeriods",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/setting/domain/FinAccountingSubjectAuxiliarySetting.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinAccountingSubjectAuxiliarySetting",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/setting/domain/FinAccountingSubjects.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinAccountingSubjects",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/setting/domain/FinAuxiliaryItems.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinAuxiliaryItems",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/setting/domain/FinAuxiliaryTypes.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinAuxiliaryTypes",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/setting/domain/FinCurrency.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinCurrency",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/setting/domain/FinSubjectType.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinSubjectType",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/setting/domain/PeriodStatus.java",
+    "line": 1,
+    "table": null,
+    "class_name": "PeriodStatus",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/voucher/domain/FinVoucherEntries.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinVoucherEntries",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/voucher/domain/FinVoucherEntriesAuxiliary.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinVoucherEntriesAuxiliary",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/voucher/domain/FinVoucherModifyLog.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinVoucherModifyLog",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/voucher/domain/FinVoucherType.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinVoucherType",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/voucher/domain/FinVoucherUpload.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinVoucherUpload",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/voucher/domain/FinVouchers.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinVouchers",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/voucher/domain/FinVourchesFile.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinVourchesFile",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/voucher/domain/ModifyResult.java",
+    "line": 1,
+    "table": null,
+    "class_name": "ModifyResult",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/voucher/domain/SubjectType.java",
+    "line": 1,
+    "table": null,
+    "class_name": "SubjectType",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/voucher/domain/VoucherBackup.java",
+    "line": 1,
+    "table": null,
+    "class_name": "VoucherBackup",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/voucher/domain/VoucherModifyPreCheckResult.java",
+    "line": 1,
+    "table": null,
+    "class_name": "VoucherModifyPreCheckResult",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-finance/src/main/java/com/wimoor/finance/voucher/domain/dto/FinVoucherDTO.java",
+    "line": 1,
+    "table": null,
+    "class_name": "FinVoucherDTO",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-gen/src/main/java/com/wimoor/gen/domain/GenTable.java",
+    "line": 1,
+    "table": null,
+    "class_name": "GenTable",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-gen/src/main/java/com/wimoor/gen/domain/GenTableColumn.java",
+    "line": 1,
+    "table": null,
+    "class_name": "GenTableColumn",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/pojo/entity/PurchaseAlibabaBuyer.java",
+    "line": 12,
+    "table": "t_purchase_alibaba_buyer",
+    "class_name": "PurchaseAlibabaBuyer",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/pojo/entity/PurchaseAlibabaOrder.java",
+    "line": 16,
+    "table": "t_purchase_alibaba_order",
+    "class_name": "PurchaseAlibabaOrder",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/pojo/entity/PurchaseAlibabaOrderItem.java",
+    "line": 16,
+    "table": "t_purchase_alibaba_order_item",
+    "class_name": "PurchaseAlibabaOrderItem",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/pojo/entity/PurchaseAlibabaReceiver.java",
+    "line": 15,
+    "table": "t_purchase_alibaba_receiver",
+    "class_name": "PurchaseAlibabaReceiver",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/pojo/entity/PurchaseAlibabaSeller.java",
+    "line": 13,
+    "table": "t_purchase_alibaba_seller",
+    "class_name": "PurchaseAlibabaSeller",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/purchase/pojo/entity/PurchaseOrderEntry.java",
+    "line": 15,
+    "table": "t_purchase_order_entry",
+    "class_name": "PurchaseOrderEntry",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/ship/pojo/dto/ShipmentSupplierTranschannelDTO.java",
+    "line": 14,
+    "table": "t_shipment_supplier_transchannel",
+    "class_name": "ShipmentSupplierTranschannelDTO",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/ship/pojo/entity/BaseEntity.java",
+    "line": 1,
+    "table": null,
+    "class_name": "BaseEntity",
+    "status": "UNCERTAIN",
+    "note": "entity/domain candidate without table annotation; resolve from Mapper/resultMap; DTOs may not own a table"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/ship/pojo/entity/QuotationPrice.java",
+    "line": 16,
+    "table": "t_supplier_quotation_price",
+    "class_name": "QuotationPrice",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/ship/pojo/entity/QuoteOrder.java",
+    "line": 18,
+    "table": "t_order",
+    "class_name": "QuoteOrder",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/ship/pojo/entity/QuoteOrderShipment.java",
+    "line": 9,
+    "table": "t_order_shipment",
+    "class_name": "QuoteOrderShipment",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/ship/pojo/entity/QuoteOrderSupplier.java",
+    "line": 12,
+    "table": "t_order_supplier",
+    "class_name": "QuoteOrderSupplier",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/ship/pojo/entity/Shipment.java",
+    "line": 16,
+    "table": "t_shipment",
+    "class_name": "Shipment",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/ship/pojo/entity/ShipmentBox.java",
+    "line": 15,
+    "table": "t_shipment_box",
+    "class_name": "ShipmentBox",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/ship/pojo/entity/ShipmentDestinationAddress.java",
+    "line": 16,
+    "table": "t_shipment_destination_address",
+    "class_name": "ShipmentDestinationAddress",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/ship/pojo/entity/ShipmentItem.java",
+    "line": 11,
+    "table": "t_shipment_item",
+    "class_name": "ShipmentItem",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/ship/pojo/entity/ShipmentSupplierTranschannel.java",
+    "line": 14,
+    "table": "t_shipment_supplier_transchannel",
+    "class_name": "ShipmentSupplierTranschannel",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/ship/pojo/entity/ShipmentTranschannel.java",
+    "line": 17,
+    "table": "t_shipment_transchannel",
+    "class_name": "ShipmentTranschannel",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/ship/pojo/entity/UserBuyer.java",
+    "line": 15,
+    "table": "t_user_buyer",
+    "class_name": "UserBuyer",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/ship/pojo/entity/UserSupplier.java",
+    "line": 15,
+    "table": "t_user_supplier",
+    "class_name": "UserSupplier",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/java/com/wimoor/quote/ship/pojo/vo/ShipmentAddressSummaryVO.java",
+    "line": 19,
+    "table": "t_shipment_destination_address",
+    "class_name": "ShipmentAddressSummaryVO",
+    "status": "INFERRED",
+    "note": "annotation only; schema identity and field mapping require domain review"
+  }
+]

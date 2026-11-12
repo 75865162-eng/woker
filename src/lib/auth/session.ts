@@ -1,5 +1,7 @@
 import { createHash, createHmac, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
+import { cache } from "react";
+import { measureServerOperation } from "@/lib/server/performance";
 import { prisma } from "@/lib/db/prisma";
 import { getAuthDriver, sessionCookieName, sessionMaxAgeSeconds } from "@/lib/auth/constants";
 import { rolePermissionsCookieName } from "@/lib/accounts/permissions";
@@ -136,7 +138,7 @@ async function getCurrentUserFromPayload(payload: SessionPayload): Promise<Curre
     return undefined;
   }
 
-  const session = await prisma.userSession.findFirst({
+  const session = await measureServerOperation("auth.session", () => prisma.userSession.findFirst({
     where: {
       id: payload.sessionId,
       userId: payload.userId,
@@ -145,12 +147,18 @@ async function getCurrentUserFromPayload(payload: SessionPayload): Promise<Curre
         gt: new Date(),
       },
     },
-    include: {
+    select: {
       user: {
-        include: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          status: true,
           memberships: {
-            include: {
-              organization: true,
+            select: {
+              role: true,
+              organizationId: true,
+              organization: { select: { name: true } },
             },
             orderBy: {
               createdAt: "asc",
@@ -160,7 +168,7 @@ async function getCurrentUserFromPayload(payload: SessionPayload): Promise<Curre
         },
       },
     },
-  });
+  }));
 
   const membership = session?.user.memberships[0];
 
@@ -182,7 +190,7 @@ export async function createSession(
   userId: string,
   sessionUser?: CurrentUser,
   secureCookie = process.env.NODE_ENV === "production",
-  rolePermissionsSnapshot?: RolePermissionsSnapshot,
+  rolePermissionsSnapshot?: RolePermissionsSnapshot | Promise<RolePermissionsSnapshot>,
 ) {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + sessionMaxAgeSeconds * 1000);
@@ -218,7 +226,7 @@ export async function createSession(
   let rolePermissionsCookie: AuthCookie | undefined;
   if (sessionUser?.organizationId) {
     const snapshot =
-      rolePermissionsSnapshot ??
+      await rolePermissionsSnapshot ??
       (await getOrganizationRolePermissionsSnapshot(sessionUser.organizationId));
 
     rolePermissionsCookie = {
@@ -280,7 +288,8 @@ export async function destroyCurrentSession() {
   cookieStore.delete(rolePermissionsCookieName);
 }
 
-export async function getCurrentUser(): Promise<CurrentUser | undefined> {
+// React cache lives only for one server render. Revocations are rechecked on the next request.
+export const getCurrentUser = cache(async (): Promise<CurrentUser | undefined> => {
   const cookieStore = await cookies();
   const payload = parseSessionCookie(cookieStore.get(sessionCookieName)?.value);
 
@@ -289,9 +298,19 @@ export async function getCurrentUser(): Promise<CurrentUser | undefined> {
   }
 
   return getCurrentUserFromPayload(payload);
+});
+
+const requestUsers = new WeakMap<Request, Promise<CurrentUser | undefined>>();
+
+export function getCurrentUserFromRequest(request: Request): Promise<CurrentUser | undefined> {
+  const existing = requestUsers.get(request);
+  if (existing) return existing;
+  const result = readCurrentUserFromRequest(request);
+  requestUsers.set(request, result);
+  return result;
 }
 
-export async function getCurrentUserFromRequest(request: Request): Promise<CurrentUser | undefined> {
+async function readCurrentUserFromRequest(request: Request): Promise<CurrentUser | undefined> {
   const payload = parseSessionCookie(getRequestCookie(request, sessionCookieName));
 
   if (!payload) {
@@ -301,16 +320,7 @@ export async function getCurrentUserFromRequest(request: Request): Promise<Curre
   return getCurrentUserFromPayload(payload);
 }
 
-export async function getCurrentUserFromSignedCookie(): Promise<CurrentUser | undefined> {
-  const cookieStore = await cookies();
-  const payload = parseSessionCookie(cookieStore.get(sessionCookieName)?.value);
-
-  if (!payload) {
-    return undefined;
-  }
-
-  return getCurrentUserFromPayload(payload);
-}
+export const getCurrentUserFromSignedCookie = getCurrentUser;
 
 // Opaque display-only scope. It never exposes the authentication token and grants no access.
 export function getNotificationSessionKey(request: Request) {

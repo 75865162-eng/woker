@@ -1,0 +1,72 @@
+[
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/common/service/SystemSchedulerService.java",
+    "line": 1,
+    "entry": "dynamic scheduler/task candidate",
+    "status": "UNCERTAIN",
+    "recovery": "database-defined cron/path not enumerated; INSERT/config values excluded; source-only inventory"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/common/service/impl/QuartzTaskFactory.java",
+    "line": 17,
+    "entry": "extends QuartzJobBean",
+    "status": "UNCERTAIN",
+    "recovery": "lock/retry/checkpoint not verified; do not start task"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/common/service/impl/SystemSchedulerInit.java",
+    "line": 1,
+    "entry": "dynamic scheduler/task candidate",
+    "status": "UNCERTAIN",
+    "recovery": "database-defined cron/path not enumerated; INSERT/config values excluded; source-only inventory"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/common/service/impl/SystemSchedulerServiceImpl.java",
+    "line": 1,
+    "entry": "dynamic scheduler/task candidate",
+    "status": "UNCERTAIN",
+    "recovery": "database-defined cron/path not enumerated; INSERT/config values excluded; source-only inventory"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/java/com/wimoor/sys/tool/controller/SysTaskController.java",
+    "line": 1,
+    "entry": "dynamic scheduler/task candidate",
+    "status": "UNCERTAIN",
+    "recovery": "database-defined cron/path not enumerated; INSERT/config values excluded; source-only inventory"
+  },
+  {
+    "path": "wimoor-amazon-adv/amazon-adv-boot/src/main/java/com/wimoor/amazon/adv/sellfox/task/SellfoxAdvertisingSyncTask.java",
+    "line": 21,
+    "entry": "@Scheduled(cron = \"${sellfox.advertising-cron:0 0 * * * ?}\")",
+    "status": "UNCERTAIN",
+    "recovery": "lock/retry/checkpoint not verified; do not start task"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/transparency/controller/TransparencyTaskController.java",
+    "line": 1,
+    "entry": "dynamic scheduler/task candidate",
+    "status": "UNCERTAIN",
+    "recovery": "database-defined cron/path not enumerated; INSERT/config values excluded; source-only inventory"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/transparency/service/ITransparencyTaskService.java",
+    "line": 1,
+    "entry": "dynamic scheduler/task candidate",
+    "status": "UNCERTAIN",
+    "recovery": "database-defined cron/path not enumerated; INSERT/config values excluded; source-only inventory"
+  },
+  {
+    "path": "wimoor-amazon/amazon-boot/src/main/java/com/wimoor/amazon/transparency/service/impl/TransparencyTaskServiceImpl.java",
+    "line": 1,
+    "entry": "dynamic scheduler/task candidate",
+    "status": "UNCERTAIN",
+    "recovery": "database-defined cron/path not enumerated; INSERT/config values excluded; source-only inventory"
+  },
+  {
+    "path": "wimoor-common/common-entity/src/main/java/com/wimoor/common/mapper/QuartzTaskMapper.java",
+    "line": 1,
+    "entry": "dynamic scheduler/task candidate",
+    "status": "UNCERTAIN",
+    "recovery": "database-defined cron/path not enumerated; INSERT/config values excluded; source-only inventory"
+  }
+]

@@ -1,5 +1,6 @@
 import { SyncInputError } from "./policy";
 import { Prisma } from "@prisma/client";
+import { digest } from "./approval-policy";
 
 /** Finances v2024-06-19 listTransactions response adapter only. No transport,
  * authorization scope selection, persistence or implicit marketplace fallback.
@@ -9,7 +10,9 @@ import { Prisma } from "@prisma/client";
  * unlike Orders Decimal (string); never decode money through JS Number.
  */
 const maxPageBytes = 4 * 1024 * 1024;
-const maxValues = 100000;
+// A real 500-transaction response contains more than 100k nested values.
+// Keep the 4 MiB/depth limits and exact numeric tokens while allowing that page.
+const maxValues = 200000;
 const maxDepth = 64;
 const maxTransactions = 5000;
 /** Exact wire-number representation shared with price/report readers. */
@@ -18,16 +21,21 @@ export class WireDecimal {
 }
 type WireValue = null | boolean | string | WireDecimal | WireValue[] | { [key: string]: WireValue };
 
+/** Positions contain no response values or dynamically supplied field names. */
+export class FinanceParseError extends SyncInputError {
+  constructor(message: string, readonly code: string, readonly offset: number | null = null, readonly path: string | null = null) { super(message); }
+}
+
 /** Bounded, finance-local JSON reader. Native JSON.parse is used only for
  * individual string tokens (no number conversion or reviver-context dependency).
  * Duplicate decoded keys fail closed, including escaped aliases of money keys.
  * Errors never echo source text, parser context or upstream exception messages.
  */
 export function readFinanceJson(source: string): WireValue {
-  if (typeof source !== "string" || source.length > maxPageBytes || new TextEncoder().encode(source).byteLength > maxPageBytes) throw new SyncInputError("财务响应超过单页大小限制。");
+  if (typeof source !== "string" || source.length > maxPageBytes || new TextEncoder().encode(source).byteLength > maxPageBytes) throw new FinanceParseError("财务响应超过单页大小限制。", "JSON_BYTE_LIMIT", 0);
   let offset = 0, values = 0;
   const number = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
-  const invalid = (): never => { throw new SyncInputError("财务响应不是安全、有效的 JSON。"); };
+  const invalid = (code = "JSON_SYNTAX"): never => { throw new FinanceParseError("财务响应不是安全、有效的 JSON。", code, Math.min(offset, source.length)); };
   const whitespace = () => { while (offset < source.length && /[\x20\t\r\n]/.test(source[offset])) offset++; };
   const string = (): string => {
     const start = offset++;
@@ -41,7 +49,8 @@ export function readFinanceJson(source: string): WireValue {
     return invalid();
   };
   const value = (depth: number): WireValue => {
-    if (++values > maxValues || depth > maxDepth) return invalid();
+    if (++values > maxValues) throw new FinanceParseError("财务响应超过单页 JSON 值数量限制。", "JSON_VALUE_LIMIT", offset);
+    if (depth > maxDepth) return invalid("JSON_DEPTH_LIMIT");
     whitespace();
     const character = source[offset];
     if (character === '"') return string();
@@ -52,7 +61,8 @@ export function readFinanceJson(source: string): WireValue {
       while (offset < source.length) {
         if (source[offset] !== '"') return invalid();
         const key = string(); whitespace();
-        if (Object.hasOwn(result, key) || source[offset++] !== ":") return invalid();
+        if (Object.hasOwn(result, key)) return invalid("JSON_DUPLICATE_KEY");
+        if (source[offset++] !== ":") return invalid();
         result[key] = value(depth + 1); whitespace();
         const delimiter = source[offset++];
         if (delimiter === "}") return result;
@@ -152,7 +162,8 @@ export function parseFinancePage(rawBody: string, window: FinanceWindow): { tran
   const token = payload.nextToken;
   if (token != null && (typeof token !== "string" || !token.trim() || token.length > 32000)) throw new SyncInputError("财务分页游标格式无效。");
   const seen = new Set<string>();
-  const transactions = payload.transactions.map(raw => {
+  const transactions = payload.transactions.map((raw, index) => {
+    try {
     const row = object(raw), transactionId = identifier(row.transactionId, true)!;
     if (seen.has(transactionId)) throw new SyncInputError("财务单页出现重复交易标识，未提交该页。");
     seen.add(transactionId);
@@ -172,6 +183,10 @@ export function parseFinancePage(rawBody: string, window: FinanceWindow): { tran
     const orderId = orderIds.values().next().value ?? null;
     return { transactionId, postedAt, transactionType: code(row.transactionType), rawStatus: code(row.transactionStatus), orderId, classification: orderId ? "ORDER_RELATED" as const : "NON_ORDER" as const,
       sellingPartnerId: identifier(metadata?.sellingPartnerId), metadataMarketplaceId: identifier(metadata?.marketplaceId), detailsMarketplaceId: identifier(details?.marketplaceId), amount: money(row.totalAmount) };
+    } catch (error) {
+      if (error instanceof SyncInputError) throw new FinanceParseError(error.message, "TRANSACTION_SCHEMA", null, `/payload/transactions/${index}`);
+      throw error;
+    }
   });
   return { transactions, ...(typeof token === "string" ? { nextToken: token } : {}) };
 }
@@ -299,10 +314,18 @@ export function financeWindowFromFrozen(value: unknown): FinanceWindow {
   if (to <= from || Date.parse(to) - Date.parse(from) > 30 * 86400000) throw new SyncInputError("财务冻结窗口无效。");
   return { from, to };
 }
-export function attributeFinanceTransaction(row: FinanceTransaction, sellerId: string, policy: FinancePolicy) {
+
+export function financeCursorDigest(cursor: { id: string; activeRunId: string | null; status: string; watermarkFrom: Date; watermarkTo: Date; nextTokenCiphertext: string | null; reportStateCiphertext: string | null; detailPolicyDigest: string | null }) {
+  return digest({ id: cursor.id, activeRunId: cursor.activeRunId, status: cursor.status, watermarkFrom: cursor.watermarkFrom.toISOString(), watermarkTo: cursor.watermarkTo.toISOString(),
+    nextTokenCiphertext: cursor.nextTokenCiphertext, reportStateCiphertext: cursor.reportStateCiphertext, detailPolicyDigest: cursor.detailPolicyDigest });
+}
+export function attributeFinanceTransaction(row: FinanceTransaction, sellerId: string, policy: FinancePolicy, quarantineOutsideScope = false) {
   if (row.sellingPartnerId !== sellerId) throw new SyncInputError("财务响应卖家身份缺失或与批准范围不匹配。", 403);
   const ids = [row.metadataMarketplaceId, row.detailsMarketplaceId].filter((id): id is string => !!id);
-  if (ids.some(id => !policy.marketplaces.some(m => m.marketplaceId === id))) throw new SyncInputError("财务响应含批准范围之外的站点，整页未提交。", 403);
+  if (ids.some(id => !policy.marketplaces.some(m => m.marketplaceId === id))) {
+    if (quarantineOutsideScope) return { marketplaceId: null, marketplaceTimeZone: null, reason: "OUTSIDE_APPROVED_MARKETPLACE" };
+    throw new SyncInputError("财务响应含批准范围之外的站点，整页未提交。", 403);
+  }
   if (new Set(ids).size > 1) return { marketplaceId: null, marketplaceTimeZone: null, reason: "CONFLICTING_MARKETPLACE" };
   const site = policy.marketplaces.find(m => m.marketplaceId === ids[0]);
   return site ? { ...site, reason: null } : { marketplaceId: null, marketplaceTimeZone: null, reason: "MISSING_MARKETPLACE" };

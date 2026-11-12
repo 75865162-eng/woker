@@ -1,0 +1,13 @@
+# Lili Skill Data Readiness
+
+The sync center's coverage view includes a read-only Skill readiness panel. It requires one seller account and one marketplace and uses the existing workspace membership, seller grant, MCP scope, and published-source checks. Its API section is `GET /api/operations/sync-center?section=skill-readiness&sellerAccountId=...&marketplaceId=...`.
+
+`src/lib/amazon-sync/skill-contracts.ts` derives Skill identifiers, tool references, and procedure steps from `src/data/lili/skills.json` and records a per-entry SHA-256. This extracts the current 116-entry shipped catalog; it does not parse prose into asserted field dependencies. The first feedback batch (`reimbursement-recovery`, `clearance-aging-decision`, `amazon-return-weekly-analysis`) has field-contract drafts. The remaining Skills are `TOOL_DEPENDENCIES_ONLY`. Neither state is field-reviewed.
+
+Readiness checks server-registered tool names, published data-source availability, declared field names, schema verification, and source freshness. A `DATA_READY_UNVERIFIED` result means only those registry/source checks passed. It does not validate non-null field values, requested historical coverage, live Lili credential access, or an actual Skill run. `endToEndStatus` remains `NOT_VERIFIED`; only separately recorded evidence may establish `SKILL_E2E_VERIFIED`.
+
+Amazon MCP also exposes fixed-scope read tools for inventory snapshots, ledger events, age reports, reimbursements, FBA returns, orders, and order items. Each is a named wrapper over an existing ERP reader, with independent grants and server-side live checks. The wrapper preserves the source reader's date semantics, page bounds, publication behavior, and attribution checks. It does not start a sync. Reimbursement event/payment tools do not decide eligibility or resolve the event-to-payment relationship; unmatched, unreported, and failed work must not be interpreted as no loss.
+
+Current blockers remain visible: inventory event type is not a direct Skill table field; age buckets remain inside report fields; SKU-level sales velocity, ERP historical costs, fee estimates, return refund amounts, and review content have no verified read mapping in this readiness contract. Amazon Ads and third-party review data use separate authorization/source paths. These are not represented as empty successful datasets.
+
+Focused offline verification: `npx tsx --test tests/amazon-skill-readiness.test.ts tests/amazon-mcp-datasets.test.ts tests/amazon-mcp-scope.test.ts tests/amazon-mcp-registry.test.ts`. MCP read isolation verification: `node scripts/test-amazon-sync-integration.mjs --mcp`. Neither proves real Amazon access or an end-to-end Skill run.

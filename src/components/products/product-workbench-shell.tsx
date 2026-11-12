@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { History, ImagePlus, LoaderCircle, RotateCcw, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, Copy, History, ImagePlus, LoaderCircle, RotateCcw, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { productStatusLabels, productStatusOptions, productStatusTones } from "@/data/products";
@@ -15,6 +15,7 @@ import {
   normalizeAssigneeList,
 } from "@/lib/products/workflow";
 import { type ProductFilters } from "./product-workbench-model";
+import type { ProductListSort, ProductListSortField } from "@/lib/products/list-sort";
 import { LabeledInput } from "./product-workbench-fields";
 
 function formatProductCreatedAtDisplay(value?: string): string | { dateText: string; timeText: string } {
@@ -197,6 +198,8 @@ export function ProductTable({
   products,
   totalCount,
   loading,
+  sort,
+  onSortChange,
   onOpenProduct,
   onOpenHistory,
   onPrefetchProduct,
@@ -204,10 +207,14 @@ export function ProductTable({
   products: Product[];
   totalCount: number;
   loading?: boolean;
+  sort: ProductListSort;
+  onSortChange: (field: ProductListSortField) => void;
   onOpenProduct: (sku: string) => void;
   onOpenHistory: (product: Product) => void;
   onPrefetchProduct?: (sku: string) => void;
 }) {
+  const [copiedSku, setCopiedSku] = useState("");
+  const [copyError, setCopyError] = useState("");
   const virtualRows = useVirtualRows<HTMLDivElement>({
     itemCount: products.length,
     rowHeight: 61,
@@ -218,6 +225,15 @@ export function ProductTable({
   const { urls: signedImageUrls, refresh: refreshSignedImageUrls, error: signedImageError } = useProductImageUrls(
     visibleProducts.map((product) => product.imageFileId),
   );
+  const sortableHeader = (label: string, field: ProductListSortField) => {
+    const active = sort.field === field;
+    const Icon = active ? sort.direction === "asc" ? ArrowUp : ArrowDown : ArrowUpDown;
+    return (
+      <button type="button" className="inline-flex max-w-full items-center gap-1 text-left hover:text-foreground" onClick={() => onSortChange(field)} aria-label={`按${label}${active ? sort.direction === "asc" ? "降序" : "升序" : "排序"}`}>
+        <span className="truncate">{label}</span><Icon className="h-3.5 w-3.5 shrink-0" />
+      </button>
+    );
+  };
 
   return (
     <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-white">
@@ -231,10 +247,10 @@ export function ProductTable({
             </span>
           ) : null}
         </div>
-        <span className="text-xs font-semibold text-muted">共 {totalCount.toLocaleString("zh-CN")} 个商品</span>
+        <div className="flex items-center gap-3 text-xs font-semibold text-muted">{copiedSku && <span role="status">已复制 SKU：{copiedSku}</span>}{copyError && <span role="alert" className="text-danger">{copyError}</span>}<span>共 {totalCount.toLocaleString("zh-CN")} 个商品</span></div>
       </div>
       <div ref={virtualRows.containerRef} className="thin-scrollbar max-h-[min(68vh,720px)] overflow-auto">
-        <table className="w-[1734px] table-fixed text-left text-sm [&_th]:overflow-hidden [&_tbody_td]:h-[61px] [&_tbody_td]:max-h-[61px] [&_tbody_td]:py-0 [&_tbody_td]:overflow-hidden [&_tbody_td]:align-middle [&_tbody_tr]:h-[61px] [&_tbody_tr]:max-h-[61px]">
+        <table className="w-[1844px] table-fixed text-left text-sm [&_th]:overflow-hidden [&_tbody_td]:h-[61px] [&_tbody_td]:max-h-[61px] [&_tbody_td]:py-0 [&_tbody_td]:overflow-hidden [&_tbody_td]:align-middle [&_tbody_tr]:h-[61px] [&_tbody_tr]:max-h-[61px]">
           <colgroup>
             <col className="w-[84px]" />
             <col className="w-[96px]" />
@@ -251,24 +267,26 @@ export function ProductTable({
             <col className="w-[180px]" />
             <col className="w-[140px]" />
             <col className="w-[72px]" />
+            <col className="w-[110px]" />
           </colgroup>
           <thead className="sticky top-0 z-10 bg-surface-muted text-xs text-muted">
             <tr>
               <th className="px-3 py-3">图片</th>
-              <th className="px-3 py-3">SKU</th>
-              <th className="px-3 py-3">品名</th>
+              <th className="px-3 py-3">{sortableHeader("SKU", "sku")}</th>
+              <th className="px-3 py-3">{sortableHeader("品名", "chineseName")}</th>
               <th className="px-3 py-3">ASIN</th>
-              <th className="px-3 py-3">采购价格</th>
-              <th className="px-3 py-3">主状态</th>
+              <th className="px-3 py-3">{sortableHeader("采购价格", "purchasePrice")}</th>
+              <th className="px-3 py-3">{sortableHeader("主状态", "status")}</th>
               <th className="px-3 py-3">当前负责人</th>
               <th className="px-3 py-3">运营</th>
               <th className="px-3 py-3">美工</th>
-              <th className="px-3 py-3">供应商名称</th>
+              <th className="px-3 py-3">{sortableHeader("供应商名称", "supplierName")}</th>
               <th className="px-3 py-3">规格</th>
-              <th className="px-3 py-3">创建日期</th>
+              <th className="px-3 py-3">{sortableHeader("创建日期", "createdAt")}</th>
               <th className="px-3 py-3">选品关键词</th>
               <th className="px-3 py-3">备注</th>
               <th className="px-3 py-3 text-right">版本</th>
+              <th className="px-3 py-3">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -276,7 +294,7 @@ export function ProductTable({
               <>
                 {virtualRows.beforeHeight > 0 ? (
                   <tr aria-hidden="true">
-                    <td colSpan={15} style={{ height: `${virtualRows.beforeHeight}px`, padding: 0, border: 0 }} />
+                    <td colSpan={16} style={{ height: `${virtualRows.beforeHeight}px`, padding: 0, border: 0 }} />
                   </tr>
                 ) : null}
                 {visibleProducts.map((product) => {
@@ -310,15 +328,27 @@ export function ProductTable({
                         </button>
                       </td>
                       <td className="px-3">
-                        <button
-                          className="block max-w-full truncate text-left font-bold text-brand hover:text-brand-dark"
-                          title={product.sku}
-                          onClick={() => onOpenProduct(product.sku)}
-                          onFocus={() => onPrefetchProduct?.(product.sku)}
-                          onMouseEnter={() => onPrefetchProduct?.(product.sku)}
-                        >
-                          {product.sku}
-                        </button>
+                        <div className="flex min-w-0 items-center gap-1">
+                          <button
+                            className="block min-w-0 truncate text-left font-bold text-brand hover:text-brand-dark"
+                            title={product.sku}
+                            onClick={() => onOpenProduct(product.sku)}
+                            onFocus={() => onPrefetchProduct?.(product.sku)}
+                            onMouseEnter={() => onPrefetchProduct?.(product.sku)}
+                          >
+                            {product.sku}
+                          </button>
+                          <button type="button" className="shrink-0 rounded p-1 text-muted hover:bg-surface-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" aria-label={`复制 SKU ${product.sku}`} title={`复制 SKU ${product.sku}`} onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(product.sku);
+                              setCopiedSku(product.sku);
+                              setCopyError("");
+                            } catch {
+                              setCopiedSku("");
+                              setCopyError(`SKU ${product.sku} 复制失败，请检查浏览器剪贴板权限。`);
+                            }
+                          }}>{copiedSku === product.sku ? <Check className="h-3.5 w-3.5 text-green-700" /> : <Copy className="h-3.5 w-3.5" />}</button>
+                        </div>
                       </td>
                       <td className="px-3">
                         <div className="min-w-0 overflow-hidden">
@@ -328,7 +358,7 @@ export function ProductTable({
                       </td>
                       <td className="px-3 font-mono text-xs">
                         <p className="truncate" title={product.asin || "--"}>{product.asin || "--"}</p>
-                        {product.amazonSnapshotError ? <p className="text-[10px] text-amber-800" title={product.amazonSnapshotError}>Amazon 快照暂不可读</p> : product.amazonSnapshots ? <a href="/operations?tab=catalog" className="block truncate text-[10px] text-brand" title={product.amazonSnapshots.map((row) => `${row.sellerAccountId}/${row.marketplaceId}: ${row.listingStatus ?? "刊登未同步"} · 可售 ${row.available ?? "未知"} · ${row.freshness} · 库存更新 ${row.inventoryUpdatedAt ?? "未同步"} · ${row.lastError ?? ""}`).join("\n")}>{product.amazonSnapshots.length ? `Amazon ${product.amazonSnapshots.length} 店铺/站点 · 可售 ${product.amazonSnapshots.some((row) => row.available === null) ? "资料不全" : product.amazonSnapshots.reduce((sum, row) => sum + (row.available ?? 0), 0)}` : "Amazon 未同步"}</a> : null}
+                        {product.amazonSnapshotError ? <p className="text-[10px] text-amber-800" title={product.amazonSnapshotError}>Amazon 快照暂不可读</p> : product.amazonSnapshots ? product.amazonSnapshots.length ? <div className="space-y-0.5">{product.amazonSnapshots.map((row) => <a key={`${row.sellerAccountId}:${row.marketplaceId}`} href={`/operations?${new URLSearchParams({ view: "catalog", sku: row.sellerSku, sellerAccountId: row.sellerAccountId, marketplaceId: row.marketplaceId })}`} className="block truncate text-[10px] text-brand" title={`${row.sellerAccountId}/${row.marketplaceId}: ${row.listingStatus ?? "刊登未同步"} · 可售 ${row.available ?? "未知"} · ${row.freshness} · 库存更新 ${row.inventoryUpdatedAt ?? "未同步"} · ${row.lastError ?? ""}`}>{row.marketplaceId} · 可售 {row.available ?? "未知"} · 查看快照</a>)}</div> : <span className="text-[10px] text-muted">Amazon 未同步</span> : null}
                       </td>
                       <td className="px-3 font-semibold metric-tabular">{product.purchasePrice.toFixed(2)}</td>
                       <td className="px-3">
@@ -376,26 +406,27 @@ export function ProductTable({
                           <History className="h-4 w-4" />
                         </Button>
                       </td>
+                      <td className="px-3"><Button size="sm" variant="secondary" aria-label={`打开商品详情 ${product.sku}`} onClick={() => onOpenProduct(product.sku)}>详情 / 编辑</Button></td>
                     </tr>
                   );
                 })}
                 {virtualRows.afterHeight > 0 ? (
                   <tr aria-hidden="true">
-                    <td colSpan={15} style={{ height: `${virtualRows.afterHeight}px`, padding: 0, border: 0 }} />
+                    <td colSpan={16} style={{ height: `${virtualRows.afterHeight}px`, padding: 0, border: 0 }} />
                   </tr>
                 ) : null}
               </>
             ) : null}
             {!products.length && loading ? (
               <tr>
-                <td colSpan={15} className="px-3 py-14 text-center text-sm text-muted">
+                <td colSpan={16} className="px-3 py-14 text-center text-sm text-muted">
                   正在从数据库读取商品数据...
                 </td>
               </tr>
             ) : null}
             {!products.length && !loading ? (
               <tr>
-                <td colSpan={15} className="px-3 py-14 text-center text-sm text-muted">
+                <td colSpan={16} className="px-3 py-14 text-center text-sm text-muted">
                   没有匹配的商品，调整筛选条件后再试。
                 </td>
               </tr>

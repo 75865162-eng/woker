@@ -1,5 +1,7 @@
 # AI / MCP / ERP 协作升级：第二批交付与交接
 
+当前契约更新（2026-11-10）：下文为历史交付记录。ERP、MCP、Lili 和销售导出已统一只返回正式字段 `facts`、`metrics`、`listingAttributes`、`fieldSources`，不再返回 `business*` 副本或 `exactMetrics`，也不再支持 `includeExactMetrics` 开关。这些开放 JSON 业务字段中的数值统一以精确字符串返回（`numericEncoding: JSON_NUMERIC_STRINGS`），保留未知字段、嵌套结构、布尔值和 null；分页等固定元数据继续使用其声明的数值类型。读取权限以服务端实时 Seller Account 分配为准，不继承历史字段、工具或财务管理员限制。历史测试数字不代表本次验收结果。
+
 日期：2026-11-06。范围：C04–C05 本地离线实现。用户已批准数据集契约、兼容查询、规范化结果和 `sales-query.ts` 精确数值投影。本批不包含共享 Gateway、持久数据库迁移、配置写入、真实 API、commit/push 或部署。总 TODO 仅将 C04–C05 标为本地实现完成；生产样本、运行时Schema/Gateway及C06–C11仍未完成。
 
 ## 实现范围

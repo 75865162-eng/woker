@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calculateReplenishment, parseReplenishmentInputs } from "@/lib/operations/replenishment";
+import { calculateReplenishment, parseReplenishmentInputs, wimoorWeightedDailyDemand } from "@/lib/operations/replenishment";
 import { extractCatalogPage } from "@/lib/amazon/catalog";
 import { parseSellerBindings } from "@/lib/amazon/seller-bindings";
 
@@ -13,6 +13,18 @@ test("mature plan uses complete history and known ETA only, forecasts shortage b
   assert.equal(result.status, "READY"); assert.equal(result.dailyDemand, 10); assert.equal(result.daysOfCover, 10);
   assert.equal(result.suggestedQuantity, 460); assert.equal(result.estimatedStockoutDate, "2026-11-02"); assert.equal(result.urgency, "URGENT");
   assert.ok(result.reasons.some((row) => row.includes("未定到货日")));
+});
+test("Wimoor mature demand uses verified 7/15/30 day weights and its source rounding rule", () => {
+  const model = parseReplenishmentInputs({ ...inputs(), matureDemandModel: "WIMOOR_7_15_30", salesHistory: Array.from({ length: 30 }, (_, index) => ({ date: new Date(Date.parse(today) - (index + 1) * 86400000).toISOString().slice(0, 10), units: index < 7 ? 10 : index < 15 ? 5 : 2 })) });
+  const result = calculateReplenishment(model, { available: 100, inbound: 0, fresh: true }, today);
+  assert.equal(result.dailyDemand, 9);
+  assert.ok(result.reasons.some(reason => reason.includes("Wimoor 成熟品日需公式")));
+  assert.equal(calculateReplenishment(parseReplenishmentInputs({ ...model, salesHistory: model.salesHistory.slice(0, 29) }), { available: 100, inbound: 0, fresh: true }, today).suggestedQuantity, null);
+  assert.throws(() => parseReplenishmentInputs({ ...model, matureDemandModel: "UNKNOWN" }));
+});
+test("Wimoor source rounding changes at the 0.9 tenth threshold", () => {
+  assert.equal(wimoorWeightedDailyDemand(0, 0, 240), 0);
+  assert.equal(wimoorWeightedDailyDemand(0, 0, 270), 1);
 });
 test("missing sales days, lead time or stale inventory prevents quantity suggestion", () => {
   const parameters = inputs(); parameters.salesHistory.pop(); parameters.oceanDays = null;

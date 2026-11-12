@@ -1,0 +1,98 @@
+[
+  {
+    "path": "docs/wimoor-sp-api-port-plan.md",
+    "sha256": "de9d6851f42b145e952c86582fa592fa061e583b76c265b35e7ddc397bcd6d7a"
+  },
+  {
+    "path": "prisma/schema.prisma",
+    "sha256": "32f4c09391de039fcbfc76f58bb88dacd78c353ad4814484b8a80f2b05da7c88"
+  },
+  {
+    "path": "scripts/runtime/worker-manager.mjs",
+    "sha256": "e9b767bb05eb26c29b163cd3b5b39045300ea76c8749df1deb789e65981fa0d9"
+  },
+  {
+    "path": "src/app/api/accounts/team-members/route.ts",
+    "sha256": "d581dc97314ef6c380ef9b30edf34c4a4420575aadf35d83db09c31c57e20139"
+  },
+  {
+    "path": "src/app/logistics/page.tsx",
+    "sha256": "c375e472fcc50e2f2b54c86533d82727ae86cb5be9d73ea7c844b5dbf58e6139"
+  },
+  {
+    "path": "src/components/operations/finance-workbench.tsx",
+    "sha256": "7dd097021ea766a260c88a8d8389a868bf0f831724a70780d5a0364226c7c778"
+  },
+  {
+    "path": "src/lib/accounts/permissions.ts",
+    "sha256": "bc7cc59144ac503cac6927bec39fad93b2600161230477654ca366c15b31fb07"
+  },
+  {
+    "path": "src/lib/accounts/role-catalog-server.ts",
+    "sha256": "a264fe396c0cb405d6836f2e0415e28fba5d8b2a3226cf10470b4240babf0628"
+  },
+  {
+    "path": "src/lib/accounts/role-definitions.ts",
+    "sha256": "f3f43e378dcc334603bca65a0e9c1abf0e8adc6d8b95b425238449677ad8305a"
+  },
+  {
+    "path": "src/lib/accounts/role-permissions-server.ts",
+    "sha256": "fe264675abf68067f3d296384fea14d640152e00d74d30f86785c86662691f97"
+  },
+  {
+    "path": "src/lib/agent-platform/tool-gateway.ts",
+    "sha256": "6b41fa504824b0bc9ee0d046a20572c1e512e93ece4d6a7cfb1f54fb6b5dab84"
+  },
+  {
+    "path": "src/lib/amazon-sync/finance.ts",
+    "sha256": "853bbda2963395a834634b173a9d3b2b01e037443219a918650859bc1ddff84e"
+  },
+  {
+    "path": "src/lib/amazon-sync/inbound.ts",
+    "sha256": "2e150d218f8aed602aa1fe6365501d38e91e994c0272e39cad84dc834435ffbc"
+  },
+  {
+    "path": "src/lib/amazon-sync/mcp-tool-registry.ts",
+    "sha256": "0cfb3b9ddec7fe8faa73f818318e792d3e99516b8dd58f3f1d78ee9b754df775"
+  },
+  {
+    "path": "src/lib/amazon-sync/mcp.ts",
+    "sha256": "608473ec354285b8c87eefad2b50397923a130432993c5a4ca0b340124f49dcc"
+  },
+  {
+    "path": "src/lib/amazon-sync/snapshots.ts",
+    "sha256": "a6e76f23da8532f8241986821f1787969205eba19e69c85f7897db9a1051d6d3"
+  },
+  {
+    "path": "src/lib/amazon/inventory.ts",
+    "sha256": "28d8c22daf46814bb128400937949a15a88a365e0de46f427fdf8a6a5dca1cf3"
+  },
+  {
+    "path": "src/lib/amazon/sp-api-client.ts",
+    "sha256": "e985e4d06bd8f1c8aeba9fa8601f43064f7588e07a164f92d9b36cb64f70aa73"
+  },
+  {
+    "path": "src/lib/auth/api-permissions.ts",
+    "sha256": "807e06cc89f409062cbe5ea945e46022f3732807047d6111ab2ec27f586ee7c7"
+  },
+  {
+    "path": "src/lib/auth/session.ts",
+    "sha256": "254b49f26c09ec3aa7776dd60c5dc60b9e7d0bd5256031cd7a05ad96b18c3201"
+  },
+  {
+    "path": "src/lib/logistics/types.ts",
+    "sha256": "75cea63a00714c20debf8c59ea76c3ebe789ddb59dd1ac5812c1ef2700986ffb"
+  },
+  {
+    "path": "src/lib/products/product-record-repository.ts",
+    "sha256": "adee1eb4684cbe4b4c10e1872e95ce1379cd629e13e059593502bf91cd4165fd"
+  },
+  {
+    "path": "src/lib/runtime/worker-registry.json",
+    "sha256": "afc5351ef2cea4b6e4bed127075c0fca8f6a54db74261ff0e99c2ab59649e8ff"
+  },
+  {
+    "path": "src/lib/workspace/access.ts",
+    "sha256": "1ead4c5d6eaaa212997701f820993743f11523590039aa514d4173f4c880a745"
+  }
+]

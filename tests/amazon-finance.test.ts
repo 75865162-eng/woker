@@ -1,7 +1,10 @@
+// Cloud role for injected offline HTTP fixtures; no real Amazon calls.
+process.env.AMAZON_API_EXECUTION_ROLE = "cloud";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { parseFinancePolicy, parseFinancePage, attributeFinanceTransaction, convertFinanceMoney, nextFinanceWindow, assertFinanceRoles, financeWindowFromFrozen } from "@/lib/amazon-sync/finance";
+import { FinanceParseError, parseFinancePolicy, parseFinancePage, readFinanceJson, attributeFinanceTransaction, convertFinanceMoney, nextFinanceWindow, assertFinanceRoles, financeWindowFromFrozen } from "@/lib/amazon-sync/finance";
+import { financeParser, financeParserCanRecover, parseFinanceResponse } from "@/lib/amazon-sync/finance-parser";
 import { normalizeCommand } from "@/lib/amazon-sync/approval-policy";
 import { AmazonSpApiClient } from "@/lib/amazon/sp-api-client";
 import { sourceAccessWhere } from "@/lib/amazon-sync/data-access";
@@ -9,6 +12,33 @@ const raw = (name: string) => readFileSync(new URL(`./fixtures/amazon/finance/${
 const policy = parseFinancePolicy(JSON.parse(raw("policy")));
 const window = { from: "2026-11-01T00:00:00.000Z", to: "2026-11-02T00:00:00.000Z" };
 const page = () => parseFinancePage(raw("page-1"), window);
+
+test("finance accepts a valid nested response above the previous value budget", () => {
+  const response = `{"extraDetails":${JSON.stringify(Array(100000).fill(null))},${raw("page-1").trim().slice(1)}`;
+  assert.equal(parseFinancePage(response, window).transactions[0].amount.original, page().transactions[0].amount.original);
+});
+
+test("finance still rejects responses over the bounded value budget", () => {
+  assert.throws(() => readFinanceJson(JSON.stringify(Array(200000).fill(null))), /JSON 值数量限制/);
+});
+
+test("finance selects only the registered API contract and validated structure", () => {
+  const identity={sourceCode:'listTransactions',apiVersion:'2024-06-19',responseType:'JSON'};
+  const result=parseFinanceResponse(raw('page-1'),identity,window);
+  assert.equal(result.parser.version,financeParser.version);
+  for(const patch of [{sourceCode:'unknown'},{apiVersion:'v0'},{responseType:'TSV'}])assert.throws(()=>parseFinanceResponse(raw('page-1'),{...identity,...patch},window),e=>e instanceof FinanceParseError&&e.code==='PARSER_NOT_REGISTERED');
+  assert.throws(()=>parseFinanceResponse('{"transactions":[]}',identity,window),e=>e instanceof FinanceParseError&&e.code==='RESPONSE_SCHEMA');
+  assert.equal(financeParserCanRecover(financeParser.version,null),false);
+  assert.equal(financeParserCanRecover('unknown-version',null),false);
+  assert.equal(financeParserCanRecover(null,'财务响应不是安全、有效的 JSON。'),true);
+  const changed=raw('page-1').replace('"payload":','"unmappedNewField":{"value":1},"payload":');
+  assert.equal(parseFinanceResponse(changed,identity,window).resultDigest,result.resultDigest);
+});
+
+test("finance diagnostics expose positions without reflecting response values", () => {
+  assert.throws(()=>readFinanceJson('{"private-secret":]}'),e=>e instanceof FinanceParseError&&e.offset!==null&&e.offset>0&&!e.message.includes('private-secret'));
+  assert.throws(()=>parseFinancePage(raw('page-1').replace('"fixture-tx-1"','null'),window),e=>e instanceof FinanceParseError&&e.path==='/payload/transactions/0'&&!e.message.includes('fixture-tx-1'));
+});
 
 test("finance retains exact wire decimals, offset UTC and real identifiers", () => {
   const row = page().transactions[0];
@@ -27,7 +57,9 @@ test("finance uses actual site, quarantines missing/conflicting sites, rejects s
   assert.equal(attributeFinanceTransaction({ ...row, metadataMarketplaceId: null, detailsMarketplaceId: null }, "fixture-seller", policy).reason, "MISSING_MARKETPLACE");
   assert.equal(attributeFinanceTransaction({ ...row, metadataMarketplaceId: "fixture-site-a" }, "fixture-seller", policy).reason, "CONFLICTING_MARKETPLACE");
   for (const patch of [{ sellingPartnerId: null }, { sellingPartnerId: "other" }, { metadataMarketplaceId: "outside" }]) assert.throws(() => attributeFinanceTransaction({ ...row, ...patch }, "fixture-seller", policy), /批准|卖家/);
-  assert.deepEqual(sourceAccessWhere({ allSellers: false, sellerIds: ["fixture"] }).resource, { notIn: ["finance", "notifications"] });
+  assert.deepEqual(attributeFinanceTransaction({ ...row, metadataMarketplaceId: "outside" }, "fixture-seller", policy, true), { marketplaceId: null, marketplaceTimeZone: null, reason: "OUTSIDE_APPROVED_MARKETPLACE" });
+  assert.throws(() => attributeFinanceTransaction({ ...row, sellingPartnerId: "other" }, "fixture-seller", policy, true), /卖家/);
+  assert.deepEqual(sourceAccessWhere({ allSellers: false, sellerIds: ["fixture"] }), { sellerAccountId: { in: ["fixture"] } });
 });
 for (const [name, transform] of Object.entries({
   "missing transaction ID": (s: string) => s.replace('"fixture-tx-1"', 'null'),

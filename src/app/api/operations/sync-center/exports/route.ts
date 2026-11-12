@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
-import { requireApiPermission } from "@/lib/auth/api-permissions";
+import { requireAmazonReadSession } from "@/lib/auth/amazon-read-session";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { prisma } from "@/lib/db/prisma";
 import { getStorageDriver } from "@/lib/storage";
 import { assertExportAccess, assertExportJobAccess, requestSalesExport } from "@/lib/amazon-sync/exports";
+import { AmazonReadError } from "@/lib/amazon-sync/read-account";
 import { requireSyncCenter, SyncInputError } from "@/lib/amazon-sync/policy";
 export const runtime = "nodejs";
 const json = (v: unknown, status = 200) => NextResponse.json(v, { status, headers: { "Cache-Control": "no-store" } });
 async function handle(request: Request, create: boolean) {
-  const permission = await requireApiPermission("operations", "export", request);
+  const permission = await requireAmazonReadSession(request);
   if (!permission.ok) return permission.response;
   try {
     const scope = { organizationId: permission.user.organizationId, workspaceId: workspaceScopeFromRequest(request).workspaceId };
@@ -31,7 +32,7 @@ async function handle(request: Request, create: boolean) {
     await prisma.$transaction(tx => assertExportJobAccess(tx, scope, permission.user.id, job.query));
     await prisma.auditLog.create({ data: { organizationId: scope.organizationId, userId: permission.user.id, action: "amazon.data.export.downloaded", entityType: "AmazonDataExport", entityId: job.id, metadata: { workspaceId: scope.workspaceId, fileId: job.file.id } } });
     return new Response(new Uint8Array(buffer), { headers: { "Cache-Control": "no-store", "Content-Type": "application/x-ndjson", "Content-Disposition": `attachment; filename="amazon-sales-${job.id}.jsonl"` } });
-  } catch (e) { return json({ error: e instanceof SyncInputError ? e.message : "导出请求失败。" }, e instanceof SyncInputError ? e.status : 500); }
+  } catch (e) { return json({ error: e instanceof SyncInputError ? e.message : "导出请求失败。", ...(e instanceof AmazonReadError ? { code: e.businessCode } : {}) }, e instanceof SyncInputError ? e.status : 500); }
 }
 export const GET = (request: Request) => handle(request, false);
 export const POST = (request: Request) => handle(request, true);

@@ -1,7 +1,8 @@
+import { amazonAccountReadAccess } from "./read-account";
 import { queryPageSize } from "./query-page";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { amazonDataAccess, sellerAccessWhere } from "./data-access";
+import { sellerAccessWhere } from "./data-access";
 import { SyncInputError, type SyncScope } from "./policy";
 
 /** Single published report per response. reportId+rowHash cannot deduplicate
@@ -9,8 +10,10 @@ import { SyncInputError, type SyncScope } from "./policy";
  * Comments, plaintext/raw documents, signed URLs and checkpoints are excluded.
  */
 export async function readReturns(scope: SyncScope, params: URLSearchParams, actor?: string) {
-  return prisma.$transaction(async tx => {
-    const access = await amazonDataAccess(scope, actor, tx);
+  params = new URLSearchParams(params);
+  const result = await prisma.$transaction(async tx => {
+    const access = await amazonAccountReadAccess(scope, actor, params, tx, "returns");
+    params.set("sellerAccountId", access.sellerIds[0]);
     const filters: Prisma.AmazonSyncDataSourceWhereInput = {};
     for (const key of ["sellerAccountId", "marketplaceId"] as const) { const v = params.get(key); if (v) { if (v.length > 200) throw new SyncInputError("退货筛选过长。"); filters[key] = v; } }
     const sources = await tx.amazonSyncDataSource.findMany({ where: { AND: [scope, sellerAccessWhere(access), filters, { resource: "returns" }] }, orderBy: { id: "asc" }, take: 201,
@@ -44,4 +47,6 @@ export async function readReturns(scope: SyncScope, params: URLSearchParams, act
     const ids = new Set(orders.map(o => o.amazonOrderId));
     return { rows: rows.map(r => ({ ...r, orderMatched: ids.has(r.amazonOrderId) })), sources: sourceViews, selectedSourceId: source.id, reportId, pagination: { page, pageSize, total, pageCount: Math.ceil(total / pageSize) }, completeness: "SINGLE_PUBLISHED_REPORT", returnsUniverseComplete: false };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  await amazonAccountReadAccess(scope, actor, params, prisma, "returns");
+  return result;
 }

@@ -9,7 +9,7 @@ const hash = (ids: string[]) => createHash("sha256").update(JSON.stringify(ids))
 function rejected(): never { throw new SyncInputError("商品发现需要当前身份、授权版本一致的完整在线商品快照；快照变更或范围超预算时保留旧详情版本。", 409); }
 export function validateProductManifest(value: unknown, policy: ProductPolicy): ProductManifest {
   const m = value as ProductManifest | null;
-  if (!policy.discovery || !m || m.sourceId !== policy.discovery.sourceId || !Number.isSafeInteger(m.sourceRevision) || m.sourceRevision < 1 || !Number.isSafeInteger(m.authorizationRevision) || m.authorizationRevision < 1 || typeof m.runId !== "string" || !m.runId || m.batchSize !== 100 || !Array.isArray(m.ids) || !m.ids.length || m.total !== m.ids.length || m.total > policy.discovery.maxObjects || m.total > policy.maxRows || (policy.resource === "pricing" ? 2 * Math.ceil(m.total / 20) : m.total) > policy.maxRequests || hash(m.ids) !== m.digest) rejected();
+  if (!policy.discovery || !m || m.sourceId !== policy.discovery.sourceId || !Number.isSafeInteger(m.sourceRevision) || m.sourceRevision < 1 || !Number.isSafeInteger(m.authorizationRevision) || m.authorizationRevision < 1 || typeof m.runId !== "string" || !m.runId || m.batchSize !== 100 || !Array.isArray(m.ids) || m.total !== m.ids.length || m.total > policy.discovery.maxObjects || m.total > policy.maxRows || (policy.resource === "pricing" ? 2 * Math.ceil(m.total / 20) : m.total) > policy.maxRequests || hash(m.ids) !== m.digest) rejected();
   const pattern = policy.resource === "listing_details" ? /^[^\u0000-\u001f\u007f]{1,255}$/ : /^[A-Z0-9]{10}$/;
   if (m.ids.some(v => typeof v !== "string" || !pattern.test(v)) || new Set(m.ids).size !== m.ids.length || m.ids.some((v, i) => i > 0 && m.ids[i - 1] >= v)) rejected();
   return m;
@@ -23,6 +23,9 @@ export async function assertProductDiscoveryHead(tx: Prisma.TransactionClient, s
   const frozen = snapshot?.frozenScope as Record<string, unknown> | undefined;
   const coverage = (snapshot?.summary as { coverage?: Record<string, unknown> } | null)?.coverage;
   if (!upstream || upstream.id === source.id || !upstream.enabled || upstream.revision !== manifest.sourceRevision || !snapshot || snapshot.status !== "SUCCEEDED" || snapshot.stage === "PURGED" || snapshot.executionVersion !== 2 || !snapshot.finishedAt || !snapshot.paginationComplete || coverage?.type !== "complete_snapshot" || coverage.paginationComplete !== true || frozen?.authorizationId !== source.authorizationId || frozen.authorizationRevision !== source.authorization.revision || !source.authorization.amazonSellerId || frozen.amazonSellerId !== source.authorization.amazonSellerId || manifest.authorizationRevision !== source.authorization.revision) rejected();
+  // An empty manifest requires positive evidence of a complete empty snapshot,
+  // not merely an absent catalog projection or an unstarted upstream task.
+  if (manifest.total === 0 && (coverage.rowCount !== 0 || snapshot.insertedCount !== 0 || await tx.amazonCatalogSnapshot.count({ where: { ...scope, sourceRunId: manifest.runId, sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId } }) !== 0)) rejected();
   return upstream;
 }
 /** Read immutable rows in batches, freeze one bounded whole-round manifest. */
@@ -30,7 +33,9 @@ export async function discoverProductObjects(tx: Prisma.TransactionClient, scope
   if (policy.resource !== "listing_details" && policy.resource !== "catalog_items" && policy.resource !== "pricing" || !policy.discovery) return;
   const head = await tx.amazonSyncDataSource.findFirst({ where: { ...scope, id: policy.discovery.sourceId, resource: "catalog", authorizationId: source.authorizationId, sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId }, select: { revision: true, activeRunId: true, rowCount: true } });
   if (!head?.activeRunId || head.rowCount > 1000) rejected();
-  const manifest: ProductManifest = { sourceId: policy.discovery.sourceId, sourceRevision: head.revision, runId: head.activeRunId, authorizationRevision: source.authorization.revision, total: 0, ids: [], digest: "", batchSize: 100 };
+  // Validate the head using its published count before the page scan resolves
+  // unique object IDs; a nonempty snapshot is not an empty manifest.
+  const manifest: ProductManifest = { sourceId: policy.discovery.sourceId, sourceRevision: head.revision, runId: head.activeRunId, authorizationRevision: source.authorization.revision, total: head.rowCount, ids: [], digest: "", batchSize: 100 };
   await assertProductDiscoveryHead(tx, scope, source, manifest);
   let after: string | undefined; let rows = 0; const ids = new Set<string>();
   for (;;) {

@@ -1,3 +1,4 @@
+import { AmazonReadError } from "@/lib/amazon-sync/read-account";
 import { boundedRequestText } from "@/lib/amazon-sync/request-body";
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
@@ -42,11 +43,11 @@ export async function POST(request: Request) {
   } catch (error) {
     const status = error instanceof SyncInputError ? error.status : error instanceof SyntaxError ? 400
       : error instanceof GatewayInvocationError ? error.code === "INVALID_INPUT" ? 400 : error.code === "TIMEOUT" ? 504 : error.code === "CANCELLED" ? 408 : 500 : 500;
-    const documentedCode = error instanceof SyncInputError ? error.message.match(/^(TABLE_NOT_ALLOWED|FIELD_NOT_MAPPED|SCHEMA_UNVERIFIED):/)?.[1] : undefined;
-    const businessCode = error instanceof McpDatasetError ? error.businessCode : error instanceof GatewayInvocationError ? error.code : documentedCode ?? (status === 401 ? "UNAUTHENTICATED" : status === 403 ? "FORBIDDEN" : status === 400 ? "INVALID_ARGUMENT" : "INTERNAL_FAILURE");
+    const documentedCode = error instanceof SyncInputError ? error.message.match(/^(TABLE_NOT_ALLOWED|FIELD_NOT_MAPPED|SCHEMA_UNVERIFIED|SCHEMA_UPGRADE_REQUIRED):/)?.[1] : undefined;
+    const businessCode = error instanceof AmazonReadError ? error.businessCode : error instanceof McpDatasetError ? error.businessCode : error instanceof GatewayInvocationError ? error.code : documentedCode ?? (status === 401 ? "UNAUTHENTICATED" : status === 403 ? "FORBIDDEN" : status === 400 ? "INVALID_ARGUMENT" : "INTERNAL_FAILURE");
     const data = { requestId, toolVersion, businessCode, ...(businessCode === "DATASET_UNPUBLISHED" ? { dataAvailability: "NO_PUBLISHED_SOURCE" } : {}) };
     if (error instanceof SyncInputError && documentedCode) return json({ jsonrpc: "2.0", id, error: { code: documentedCode, message: error.message, data } }, status);
-    const message = error instanceof GatewayInvocationError ? error.message : status === 401 ? "认证失败。" : status === 403 ? "数据范围不可访问。" : status === 400 ? "参数无效。" : "请求失败。";
+    const message = error instanceof AmazonReadError ? error.message : error instanceof GatewayInvocationError ? error.message : status === 401 ? "认证失败。" : status === 403 ? "数据范围不可访问。" : status === 400 ? "参数无效。" : "请求失败。";
     const code = error instanceof GatewayInvocationError && error.code === "INVALID_INPUT" ? -32602 : status === 401 ? -32001 : status === 403 ? -32003 : error instanceof McpDatasetError ? -32602 : -32603;
     return json({ jsonrpc: "2.0", id, error: { code, message, data } }, status);
   }

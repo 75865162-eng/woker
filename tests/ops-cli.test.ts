@@ -27,10 +27,11 @@ const calls: Array<{ table: string; args: Record<string, unknown> }> = [];
 const readOnlyDb = new Proxy({}, { get: (_, table: string) => new Proxy({}, { get: (_, method: string) => async (args: Record<string, unknown>) => {
   assert.ok(["findFirst", "findMany", "findUnique", "aggregate"].includes(method), `unexpected database mutation: ${method}`);
   calls.push({ table, args });
+  if (table === "amazonDataAccessGrant") return [{ sellerAccountId: "seller" }];
   if (table === "organizationMember") return { role: "owner", user: { status: "active" } };
   if (table === "workspaceScope") return { id: "ws" };
   if (table === "organizationRosterRole") return [{ id: "owner", permissions: {} }];
-  if (table === "amazonSyncDataSource") return [{ id: "source", activeRunId: "run-1", sellerAccountId: "seller", marketplaceId: "site", resource: "inventory" }, { id: "catalog-source", activeRunId: "catalog-run", sellerAccountId: "seller", marketplaceId: "site", resource: "catalog" }];
+  if (table === "amazonSyncDataSource") return [{ id: "source", activeRunId: "run-1", sellerAccountId: "seller", marketplaceId: "site", resource: "inventory", authorization: { status: "CONFIGURED", identityVerifiedAt: new Date() } }, { id: "catalog-source", activeRunId: "catalog-run", sellerAccountId: "seller", marketplaceId: "site", resource: "catalog", authorization: { status: "CONFIGURED", identityVerifiedAt: new Date() } }];
   if (table === "workspaceDataset") return null;
   if (table === "amazonSyncRun" && method === "findFirst") return { id: "run-1", finishedAt: new Date("2026-10-24T00:00:00Z") };
   if (method === "aggregate") return { _sum: { fulfillableQuantity: 4 }, _count: { _all: 1 } };
@@ -74,6 +75,7 @@ test("CLI authorization requires active membership, workspace and current module
   } as unknown as Prisma.TransactionClient;
   await authorizeOps(db, identity, parseOpsArgs(["ppc", "suggest"]));
   grants = ["operations"]; await assert.rejects(() => authorizeOps(db, identity, parseOpsArgs(["ppc", "suggest"])), /Missing module/);
+  grants = []; await authorizeOps(db, identity, parseOpsArgs(["inventory", "list"]));
   active = false; await assert.rejects(() => authorizeOps(db, identity, parseOpsArgs(["freshness"])), /Active/);
   active = true; workspace = false; await assert.rejects(() => authorizeOps(db, identity, parseOpsArgs(["freshness"])), /workspace/);
 });

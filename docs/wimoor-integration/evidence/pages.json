@@ -1,0 +1,4886 @@
+[
+  {
+    "path": "init-config/browse/wimoor/js/background.html",
+    "module": "init-config",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "init-config/browse/wimoor/popup.html",
+    "module": "init-config",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "init-config/md/Wimoor ERP仓库管理流程图.html",
+    "module": "init-config",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "init-config/md/Wimoor ERP发货流程.html",
+    "module": "init-config",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "init-config/md/Wimoor ERP采购流程.html",
+    "module": "init-config",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "init-config/md/Wimoor ERP采购流程修复版.html",
+    "module": "init-config",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "init-config/md/Wimoor ERP采购流程图-独立版.html",
+    "module": "init-config",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/resources/templates/index.html",
+    "module": "wimoor-admin",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-admin/admin-boot/src/main/resources/templates/open1688.html",
+    "module": "wimoor-admin",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-erp/wimoor-erp-proxy/src/main/resources/templates/index.html",
+    "module": "wimoor-erp",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-erp/wimoor-erp-proxy/src/main/resources/templates/open1688.html",
+    "module": "wimoor-erp",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-modules/wimoor-data/src/main/resources/templates/index.html",
+    "module": "wimoor-modules",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/resources/templates/index.html",
+    "module": "wimoor-modules",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-modules/wimoor-quote/src/main/resources/templates/open1688.html",
+    "module": "wimoor-modules",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/index.html",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/public/clause.html",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/App.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/Crontab/day.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/Crontab/hour.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/Crontab/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/Crontab/min.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/Crontab/month.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/Crontab/result.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/Crontab/second.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/Crontab/week.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/Crontab/year.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/DictTag/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/Editor/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/FileUpload/Upload.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/FileUpload/UploadDialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/ImagePreview/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/ImageUpload/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/Pagination/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/Radio/RadioButton/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/Radio/RadioCard/radio_card.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/Radio/RadioCard/radio_card_group.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/RightPanel/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/RightToolbar/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/Screenfull/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/SizeSelect/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/SvgIcon/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/Table/GlobalTable/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/Table/column_set.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/TinyMCE/TinyMCEEditor.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/Upload/SingleImage.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/Upload/SingleImage2.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/Upload/SingleImage3.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/Upload/uploadDialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/Upload/uploadRpt.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/UploadExcel/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/dialog/confirm.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/feedstatus/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/header/ad_group.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/header/category.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/header/currency.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/header/datepicker.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/header/group.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/header/groupWithoutMarket.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/header/group_select.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/header/helper.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/header/market.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/header/market_country.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/header/owner.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/header/ownerAll.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/header/printer.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/header/quarter_picker.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/header/region.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/header/search.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/header/supplier.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/header/tags.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/header/warehouse.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/header/warehouse_fba.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/icon/filtericon.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/progress/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/components/template/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/layout/components/Aside/AsideMenu.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/layout/components/Aside/SubMenu.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/layout/components/Header/Header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/layout/components/Header/HeaderAvatar.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/layout/components/Header/HeaderNavbtn.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/layout/components/Header/HeaderPlatform.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/layout/components/Header/HeaderTab.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/layout/components/Progress/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/layout/components/remind_message/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/layout/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/address/components/editdialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/address/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/address/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/download/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/common/ad_chart.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/common/ad_order_cycle.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/common/ad_tree.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/common/data_filter.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/common/date_select.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/common/portfolios_plane.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/common/schedule_plan.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/components/adcreative.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/components/bidding.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/components/bidding_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/components/bidding_tactics_sb.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/components/bidding_tactics_sp.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/components/bidding_type.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/components/negative_keywords.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/components/negative_target.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/components/product_add.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/components/target.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/components/target_keyword.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/components/target_product.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/create.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/listAdgroups.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/listCampNegativaKeywords.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/listCampNegativaTarget.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/listCampaigns.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/listKeywords.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/listKeywordsQuery.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/listNegativaKeywords.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/listNegativaTarget.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/listProductAds.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/listPurchaseProductAds.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/listTarget.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/hsa/listTargetQuery.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sd/components/adcreative.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sd/components/bidding.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sd/components/bidding_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sd/components/bidding_tactics_sp.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sd/components/bidding_type.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sd/components/negative_keywords.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sd/components/negative_target.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sd/components/product_add.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sd/components/target.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sd/components/target_product.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sd/create.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sd/listAdgroups.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sd/listCampaigns.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sd/listNegativaTarget.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sd/listProductAds.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sd/listPurchaseProductAds.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sd/listTarget.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sp/components/bidding.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sp/components/bidding_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sp/components/bidding_tactics_sp.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sp/components/bidding_type.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sp/components/negative_keywords.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sp/components/negative_target.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sp/components/product_add.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sp/components/target.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sp/components/target_keyword.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sp/components/target_product.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sp/create.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sp/listAdgroups.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sp/listCampNegativaKeywords.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sp/listCampNegativaTarget.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sp/listCampaigns.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sp/listKeywords.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sp/listKeywordsQuery.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sp/listNegativaKeywords.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sp/listNegativaTarget.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sp/listProductAds.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sp/listPurchaseProductAds.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sp/listTarget.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/components/sp/listTargetQuery.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/warn/components/create.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/manager/warn/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/operation_record/components/detail.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/operation_record/components/remarks_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/operation_record/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/overview/components/adFunnel.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/overview/components/adStatistics.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/overview/components/indicator.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/overview/components/indicator_detail.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/overview/components/roasRank.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/overview/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/advertisement/rules/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/inbound/fbacenter.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/inventory/fba/daily.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/inventory/fba/detail.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/inventory/planning/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/inventory/quantity/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/inventory/worth/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/analysis/components/data_deatils.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/analysis/components/dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/analysis/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/catalog/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/common/arrival_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/common/goods_deatils.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/common/group.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/common/group_only.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/common/listings.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/common/salechart.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/price_adjust/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/price_adjust/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/product_customs/components/arrival_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/product_customs/components/batchmodifypriceDialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/product_customs/components/follow_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/product_customs/components/matching.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/product_customs/components/modifypriceDialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/product_customs/components/profit_details.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/product_customs/components/prostatus.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/product_customs/components/refreshProduct.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/product_customs/components/remarks_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/product_customs/components/sale_formula.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/product_customs/components/sale_status_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/product_customs/components/sale_status_select.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/product_customs/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/product_customs/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/product_edit/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/product_label/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/product_plus/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/products/components/arrival_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/products/components/batchmodifypriceDialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/products/components/fbainvhistory_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/products/components/feedback_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/products/components/follow_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/products/components/matching.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/products/components/modifypriceDialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/products/components/productAIDialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/products/components/profit_details.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/products/components/prostatus.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/products/components/refreshProduct.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/products/components/remarks_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/products/components/sale_formula.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/products/components/sale_status_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/products/components/sale_status_select.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/products/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/products/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/listing/relation_msku/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/fbm/components/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/fbm/components/invoice.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/fbm/components/invoice_template.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/fbm/components/invoice_view.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/fbm/components/invoice_view_refund.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/fbm/components/order_detail.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/fbm/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/fbm/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/fulfillment/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/order_manager/components/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/order_manager/components/invoice.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/order_manager/components/invoice_template.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/order_manager/components/invoice_view.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/order_manager/components/invoice_view_refund.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/order_manager/components/message.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/order_manager/components/order_detail.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/order_manager/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/order_manager/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/refund/components/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/refund/components/skudetail.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/refund/components/summary_chart.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/refund/components/summary_chart_line.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/refund/components/summary_chart_pie.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/refund/components/summary_sku.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/refund/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/refund/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/remove/components/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/remove/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/remove/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/summary_week_month/components/day.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/summary_week_month/components/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/summary_week_month/components/month.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/summary_week_month/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/today/components/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/order/today/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/common/refresh_data_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/costSharing/components/create.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/costSharing/components/otherFee.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/costSharing/components/shareRules.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/costSharing/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/costSharing/cost_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/costSharing/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/finance/components/month.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/finance/components/other_fee_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/finance/components/record.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/finance/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/item_fee/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/jobCosting/components/edit.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/jobCosting/components/resetAddDialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/jobCosting/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/jobCosting/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/monthReport/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/performanpce/components/monthReport.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/performanpce/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/performanpce/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/profitReport/components/accCalc_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/profitReport/components/formula.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/profitReport/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/profitReport/profitGroup/components/profitGroup.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/profitReport/profitGroup/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/profitReport/table/child.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/profitReport/table/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/record/detail.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/record/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/record/records.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/record/report.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/settlement_sku/account_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/settlement_sku/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/settlement_sku/settlement.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/settlement_sku/skutable.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/settlement_sku/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/payment/summaryMonth/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/profit/calculator/components/country_collapse.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/profit/calculator/components/fba_size.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/profit/calculator/components/profit_deatils.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/profit/calculator/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/profit/config/components/edit_plan.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/profit/config/components/market_fee/form.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/profit/config/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/profit/fbafee/component/fba.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/profit/fbafee/component/fbasipp.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/profit/fbafee/component/inplace.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/profit/fbafee/component/inplacefee.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/profit/fbafee/component/referralfee.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/profit/fbafee/component/storagefee.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/profit/fbafee/component/tier.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/profit/fbafee/component/tierformat.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/profit/fbafee/component/tierweight.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/profit/fbafee/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/fba_fee/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/fba_fee/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/open/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/pageview/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/performance/coupon/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/performance/coupon/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/performance/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/performance/orderfeedback/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/performance/orderfeedback/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/performance/promotions/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/performance/promotions/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/performance/seller/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/performance/seller/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/reimbursements_fee/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/ship/detail/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/ship/fee_summary/detail_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/ship/fee_summary/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/ship/fee_summary_new/detail_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/ship/fee_summary_new/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/ship/ship_fee_record/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/ship/ship_summary/component/piechart.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/ship/ship_summary/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/ship/time/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/shipv2/detail/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/shipv2/ship_summary/component/piechart.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/shipv2/ship_summary/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/storage_fee/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/storage_fee/index_fee.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/report/storage_fee/index_long.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/sales/details/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/sales/forecast/components/sale_adjust_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/sales/forecast/components/sale_adjust_upload_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/sales/forecast/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/sales/report/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/service/VatInvioce/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/storeAuth/advResult/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/storeAuth/authResult/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/storeAuth/components/advReport.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/storeAuth/components/authadv.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/storeAuth/components/authstore.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/storeAuth/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/storeAuth/components/taskData.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/storeAuth/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/transparency/auth/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/transparency/manager/components/skuinfo.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/transparency/manager/components/task.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/transparency/manager/components/tcode.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/transparency/manager/components/uploadDialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/amazon/transparency/manager/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/amazon_follow_ui/components/asinLog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/amazon_follow_ui/components/batchEditDialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/amazon_follow_ui/components/batchFollow.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/amazon_follow_ui/components/downloadItem.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/amazon_follow_ui/components/followAdd.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/amazon_follow_ui/components/followEdit.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/amazon_follow_ui/components/followTime.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/amazon_follow_ui/components/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/amazon_follow_ui/components/warning.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/amazon_follow_ui/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/electronics/components/data_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/electronics/components/uploadSalesDialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/electronics/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/finance/components/month.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/finance/components/other_fee_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/finance/components/record.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/finance/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/forecast/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/inventory/components/history_inv.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/inventory/components/plan_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/inventory/components/sales_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/inventory/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/order/components/create.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/order/components/inv_header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/order/components/inv_his_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/order/components/inv_table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/order/components/invoice_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/order/components/invoice_view_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/order/components/plan_create_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/order/components/plan_detail_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/order/components/plan_header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/order/components/plan_table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/order/components/platform.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/order/components/sales_header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/order/components/sales_table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/order/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/plan/components/create_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/plan/components/details_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/plan/components/fba_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/plan/components/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/plan/components/overseas_create_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/plan/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/sale/components/fbafee_popover.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/customized/chelsea/sale/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/dashboard/components/adchart.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/dashboard/components/comparechart.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/dashboard/components/goodsrank.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/dashboard/components/notice.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/dashboard/components/personrank.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/dashboard/components/piechart.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/dashboard/components/salechart.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/dashboard/components/service.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/dashboard/components/stockchart.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/dashboard/components/storeshow.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/dashboard/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/brand/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/category/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/material/components/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/material/components/record.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/material/consumable.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/material/consumableDialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/material/details/components/listinfo.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/material/details/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/material/editinfo/components/assemble_info.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/material/editinfo/components/base.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/material/editinfo/components/consumables.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/material/editinfo/components/logistics.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/material/editinfo/components/parent_info.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/material/editinfo/components/purchase.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/material/editinfo/components/purchase_price_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/material/editinfo/components/specs.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/material/editinfo/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/material/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/material/materialDialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/material/package.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/material/photoupload/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/quote/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/supplier/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/supplier/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/baseinfo/supplier/supplier_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/components/assembly_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/components/download_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/components/shelfInvOpt.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/finance/account/components/finItem.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/finance/account/components/finRecord.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/finance/account/components/lineChart.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/finance/account/components/paymethod_index_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/finance/account/components/pieChart.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/finance/account/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/finance/account/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/finance/alibabaSettlement/components/order.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/finance/alibabaSettlement/components/pay.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/finance/alibabaSettlement/components/returnorder.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/finance/alibabaSettlement/components/returnpay.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/finance/alibabaSettlement/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/finance/exchangeRate/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/finance/inventoryValue/components/fba.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/finance/inventoryValue/components/self.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/finance/inventoryValue/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/finance/paymentRequest/components/details.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/finance/paymentRequest/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/finance/paymentRequest/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/change/components/create.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/change/components/details.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/change/components/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/change/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/components/preplan.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/consumable/components/consumable_material.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/consumable/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/open1688/bind/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/open1688/order/open1688order.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/orders/components/arrival_record.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/orders/components/assembly.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/orders/components/auto_price_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/orders/components/change_records.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/orders/components/create.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/orders/components/deliverydate.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/orders/components/details.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/orders/components/logistics_record.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/orders/components/order_record.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/orders/components/pay_record.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/orders/components/payment.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/orders/components/printip.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/orders/components/receipt.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/orders/components/remark_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/orders/components/shipfee_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/orders/components/skuTable.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/orders/components/sku_table_inner_dailog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/orders/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/orders/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/orders/order_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/orders/records.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/plan_amz/components/expand_table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/plan_amz/components/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/plan_amz/components/plan_select.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/plan_amz/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/plan_amz/plan_submit/detail.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/plan_amz/plan_submit/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/process/components/create.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/process/components/details.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/process/components/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/process/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/report/detail/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/report/payment/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/report/receive/components/storageDetail_table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/report/receive/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/report/summary/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/purchase/report/time/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/orderblank/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/quota/components/shelfproduct.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/quota/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/ship_plan/components/afterplan_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/ship_plan/components/check_data_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/ship_plan/components/delivery_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/ship_plan/components/expand_table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/ship_plan/components/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/ship_plan/components/remarks_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/ship_plan/components/ship_record.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/ship_plan/components/shipmarket_rank.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/ship_plan/components/split_plan_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/ship_plan/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/ship_plan/plan_submit/eu_split.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/ship_plan/plan_submit/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/ship_plan/plan_submit/market_plan.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_add/approve/components/list.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_add/approve/components/split_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_add/approve/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_add/approve/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_add/create/components/form.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_add/create/components/mateiralDialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_add/create/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_add/list/components/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_add/list/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_add/list/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_handing/list/components/async.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_handing/list/components/asyncdailog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_handing/list/components/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_handing/list/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_handing/list/components/transinfo.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_handing/list/components/transnumber.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_handing/list/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_handing/shipstep/components/four_receive.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_handing/shipstep/components/one_picking.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_handing/shipstep/components/print_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_handing/shipstep/components/shipment_info.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_handing/shipstep/components/shipment_operator.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_handing/shipstep/components/three_deliver.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_handing/shipstep/components/two_box.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/shipment_handing/shipstep/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/transportation/components/compare.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/transportation/components/list.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/transportation/components/trans_type_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/transportation/details_transportation.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/transportation/edit_transportation.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/ship/transportation/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/quote/channel.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/quote/components/channel_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/quote/components/channel_type.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/quote/components/create_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/quote/components/price_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/quote/components/protocol_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/quote/components/reset_password_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/quote/order.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/quote/overview.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/quote/price.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/quote/purchase/quote.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/quote/quote.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/quote/setting.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/quote/supplier.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/approve/components/list.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/approve/components/split_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/approve/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/approve/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/create/components/form.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/create/components/mateiralDialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/create/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/list/components/async.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/list/components/asyncdailog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/list/components/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/list/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/list/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/shipstep/components/box_analysis_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/shipstep/components/box_plan.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/shipstep/components/box_table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/shipstep/components/box_table_case.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/shipstep/components/consumable.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/shipstep/components/footer.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/shipstep/components/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/shipstep/components/operation.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/shipstep/components/planCancel.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/shipstep/components/planCreate.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/shipstep/components/planShipped.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/shipstep/components/pre.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/shipstep/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/shipstep/components/trans.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/shipstep/four_end.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/shipstep/one_pick.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/shipstep/placement_confirm.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/shipstep/three_ship.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_add/shipstep/two_box.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_handing/list/components/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_handing/list/components/quoteDialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_handing/list/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_handing/list/components/transinfo.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_handing/list/components/transnumber.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_handing/list/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_handing/shipstep/components/customs_clearance.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_handing/shipstep/components/customs_data.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_handing/shipstep/components/customs_declaration.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_handing/shipstep/components/customs_declaration_xml.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_handing/shipstep/components/customs_inventory_xml.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_handing/shipstep/components/customs_order_xml.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_handing/shipstep/components/customs_picking.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_handing/shipstep/components/customs_summary.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_handing/shipstep/components/destination.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_handing/shipstep/components/four_receive.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_handing/shipstep/components/ship_box.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_handing/shipstep/components/ship_box_case.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_handing/shipstep/components/shipment_info.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_handing/shipstep/components/shipment_operator.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_handing/shipstep/components/three_deliver.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_handing/shipstep/components/two_box.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_handing/shipstep/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/shipv2/shipment_handing/shipstep/index_tab.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/thirdparty/components/edit_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/thirdparty/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/address/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/base/components/childrenlist.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/base/components/edit.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/base/components/parentlist.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/base/components/thirdparty/k5.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/base/components/thirdparty/ops.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/base/components/thirdparty/xl.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/base/components/thirdparty/yc.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/base/components/thirdparty_bind_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/base/components/thirdparty_oversea.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/base/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/base/warehouseDialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/exchange/components/create.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/exchange/components/details.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/exchange/components/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/exchange/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/fee/detail_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/fee/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/inbound/components/create.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/inbound/components/create_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/inbound/components/details.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/inbound/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/inbound/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/inventory/daily/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/inventory/report/base/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/inventory/report/turns/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/inventory/report/unsalable/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/outbound/components/create.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/outbound/components/create_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/outbound/components/details.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/outbound/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/outbound/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/inv/components/create.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/inv/components/inv_header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/inv/components/inv_his_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/inv/components/invoice_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/inv/components/plan_create_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/inv/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/order/components/create.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/order/components/invoice_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/order/components/invoice_view_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/order/components/platform.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/order/components/sales_header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/order/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/plan/components/PurchaseDialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/plan/components/ShipDialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/plan/components/arrival_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/plan/components/delivery_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/plan/components/expand_table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/plan/components/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/plan/components/plan_select.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/plan/components/salechart.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/plan/components/ship_record.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/plan/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/plan/plan_submit/detail.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/plan/plan_submit/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/simpleplan/components/plan_create_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/simpleplan/components/plan_detail_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/simpleplan/components/plan_header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/simpleplan/components/platform.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/simpleplan/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/stock/components/box_table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/stock/components/create.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/stock/components/create_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/stock/components/details.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/stock/components/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/stock/components/logistics.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/stock/components/split_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/overseas/stock/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/record/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/record/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/shelf/base/shelf_tree.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/shelf/create/components/shelf_card.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/shelf/create/components/shelf_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/shelf/create/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/shelf/inv/components/shelf_product.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/shelf/inv/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/shelf/operator/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/stocktake/components/create.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/stocktake/components/create_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/stocktake/components/details.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/stocktake/components/sku_inventory.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/stocktake/components/table.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/stocktake/components/uploadDialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/stocktake/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/transfer/components/create.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/transfer/components/details.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/transfer/components/header.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/erp/warehouse/transfer/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/auxiliary/items/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/auxiliary/types/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/category/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/currency/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/entries/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/ledger/balance/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/ledger/detail/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/ledger/general/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/log/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/periods/components/periods.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/periods/components/template-tree.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/periods/components/template.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/periods/components/template/add_subject_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/periods/components/template/amazon_fin_month_report.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/periods/components/template/feishu_table_bind.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/periods/components/template/feishu_table_record.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/periods/components/template/feishu_table_record_filter.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/periods/components/template/other_custom.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/periods/components/template/period_change_rate.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/periods/components/template/period_profit_loss_transfer.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/periods/components/voucher_log_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/periods/components/vouchers.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/periods/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/report/items/components/report_balance.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/report/items/components/report_cashflow.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/report/items/components/report_equity.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/report/items/components/report_income.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/report/items/components/report_sheet.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/report/items/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/report/templates/components/mapping_rules_panel.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/report/templates/components/template_item_custom_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/report/templates/components/template_item_edit.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/report/templates/components/template_items.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/report/templates/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/subjects/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/vouchers/create/components/ImportVoucherDialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/vouchers/create/components/upload_status.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/vouchers/create/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/vouchers/list/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/finance/vouchertype/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/Login.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/Register.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/SSOLogin.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/blank/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/client/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/customer/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/customer/order/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/deepseek/components/MarkdownRenderer.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/deepseek/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/dept/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/dict/components/DictItem.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/dict/components/DictType.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/dict/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/feishu/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/fileuser/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/gen/basicInfoForm.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/gen/editTable.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/gen/genInfoForm.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/gen/importTable.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/gen/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/holiday/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/menu/components/Menu.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/menu/components/Perm.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/menu/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/movedata/components/backup.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/movedata/components/movetable.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/movedata/components/settlement.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/movedata/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/notepad/content_dialog.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/notepad/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/notify/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/online/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/ruleAuth/components/menu_list.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/ruleAuth/components/page_list.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/ruleAuth/components/role_list.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/ruleAuth/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/subUser/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/swagger/amazon.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/swagger/erp.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/swagger/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/tag/components/sysTagGroups.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/tag/components/sysTags.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/tag/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/tariffpackages/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/task/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/userCenter/components/accountSafe.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/userCenter/components/buypackage.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/userCenter/components/card.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/userCenter/components/logoff.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/userCenter/components/package.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/userCenter/components/unbind.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/userCenter/components/wechat.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/userCenter/index.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  },
+  {
+    "path": "wimoor-ui/src/views/sys/userCenter/resetPassword.vue",
+    "module": "wimoor-ui",
+    "status": "UNCERTAIN",
+    "review": "indexed; route and interaction semantics not verified"
+  }
+]

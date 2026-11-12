@@ -1,3 +1,5 @@
+// Cloud role for injected offline HTTP fixtures; no real Amazon calls.
+process.env.AMAZON_API_EXECUTION_ROLE = "cloud";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createSponsoredProductsProductAdReader, createSponsoredProductsReadAdapter } from "../src/lib/amazon-ads/sync-adapter";

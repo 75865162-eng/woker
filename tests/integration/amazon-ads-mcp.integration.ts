@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { before, after, test } from "node:test";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { authenticateAmazonMcp, invokeAmazonMcp, manageMcpCredential } from "@/lib/amazon-sync/mcp";
+import { authenticateAmazonMcp, invokeAmazonMcp as invokeUnscopedAmazonMcp, manageMcpCredential } from "@/lib/amazon-sync/mcp";
 import { POST } from "@/app/api/mcp/amazon/route";
 
 if (process.env.AMAZON_SYNC_OFFLINE_FIXTURE !== "1") throw new Error("Disposable runner required");
@@ -13,8 +13,12 @@ const site = "ATVPDKIKX0DER", ca = "A2EUQ1WTGCTBG2", tool = "amazon.ads.entities
 const types = ["SP:campaign", "SP:ad-group", "SP:keyword", "SP:target", "SP:negative-keyword", "SP:negative-target", "SP:campaign-negative-keyword", "SP:campaign-negative-target"];
 let profile = "", caProfile = "", grant = "", token = "", oldToken = "", aliasToken = "", statusToken = "", credentialId = "";
 const originalFetch = globalThis.fetch;
+const selectedPair = { sellerAccountId: seller, marketplaceId: site };
+const invokeAmazonMcp: typeof invokeUnscopedAmazonMcp = (identity, tool, args, ...rest) =>
+  invokeUnscopedAmazonMcp(identity, tool, { ...selectedPair, ...(args as Record<string, unknown>) }, ...rest);
 async function invoke(args = {}, bearer = token) { return invokeAmazonMcp(await authenticateAmazonMcp(`Bearer ${bearer}`), tool, args); }
-async function protocol(method: string, bearer = token, params = {}) {
+async function protocol(method: string, bearer = token, params: Record<string, unknown> = {}) {
+  if (method === "tools/call") params = { ...params, arguments: { ...selectedPair, ...(params.arguments as Record<string, unknown> | undefined) } };
   return POST(new Request("http://localhost/api/mcp/amazon", { method: "POST", headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) }));
 }
 before(async () => {

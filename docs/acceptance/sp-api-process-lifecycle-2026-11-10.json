@@ -1,0 +1,846 @@
+{
+  "environment": "disposable PostgreSQL/Redis, actual registered Worker, real local Next HTTP; mocked Amazon only",
+  "status": "SCENARIOS_PASSED",
+  "fullRequestedLifecycleAccepted": false,
+  "notCovered": [
+    "parser failure recovery",
+    "late corrections outside latest closed day",
+    "all adapters and optional policy combinations"
+  ],
+  "finalTasks": [
+    {
+      "id": "ab043761-a5cb-495b-a73e-a144b97acf57",
+      "resource": "inventory_age",
+      "status": "FAILED",
+      "stage": "REPORT_CREATE_REJECTED",
+      "attempts": 1,
+      "pagesCompleted": 0,
+      "insertedCount": 0,
+      "apiRequests": 4,
+      "throttles": 0
+    },
+    {
+      "id": "2bedb329-27aa-4c8b-b5fb-b803126a7b39",
+      "resource": "reimbursements",
+      "status": "WAITING",
+      "stage": "FETCHING",
+      "attempts": 1,
+      "pagesCompleted": 0,
+      "insertedCount": 0,
+      "apiRequests": 2,
+      "throttles": 0
+    },
+    {
+      "id": "e32bb3f6-6698-43c9-9dc1-e0181935ce4a",
+      "resource": "inventory",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 2,
+      "pagesCompleted": 2,
+      "insertedCount": 53,
+      "apiRequests": 3,
+      "throttles": 0
+    },
+    {
+      "id": "2a8db8fe-a18c-4d90-badc-b158be3c6121",
+      "resource": "inventory",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 2,
+      "pagesCompleted": 2,
+      "insertedCount": 53,
+      "apiRequests": 5,
+      "throttles": 0
+    },
+    {
+      "id": "4b674623-9c88-4534-9b18-6d4fc2908990",
+      "resource": "notifications",
+      "status": "QUEUED",
+      "stage": "FETCHING",
+      "attempts": 2,
+      "pagesCompleted": 0,
+      "insertedCount": 0,
+      "apiRequests": 14,
+      "throttles": 0
+    },
+    {
+      "id": "b3a429ba-e92c-49da-a669-92627312eed0",
+      "resource": "pricing",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 0,
+      "insertedCount": 0,
+      "apiRequests": 0,
+      "throttles": 0
+    },
+    {
+      "id": "bf23a941-8e39-412c-82a1-4e7050c546d3",
+      "resource": "orders",
+      "status": "FAILED",
+      "stage": "WAITING",
+      "attempts": 2,
+      "pagesCompleted": 0,
+      "insertedCount": 0,
+      "apiRequests": 2,
+      "throttles": 0
+    },
+    {
+      "id": "71f52e59-0001-4834-984a-8df1c1bf48e1",
+      "resource": "pricing",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 0,
+      "insertedCount": 0,
+      "apiRequests": 0,
+      "throttles": 0
+    },
+    {
+      "id": "5d6db207-2d30-4688-bd29-7f14e2c83e04",
+      "resource": "settlements",
+      "status": "QUEUED",
+      "stage": "WAITING",
+      "attempts": 1,
+      "pagesCompleted": 0,
+      "insertedCount": 0,
+      "apiRequests": 2,
+      "throttles": 0
+    },
+    {
+      "id": "5237dadb-769f-433f-9a38-a97ced556df9",
+      "resource": "fulfillment",
+      "status": "FAILED",
+      "stage": "WAITING",
+      "attempts": 1,
+      "pagesCompleted": 0,
+      "insertedCount": 0,
+      "apiRequests": 2,
+      "throttles": 0
+    },
+    {
+      "id": "2249969c-efda-48f8-bf94-27f612c3bc11",
+      "resource": "brand_analytics",
+      "status": "FAILED",
+      "stage": "FETCHING",
+      "attempts": 1,
+      "pagesCompleted": 0,
+      "insertedCount": 0,
+      "apiRequests": 2,
+      "throttles": 0
+    },
+    {
+      "id": "8689b13a-b06f-42b7-8746-f7f8c47e5ce4",
+      "resource": "finance",
+      "status": "FAILED",
+      "stage": "WAITING",
+      "attempts": 2,
+      "pagesCompleted": 0,
+      "insertedCount": 0,
+      "apiRequests": 1,
+      "throttles": 0
+    },
+    {
+      "id": "cadf5f8c-3dc5-460d-8856-e6ac7716fad9",
+      "resource": "catalog",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 0,
+      "apiRequests": 2,
+      "throttles": 0
+    },
+    {
+      "id": "8ebd527b-ba99-4bc0-b9a4-928b7763c80a",
+      "resource": "pricing",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 0,
+      "insertedCount": 0,
+      "apiRequests": 0,
+      "throttles": 0
+    },
+    {
+      "id": "b1e4d9f3-7c43-4f98-9c3a-d7242568d183",
+      "resource": "inventory",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 4,
+      "pagesCompleted": 2,
+      "insertedCount": 53,
+      "apiRequests": 5,
+      "throttles": 1
+    },
+    {
+      "id": "5e5d379d-4b5b-43f4-8f3d-2576cbdf67e8",
+      "resource": "inventory_events",
+      "status": "FAILED",
+      "stage": "REPORT_CREATE_REJECTED",
+      "attempts": 1,
+      "pagesCompleted": 0,
+      "insertedCount": 0,
+      "apiRequests": 1,
+      "throttles": 0
+    },
+    {
+      "id": "e2ecb37c-1f04-4702-a072-982787448c58",
+      "resource": "listing_details",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 0,
+      "insertedCount": 0,
+      "apiRequests": 0,
+      "throttles": 0
+    },
+    {
+      "id": "9ca730b1-12c0-4c92-ac89-db75adf01658",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 31,
+      "apiRequests": 7,
+      "throttles": 0
+    },
+    {
+      "id": "998a510f-afb6-4f9c-919c-91b8787cba2a",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 31,
+      "apiRequests": 7,
+      "throttles": 0
+    },
+    {
+      "id": "623c63da-9bdc-48ab-9bad-99d76555238b",
+      "resource": "catalog_items",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 0,
+      "insertedCount": 0,
+      "apiRequests": 0,
+      "throttles": 0
+    },
+    {
+      "id": "36881aa7-e387-449f-ae04-ee8d76e95190",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 31,
+      "apiRequests": 7,
+      "throttles": 0
+    },
+    {
+      "id": "d8904c06-1915-46c1-a109-14966d9b4a1c",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 31,
+      "apiRequests": 7,
+      "throttles": 0
+    },
+    {
+      "id": "876af69f-34e7-48f6-b5c7-89183248cf3e",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 5,
+      "pagesCompleted": 1,
+      "insertedCount": 31,
+      "apiRequests": 12,
+      "throttles": 0
+    },
+    {
+      "id": "6cc7105a-4250-4531-ac21-b3c8960cfa58",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 31,
+      "apiRequests": 7,
+      "throttles": 0
+    },
+    {
+      "id": "afacef8e-2137-43bb-a106-0a2a9f03aa37",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 31,
+      "apiRequests": 7,
+      "throttles": 0
+    },
+    {
+      "id": "b8c2ad3d-8b1a-493f-878b-35eb8fcf1dd3",
+      "resource": "inventory",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 2,
+      "insertedCount": 53,
+      "apiRequests": 3,
+      "throttles": 0
+    },
+    {
+      "id": "5a60737d-e099-4187-8607-714de87491ee",
+      "resource": "inventory",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 2,
+      "pagesCompleted": 2,
+      "insertedCount": 53,
+      "apiRequests": 3,
+      "throttles": 0
+    },
+    {
+      "id": "b782425f-05c3-44a7-adf3-61861b41eb2b",
+      "resource": "inventory",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 2,
+      "insertedCount": 53,
+      "apiRequests": 3,
+      "throttles": 0
+    },
+    {
+      "id": "2d9d1026-8076-4f9f-aafa-aaedc48517d7",
+      "resource": "catalog",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 0,
+      "apiRequests": 2,
+      "throttles": 0
+    },
+    {
+      "id": "e7eeb026-82e6-4084-9ea7-c39af0c365b1",
+      "resource": "pricing",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 0,
+      "insertedCount": 0,
+      "apiRequests": 0,
+      "throttles": 0
+    },
+    {
+      "id": "ce0cefad-e0e7-42b7-9bdf-3ee8614f9003",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 31,
+      "apiRequests": 7,
+      "throttles": 0
+    },
+    {
+      "id": "5ef0257a-2892-49e0-913f-7b7434248372",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 31,
+      "apiRequests": 7,
+      "throttles": 0
+    },
+    {
+      "id": "429e810b-8d94-4cda-8130-d5a3c86f2f96",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 31,
+      "apiRequests": 7,
+      "throttles": 0
+    },
+    {
+      "id": "443fd0d1-31bc-41e6-bf19-2a96c1fe4c71",
+      "resource": "buy_box_history",
+      "status": "FAILED",
+      "stage": "FETCHING",
+      "attempts": 1,
+      "pagesCompleted": 0,
+      "insertedCount": 0,
+      "apiRequests": 2,
+      "throttles": 0
+    },
+    {
+      "id": "56d65361-04c7-4f52-9e19-9bfe1f6d6f74",
+      "resource": "returns",
+      "status": "QUEUED",
+      "stage": "WAITING",
+      "attempts": 1,
+      "pagesCompleted": 0,
+      "insertedCount": 0,
+      "apiRequests": 1,
+      "throttles": 0
+    },
+    {
+      "id": "fc5c56fc-d6b3-430e-8823-4e47b6535d7c",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 31,
+      "apiRequests": 7,
+      "throttles": 0
+    },
+    {
+      "id": "7bbdfce7-d1e9-4e09-89f4-5eb9bfed38e3",
+      "resource": "notifications",
+      "status": "PARTIAL_SUCCESS",
+      "stage": "OBJECTS_UNAVAILABLE",
+      "attempts": 2,
+      "pagesCompleted": 0,
+      "insertedCount": 0,
+      "apiRequests": 52,
+      "throttles": 0
+    },
+    {
+      "id": "83447a9d-802b-485d-805a-8db07f2dfe1f",
+      "resource": "pricing",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 0,
+      "insertedCount": 0,
+      "apiRequests": 0,
+      "throttles": 0
+    },
+    {
+      "id": "a9ff5f63-dd12-4f79-a30e-e47b1ccf59dc",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 31,
+      "apiRequests": 7,
+      "throttles": 0
+    },
+    {
+      "id": "b823961e-f201-4514-8e79-4b1efa3dd6d0",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 31,
+      "apiRequests": 7,
+      "throttles": 0
+    },
+    {
+      "id": "f7cc5fad-b8c3-4881-8ff7-6da88a45c03b",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 31,
+      "apiRequests": 7,
+      "throttles": 0
+    },
+    {
+      "id": "2d3bd598-d2ed-4df6-8668-28bb8226a453",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 31,
+      "apiRequests": 7,
+      "throttles": 0
+    },
+    {
+      "id": "fa5978e3-9c27-41c4-9133-af2910e920fe",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 31,
+      "apiRequests": 7,
+      "throttles": 0
+    },
+    {
+      "id": "54ecf789-4082-489c-aef1-cdcee06e9101",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 31,
+      "apiRequests": 7,
+      "throttles": 0
+    },
+    {
+      "id": "398b4bfe-8ce5-4ca6-a8ab-7569be49eb13",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 31,
+      "apiRequests": 7,
+      "throttles": 0
+    },
+    {
+      "id": "8dd814dd-0f59-43ce-9089-0bd95bce245d",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 31,
+      "apiRequests": 7,
+      "throttles": 0
+    },
+    {
+      "id": "177fea7b-0ee2-4b1c-882a-8c2eac2b738e",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 31,
+      "apiRequests": 7,
+      "throttles": 0
+    },
+    {
+      "id": "9eb2234b-e65b-486c-87d3-db60eba617d4",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 31,
+      "apiRequests": 7,
+      "throttles": 0
+    },
+    {
+      "id": "358321f4-b30f-4f82-a1b3-e7a4a8aa20e0",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 1,
+      "apiRequests": 7,
+      "throttles": 0
+    },
+    {
+      "id": "1a60c2c6-42cc-4933-a6f6-bdebf083fd5e",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 31,
+      "apiRequests": 7,
+      "throttles": 0
+    },
+    {
+      "id": "58301309-225a-4eb7-a9e4-6e3507ba4f99",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 18,
+      "apiRequests": 7,
+      "throttles": 0
+    },
+    {
+      "id": "1253ad5a-556f-4a6c-a463-ab201e7b4f97",
+      "resource": "pricing",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 0,
+      "insertedCount": 0,
+      "apiRequests": 0,
+      "throttles": 0
+    },
+    {
+      "id": "d8aa7c95-a2c7-4122-a3f1-bf4a6a02c46b",
+      "resource": "sales_traffic",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 1,
+      "insertedCount": 31,
+      "apiRequests": 7,
+      "throttles": 0
+    },
+    {
+      "id": "7757a5e0-f610-455e-aeea-601ff8b2cd6b",
+      "resource": "listing_details",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 0,
+      "insertedCount": 0,
+      "apiRequests": 0,
+      "throttles": 0
+    },
+    {
+      "id": "60507286-5a99-40dd-8f8b-caa48d2c3028",
+      "resource": "catalog_items",
+      "status": "SUCCEEDED",
+      "stage": "COMPLETED",
+      "attempts": 1,
+      "pagesCompleted": 0,
+      "insertedCount": 0,
+      "apiRequests": 0,
+      "throttles": 0
+    }
+  ],
+  "evidence": [
+    {
+      "scenario": "OAuth HTTP",
+      "sources": 17,
+      "plans": 17,
+      "tasks": 14,
+      "duplicateCallback": 403
+    },
+    {
+      "scenario": "429 + pagination",
+      "taskId": "b1e4d9f3-7c43-4f98-9c3a-d7242568d183",
+      "status": "RETRY_WAIT",
+      "pages": 1,
+      "requests": 2,
+      "archives": 1,
+      "errorArchives": 1,
+      "published": false
+    },
+    {
+      "scenario": "SIGKILL + lease + publication failure",
+      "taskId": "b1e4d9f3-7c43-4f98-9c3a-d7242568d183",
+      "status": "SUCCEEDED",
+      "attempts": 4,
+      "generation": 4,
+      "requests": 4,
+      "pageOneRequests": 1,
+      "archives": 2,
+      "rows": 53,
+      "publicationRetryRequests": 0
+    },
+    {
+      "scenario": "real HTTP ERP/MCP/Lili",
+      "crossAccountAndSiteDenied": true,
+      "unknownNestedFieldObservations": 50,
+      "total": 53,
+      "firstRows": 50,
+      "lastRows": 3,
+      "sameData": true,
+      "secretsLeaked": false
+    },
+    {
+      "scenario": "duplicate queue delivery",
+      "requests": 0,
+      "rows": 53,
+      "taskId": "b1e4d9f3-7c43-4f98-9c3a-d7242568d183"
+    },
+    {
+      "scenario": "Redis restart + insertion recovery + automatic cadence + old delivery",
+      "insertionInterruptedRows": 50,
+      "insertionInterruptedPages": 1,
+      "insertionRetryRequests": 0,
+      "taskId": "e32bb3f6-6698-43c9-9dc1-e0181935ce4a",
+      "previousTask": "b1e4d9f3-7c43-4f98-9c3a-d7242568d183",
+      "rows": 53,
+      "quantity": 9,
+      "oldDeliveryRequests": 0
+    },
+    {
+      "scenario": "Worker sales 730-day history and recent correction",
+      "recentPublished": true,
+      "creationReconcileRequests": 1,
+      "completedWindows": 24,
+      "coverage": [
+        {
+          "from": "2024-11-10",
+          "to": "2026-11-09"
+        }
+      ],
+      "reports": 24,
+      "requestedWindows": [
+        {
+          "from": "2024-11-09T00:00:00Z",
+          "to": "2024-12-09T23:59:59Z"
+        },
+        {
+          "from": "2024-12-10T00:00:00Z",
+          "to": "2025-01-09T23:59:59Z"
+        },
+        {
+          "from": "2025-01-10T00:00:00Z",
+          "to": "2025-02-09T23:59:59Z"
+        },
+        {
+          "from": "2025-02-10T00:00:00Z",
+          "to": "2025-03-12T23:59:59Z"
+        },
+        {
+          "from": "2025-03-13T00:00:00Z",
+          "to": "2025-04-12T23:59:59Z"
+        },
+        {
+          "from": "2025-04-13T00:00:00Z",
+          "to": "2025-05-13T23:59:59Z"
+        },
+        {
+          "from": "2025-05-14T00:00:00Z",
+          "to": "2025-06-13T23:59:59Z"
+        },
+        {
+          "from": "2025-06-14T00:00:00Z",
+          "to": "2025-07-14T23:59:59Z"
+        },
+        {
+          "from": "2025-07-15T00:00:00Z",
+          "to": "2025-08-14T23:59:59Z"
+        },
+        {
+          "from": "2025-08-15T00:00:00Z",
+          "to": "2025-09-14T23:59:59Z"
+        },
+        {
+          "from": "2025-09-15T00:00:00Z",
+          "to": "2025-10-15T23:59:59Z"
+        },
+        {
+          "from": "2025-10-16T00:00:00Z",
+          "to": "2025-11-15T23:59:59Z"
+        },
+        {
+          "from": "2025-11-16T00:00:00Z",
+          "to": "2025-12-16T23:59:59Z"
+        },
+        {
+          "from": "2025-12-17T00:00:00Z",
+          "to": "2026-01-16T23:59:59Z"
+        },
+        {
+          "from": "2026-01-17T00:00:00Z",
+          "to": "2026-02-16T23:59:59Z"
+        },
+        {
+          "from": "2026-02-17T00:00:00Z",
+          "to": "2026-03-19T23:59:59Z"
+        },
+        {
+          "from": "2026-03-20T00:00:00Z",
+          "to": "2026-04-19T23:59:59Z"
+        },
+        {
+          "from": "2026-04-20T00:00:00Z",
+          "to": "2026-05-20T23:59:59Z"
+        },
+        {
+          "from": "2026-05-21T00:00:00Z",
+          "to": "2026-06-20T23:59:59Z"
+        },
+        {
+          "from": "2026-06-21T00:00:00Z",
+          "to": "2026-07-21T23:59:59Z"
+        },
+        {
+          "from": "2026-07-22T00:00:00Z",
+          "to": "2026-08-21T23:59:59Z"
+        },
+        {
+          "from": "2026-08-22T00:00:00Z",
+          "to": "2026-09-21T23:59:59Z"
+        },
+        {
+          "from": "2026-09-22T00:00:00Z",
+          "to": "2026-10-22T23:59:59Z"
+        },
+        {
+          "from": "2026-10-23T00:00:00Z",
+          "to": "2026-11-09T23:59:59Z"
+        }
+      ],
+      "networkFailures": 2,
+      "automaticRecentWindow": {
+        "reportType": "GET_SALES_AND_TRAFFIC_REPORT",
+        "marketplaceIds": [
+          "ATVPDKIKX0DER"
+        ],
+        "dataStartTime": "2026-11-10T00:00:00Z",
+        "dataEndTime": "2026-11-10T23:59:59Z",
+        "reportOptions": {
+          "dateGranularity": "DAY",
+          "asinGranularity": "CHILD"
+        }
+      }
+    },
+    {
+      "scenario": "zero vs forbidden and domain isolation",
+      "confirmedZeroStatus": "SUCCEEDED",
+      "zeroRawPages": 1,
+      "forbiddenStatus": "FAILED",
+      "forbiddenPublished": false,
+      "forbiddenAttempts": 1,
+      "independentInventoryPublished": true
+    },
+    {
+      "scenario": "actual HTTP timeout",
+      "taskId": "2a8db8fe-a18c-4d90-badc-b158be3c6121",
+      "failedStatus": "RETRY_WAIT",
+      "committedPages": 1,
+      "committedRows": 50,
+      "finalStatus": "SUCCEEDED",
+      "finalRows": 53,
+      "repeatedCompletedPageRequests": 0
+    },
+    {
+      "scenario": "PostgreSQL connection terminated during transaction",
+      "taskId": "5a60737d-e099-4187-8607-714de87491ee",
+      "failedStatus": "RETRY_WAIT",
+      "committedPages": 1,
+      "committedRows": 50,
+      "archives": 2,
+      "requests": 2,
+      "retryRequests": 0,
+      "finalStatus": "SUCCEEDED",
+      "finalRows": 53
+    },
+    {
+      "scenario": "authorization expiry and HTTP OAuth renewal",
+      "expiredRequests": 0,
+      "sources": 17,
+      "plans": 17,
+      "authorizationRevisionAdvanced": true
+    },
+    {
+      "scenario": "ERP/MCP/Lili grant revocation",
+      "erpStatus": 403,
+      "liliStatus": 403,
+      "mcpDenied": true
+    }
+  ],
+  "realAmazonRequests": 0,
+  "productionOperations": false,
+  "fixtureLog": "/var/folders/r2/1864xtpd0xv8n0z_n47d845h0000gn/T/sp-api-process-ZZH9ZX"
+}

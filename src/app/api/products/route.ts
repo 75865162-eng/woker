@@ -1,3 +1,6 @@
+import { amazonDataAccess } from "@/lib/amazon-sync/data-access";
+import { AmazonReadError } from "@/lib/amazon-sync/read-account";
+import { SyncInputError } from "@/lib/amazon-sync/policy";
 import { stripAmazonProductObservations } from "@/lib/products/amazon-field-policy";
 import { readAmazonProductsForSkus } from "@/lib/operations/amazon-products";
 import { NextResponse } from "next/server";
@@ -31,6 +34,8 @@ import { enqueueProductOutboxEvent } from "@/lib/queue";
 import { ProductRecordRevisionConflictError } from "@/lib/products/product-record-repository";
 import { InvalidProductStatusError } from "@/lib/products/status-machine";
 import { saveProductAggregate } from "@/lib/products/product-aggregate-service";
+import { ProductManagementError } from "@/lib/products/management-contract";
+import { normalizeProductListSort } from "@/lib/products/list-sort";
 
 export const runtime = "nodejs";
 
@@ -315,6 +320,7 @@ export async function getProductsResponse(
     const source = normalizeProductListSource(url.searchParams.get("source"));
     const page = Math.max(Number(url.searchParams.get("page")) || 1, 1);
     const pageSize = clampPageSize(url.searchParams.get("pageSize"));
+    const sort = normalizeProductListSort(url.searchParams.get("sortBy"), url.searchParams.get("sortDirection"));
     const search = url.searchParams.get("search")?.trim();
     const status = url.searchParams.get("status");
     const minPrice = parseOptionalNumber(url.searchParams.get("minPrice"));
@@ -359,6 +365,7 @@ export async function getProductsResponse(
       createdByUserId: createdByMe ? user.id : undefined,
       minPrice,
       maxPrice,
+      sort,
       detail: false,
       includeSummary,
     });
@@ -367,14 +374,19 @@ export async function getProductsResponse(
       // Permissions are evaluated per request; snapshot data never enters shared list caches.
       if (payload && typeof payload === "object" && "products" in payload) {
         const list = payload as ProductListResponse;
-        const rolePermissions = permissions ?? await import("@/lib/accounts/role-permissions-server").then((module) => module.getOrganizationRolePermissions(user.organizationId));
-        if (roleCanPerformAction(user.role, "operations", "view", rolePermissions) && list.products.length) {
-          try {
-            const snapshots = await measure("amazonSnapshots", readAmazonProductsForSkus(user.organizationId, scope.workspaceId, list.products.map((row) => row.sku), user.id));
-            payload = { ...list, products: list.products.map((row) => ({ ...row, amazonSnapshots: snapshots.filter((snapshot) => snapshot.sellerSku === row.sku) })) };
-          } catch {
-            payload = { ...list, products: list.products.map((row) => ({ ...row, amazonSnapshotError: "Amazon 快照暂不可读；公司商品资料正常。" })) };
-          }
+        const products = list.products.map(stripAmazonProductObservations);
+        let amazonAccounts: Array<{ id: string; displayName: string }> = [];
+        try {
+          const access = await amazonDataAccess({ organizationId: user.organizationId, workspaceId: scope.workspaceId }, user.id);
+          amazonAccounts = await prisma.sellerAccount.findMany({ where: { organizationId: user.organizationId, workspaceId: scope.workspaceId, id: { in: access.sellerIds }, status: "active" }, select: { id: true, displayName: true }, orderBy: { id: "asc" } });
+          const sellerAccountId = url.searchParams.get("sellerAccountId") || (access.sellerIds.length === 1 ? access.sellerIds[0] : "");
+          if (!sellerAccountId) throw new AmazonReadError("ACCOUNT_SCOPE_REQUIRED", "请选择单个 Amazon 账号后查询。", 400);
+          const snapshots = await measure("amazonSnapshots", readAmazonProductsForSkus(user.organizationId, scope.workspaceId, products.map(row => row.sku), user.id, { sellerAccountId }));
+          payload = { ...list, amazonAccounts, products: products.map(row => ({ ...row, amazonSnapshots: snapshots.filter(snapshot => snapshot.sellerSku === row.sku) })) };
+        } catch (error) {
+          const amazonSnapshotErrorCode = error instanceof AmazonReadError ? error.businessCode : error instanceof SyncInputError && error.status === 403 ? "ACCOUNT_ACCESS_DENIED" : "AMAZON_READ_UNAVAILABLE";
+          const amazonSnapshotError = error instanceof SyncInputError ? error.message : "Amazon 快照暂不可读；公司商品资料正常。";
+          payload = { ...list, amazonAccounts, products: products.map(row => ({ ...row, amazonSnapshotError, amazonSnapshotErrorCode })) };
         }
       }
       const totalMs = roundDuration(performance.now() - startedAt);
@@ -383,7 +395,7 @@ export async function getProductsResponse(
         response.headers.set("Server-Timing", createServerTimingHeader(timings, totalMs));
         response.headers.set("X-Product-Cache", result === "cache-hit" ? "hit" : "miss");
         response.headers.set("X-Product-Data-Tier", "summary-row");
-        response.headers.set("Cache-Control", "private, max-age=0, stale-while-revalidate=30");
+        response.headers.set("Cache-Control", "private, no-store");
         return response;
       }
 
@@ -403,7 +415,7 @@ export async function getProductsResponse(
       response.headers.set("Server-Timing", createServerTimingHeader(timings, totalMs));
       response.headers.set("X-Product-Cache", result === "cache-hit" ? "hit" : "miss");
       response.headers.set("X-Product-Data-Tier", "summary-row");
-      response.headers.set("Cache-Control", "private, max-age=0, stale-while-revalidate=30");
+      response.headers.set("Cache-Control", "private, no-store");
       return response;
     };
     const measure = async <T>(name: string, promise: Promise<T>) => {
@@ -471,6 +483,15 @@ export async function getProductsResponse(
         maxPrice,
       });
       const listOffset = (page - 1) * pageSize;
+      const sortExpressions = {
+        sku: Prisma.sql`COALESCE(s."sku", r."sku")`,
+        chineseName: Prisma.sql`COALESCE(s."chineseName", r."chineseName")`,
+        createdAt: Prisma.sql`COALESCE(s."createdAt", r."createdAt")`,
+        purchasePrice: Prisma.sql`COALESCE(s."purchasePrice", r."purchasePrice")`,
+        status: Prisma.sql`COALESCE(s."status", r."status")`,
+        supplierName: Prisma.sql`COALESCE(s."supplierName", r."supplierName")`,
+      } satisfies Record<typeof sort.field, Prisma.Sql>;
+      const sortDirection = Prisma.raw(sort.direction === "asc" ? "ASC" : "DESC");
       const recordsPromise = measure(
         "records",
         prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
@@ -585,7 +606,7 @@ export async function getProductsResponse(
             LIMIT 1
           ) image_asset ON true
           ${listWhereSql}
-          ORDER BY COALESCE(s."createdAt", r."createdAt") DESC, COALESCE(s."sku", r."sku") ASC
+          ORDER BY ${sortExpressions[sort.field]} ${sortDirection}, COALESCE(s."sku", r."sku") ASC, r."id" ASC
           OFFSET ${listOffset}
           LIMIT ${pageSize}
         `),
@@ -826,6 +847,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ product: persisted.productToSave });
   } catch (error) {
+    if (error instanceof ProductManagementError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof ProductRecordRevisionConflictError) {
       return NextResponse.json(
         { error: error.message, conflict: true, currentRevision: error.currentRevision },

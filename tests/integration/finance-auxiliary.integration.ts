@@ -1,0 +1,44 @@
+import assert from 'node:assert/strict';
+import { prisma } from '../../src/lib/db/prisma';
+import { mutateFinanceAuxiliary, queryFinanceAuxiliary } from '../../src/lib/finance/auxiliary-service';
+import { mutateFinanceLedger } from '../../src/lib/finance/ledger-service';
+import type { WmsScope } from '../../src/lib/wms/contracts';
+type Row={id:string;revision:number;status:string};
+function entity(value:unknown,key:string){const row=(value as Record<string,Row>)[key];assert.ok(row);return row;}
+export async function financeAuxiliaryFixture(scope:WmsScope,reviewer:WmsScope){
+ const book=entity(await mutateFinanceLedger(scope,{action:'create-book',code:'AUX',name:'Synthetic auxiliaries',currency:'USD'}),'book');
+ const period=entity(await mutateFinanceLedger(scope,{action:'create-period',bookId:book.id,code:'2026-11',start:'2026-11-01',end:'2026-11-30'}),'period');
+ await mutateFinanceLedger(reviewer,{action:'open-period',periodId:period.id,revision:1});
+ const expense=entity(await mutateFinanceLedger(scope,{action:'create-subject',bookId:book.id,code:'EXP',name:'Expense',normalSide:'DEBIT'}),'subject');
+ const cash=entity(await mutateFinanceLedger(scope,{action:'create-subject',bookId:book.id,code:'BANK',name:'Bank',normalSide:'DEBIT'}),'subject');
+ const type=entity(await mutateFinanceAuxiliary(reviewer,{action:'create-type',bookId:book.id,code:'DEPT',name:'Target department'}),'type');
+ const otherType=entity(await mutateFinanceAuxiliary(reviewer,{action:'create-type',bookId:book.id,code:'EMP',name:'Target employee'}),'type');
+ const item=entity(await mutateFinanceAuxiliary(reviewer,{action:'create-item',bookId:book.id,typeId:type.id,code:'WAREHOUSE',name:'Warehouse'}),'item');
+ const category=entity(await mutateFinanceAuxiliary(reviewer,{action:'create-voucher-type',bookId:book.id,code:'PAYMENT',name:'Payment voucher',policyReference:'Target classifications v1'}),'voucherType');
+ await mutateFinanceAuxiliary(reviewer,{action:'configure-subject',bookId:book.id,subjectId:expense.id,typeId:type.id,required:true,policyReference:'Target expense dimensions v1'});
+ const voucher=entity(await mutateFinanceLedger(scope,{action:'create-voucher',periodId:period.id,idempotencyKey:'AUX-VOUCHER',sourceKey:'AUX-VOUCHER',date:'2026-11-12',lines:[{subjectId:expense.id,debit:'12.123456',credit:'0'},{subjectId:cash.id,debit:'0',credit:'12.123456'}]}),'voucher');
+ await assert.rejects(()=>mutateFinanceLedger(reviewer,{action:'review-voucher',voucherId:voucher.id,revision:1}));
+ const annotate={action:'annotate-voucher',bookId:book.id,voucherId:voucher.id,revision:1,assignments:[{lineNumber:1,typeId:type.id,itemId:item.id}],voucherTypeId:category.id,evidence:'Synthetic department allocation'};
+ await assert.rejects(()=>mutateFinanceAuxiliary(scope,{...annotate,assignments:[{lineNumber:1,typeId:otherType.id,itemId:item.id}]}));
+ await assert.rejects(()=>mutateFinanceAuxiliary({...scope,workspaceId:'other'},annotate));
+ const concurrent=await Promise.allSettled(Array.from({length:6},()=>mutateFinanceAuxiliary(scope,annotate)));
+ assert.equal(concurrent.filter(result=>result.status==='fulfilled').length,1);
+ assert.equal((await prisma.financeVoucher.findUniqueOrThrow({where:{id:voucher.id}})).revision,2);
+ const current=await queryFinanceAuxiliary(scope,new URLSearchParams({bookId:book.id,voucherId:voucher.id}));assert.equal(current.assignments[0].itemId,item.id);assert.equal(current.profile?.voucherTypeId,category.id);
+ await assert.rejects(()=>prisma.financeAuxiliaryItem.update({where:{id:item.id},data:{name:'Rewritten'}}));
+ await assert.rejects(()=>mutateFinanceLedger(scope,{action:'review-voucher',voucherId:voucher.id,revision:2}));
+ await mutateFinanceLedger(reviewer,{action:'review-voucher',voucherId:voucher.id,revision:2});
+ await assert.rejects(()=>mutateFinanceAuxiliary(scope,{...annotate,revision:3}));
+ await assert.rejects(()=>prisma.financeVoucherAuxiliary.deleteMany({where:{voucherId:voucher.id}}));
+ await assert.rejects(()=>prisma.financeVoucherProfile.deleteMany({where:{voucherId:voucher.id}}));
+ await mutateFinanceAuxiliary(reviewer,{action:'configure-subject',bookId:book.id,subjectId:expense.id,typeId:otherType.id,required:true,policyReference:'New target policy after review'});
+ await mutateFinanceLedger(reviewer,{action:'post-voucher',voucherId:voucher.id,revision:3});
+ const reviewAudit=await prisma.auditLog.findFirstOrThrow({where:{entityId:voucher.id,action:'finance.voucher.review'}});assert.ok((reviewAudit.metadata as Record<string,unknown>).auxiliaryEvidence);
+ const reversal=entity(await mutateFinanceLedger(scope,{action:'reverse-voucher',voucherId:voucher.id,periodId:period.id,idempotencyKey:'AUX-REV',sourceKey:'AUX-REV',date:'2026-11-13'}),'voucher');
+ const inherited=await queryFinanceAuxiliary(scope,new URLSearchParams({bookId:book.id,voucherId:reversal.id}));assert.equal(inherited.assignments[0].itemId,item.id);assert.equal(inherited.profile?.voucherTypeId,category.id);
+ await assert.rejects(()=>mutateFinanceAuxiliary(scope,{...annotate,voucherId:reversal.id}));
+ await mutateFinanceLedger(reviewer,{action:'review-voucher',voucherId:reversal.id,revision:1});
+ await mutateFinanceLedger(reviewer,{action:'post-voucher',voucherId:reversal.id,revision:2});
+ assert.equal((await queryFinanceAuxiliary({...scope,workspaceId:'other'},new URLSearchParams({bookId:book.id,voucherId:voucher.id}))).assignments.length,0);
+ console.log('PASS: target auxiliary catalogs, mandatory dimensions, category binding, six concurrent revision checks, cross-workspace isolation, independent review, DB immutability and inherited reversal dimensions');
+}

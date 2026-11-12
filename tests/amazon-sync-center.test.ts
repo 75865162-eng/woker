@@ -22,7 +22,7 @@ test("data domain catalog has explicit execution and planning metadata", () => {
     assert.ok(Number.isInteger(domain.frequency) && domain.frequency > 0);
     assert.ok(Number.isInteger(domain.priority) && domain.priority >= 1 && domain.priority <= 4);
   }
-  assert.deepEqual(syncDomains.filter(domain => domain.implemented).map(domain => domain.id).sort(), ["brand_analytics", "buy_box_history", "catalog", "catalog_items", "finance", "fulfillment", "inventory", "inventory_age", "inventory_events", "listing_details", "notifications", "orders", "pricing", "reimbursements", "returns", "sales_traffic", "settlements"]);
+  assert.deepEqual(syncDomains.filter(domain => domain.implemented).map(domain => domain.id).sort(), ["brand_analytics", "buy_box_history", "catalog", "catalog_items", "fba_customer_sales", "fba_fulfilled_inventory", "fba_inventory_by_country", "fba_inventory_report", "fba_overage_fees", "fba_shipments", "fee_preview", "finance", "fulfillment", "inventory", "inventory_age", "inventory_events", "listing_details", "long_term_storage_fees", "mfn_returns", "notifications", "orders", "pricing", "promotions", "recommended_removals", "reimbursements", "removal_order_report", "removal_shipment_report", "reserved_inventory", "returns", "sales_traffic", "settlements", "storage_fees", "stranded_inventory"]);
 });
 test("plans reject unimplemented domains, incremental modes and invalid scope/frequency", () => {
   const p = { name: "inventory", resource: "inventory", enabled: false, intervalMinutes: 60, sourceIds: ["one"] };
@@ -153,4 +153,25 @@ test("incremental operator guidance and error codes distinguish resources withou
     assert.equal(incrementalOperatorAction(resource, "SUCCEEDED"), null);
   }
   assert.equal(incrementalOperatorAction("inventory", "FAILED"), null);
+});
+
+
+test("Listing attribute conflicts cannot be silently merged across pages; absent legacy JSON stays compatible", async () => {
+  const { assertConsistentSnapshotRows, validateCatalogPage } = await import("@/lib/amazon-sync/processor");
+  const base = { sellerSku: "SKU", asin: "B012345678", listingStatus: null, fulfillmentType: null, sourceUpdatedAt: null };
+  assert.doesNotThrow(() => assertConsistentSnapshotRows([base, { ...base, listingAttributes: null }], "catalog"));
+  assert.throws(() => assertConsistentSnapshotRows([{ ...base, listingAttributes: { itemName: "A" } }, { ...base, listingAttributes: { itemName: "B" } }], "catalog"), /冲突/);
+  assert.throws(() => validateCatalogPage({ items: [{ sku: "SKU", summaries: [{ marketplaceId: "US", itemName: "A" }] }, { sku: "SKU", summaries: [{ marketplaceId: "US", itemName: "B" }] }] }, "US"), /冲突/);
+});
+
+// Driver shape captured by terminating a real disposable PostgreSQL backend.
+test("Prisma pg ORM disconnects retry from their nested SQLSTATE without retrying constraint errors", async () => {
+  const { Prisma } = await import("@prisma/client");
+  for (const originalCode of ["57P01", "57P02", "57P03", "08006", "40001", "40P01", "23505"]) {
+    const error = new Prisma.PrismaClientKnownRequestError("private database details", { code: "P2039", clientVersion: "fixture", meta: { driverAdapterError: { cause: { kind: "postgres", originalCode } } } });
+    const result = classifySyncFailure(error);
+    assert.equal(result.retryable, originalCode !== "23505");
+    assert.equal(result.code, originalCode === "23505" ? "VALIDATION_OR_CONFIGURATION" : "DATABASE_TRANSIENT");
+    assert.ok(!result.message.includes("private database details"));
+  }
 });

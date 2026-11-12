@@ -31,7 +31,8 @@ export async function refreshDueReplenishmentPlans(now = new Date()) {
       if (inputs.historicalSource) {
         const store = await prisma.sellfoxStore.findFirst({ where: { id: inputs.historicalSource.storeId, organizationId: policy.organizationId, workspaceId: policy.workspaceId } });
         if (!store) throw new Error("历史数据店铺映射已失效。");
-        const from = new Date(Date.parse(today) - 28 * 86400000).toISOString().slice(0, 10);
+        const historyDays = inputs.matureDemandModel === "WIMOOR_7_15_30" ? 30 : 28;
+        const from = new Date(Date.parse(today) - historyDays * 86400000).toISOString().slice(0, 10);
         const history = await prisma.$queryRaw<Array<{ reportDate: string; msku: string; quantity: number | null; complete: boolean }>>`
           SELECT "reportDate", msku, quantity, complete FROM sellfox_sales_daily
           WHERE "organizationId" = ${policy.organizationId} AND "workspaceId" = ${policy.workspaceId}

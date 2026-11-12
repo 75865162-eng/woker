@@ -1,3 +1,4 @@
+import { assertAmazonCloudExecution } from "@/lib/amazon/execution-role";
 import { adsRegionHosts, type AdsRegion } from "./oauth-contract";
 import { AdsSyncError, type AdsSyncStage } from "./sync-policy";
 
@@ -216,6 +217,7 @@ async function postSponsoredProductsList(
   if (!isAdsRegion(input.region) || !/^\d{1,40}$/.test(input.profileId) || !input.clientId || !input.accessToken || (input.cursor !== null && (!input.cursor || input.cursor.length > 16384))) {
     throw new AdsSyncError(`ADS_${resource}_INPUT_INVALID`);
   }
+  assertAmazonCloudExecution();
   let response: Response;
   try {
     response = await fetcher(`${adsRegionHosts[input.region]}${path}`, {
