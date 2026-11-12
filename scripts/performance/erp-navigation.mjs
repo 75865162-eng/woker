@@ -95,7 +95,7 @@ try {
   const config = path.join(directory, "prisma.config.ts");
   writeFileSync(config, `import {defineConfig} from ${JSON.stringify(path.join(root, "node_modules/prisma/config.js"))};export default defineConfig({schema:${JSON.stringify(path.join(sourceDir, "prisma/schema.prisma"))},datasource:{url:${JSON.stringify(databaseUrl)}}});`);
   const generatorSchema = path.join(directory, "schema.prisma");
-  writeFileSync(generatorSchema, readFileSync(path.join(sourceDir, "prisma/schema.prisma"), "utf8").replace(/provider\s*=\s*"prisma-client"/, 'provider = "prisma-client-js"').replace(/output\s*=\s*"[^"]+"/, `output = ${JSON.stringify(path.join(root, "node_modules/@prisma/client"))}`));
+  writeFileSync(generatorSchema, readFileSync(path.join(sourceDir, "prisma/schema.prisma"), "utf8"));
   await run([path.join(root, "node_modules/prisma/build/index.js"), "generate", "--schema", generatorSchema], env);
   await run([path.join(root, "node_modules/prisma/build/index.js"), "db", "push", "--config", config], env);
   const passwordHash = `scrypt:fixture:${scryptSync("fixture_password", "fixture", 64).toString("base64url")}`;
@@ -145,13 +145,13 @@ try {
     await pause(2500);
   }
   // DOM identity detects remounts without adding production-only test hooks.
-  await page.locator('nav[aria-label="业务导航"]').evaluate(el => { window.__perfOriginalNav = el; });
+  await page.locator("aside nav").first().evaluate(el => { window.__perfOriginalNav = el; });
   publicRequests.length = 0;
   const warm = [], serverResponses = [];
   for (let i = 0; i < 9; i++) {
     const item = pages[i % pages.length];
     const at = performance.now();
-    await page.getByRole("link", { name: item.link, exact: true }).click();
+    await page.locator(`aside nav a[href="${item.path}"]`).click();
     await page.getByRole("heading", { name: item.heading, exact: true }).waitFor();
     await page.waitForURL(base + item.path);
     warm.push(performance.now() - at);
@@ -159,7 +159,7 @@ try {
     await page.evaluate(() => performance.clearResourceTimings());
   }
   const navigationRequests = [...publicRequests];
-  const shellPersisted = await page.evaluate(() => window.__perfOriginalNav === document.querySelector('nav[aria-label="业务导航"]'));
+  const shellPersisted = await page.evaluate(() => window.__perfOriginalNav === document.querySelector("aside nav"));
   await pause(1800);
   publicRequests.length = 0;
   await page.evaluate(() => performance.clearResourceTimings());
