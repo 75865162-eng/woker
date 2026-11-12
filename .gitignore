@@ -23,6 +23,7 @@
 /.next-build*/
 /.next-amazon-live/
 /.next-auth-check/
+/.next-verify/
 /out/
 
 # production

@@ -3,7 +3,7 @@ import {assertFinanceAction} from './access';
 import { readFxRevaluationSource } from './fx-revaluation-service';
 import { readWmsInventoryRiskSource } from '@/lib/wms/inventory-risk-service';
 import { readWmsCostAdjustmentSource } from '@/lib/wms/cost-adjustment-service';
-import { readPurchasePaymentFinanceSource } from '@/lib/procurement/finance-source-query';
+import { readPurchaseInvoiceFinanceSource, readPurchasePaymentFinanceSource } from '@/lib/procurement/finance-source-query';
 import { readPurchaseRefundFinanceSource } from '@/lib/procurement/finance-source-query';
 import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
@@ -17,7 +17,7 @@ import { readWmsFinanceSource } from '@/lib/wms/finance-source-query';
 import { createLedgerVoucher } from './ledger-service';
 import { mapSourceLines, parseSourceIdentity, sourceFingerprint, validateSourceDate, type FinanceSourceKind } from './source-rules';
 
-const readSource = (tx: Tx, scope: WmsScope, kind: FinanceSourceKind, id: string) => kind==='WMS_OVERSEAS_CHARGE'?readWmsOverseasChargeSource(tx,scope,id):kind === 'FX_REVALUATION' ? readFxRevaluationSource(tx,scope,id) : kind === 'WMS_INVENTORY_RISK' ? readWmsInventoryRiskSource(tx, scope, id) : kind === 'PURCHASE_PAYMENT' ? readPurchasePaymentFinanceSource(tx, scope, id) : kind === 'PURCHASE_REFUND' ? readPurchaseRefundFinanceSource(tx, scope, id) : kind === 'WMS_COST_ADJUSTMENT' ? readWmsCostAdjustmentSource(tx, scope, id) : kind === 'FBA_ADJUSTMENT' ? readFbaFinanceSource(tx, scope, id) : readWmsFinanceSource(tx, scope, id);
+const readSource = (tx: Tx, scope: WmsScope, kind: FinanceSourceKind, id: string) => kind==='WMS_OVERSEAS_CHARGE'?readWmsOverseasChargeSource(tx,scope,id):kind === 'FX_REVALUATION' ? readFxRevaluationSource(tx,scope,id) : kind === 'WMS_INVENTORY_RISK' ? readWmsInventoryRiskSource(tx, scope, id) : kind === 'PURCHASE_PAYMENT' ? readPurchasePaymentFinanceSource(tx, scope, id) : kind === 'PURCHASE_REFUND' ? readPurchaseRefundFinanceSource(tx, scope, id) : kind === 'PURCHASE_INVOICE' ? readPurchaseInvoiceFinanceSource(tx, scope, id) : kind === 'WMS_COST_ADJUSTMENT' ? readWmsCostAdjustmentSource(tx, scope, id) : kind === 'FBA_ADJUSTMENT' ? readFbaFinanceSource(tx, scope, id) : readWmsFinanceSource(tx, scope, id);
 export async function previewFinanceSource(scope: WmsScope, params: URLSearchParams) {
   const { kind, id } = parseSourceIdentity(params.get('kind'), params.get('id'));
   return prisma.$transaction(async tx => {

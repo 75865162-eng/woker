@@ -1,4 +1,4 @@
-import { Activity, Banknote, Bot, Boxes, ChartNoAxesCombined, ClipboardList, History, ListChecks, PackageSearch, SearchCheck, Settings, Sparkles, Store, Truck, UploadCloud, UsersRound, Warehouse } from "lucide-react";
+import { Activity, Banknote, Bot, Boxes, ChartNoAxesCombined, ClipboardList, History, ListChecks, PackageSearch, ReceiptText, SearchCheck, Settings, Sparkles, Store, Truck, UploadCloud, UsersRound, Warehouse } from "lucide-react";
 
 export const accountMenuItems = [
   { href: "/tasks", label: "任务中心", icon: ListChecks, moduleId: "tasks" },
@@ -29,9 +29,13 @@ export const navigationGroups = [
     { href: "/logistics/warehouse?tab=reservations", label: "仓库出库", icon: PackageSearch, moduleId: "wms" },
     { href: "/logistics/warehouse?tab=balances", label: "公司库存与调拨", icon: Warehouse, moduleId: "wms" },
     { href: "/logistics/warehouse?tab=transfers", label: "调拨流水", icon: Warehouse, moduleId: "wms" },
+    { href: "/operations/assembly", label: "组装", icon: Boxes, moduleId: "wms" },
     { href: "/logistics", label: "物流文件工作台", icon: PackageSearch, moduleId: "logistics" },
   ] },
   { label: "采购管理", items: [
+    { href: "/operations/purchase-plans", label: "采购计划", icon: ClipboardList, moduleId: "operations" },
+    { href: "/operations/purchase-invoices", label: "采购发票", icon: ReceiptText, moduleId: "operations" },
+    { href: "/operations/ops-extensions", label: "运营资料与滞销", icon: Boxes, moduleId: "operations" },
     { href: "/operations?view=purchase-orders", label: "采购订单", icon: ClipboardList, moduleId: "operations" },
     { href: "/operations?view=suppliers", label: "供应商档案", icon: Store, moduleId: "operations" },
   ] },

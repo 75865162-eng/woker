@@ -4,7 +4,7 @@ import Image from "next/image";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { accountMenuItems, navigationGroups } from "./business-navigation";
 import { Button } from "@/components/ui/button";
@@ -57,7 +57,6 @@ export function AppShellClient({
   authorizationRevision?: string;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [contentRevision, setContentRevision] = useState(0);
   const [enableShellEnhancements, setEnableShellEnhancements] = useState(false);
@@ -160,12 +159,9 @@ export function AppShellClient({
               <Link
                 key={item.href}
                 href={item.href}
-                prefetch={false}
                 aria-current={active ? "page" : undefined}
                 aria-label={item.label}
                 title={item.label}
-                onMouseEnter={() => router.prefetch(item.href)}
-                onFocus={() => router.prefetch(item.href)}
                 className={cn(
                   "flex h-10 w-10 cursor-pointer items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand",
                   active && "bg-brand text-white hover:bg-brand hover:text-white",
@@ -215,10 +211,7 @@ export function AppShellClient({
                       <Link
                         key={item.href}
                         href={item.href}
-                        prefetch={false}
                         className={itemClassName}
-                        onMouseEnter={() => router.prefetch(item.href)}
-                        onFocus={() => router.prefetch(item.href)}
                       >
                         <Icon className="h-4 w-4" />
                         {item.label}

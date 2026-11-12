@@ -159,7 +159,7 @@ export async function mutateFinanceLedger(scope: WmsScope, body: Record<string, 
   if (action === 'create-voucher') {
     strictKeys(body, ['action', 'periodId', 'idempotencyKey', 'sourceKey', 'date', 'memo', 'lines']);
     const periodId = requireText(body.periodId, '期间 ID'), idempotencyKey = requireText(body.idempotencyKey, '幂等键'), sourceKey = requireText(body.sourceKey, '凭证来源标识');
-    if (/^(?:FBA-ADJUSTMENT|WMS-COMMAND|WMS-COST-ADJUSTMENT|WMS-INVENTORY-RISK|WMS-OVERSEAS-CHARGE|TEMPLATE-SOURCE|PURCHASE-PAYMENT|PURCHASE-REFUND|PROFIT-LOSS|VOUCHER-IMPORT|EXTERNAL-FINANCE|FX-REVALUATION):/.test(sourceKey)) throw new WmsError('该来源标识仅允许经核算来源交接创建。', 400);
+    if (/^(?:FBA-ADJUSTMENT|WMS-COMMAND|WMS-COST-ADJUSTMENT|WMS-INVENTORY-RISK|WMS-OVERSEAS-CHARGE|TEMPLATE-SOURCE|PURCHASE-PAYMENT|PURCHASE-REFUND|PURCHASE-INVOICE|PROFIT-LOSS|VOUCHER-IMPORT|EXTERNAL-FINANCE|FX-REVALUATION):/.test(sourceKey)) throw new WmsError('该来源标识仅允许经核算来源交接创建。', 400);
     const date = dateText(body.date, '会计日期'), memo = typeof body.memo === 'string' ? body.memo.trim().slice(0, 500) : '';
     if (!Array.isArray(body.lines) || body.lines.length < 2 || body.lines.length > 200) throw new WmsError('凭证须有 2 至 200 条分录。', 400);
     const lines = body.lines.map((raw, index) => { const line = record(raw); strictKeys(line, ['subjectId', 'debit', 'credit', 'memo']); return { subjectId: requireText(line.subjectId, `第 ${index + 1} 行科目`), debit: decimalText(line.debit, `第 ${index + 1} 行借方`), credit: decimalText(line.credit, `第 ${index + 1} 行贷方`), memo: typeof line.memo === 'string' ? line.memo.trim().slice(0, 240) : '' }; });
@@ -216,7 +216,7 @@ export async function mutateFinanceLedger(scope: WmsScope, body: Record<string, 
   if (action === 'reverse-voucher') {
     strictKeys(body, ['action', 'voucherId', 'periodId', 'idempotencyKey', 'sourceKey', 'date']);
     const voucherId = requireText(body.voucherId, '原凭证 ID'), periodId = requireText(body.periodId, '冲销期间 ID'), idempotencyKey = requireText(body.idempotencyKey, '幂等键'), sourceKey = requireText(body.sourceKey, '冲销来源标识'), date = dateText(body.date, '冲销日期');
-    if (/^(?:FBA-ADJUSTMENT|WMS-COMMAND|WMS-COST-ADJUSTMENT|WMS-INVENTORY-RISK|WMS-OVERSEAS-CHARGE|TEMPLATE-SOURCE|PURCHASE-PAYMENT|PURCHASE-REFUND|PROFIT-LOSS|VOUCHER-IMPORT|EXTERNAL-FINANCE|FX-REVALUATION):/.test(sourceKey)) throw new WmsError('冲销来源标识不能占用核算来源命名空间。', 400);
+    if (/^(?:FBA-ADJUSTMENT|WMS-COMMAND|WMS-COST-ADJUSTMENT|WMS-INVENTORY-RISK|WMS-OVERSEAS-CHARGE|TEMPLATE-SOURCE|PURCHASE-PAYMENT|PURCHASE-REFUND|PURCHASE-INVOICE|PROFIT-LOSS|VOUCHER-IMPORT|EXTERNAL-FINANCE|FX-REVALUATION):/.test(sourceKey)) throw new WmsError('冲销来源标识不能占用核算来源命名空间。', 400);
     return prisma.$transaction(async tx => {
       await assertFinanceAction(tx,scope,['open-period','review-voucher','post-voucher','close-period','close-business-period','reopen-period'].includes(action)?'approve':'create');
       const originalIdentity = await tx.financeVoucher.findFirst({ where: { ...scoped(scope), id: voucherId }, select: { bookId: true, periodId: true } });

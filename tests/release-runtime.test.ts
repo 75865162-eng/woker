@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 
 // Extract functions only: never execute a release or contact systemd.
-const source = readFileSync(new URL("../scripts/server-artifact-release.sh", import.meta.url), "utf8");
+const source = readFileSync(new URL("../scripts/server-artifact-release.sh", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const functions = ["assert_service_release", "restart_runtime_service", "install_runtime_from_release"].map(name => {
   const match = source.match(new RegExp(`^${name}\\(\\) \\{[\\s\\S]*?^\\}(?=\\n\\n)`, "m"));
   assert.ok(match, name); return match[0];
@@ -64,7 +64,7 @@ test("a failed service restart cannot become a successful release", () => {
 });
 
 test("SP-API service boots from persistent server configuration and survives delayed dependencies", () => {
-  const unit = readFileSync(new URL("../deploy/systemd/amazon-sync-worker.service", import.meta.url), "utf8");
+  const unit = readFileSync(new URL("../deploy/systemd/amazon-sync-worker.service", import.meta.url), "utf8").replace(/\r\n/g, "\n");
   const section = (name: string) => unit.split(`[${name}]`)[1]?.split(/\n\[/)[0] ?? "";
   assert.match(section("Unit"), /^StartLimitIntervalSec=0$/m, "dependency outages must not exhaust the systemd startup limit");
   for (const directive of [

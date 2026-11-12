@@ -1,6 +1,7 @@
 import {validateValuationAction} from './valuation-service';
 import {validateConsumableIssue} from './consumable-service';
 import {validateSkuConversion,validateConversionReversal} from './sku-conversion-service';
+import {validateAssemblyCompletion} from './assembly-service';
 import {validateTransferOrderAction} from './transfer-order-service';
 import { validateLocationFreeze } from "./location-freeze-service";
 import { prisma } from "@/lib/db/prisma";
@@ -23,6 +24,7 @@ async function validateApprovalTarget(tx: Tx, scope: WmsScope, command: WmsComma
   if (command.payload.action === "CONSUMABLE_ISSUE") await validateConsumableIssue(tx,scope,command);
   if (command.payload.action === "SKU_CONVERSION_REVERSE") await validateConversionReversal(tx,scope,command);
   if (command.payload.action === "SKU_CONVERT") await validateSkuConversion(tx, scope, command);
+  if (command.payload.action === "ASSEMBLY_COMPLETE") await validateAssemblyCompletion(tx, scope, command);
   if (command.payload.action === "TRANSFER") await validateTransfer(tx, scope, command);
   if (command.payload.action === "RELEASE" || command.payload.action === "DISPATCH") await validateReservationAction(tx, scope, command);
 }

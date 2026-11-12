@@ -1,0 +1,4 @@
+# Shell scripts and systemd units are executed on Linux; CRLF breaks bash parsing and
+# makes release assertions line-based comparisons fail on Windows checkouts.
+*.sh text eol=lf
+*.service text eol=lf

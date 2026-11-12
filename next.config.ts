@@ -23,6 +23,15 @@ const nextConfig: NextConfig = {
     "next-server": localOnlyTraceExcludes,
     "/**/*": localOnlyTraceExcludes,
   },
+  experimental: {
+    // Keep client-side router cache entries alive so re-visiting a page does not
+    // re-hit the server. Default is 0 for dynamic routes, which made every
+    // sidebar click a full RSC round-trip.
+    staleTimes: {
+      dynamic: 30,
+      static: 300,
+    },
+  },
 };
 
 export default nextConfig;

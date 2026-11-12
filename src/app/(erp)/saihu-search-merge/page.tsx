@@ -11,7 +11,6 @@ export default function SaihuSearchMergePage() {
       actions={
         <Link
           href="/history"
-          prefetch={false}
           className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-semibold text-foreground shadow-sm transition-colors hover:bg-surface-muted"
         >
           <History className="h-4 w-4" />
