@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
+import { ProductManagementError } from "@/lib/products/management-contract";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { recordDataChangeVersion, type VersionedEntityType } from "@/lib/audit/versioning";
 import {
@@ -344,6 +345,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if (error instanceof ProductManagementError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof ProductRecordRevisionConflictError) {
       return NextResponse.json(
         { error: error.message, conflict: true, currentRevision: error.currentRevision },

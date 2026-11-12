@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Database, Menu, RefreshCw } from "lucide-react";
 import { AdsAccounts } from "./ads-accounts";
+import { AdsBusinessChanges } from "./ads-business-changes";
 import { reportMetricFields, type ReportCompleteness } from "@/lib/amazon-ads/report-completeness";
 
 type Profile = { profileRecordId: string; amazonProfileId: string; countryCode: string; marketplaceId: string | null; currencyCode: string | null; timezone: string | null; sellerAccountId: string | null; sellerName: string | null };
@@ -104,7 +105,7 @@ function TaskEvidence({ id, profileId }: { id: string; profileId: string }) {
 }
 function RawEntity({ row }: { row: Entity }) {
   const [open, setOpen] = useState(false);
-  return <details onToggle={event => setOpen(event.currentTarget.open)}><summary>原始维度与来源</summary>{open && <><dl><dt>Amazon ID</dt><dd>{row.externalId}</dd><dt>本地同步</dt><dd>{date(row.syncedAt)}</dd><dt>来源状态</dt><dd>{row.sourceTask ? `${row.sourceTask.status} / ${row.sourceTask.stage}` : "未知"}</dd></dl><TaskEvidence id={row.sourceTaskId} profileId={row.profileId} /><pre>{JSON.stringify(row.payload, null, 2)}</pre></>}</details>;
+  return <><AdsBusinessChanges key={`${row.profileId}/${row.entityType}/${row.externalId}`} profileId={row.profileId} entityType={row.entityType} externalId={row.externalId} /><details onToggle={event => setOpen(event.currentTarget.open)}><summary>原始维度与来源</summary>{open && <><dl><dt>Amazon ID</dt><dd>{row.externalId}</dd><dt>本地同步</dt><dd>{date(row.syncedAt)}</dd><dt>来源状态</dt><dd>{row.sourceTask ? `${row.sourceTask.status} / ${row.sourceTask.stage}` : "未知"}</dd></dl><TaskEvidence id={row.sourceTaskId} profileId={row.profileId} /><pre>{JSON.stringify(row.payload, null, 2)}</pre></>}</details></>;
 }
 
 function CampaignList({ navigate, groups = false, domain }: { navigate: (path: string) => void; groups?: boolean; domain?: typeof groupDomains[number] }) {

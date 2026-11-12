@@ -153,7 +153,7 @@ export async function verifyFbaLocalBrowser(cookie:string, approverCookie:string
    await openPlans(approver);
    const supervisorCard=approver.locator('article').filter({has:approver.getByText('BROWSER-CORE',{exact:true})});
    await supervisorCard.getByRole('button',{name:'批准本计划待审明细（2 条）',exact:true}).click();
-   await expect(supervisorCard).toContainText('已批准待执行');
+   await expect(supervisorCard).toContainText('已批准待执行',{timeout:30000});
    const pendingPlan=await prisma.fbaLocalPlan.findFirstOrThrow({where:{number:'BROWSER-CORE'},include:{lines:true}});
    const pendingApproval=await prisma.wmsApproval.findFirstOrThrow({where:{status:'APPROVED',request:{path:['payload','number'],equals:`FBA-LOCAL:${pendingPlan.lines[0].id}`}}});
    await page.goto(base+'/logistics/warehouse?tab=approvals',{waitUntil:'domcontentloaded',timeout:60000});

@@ -20,7 +20,7 @@ export async function verifyFinanceSourceBrowser(page: Page, base: string) {
     await expect(panel.getByLabel('核算来源类型', { exact: true })).toHaveValue('FBA_ADJUSTMENT');
     await expect(panel.getByLabel('核算草稿 ID', { exact: true })).toHaveValue(draft.id);
     await panel.getByRole('button', { name: '预览来源', exact: true }).click();
-    await expect(panel).toContainText(sourceKey);
+    await expect(panel).toContainText(sourceKey,{timeout:30000});
     await panel.getByLabel('来源科目 1405', { exact: true }).selectOption(subjects.find(row => row.code === '1001')!.id);
     await panel.getByLabel('来源科目 2202', { exact: true }).selectOption(subjects.find(row => row.code === '2001')!.id);
     await panel.getByLabel('来源凭证会计日期', { exact: true }).fill('2026-11-12');

@@ -70,6 +70,7 @@ before(async () => {
     const p = await prisma.amazonAdsSyncPlan.create({ data: { ...scope, id: randomUUID(), profileId: prof.id, actorUserId: owner, sellerAccountId: seller, authorizationRevision: 1, status: "ACTIVE" } });
     if (external === "999") { profile = prof.id; plan = p.id; } else { otherProfile = prof.id; secondPlan = p.id; }
   }
+  await prisma.amazonDataAccessGrant.create({ data: { ...scope, id: randomUUID(), userId: owner, sellerAccountId: seller, marketplaceIds: [site], actions: ["view"] } });
   await prisma.amazonDataAccessGrant.create({ data: { ...scope, id: randomUUID(), userId: member, sellerAccountId: seller, marketplaceIds: [site], actions: ["view"] } });
   await prisma.amazonDataAccessGrant.create({ data: { ...scope, id: randomUUID(), userId: siteViewer, sellerAccountId: seller, marketplaceIds: [site], actions: ["view"] } });
 });
@@ -104,11 +105,12 @@ test("nine real adapter collections persist via worker, checkpoint, queue and re
   assert.equal(await prisma.amazonAdsEntityRecord.count({ where: { ...scope, profileId: profile } }), 9);
   await drain((await newTask(secondPlan, otherProfile)).id);
   assert.equal(await prisma.amazonAdsEntityRecord.count({ where: scope }), 18);
-  const data = await queryAdsEntities(scope, member, new URLSearchParams({ pageSize: "2", sort: "externalId", direction: "desc" }));
+  const data = await queryAdsEntities(scope, member, new URLSearchParams({ internalProfileId: profile, pageSize: "2", sort: "externalId", direction: "desc" }));
   assert.equal(data.total, 9); assert.equal(data.rows.length, 2); assert.ok(data.rows.every(r => r.profileId === profile && r.amazonProfileId === "999"));
-  const forbidden = await queryAdsEntities(scope, member, new URLSearchParams({ internalProfileId: otherProfile })); assert.equal(forbidden.total, 0);
-  assert.equal((await queryAdsEntities(scope, member, new URLSearchParams({ campaignId: "101", adGroupId: "201" }))).total, 6);
-  assert.equal((await queryAdsEntities(scope, member, new URLSearchParams({ search: "Stored Alpha", state: "ARCHIVED" }))).total, 1);
+  const sameAccount = await queryAdsEntities(scope, member, new URLSearchParams({ internalProfileId: otherProfile })); assert.equal(sameAccount.total, 9);
+  assert.ok(sameAccount.rows.every(row => row.profileId === otherProfile), "account grant includes other sites while Profile filter stays exact");
+  assert.equal((await queryAdsEntities(scope, member, new URLSearchParams({ internalProfileId: profile, campaignId: "101", adGroupId: "201" }))).total, 6);
+  assert.equal((await queryAdsEntities(scope, member, new URLSearchParams({ internalProfileId: profile, search: "Stored Alpha", state: "ARCHIVED" }))).total, 1);
   assert.equal((await queryAdsEntities(scope, member, new URLSearchParams({ entityType: "SP:campaign-negative-keyword" }))).rows[0].parentExternalId, "101");
   assert.throws(() => parseAdsEntityQuery(new URLSearchParams({ sort: "payload" })), /排序/);
   assert.throws(() => parseAdsEntityQuery(new URLSearchParams({ from: "2026-01-01" })), /日期/);
@@ -187,7 +189,7 @@ test("authenticated data API returns server totals, bounded filters and denies m
   const profileListResponse = await listAdsProfiles(new Request("http://localhost/api/integrations/amazon/ads/profiles", { headers: viewerHeaders }));
   assert.equal(profileListResponse.status, 200);
   const profileList = await profileListResponse.json() as { profiles: Array<{ profileId: string }>; sellers: Array<{ id: string }> };
-  assert.deepEqual(profileList.profiles.map(item => item.profileId), ["999"]);
+  assert.deepEqual(profileList.profiles.map(item => item.profileId).sort(), ["888", "999"]);
   assert.deepEqual(profileList.sellers.map(item => item.id), [seller]);
   const scopedSync = await syncStatus(new Request(`http://localhost/api/integrations/amazon/ads/sync?profileId=${profile}&status=SUCCEEDED&page=1&pageSize=1`, { headers: viewerHeaders }));
   assert.equal(scopedSync.status, 200);
@@ -200,7 +202,8 @@ test("authenticated data API returns server totals, bounded filters and denies m
   const hiddenSync = await syncStatus(new Request(`http://localhost/api/integrations/amazon/ads/sync?profileId=${otherProfile}`, { headers: viewerHeaders }));
   assert.equal(hiddenSync.status, 200);
   const hiddenPayload = await hiddenSync.json() as { plans: Array<{ profileId: string }>; taskHistory: Array<{ profileId: string }>; taskPagination: { total: number } };
-  assert.deepEqual(hiddenPayload.plans, []); assert.deepEqual(hiddenPayload.taskHistory, []); assert.equal(hiddenPayload.taskPagination.total, 0);
+  assert.ok(hiddenPayload.plans.length > 0); assert.ok(hiddenPayload.plans.every(row => row.profileId === otherProfile));
+  assert.ok(hiddenPayload.taskHistory.length > 0); assert.ok(hiddenPayload.taskHistory.every(row => row.profileId === otherProfile)); assert.ok(hiddenPayload.taskPagination.total > 0);
   assert.equal((await syncStatus(new Request("http://localhost/api/integrations/amazon/ads/sync?status=not-a-state", { headers: viewerHeaders }))).status, 400);
   assert.equal((await syncStatus(new Request("http://localhost/api/integrations/amazon/ads/sync?pageSize=101", { headers: viewerHeaders }))).status, 400);
 });
@@ -235,7 +238,12 @@ test("task detail API paginates attempts and exposes only scoped report provenan
   const hiddenTask = await newTask(secondPlan, otherProfile);
   await prisma.amazonAdsSyncTask.update({ where: { id: hiddenTask.id }, data: { status: "FAILED", finishedAt: new Date() } });
   const hidden = await GET(new Request(`http://localhost/api/integrations/amazon/ads/sync?taskId=${hiddenTask.id}`, { headers }));
-  assert.equal(hidden.status, 404, "Profile outside the viewer's Marketplace grant is hidden");
+  assert.equal(hidden.status, 200, "assigned account grants reads across its sites");
+  await prisma.amazonDataAccessGrant.updateMany({ where: { ...scope, userId: siteViewer }, data: { enabled: false } });
+  try {
+    const revoked = await GET(new Request(`http://localhost/api/integrations/amazon/ads/sync?taskId=${hiddenTask.id}`, { headers }));
+    assert.equal(revoked.status, 403, "revoking account assignment withholds task detail immediately");
+  } finally { await prisma.amazonDataAccessGrant.updateMany({ where: { ...scope, userId: siteViewer }, data: { enabled: true } }); }
 });
 
 test("cancellation closes only the latest attempt and fences a stale dispatch", async () => {

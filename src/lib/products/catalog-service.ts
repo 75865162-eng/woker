@@ -1,3 +1,4 @@
+import { queryProductListingChoices } from './management-service';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '@/lib/db/prisma';
 import { assertWorkspaceAccess } from '@/lib/workspace/access';
@@ -15,12 +16,13 @@ export async function queryProductCatalog(scope: ProductCatalogScope, params: UR
   if (search.length > 100) throw new ProductManagementError('搜索词过长。');
   const kind = params.get('kind');
   const where = { organizationId: scope.organizationId, workspaceId: scope.workspaceId };
-  const [catalogs, suppliers, products] = await Promise.all([
+  const [catalogs, suppliers, products, listingChoices] = await Promise.all([
     prisma.productCatalogEntry.findMany({ where: { ...where, ...(kind ? { kind: catalogKind(kind) } : {}), ...(search ? { name: { contains: search, mode: 'insensitive' as const } } : {}) }, orderBy: [{ name: 'asc' }, { id: 'asc' }], take: 101 }),
     prisma.supplier.findMany({ where: { organizationId: scope.organizationId, ...(search ? { name: { contains: search, mode: 'insensitive' as const } } : {}) }, select: { id: true, name: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }], take: 101 }),
     prisma.productRecord.findMany({ where: { ...where, ...(search ? { OR: [{ sku: { contains: search, mode: 'insensitive' as const } }, { chineseName: { contains: search, mode: 'insensitive' as const } }] } : {}) }, select: { id: true, sku: true, chineseName: true }, orderBy: [{ sku: 'asc' }, { id: 'asc' }], take: 101 }),
+    queryProductListingChoices(where, scope.actor),
   ]);
-  return { catalogs: catalogs.slice(0, 100), suppliers: suppliers.slice(0, 100), products: products.slice(0, 100), truncated: catalogs.length > 100 || suppliers.length > 100 || products.length > 100 };
+  return { listingChoices, catalogs: catalogs.slice(0, 100), suppliers: suppliers.slice(0, 100), products: products.slice(0, 100), truncated: catalogs.length > 100 || suppliers.length > 100 || products.length > 100 };
 }
 export async function saveProductCatalog(scope: ProductCatalogScope, body: Record<string, unknown>) {
   const allowed = ['id', 'revision', 'kind', 'code', 'name', 'color', 'notes', 'enabled', 'workspaceId'];

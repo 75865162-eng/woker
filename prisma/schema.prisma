@@ -50,6 +50,8 @@ model Organization {
 }
 
 model User {
+  adsChangesCreated AmazonAdsChangeDraft[] @relation("AdsChangeCreator")
+  adsChangesReviewed AmazonAdsChangeDraft[] @relation("AdsChangeReviewer")
   wmsOutbounds WmsOutbound[] @relation("WmsOutboundCreator")
   fbaLocalPlans FbaLocalPlan[]
   wmsCountedLines         WmsStocktakeLine[]
@@ -1661,6 +1663,8 @@ model AmazonAdsAuthorization {
 }
 
 model AmazonAdsProfile {
+  businessChanges AmazonAdsChangeDraft[]
+  entityHistory AmazonAdsEntityHistory[]
   id                 String   @id
   organizationId     String
   workspaceId        String   @default("default")
@@ -1763,6 +1767,7 @@ model AmazonAdsSyncTask {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   entities            AmazonAdsEntityRecord[]
+  entityHistory       AmazonAdsEntityHistory[]
   attemptRuns         AmazonAdsSyncAttempt[]
   domainStates        AmazonAdsSyncDomainState[]
   reportRequests      AmazonAdsReportRequest[]
@@ -5843,5 +5848,50 @@ model ProductCatalogEntry {
   workspace WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
   @@unique([organizationId, workspaceId, id])
   @@unique([organizationId, workspaceId, kind, code])
-  @@index([organizationId, workspaceId, kind, enabled, name])
+  @@index([organizationId, workspaceId, kind, enabled, name], map: "ProductCatalogEntry_scope_kind_enabled_name")
+}
+
+model AmazonAdsChangeDraft {
+  id String @id
+  organizationId String
+  workspaceId String
+  profileId String
+  entityType String
+  externalId String
+  status String @default("DRAFT")
+  revision Int @default(1)
+  requestKey String
+  before Json
+  patch Json
+  snapshotHash String
+  reason String
+  createdBy String
+  reviewedBy String?
+  decisionReason String?
+  expiresAt DateTime @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  profile AmazonAdsProfile @relation(fields: [organizationId, workspaceId, profileId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict, map: "AdsChangeDraft_profile_fkey")
+  creator User @relation("AdsChangeCreator", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  reviewer User? @relation("AdsChangeReviewer", fields: [reviewedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([organizationId, workspaceId, profileId, createdBy, requestKey], map: "AdsChangeDraft_request_key")
+  @@index([organizationId, workspaceId, profileId, status, createdAt], map: "AmazonAdsChangeDraft_scope_status")
+}
+
+model AmazonAdsEntityHistory {
+  id String @id
+  organizationId String
+  workspaceId String
+  profileId String
+  entityType String
+  externalId String
+  sourceTaskId String
+  before Json?
+  after Json
+  observationHash String
+  observedAt DateTime @default(now()) @db.Timestamptz(3)
+  profile AmazonAdsProfile @relation(fields: [organizationId, workspaceId, profileId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict, map: "AdsEntityHistory_profile_fkey")
+  sourceTask AmazonAdsSyncTask @relation(fields: [organizationId, workspaceId, sourceTaskId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: Restrict, map: "AdsEntityHistory_task_fkey")
+  @@unique([organizationId, workspaceId, profileId, entityType, externalId, sourceTaskId, observationHash], map: "AdsEntityHistory_observation_key")
+  @@index([organizationId, workspaceId, profileId, entityType, externalId, observedAt], map: "AdsEntityHistory_entity_time_idx")
 }

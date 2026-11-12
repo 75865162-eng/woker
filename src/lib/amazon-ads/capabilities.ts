@@ -75,7 +75,7 @@ function capability(product: AdsCapabilityProduct, domain: AdsCapabilityDomain):
       endpoints: [endpoint], entityType, storage: "CURRENT_ENTITY_SNAPSHOT", query: "ENTITY_QUERY",
       ui: "SYNCED_DATA", mcpTool: "amazon.ads.entities.list",
       evidence: ["src/lib/amazon-ads/sync-adapter.ts", "src/lib/amazon-ads/sync-processor.ts", "docs/amazon-ads-api-integration.md"],
-      limitations: ["Current snapshot only; missing rows are not deletions.", "Whole-domain atomic publication and historical object versions are not implemented."],
+      limitations: ["Current snapshot only; missing rows are not deletions.", "Whole-domain atomic publication is not implemented. Optional persisted observations cover successful collected snapshot differences only; they are not complete Amazon change history."],
     };
   }
   if (reports.has(domain)) return {

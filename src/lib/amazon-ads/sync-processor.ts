@@ -1,3 +1,4 @@
+import { recordAdsEntityObservation } from "./entity-history";
 import { assertAmazonCloudExecution } from "@/lib/amazon/execution-role";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
@@ -99,11 +100,12 @@ export async function processAmazonAdsSyncTask(taskId: string, dispatchVersion: 
       for (const entity of page.entities) {
         const where = { organizationId_workspaceId_profileId_entityType_externalId: { ...scope, profileId: initial.profileId, entityType: entity.entityType, externalId: entity.externalId } };
         const normalized = normalizeAdsEntity(entity.payload);
-        const exists = await tx.amazonAdsEntityRecord.findUnique({ where, select: { id: true, sourceUpdatedAt: true, sourceTask: { select: { createdAt: true, id: true } } } });
+        const exists = await tx.amazonAdsEntityRecord.findUnique({ where, select: { id: true, payload: true, state: true, sourceUpdatedAt: true, sourceTask: { select: { createdAt: true, id: true } } } });
         // A current snapshot cannot be replaced by an older task or source observation.
         if (exists && (exists.sourceTask.createdAt > initial.createdAt
           || (exists.sourceTask.createdAt.getTime() === initial.createdAt.getTime() && exists.sourceTask.id > initial.id)
           || (exists.sourceUpdatedAt && (!entity.sourceUpdatedAt || exists.sourceUpdatedAt > new Date(entity.sourceUpdatedAt))))) continue;
+        if (process.env.AMAZON_ADS_ENTITY_HISTORY_ENABLED === "1") await recordAdsEntityObservation(tx, { scope, profileId: initial.profileId, entityType: entity.entityType, externalId: entity.externalId, sourceTaskId: initial.id, before: exists ? { state: exists.state, payload: exists.payload } : null, after: { state: entity.state ?? null, payload: entity.payload as Prisma.JsonValue } });
         await tx.amazonAdsEntityRecord.upsert({ where, create: { id: randomUUID(), ...scope, profileId: initial.profileId, entityType: entity.entityType, externalId: entity.externalId, parentExternalId: entity.parentExternalId ?? null, state: entity.state ?? null, ...normalized, payload: json(entity.payload), sourceUpdatedAt: entity.sourceUpdatedAt ? new Date(entity.sourceUpdatedAt) : null, sourceTaskId: initial.id }, update: { parentExternalId: entity.parentExternalId ?? null, state: entity.state ?? null, ...normalized, payload: json(entity.payload), sourceUpdatedAt: entity.sourceUpdatedAt ? new Date(entity.sourceUpdatedAt) : null, sourceTaskId: initial.id, syncedAt: new Date() } });
         if (exists) updatedCount += 1; else insertedCount += 1;
       }

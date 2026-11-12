@@ -22,6 +22,7 @@ async function setup(page: Page, mode = "", imageAssets?: Product["imageAssets"]
   await page.route("http://127.0.0.1:43219/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
+    if (url.pathname === "/api/products/catalogs") return route.fulfill({ json: { catalogs: [], suppliers: [], products: [], listingChoices: [], truncated: false } });
     if (url.pathname === "/api/products" && request.method() === "POST") {
       state.saves++;
       const { product } = request.postDataJSON() as { product: Product };
@@ -430,4 +431,25 @@ test("production conflict UI omits full JSON and supports using the server versi
   await page.getByRole("button", { name: "使用服务器版本" }).click();
   await expect(nameInput(page)).toHaveValue("服务器版本");
   expect(state.saves).toBe(1);
+});
+
+test('商品原编辑器保存并回读外箱、组合品和授权刊登标识', async ({ page }) => {
+  const state = await setup(page);
+  await page.route('**/api/products/catalogs?*', route => route.fulfill({ json: { catalogs: [], suppliers: [], products: [{ id: 'fixture-part', sku: 'PART-FIXTURE', chineseName: '隔离配件' }], listingChoices: [{ sellerAccountId: 'fixture-seller', sellerName: '隔离授权店铺', marketplaceId: 'FIXTURE-SITE' }], truncated: false } }));
+  await page.getByRole('region', { name: '商品管理', exact: true }).getByRole('textbox').first().fill('PART');
+  await page.getByRole('button', { name: '添加子商品', exact: true }).click();
+  await page.getByLabel('子商品', { exact: true }).selectOption('fixture-part');
+  await page.getByLabel('组成用量', { exact: true }).fill('3');
+  await page.getByLabel('长 cm', { exact: true }).fill('32.123456');
+  await page.getByRole('button', { name: '添加刊登标识', exact: true }).click();
+  await page.getByLabel('刊登店铺与站点').selectOption(JSON.stringify(['fixture-seller', 'FIXTURE-SITE']));
+  await page.getByLabel('卖家 SKU', { exact: true }).fill('SELLER-FIXTURE');
+  await page.getByLabel('FNSKU', { exact: true }).fill('X001FIXTURE');
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await expect.poll(() => state.saves).toBe(1);
+  expect(state.product.management).toMatchObject({ carton: { lengthCm: '32.123456', widthCm: null }, components: [{ productRecordId: 'fixture-part', quantity: 3 }], listingIdentifiers: [{ sellerAccountId: 'fixture-seller', marketplaceId: 'FIXTURE-SITE', fnsku: 'X001FIXTURE' }] });
+  await page.reload();
+  await expect(page.getByLabel('长 cm', { exact: true })).toHaveValue('32.123456');
+  await expect(page.getByLabel('组成用量', { exact: true })).toHaveValue('3');
+  await expect(page.getByLabel('FNSKU', { exact: true })).toHaveValue('X001FIXTURE');
 });
