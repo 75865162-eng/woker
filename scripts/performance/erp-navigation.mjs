@@ -94,6 +94,7 @@ try {
   };
   const config = path.join(directory, "prisma.config.ts");
   writeFileSync(config, `import {defineConfig} from ${JSON.stringify(path.join(root, "node_modules/prisma/config.js"))};export default defineConfig({schema:${JSON.stringify(path.join(sourceDir, "prisma/schema.prisma"))},datasource:{url:${JSON.stringify(databaseUrl)}}});`);
+  await run([path.join(root, "node_modules/prisma/build/index.js"), "generate", "--config", config], env);
   await run([path.join(root, "node_modules/prisma/build/index.js"), "db", "push", "--config", config], env);
   const passwordHash = `scrypt:fixture:${scryptSync("fixture_password", "fixture", 64).toString("base64url")}`;
   for (const [org, user] of [["perf-org", "perf-user"], ["other-org", "other-user"]]) {
