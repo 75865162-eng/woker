@@ -39,6 +39,7 @@
     "verify:assembly": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/smoke-assembly.ts",
     "verify:invoice": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/smoke-invoice-source.ts",
     "verify:ops": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/smoke-ops-extensions.ts --in-place",
+    "verify:ext": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/smoke-ext-domains.ts",
     "test:e2e": "playwright test",
     "performance:dev": "node scripts/performance/erp-navigation.mjs --mode=dev --output=outputs/performance/dev.json",
     "performance:build": "node scripts/performance/erp-navigation.mjs --mode=production --output=outputs/performance/build.json",

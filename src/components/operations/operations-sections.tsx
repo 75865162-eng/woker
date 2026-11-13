@@ -92,6 +92,22 @@ export const operationsSections: OperationsSection[] = [
       { view: "buyer-messages", label: "买家消息与邀评", pending: { source: "Messaging、Solicitations", fields: "可用消息动作、邀评资格与动作", requirement: "需核验订单及可用动作并接入；消息、邀评为外部发送动作，此入口不发送任何内容。" } },
       { view: "account-health", label: "账户健康与卖家绩效", pending: { source: "适用卖家绩效报告", fields: "接口或报告实际支持的卖家绩效指标", requirement: "需逐站点核验可用报告和字段；不把同步数据质量当作 Amazon 账户健康。" } }],
   },
+  {
+    id: "ext", label: "补全业务域（对齐 wimoor）",
+    fields: "费用与利润测算、评论与差评、跟卖与调价、销售计划与预测、请款/换货/报价、VAT 台账、多渠道店铺与订单、字典与自定义字段",
+    source: "本系统自建业务表与人工录入；Amazon 侧接入后由同步任务补数，不依赖第三方采集",
+    boundary: "全部域写入均带组织/工作区隔离、版本乐观锁与审计；调价只出建议不自动改线上价，税务归集只汇总不改发票。",
+    entries: [
+      { view: "ext-calculators", label: "计算器中心", href: "/operations/calculators" },
+      { view: "ext-reviews", label: "评论与店铺绩效", href: "/operations/reviews" },
+      { view: "ext-repricing", label: "跟卖与调价", href: "/operations/repricing" },
+      { view: "ext-sales-plans", label: "销售计划与预测", href: "/operations/sales-plans" },
+      { view: "ext-procurement-collab", label: "采购协同", href: "/operations/procurement-collab" },
+      { view: "ext-tax", label: "税务与发票台账", href: "/operations/tax" },
+      { view: "ext-multi-channel", label: "多渠道经营", href: "/operations/multi-channel" },
+      { view: "ext-dictionary", label: "数据字典与自定义字段", href: "/operations/data-dictionary" },
+    ],
+  },
 ];
 
 export const operationsEntries = operationsSections.flatMap(section => section.entries);

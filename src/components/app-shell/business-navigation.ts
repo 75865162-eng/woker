@@ -1,4 +1,4 @@
-import { Activity, Banknote, Bot, Boxes, ChartNoAxesCombined, ClipboardList, History, ListChecks, PackageSearch, ReceiptText, SearchCheck, Settings, Sparkles, Store, Truck, UploadCloud, UsersRound, Warehouse } from "lucide-react";
+import { Activity, Banknote, BookMarked, Bot, Boxes, Calculator, ChartNoAxesCombined, ClipboardList, Handshake, History, Landmark, ListChecks, PackageSearch, ReceiptText, SearchCheck, Settings, Sparkles, Star, Store, Tags, Target, Truck, UploadCloud, UsersRound, Warehouse } from "lucide-react";
 
 export const accountMenuItems = [
   { href: "/tasks", label: "任务中心", icon: ListChecks, moduleId: "tasks" },
@@ -38,6 +38,7 @@ export const navigationGroups = [
     { href: "/operations/ops-extensions", label: "运营资料与滞销", icon: Boxes, moduleId: "operations" },
     { href: "/operations?view=purchase-orders", label: "采购订单", icon: ClipboardList, moduleId: "operations" },
     { href: "/operations?view=suppliers", label: "供应商档案", icon: Store, moduleId: "operations" },
+    { href: "/operations/procurement-collab", label: "采购协同", icon: Handshake, moduleId: "operations" },
   ] },
   { label: "FBA 物流", items: [
     { href: "/operations?view=fulfillment", label: "FBA 在途货件", icon: Truck, moduleId: "operations" },
@@ -51,21 +52,28 @@ export const navigationGroups = [
     { href: "/operations?view=reimbursements", label: "FBA 赔偿", icon: Banknote, moduleId: "operations" },
     { href: "/operations?view=expense-management", label: "ERP 费用单", icon: Banknote, moduleId: "operations" },
     { href: "/sellfox/performance", label: "Sellfox 经营报表", icon: ChartNoAxesCombined, moduleId: "sellfox" },
+    { href: "/operations/tax", label: "税务与发票", icon: Landmark, moduleId: "operations" },
   ] },
   { label: "广告管理", items: [
     { href: "/amazon-ads/campaigns", label: "Amazon Ads", icon: Activity, moduleId: "workspace" },
     { href: "/workspace", label: "PPC Bulk 优化", icon: UploadCloud, moduleId: "workspace" },
     { href: "/operations?view=ads", label: "PPC 经营指标", icon: ChartNoAxesCombined, moduleId: "operations" },
+    { href: "/operations/repricing", label: "跟卖与调价", icon: Tags, moduleId: "operations" },
   ] },
   { label: "数据中心", items: [
     { href: "/operations?view=sales-traffic", label: "销售与流量", icon: ChartNoAxesCombined, moduleId: "operations" },
     { href: "/operations?view=brand_analytics", label: "品牌分析", icon: SearchCheck, moduleId: "operations" },
     { href: "/operations", label: "同步中心", icon: Activity, moduleId: "operations" },
     { href: "/sellfox", label: "Sellfox 数据", icon: Store, moduleId: "sellfox" },
+    { href: "/operations/reviews", label: "评论与店铺绩效", icon: Star, moduleId: "operations" },
+    { href: "/operations/sales-plans", label: "销售计划与预测", icon: Target, moduleId: "operations" },
+    { href: "/operations/multi-channel", label: "多渠道经营", icon: Store, moduleId: "operations" },
   ] },
   { label: "系统管理", items: [
     { href: "/operations?view=connections", label: "Amazon 账号与站点", icon: Store, moduleId: "operations" },
     { href: "/amazon-ads/accounts", label: "Ads 账号授权", icon: Activity, moduleId: "workspace" },
+    { href: "/operations/calculators", label: "计算器中心", icon: Calculator, moduleId: "operations" },
+    { href: "/operations/data-dictionary", label: "数据字典", icon: BookMarked, moduleId: "operations" },
     ...accountMenuItems,
   ] },
   { label: "其他工作区", items: [

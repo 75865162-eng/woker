@@ -54,6 +54,23 @@ model Organization {
   carriers                       Carrier[]
   thirdPartyWarehouses           ThirdPartyWarehouse[]
   unsalableAssessments           UnsalableAssessment[]
+  calcSchemes                    CalcScheme[]
+  reviewRecords                  ReviewRecord[]
+  storePerformanceSnapshots      StorePerformanceSnapshot[]
+  repricingRules                 RepricingRule[]
+  competitorOfferWatches         CompetitorOfferWatch[]
+  repricingQueueItems            RepricingQueueItem[]
+  salesPlans                     SalesPlan[]
+  purchasePaymentRequests        PurchasePaymentRequest[]
+  purchaseExchangeOrders         PurchaseExchangeOrder[]
+  supplierQuotations             SupplierQuotation[]
+  taxInvoices                    TaxInvoice[]
+  taxFilingPeriods               TaxFilingPeriod[]
+  multiChannelAccounts           MultiChannelAccount[]
+  multiChannelOrders             MultiChannelOrder[]
+  dataDictionaries               DataDictionary[]
+  dataDictionaryItems            DataDictionaryItem[]
+  customFieldDefinitions         CustomFieldDefinition[]
 }
 
 model User {
@@ -153,6 +170,23 @@ model WorkspaceScope {
   carriers                       Carrier[]
   thirdPartyWarehouses           ThirdPartyWarehouse[]
   unsalableAssessments           UnsalableAssessment[]
+  calcSchemes                    CalcScheme[]
+  reviewRecords                  ReviewRecord[]
+  storePerformanceSnapshots      StorePerformanceSnapshot[]
+  repricingRules                 RepricingRule[]
+  competitorOfferWatches         CompetitorOfferWatch[]
+  repricingQueueItems            RepricingQueueItem[]
+  salesPlans                     SalesPlan[]
+  purchasePaymentRequests        PurchasePaymentRequest[]
+  purchaseExchangeOrders         PurchaseExchangeOrder[]
+  supplierQuotations             SupplierQuotation[]
+  taxInvoices                    TaxInvoice[]
+  taxFilingPeriods               TaxFilingPeriod[]
+  multiChannelAccounts           MultiChannelAccount[]
+  multiChannelOrders             MultiChannelOrder[]
+  dataDictionaries               DataDictionary[]
+  dataDictionaryItems            DataDictionaryItem[]
+  customFieldDefinitions         CustomFieldDefinition[]
 
   @@id([organizationId, id])
 }
@@ -6417,4 +6451,497 @@ model UnsalableAssessment {
   @@unique([organizationId, workspaceId, id])
   @@unique([organizationId, workspaceId, warehouseId, asOfDate], map: "UnsalableAssessment_day_key")
   @@index([organizationId, workspaceId, asOfDate])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 功能补全：wimoor 有、woker 缺的 8 个业务域
+// 统一口径：scope（organizationId + workspaceId）+ revision 乐观锁 + createdBy 审计。
+// 跨表引用除主子表外一律存 ID 文本，避免在迁移期引入多余外键阻塞线上写入。
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// 计算器中心：FBA 费用测算与利润测算方案。inputs/result 为快照，改口径不影响历史方案。
+model CalcScheme {
+  id             String         @id @default(cuid())
+  organizationId String
+  workspaceId    String         @default("default")
+  name           String
+  /// FBA_FEE 费用测算 / PROFIT 利润测算
+  kind           String         @default("PROFIT")
+  marketplace    String         @default("US")
+  currency       String         @default("CNY")
+  inputs         Json
+  result         Json
+  notes          String         @default("")
+  createdBy      String
+  revision       Int            @default(1)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, name])
+  @@index([organizationId, workspaceId, kind, createdAt])
+}
+
+/// 评论与差评跟踪。externalId 为平台侧唯一标识，手工录入留空。
+model ReviewRecord {
+  id             String         @id @default(cuid())
+  organizationId String
+  workspaceId    String         @default("default")
+  marketplace    String         @default("US")
+  asin           String         @default("")
+  sellerSku      String         @default("")
+  rating         Int
+  /// POSITIVE / NEUTRAL / NEGATIVE
+  sentiment      String         @default("NEUTRAL")
+  title          String         @default("")
+  content        String         @default("")
+  reviewer       String         @default("")
+  reviewedAt     DateTime       @db.Date
+  /// MANUAL / SPAPI_REPORT / IMPORT
+  source         String         @default("MANUAL")
+  externalId     String?
+  /// NEW / REPLIED / IGNORED
+  status         String         @default("NEW")
+  replyText      String         @default("")
+  repliedAt      DateTime?
+  createdBy      String
+  revision       Int            @default(1)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, externalId], map: "ReviewRecord_external_key")
+  @@index([organizationId, workspaceId, sentiment, reviewedAt])
+  @@index([organizationId, workspaceId, asin, reviewedAt])
+}
+
+/// 店铺绩效快照。比率统一万分比（120 = 1.20%），阈值判定在服务层做，不改写平台原值。
+model StorePerformanceSnapshot {
+  id                     String         @id @default(cuid())
+  organizationId         String
+  workspaceId            String         @default("default")
+  marketplace            String         @default("US")
+  periodStart            DateTime       @db.Date
+  periodEnd              DateTime       @db.Date
+  totalOrders            Int            @default(0)
+  orderDefectRateBp      Int            @default(0)
+  lateShipmentRateBp     Int            @default(0)
+  cancellationRateBp     Int            @default(0)
+  validTrackingRateBp    Int            @default(0)
+  negativeFeedbackRateBp Int            @default(0)
+  policyReference        String         @default("")
+  /// CAPTURED 已固化 / SUPERSEDED 被新快照替代
+  status                 String         @default("CAPTURED")
+  createdBy              String
+  createdAt              DateTime       @default(now())
+  organization           Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace              WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, marketplace, periodStart], map: "StorePerformanceSnapshot_period_key")
+  @@index([organizationId, workspaceId, periodStart])
+}
+
+/// 调价规则：地板价/天花板价/步长/最低毛利，逐个字段上限由业务校验兜底。
+model RepricingRule {
+  id             String         @id @default(cuid())
+  organizationId String
+  workspaceId    String         @default("default")
+  name           String
+  marketplace    String         @default("US")
+  /// MATCH_LOWEST / BEAT_LOWEST / HOLD
+  strategy       String         @default("MATCH_LOWEST")
+  floorPrice     Decimal        @db.Decimal(20, 6)
+  ceilingPrice   Decimal        @db.Decimal(20, 6)
+  stepAmount     Decimal        @default(0) @db.Decimal(20, 6)
+  minMarginBp    Int            @default(0)
+  enabled        Boolean        @default(true)
+  notes          String         @default("")
+  createdBy      String
+  revision       Int            @default(1)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, name])
+  @@index([organizationId, workspaceId, enabled, marketplace])
+}
+
+/// 跟卖与购物车监控快照。同一 ASIN 同站点只保留一条最新观察。
+model CompetitorOfferWatch {
+  id                    String         @id @default(cuid())
+  organizationId        String
+  workspaceId           String         @default("default")
+  marketplace           String         @default("US")
+  asin                  String
+  sellerSku             String         @default("")
+  myPrice               Decimal        @db.Decimal(20, 6)
+  buyBoxPrice           Decimal        @default(0) @db.Decimal(20, 6)
+  lowestCompetitorPrice Decimal        @default(0) @db.Decimal(20, 6)
+  competitorCount       Int            @default(0)
+  buyBoxOwner           String         @default("")
+  /// WINNING / LOSING / UNKNOWN
+  buyBoxStatus          String         @default("UNKNOWN")
+  lastSeenAt            DateTime       @default(now())
+  createdBy             String
+  revision              Int            @default(1)
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  organization          Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace             WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, marketplace, asin], map: "CompetitorOfferWatch_asin_key")
+  @@index([organizationId, workspaceId, buyBoxStatus, lastSeenAt])
+}
+
+/// 调价队列：由观察 + 规则算出建议价，人工采纳后才视为生效，绝不自动改线上价。
+model RepricingQueueItem {
+  id             String         @id @default(cuid())
+  organizationId String
+  workspaceId    String         @default("default")
+  marketplace    String         @default("US")
+  asin           String
+  sellerSku      String         @default("")
+  ruleId         String         @default("")
+  currentPrice   Decimal        @db.Decimal(20, 6)
+  suggestedPrice Decimal        @db.Decimal(20, 6)
+  reason         String         @default("")
+  /// PENDING / APPLIED / DISMISSED
+  status         String         @default("PENDING")
+  appliedPrice   Decimal?       @db.Decimal(20, 6)
+  decidedBy      String         @default("")
+  decidedAt      DateTime?
+  createdBy      String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, id])
+  @@index([organizationId, workspaceId, status, createdAt])
+  @@index([organizationId, workspaceId, asin, status])
+}
+
+/// 销售计划：目标按 SKU 拆行，实际取自订单事实，预测取历史日均 × 季节系数。
+model SalesPlan {
+  id                 String          @id @default(cuid())
+  organizationId     String
+  workspaceId        String          @default("default")
+  name               String
+  marketplace        String          @default("US")
+  currency           String          @default("CNY")
+  /// MONTH / QUARTER
+  periodType         String          @default("MONTH")
+  periodStart        DateTime        @db.Date
+  periodEnd          DateTime        @db.Date
+  /// DRAFT / ACTIVE / CLOSED
+  status             String          @default("DRAFT")
+  forecastWindowDays Int             @default(90)
+  seasonalityBp      Int             @default(10000)
+  notes              String          @default("")
+  createdBy          String
+  revision           Int             @default(1)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace          WorkspaceScope  @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+  lines              SalesPlanLine[]
+
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, name])
+  @@index([organizationId, workspaceId, status, periodStart])
+}
+
+model SalesPlanLine {
+  id              String         @id @default(cuid())
+  organizationId  String
+  workspaceId     String         @default("default")
+  planId          String
+  sellerSku       String
+  asin            String         @default("")
+  targetQty       Int
+  targetRevenue   Decimal        @db.Decimal(20, 6)
+  unitCost        Decimal        @default(0) @db.Decimal(20, 6)
+  historyDailyAvg Decimal        @default(0) @db.Decimal(20, 6)
+  forecastQty     Int            @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  plan            SalesPlan      @relation(fields: [organizationId, workspaceId, planId], references: [organizationId, workspaceId, id], onDelete: Cascade)
+
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, planId, sellerSku])
+  @@index([organizationId, workspaceId, planId])
+}
+
+/// 请款单：采购付款申请，独立于付款记录，审批通过后才允许登记付款。
+model PurchasePaymentRequest {
+  id              String         @id @default(cuid())
+  organizationId  String
+  workspaceId     String         @default("default")
+  number          String
+  supplierId      String
+  purchaseOrderId String         @default("")
+  currency        String         @default("CNY")
+  amount          Decimal        @db.Decimal(20, 6)
+  dueDate         DateTime       @db.Date
+  purpose         String         @default("")
+  /// DRAFT / SUBMITTED / APPROVED / REJECTED / PAID
+  status          String         @default("DRAFT")
+  approvedBy      String         @default("")
+  approvedAt      DateTime?
+  paidAt          DateTime?
+  rejectionReason String         @default("")
+  createdBy       String
+  revision        Int            @default(1)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  organization    Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace       WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, number])
+  @@index([organizationId, workspaceId, status, dueDate])
+}
+
+/// 采购换货单：数量在行明细 JSON 里校验，lineCount 供列表免解析展示。
+model PurchaseExchangeOrder {
+  id              String         @id @default(cuid())
+  organizationId  String
+  workspaceId     String         @default("default")
+  number          String
+  supplierId      String
+  purchaseOrderId String         @default("")
+  reason          String         @default("")
+  /// DRAFT / SUBMITTED / APPROVED / SHIPPED / CLOSED
+  status          String         @default("DRAFT")
+  lines           Json
+  lineCount       Int            @default(0)
+  expectedAt      DateTime?      @db.Date
+  createdBy       String
+  revision        Int            @default(1)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  organization    Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace       WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, number])
+  @@index([organizationId, workspaceId, status, createdAt])
+}
+
+/// 供应商报价单：同一 SKU 多方比价，选中即锁定当次交期与 MOQ。
+model SupplierQuotation {
+  id              String         @id @default(cuid())
+  organizationId  String
+  workspaceId     String         @default("default")
+  number          String
+  supplierId      String
+  productRecordId String         @default("")
+  sellerSku       String         @default("")
+  currency        String         @default("CNY")
+  unitPrice       Decimal        @db.Decimal(20, 6)
+  moq             Int            @default(1)
+  leadTimeDays    Int            @default(0)
+  validUntil      DateTime?      @db.Date
+  /// ACTIVE / EXPIRED / SELECTED
+  status          String         @default("ACTIVE")
+  notes           String         @default("")
+  createdBy       String
+  revision        Int            @default(1)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  organization    Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace       WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, number])
+  @@index([organizationId, workspaceId, productRecordId, unitPrice])
+}
+
+/// 税务发票台账（VAT / GST / SALES_TAX）。税率为万分比，税额由服务层按含税/不含税口径换算。
+model TaxInvoice {
+  id             String         @id @default(cuid())
+  organizationId String
+  workspaceId    String         @default("default")
+  country        String         @default("DE")
+  taxType        String         @default("VAT")
+  invoiceNo      String
+  invoiceDate    DateTime       @db.Date
+  counterparty   String         @default("")
+  currency       String         @default("EUR")
+  taxableAmount  Decimal        @db.Decimal(20, 6)
+  taxRateBp      Int
+  taxAmount      Decimal        @db.Decimal(20, 6)
+  /// INPUT 进项 / OUTPUT 销项
+  direction      String         @default("OUTPUT")
+  /// DRAFT / FILED / PAID / VOID
+  status         String         @default("DRAFT")
+  filingPeriod   String         @default("")
+  createdBy      String
+  revision       Int            @default(1)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, country, invoiceNo], map: "TaxInvoice_no_key")
+  @@index([organizationId, workspaceId, filingPeriod, direction])
+}
+
+/// 申报期：按国家 + 税种 + 期间归集，金额由发票台账汇总，不接受手工改写。
+model TaxFilingPeriod {
+  id             String         @id @default(cuid())
+  organizationId String
+  workspaceId    String         @default("default")
+  country        String         @default("DE")
+  taxType        String         @default("VAT")
+  /// 2026-11
+  period         String
+  taxableAmount  Decimal        @default(0) @db.Decimal(20, 6)
+  taxAmount      Decimal        @default(0) @db.Decimal(20, 6)
+  /// OPEN / FILED
+  status         String         @default("OPEN")
+  filedAt        DateTime?
+  reference      String         @default("")
+  createdBy      String
+  revision       Int            @default(1)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, country, taxType, period], map: "TaxFilingPeriod_key")
+  @@index([organizationId, workspaceId, status, period])
+}
+
+/// 多渠道店铺档案：Amazon 之外的自营渠道（eBay / Walmart / Temu / TikTok / Shopify）。
+model MultiChannelAccount {
+  id             String         @id @default(cuid())
+  organizationId String
+  workspaceId    String         @default("default")
+  channel        String
+  name           String
+  sellerId       String         @default("")
+  marketplace    String         @default("")
+  credentialsRef String         @default("")
+  /// ACTIVE / SUSPENDED / CLOSED
+  status         String         @default("ACTIVE")
+  createdBy      String
+  revision       Int            @default(1)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+  orders         MultiChannelOrder[]
+
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, channel, sellerId], map: "MultiChannelAccount_key")
+  @@index([organizationId, workspaceId, status, channel])
+}
+
+/// 多渠道订单：与 Amazon 订单分表存，避免口径混算；同名外部单号 + SKU 幂等。
+model MultiChannelOrder {
+  id              String              @id @default(cuid())
+  organizationId  String
+  workspaceId     String              @default("default")
+  accountId       String
+  channel         String
+  externalOrderNo String
+  sellerSku       String
+  quantity        Int
+  currency        String              @default("USD")
+  amount          Decimal             @db.Decimal(20, 6)
+  /// PENDING / SHIPPED / DELIVERED / CANCELLED
+  status          String              @default("PENDING")
+  orderedAt       DateTime
+  buyerCountry    String              @default("")
+  trackingNo      String              @default("")
+  createdBy       String
+  revision        Int                 @default(1)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace       WorkspaceScope      @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+  account         MultiChannelAccount @relation(fields: [organizationId, workspaceId, accountId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, channel, externalOrderNo, sellerSku], map: "MultiChannelOrder_key")
+  @@index([organizationId, workspaceId, status, orderedAt])
+}
+
+/// 数据字典：把散落在各页面的枚举收敛为可维护字典（wimoor sys/fields 的等价物）。
+model DataDictionary {
+  id             String                @id @default(cuid())
+  organizationId String
+  workspaceId    String                @default("default")
+  code           String
+  name           String
+  description    String                @default("")
+  itemCount      Int                   @default(0)
+  createdBy      String
+  revision       Int                   @default(1)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      WorkspaceScope        @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+  items          DataDictionaryItem[]
+
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, code])
+  @@index([organizationId, workspaceId, code])
+}
+
+model DataDictionaryItem {
+  id             String         @id @default(cuid())
+  organizationId String
+  workspaceId    String         @default("default")
+  dictionaryId   String
+  value          String
+  label          String
+  sort           Int            @default(0)
+  enabled        Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+  dictionary     DataDictionary @relation(fields: [organizationId, workspaceId, dictionaryId], references: [organizationId, workspaceId, id], onDelete: Cascade)
+
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, dictionaryId, value], map: "DataDictionaryItem_key")
+  @@index([organizationId, workspaceId, dictionaryId, sort])
+}
+
+/// 自定义字段定义：给商品/供应商/采购单/订单挂扩展字段，值存业务表 JSON，不在此双写。
+model CustomFieldDefinition {
+  id             String         @id @default(cuid())
+  organizationId String
+  workspaceId    String         @default("default")
+  entity         String
+  code           String
+  label          String
+  /// TEXT / NUMBER / DATE / SELECT / BOOLEAN
+  fieldType      String         @default("TEXT")
+  required       Boolean        @default(false)
+  options        Json?
+  enabled        Boolean        @default(true)
+  sortOrder      Int            @default(0)
+  createdBy      String
+  revision       Int            @default(1)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, entity, code], map: "CustomFieldDefinition_key")
+  @@index([organizationId, workspaceId, entity, sortOrder])
 }
