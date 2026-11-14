@@ -1,4 +1,5 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { prisma } from "@/lib/db/prisma";
 import { SyncInputError } from "./policy";
 import {
@@ -10,8 +11,9 @@ import {
 /**
  * Amazon 本地承接池原始落地行的只读服务。
  *
- * 复用仓库既有的只读事务边界（SET TRANSACTION READ ONLY + RepeatableRead），
- * 不新建数据库连接、不引入新的环境变量。调用方负责先完成账号授权校验；
+ * 复用仓库既有的只读事务边界（SET TRANSACTION READ ONLY + RepeatableRead）。
+ * 配置了 AMAZON_MCP_PG_READONLY_URL 时走独立只读角色连接；否则回退主连接，
+ * 只读仍由事务强制，绝不回退到无事务写入路径。调用方负责先完成账号授权校验；
  * 这里再强制做一次 organizationId / workspaceId / 单账号单站点围栏。
  */
 export type AmazonLocalScope = { organizationId: string; workspaceId: string };
@@ -19,6 +21,18 @@ export type AmazonLocalFence = { sellerAccountId: string; marketplaceId: string 
 
 const MAX_PAGE_SIZE = 1000;
 const MAX_PAGE = 10_000;
+
+const globalForAmazonRo = globalThis as unknown as { amazonMcpReadonlyClient?: PrismaClient };
+/** 双池连接隔离：有独立只读角色就用它，没有则沿用主连接 + 只读事务。 */
+function amazonReadClient() {
+  const url = process.env.AMAZON_MCP_PG_READONLY_URL?.trim();
+  if (!url) return prisma;
+  // Prisma 7 用 driver adapter；连接本身即只读，事务里再强制一次 READ ONLY。
+  globalForAmazonRo.amazonMcpReadonlyClient ??= new PrismaClient({
+    adapter: new PrismaPg({ connectionString: url, options: "-c default_transaction_read_only=on -c statement_timeout=15000" }),
+  });
+  return globalForAmazonRo.amazonMcpReadonlyClient;
+}
 
 /** 标识符只来自静态封闭清单或 information_schema 的真实列名。 */
 function ident(name: string) {
@@ -69,7 +83,7 @@ const readOnlyTransaction = { isolationLevel: Prisma.TransactionIsolationLevel.R
 
 /** 列出全部真实物理表、真实列清单与按授权围栏计算出的精确行数。 */
 export async function listAmazonLocalRawTables(scope: AmazonLocalScope, fence: AmazonLocalFence) {
-  return prisma.$transaction(async tx => {
+  return amazonReadClient().$transaction(async tx => {
     await tx.$executeRaw`SET TRANSACTION READ ONLY`;
     await tx.$executeRaw`SET LOCAL statement_timeout = '15000ms'`;
     const columnsByTable = await physicalColumns(tx);
@@ -126,7 +140,7 @@ export async function readAmazonLocalRawRows(
   const page = integer(input.page, 1, MAX_PAGE);
   const pageSize = integer(input.pageSize, 100, MAX_PAGE_SIZE);
   const offset = (page - 1) * pageSize;
-  return prisma.$transaction(async tx => {
+  return amazonReadClient().$transaction(async tx => {
     await tx.$executeRaw`SET TRANSACTION READ ONLY`;
     await tx.$executeRaw`SET LOCAL statement_timeout = '15000ms'`;
     const columnsByTable = await physicalColumns(tx);

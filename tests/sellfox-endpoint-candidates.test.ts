@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { sellfoxEndpointCandidates } from "../src/lib/sellfox/endpoint-candidates";
 import { sellfoxPlanGroups } from "../src/lib/sellfox/data-plan";
+import { sellfoxKnownEndpoints } from "../src/lib/sellfox/known-endpoints";
 
 /**
  * 待接入数据集 → 泛化端点候选的真实性校验。
@@ -60,4 +61,27 @@ test("端点原始行承接链路存在且带租户围栏与口径声明", () =>
   assert.ok(consoleSource.includes("/sellfox/endpoint-data?code="), "同步控制台必须能进入承接页");
   assert.ok(pageSource.includes("endpoint-records"), "承接页必须读取端点原始行接口");
   assert.ok(pageSource.includes("不补造占位行"), "空态必须明确不补造占位行");
+});
+
+test("每条候选路径都标注了本地字段文档或已登记种子，杜绝悬空路径", () => {
+  const seeded = new Set(sellfoxKnownEndpoints().map(seed => seed.path));
+  let documented = 0, seededCount = 0;
+  for (const candidate of sellfoxEndpointCandidates()) {
+    assert.equal(candidate.pathDocs.length, candidate.paths.length, `${candidate.code} 的路径与文档标注数量不一致`);
+    for (const entry of candidate.pathDocs) {
+      assert.ok(candidate.paths.includes(entry.path), `${candidate.code} 出现未登记的路径标注`);
+      if (entry.seeded) {
+        seededCount += 1;
+        assert.ok(seeded.has(entry.path), `${entry.path} 声称已有种子，但 known-endpoints 里没有`);
+      }
+      if (entry.doc) {
+        documented += 1;
+        assert.ok(entry.doc.endsWith(".md"), `${entry.path} 的文档名不是本地字段文档`);
+      }
+      assert.ok(entry.seeded || entry.doc, `${entry.path} 既无种子也无字段文档，不能作为候选`);
+    }
+  }
+  assert.ok(documented >= 30, `已核对的本地字段文档不应被意外清空（当前 ${documented}）`);
+  assert.ok(seededCount >= 10, `与已登记种子的重合路径应被显式标注（当前 ${seededCount}）`);
+  assert.ok(consoleSource.includes("candidateDocSummary"), "同步控制台必须展示文档/种子落地状态");
 });

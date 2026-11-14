@@ -24,7 +24,13 @@ type EndpointView = {
   rows: number; lastPeriod: string | null;
   lastRun: { status: string; error: string | null; startedAt: string; finishedAt: string | null } | null;
 };
-type CandidateView = { code: string; label: string; priority: string; paths: string[]; paramsContract: string; note: string };
+type CandidateView = { code: string; label: string; priority: string; paths: string[]; pathDocs: Array<{ path: string; doc: string | null; seeded: boolean }>; paramsContract: string; note: string };
+function candidateDocSummary(candidate: CandidateView) {
+  const docs = candidate.pathDocs ?? [];
+  const seeded = docs.filter(item => item.seeded).length;
+  const documented = docs.filter(item => item.doc).length;
+  return [seeded ? `${seeded} 条已可一键登记` : null, documented ? `${documented} 条有本地字段文档` : null, "参数待联调，不猜字段"].filter(Boolean).join(" · ");
+}
 const emptyEndpointForm = {
   code: "", label: "", path: "", dateMode: "range", scopeMode: "store", chunkDays: "7",
   pageSize: "100", rowsPath: "", idFields: "", params: "{}", historyFrom: "", enabled: true,
@@ -403,7 +409,7 @@ export function SyncConsole() {
                         <td className="sf-mono">{candidate.code}</td>
                         <td>{candidate.label}</td>
                         <td className="sf-mono sf-wrap">{candidate.paths.join(" · ")}</td>
-                        <td className="sf-muted">待联调，不猜字段</td>
+                        <td className="sf-muted">{candidateDocSummary(candidate)}</td>
                       </tr>
                     ))}
                   </tbody>

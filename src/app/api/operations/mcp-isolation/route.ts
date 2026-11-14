@@ -66,8 +66,9 @@ export async function GET(request: Request) {
       { key: "cross", label: "跨服务请求", state: "ok", detail: "在查询数据库前拒绝，并写入 isolation.denied 审计" },
       { key: "catalog", label: "工具与数据集封闭清单", state: "ok", detail: `Amazon 仅 amazon.*，赛狐仅 sellfox.* 与 ${sellfoxDatasetKeys.length} 个数据集` },
       { key: "fence", label: "店铺 / 站点围栏", state: "ok", detail: "凭证范围之外的店铺、账号、站点一律 403 STORE_NOT_ALLOWED" },
-      { key: "sellfox-ro", label: "赛狐只读连接", state: sellfoxReadonly ? "ok" : "warn", detail: sellfoxReadonly ? "已配置独立只读角色 mcp_sellfox_ro" : "未配置 MCP_PG_READONLY_URL，赛狐工具调用会直接失败（不会回退到可写连接）" },
-      { key: "amazon-ro", label: "Amazon 只读连接", state: amazonReadonly ? "ok" : "warn", detail: amazonReadonly ? "已配置独立只读角色 mcp_amazon_ro" : "未配置 AMAZON_MCP_PG_READONLY_URL，读路径走主连接，只读由应用层保证" },
+      { key: "sellfox-ro", label: "赛狐只读连接", state: sellfoxReadonly ? "ok" : "warn", detail: sellfoxReadonly ? "已配置独立只读角色 sellfox_mcp_ro" : "未配置 MCP_PG_READONLY_URL，赛狐工具调用会直接失败（不会回退到可写连接）" },
+      { key: "amazon-ro", label: "Amazon 只读连接", state: amazonReadonly ? "ok" : "warn", detail: amazonReadonly ? "已配置独立只读角色，原始行读取走独立连接 + 只读事务" : "未配置 AMAZON_MCP_PG_READONLY_URL，读路径走主连接 + 只读事务；应用层只读仍强制生效" },
+      { key: "db-cross-pool", label: "数据库角色层双池隔离", state: amazonReadonly ? "ok" : "warn", detail: amazonReadonly ? "已配置独立角色；用 node scripts/mcp-isolation/audit-roles.mjs 复核跨池越权为 0" : "尚未收口：赛狐只读角色对 Amazon* 表仍有 SELECT，仅靠应用层 Amazon*/Sellfox* 前缀封闭清单拦截。执行 scripts/mcp-isolation/grant-roles.sql 并配置独立角色后用 audit-roles.mjs 复核" },
       { key: "shared-token", label: "兼容共享令牌", state: sharedTokenEnabled ? "warn" : "ok", detail: sharedTokenEnabled ? "MCP_HTTP_TOKEN 仍启用，可在赛狐端点只读访问单组织全部店铺" : "已关闭共享令牌，只接受个人凭证" },
       { key: "credentials", label: "可用凭证", state: sellfoxActive.length + amazonActive.length ? "ok" : "warn", detail: `Amazon ${amazonActive.length} 个 · 赛狐 ${sellfoxActive.length} 个可用（已排除过期与停用）` },
     ] as const;
