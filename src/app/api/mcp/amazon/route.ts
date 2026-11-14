@@ -2,8 +2,9 @@ import { AmazonReadError } from "@/lib/amazon-sync/read-account";
 import { boundedRequestText } from "@/lib/amazon-sync/request-body";
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { auditAmazonMcpProtocol, listDiscoverableAmazonMcpTools, authenticateAmazonMcp, invokeAmazonMcp } from "@/lib/amazon-sync/mcp";
+import { auditAmazonMcpIsolation, auditAmazonMcpProtocol, listDiscoverableAmazonMcpTools, authenticateAmazonMcp, invokeAmazonMcp } from "@/lib/amazon-sync/mcp";
 import { SyncInputError } from "@/lib/amazon-sync/policy";
+import { bearerToken, mcpProviderPolicies, providerOfToken } from "@/lib/mcp/isolation";
 import { McpDatasetError } from "@/lib/amazon-sync/mcp-datasets";
 import { amazonMcpToolDefinitions } from "@/lib/amazon-sync/mcp-tool-registry";
 import { GatewayInvocationError } from "@/lib/agent-platform/tool-gateway";
@@ -17,7 +18,13 @@ export async function POST(request: Request) {
     if (request.headers.get("origin") && request.headers.get("origin") !== new URL(request.url).origin) throw new SyncInputError("Forbidden.", 403);
     if (!request.headers.get("content-type")?.includes("application/json")) return json({ error: "JSON required." }, 415);
     if (Number(request.headers.get("content-length")) > 64_000) return json({ error: "Request too large." }, 413);
-    const identity = await authenticateAmazonMcp(request.headers.get("authorization"), new URL(request.url).origin + "/api/mcp/amazon");
+    const presented = bearerToken(request.headers.get("authorization"));
+    const presentedProvider = providerOfToken(presented);
+    if (presentedProvider && presentedProvider !== "amazon") {
+      await auditAmazonMcpIsolation({ attemptedProvider: presentedProvider, tokenPrefix: presented?.slice(0, 8) ?? null, reason: "PROVIDER_MISMATCH" });
+      return json({ jsonrpc: "2.0", id: null, error: { code: -32001, message: "认证失败：该凭证不属于 Amazon MCP。", data: { requestId, provider: "amazon", businessCode: "PROVIDER_MISMATCH" } } }, 401);
+    }
+    const identity = await authenticateAmazonMcp(request.headers.get("authorization"), new URL(request.url).origin + mcpProviderPolicies.amazon.audiencePath);
     const text = await boundedRequestText(request, 64000);
     if (Buffer.byteLength(text) > 64_000) return json({ error: "Request too large." }, 413);
     const input = JSON.parse(text) as Record<string, unknown>;

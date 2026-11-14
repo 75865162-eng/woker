@@ -141,33 +141,31 @@ export function AppShellClient({
     <AppShellUserProvider value={{ organizationId, userId, userInitials, userName, userRole, rolePermissions }}>
       <div className="min-h-screen bg-background">
       {enableShellEnhancements ? <WeComNotificationRunner /> : null}
-      <aside className="fixed inset-y-0 left-0 z-20 flex w-[76px] flex-col border-r border-border bg-white">
-        <div className="flex h-16 w-full items-center justify-center border-b border-border px-1">
+      <aside className="fixed inset-y-0 left-0 z-20 hidden w-[184px] flex-col border-r border-border bg-white lg:flex">
+        <div className="flex h-16 w-full items-center border-b border-border px-4">
           <Link href="/" aria-label="工作台首页" title="工作台首页" className="overflow-hidden rounded-lg transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">
-            <Image src="/brand-logo.png" alt="品牌图标" width={34} height={34} className="h-[34px] w-[34px] object-cover" />
+            <Image src="/brand-logo.png" alt="品牌图标" width={32} height={32} className="h-8 w-8 object-cover" />
           </Link>
         </div>
-        <nav aria-label="业务导航" className="min-h-0 flex-1 overflow-y-auto px-1 py-2">
-          {visibleNavigationGroups.map((group) => <section key={group.label} className="mb-3">
-            <h2 className="mb-1 cursor-default select-none border-y border-border bg-surface-muted px-0.5 py-1.5 text-center text-[10px] font-semibold leading-3 text-muted">{group.label}</h2>
+        <nav aria-label="业务导航" className="min-h-0 flex-1 overflow-y-auto px-2 pb-6 pt-1">
+          {visibleNavigationGroups.map((group) => <section key={group.label} className="mb-1">
+            <h2 className="cursor-default select-none px-2 pb-1 pt-3 text-[11px] font-semibold tracking-wide text-muted">{group.label}</h2>
             <div className="space-y-0.5">
           {group.items.map((item) => {
             const active = isNavigationActive(item.href);
-            const Icon = item.icon;
 
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                aria-label={item.label}
                 title={item.label}
                 className={cn(
-                  "flex h-10 w-10 cursor-pointer items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand",
-                  active && "bg-brand text-white hover:bg-brand hover:text-white",
+                  "flex min-h-9 items-center rounded-md px-2.5 py-1.5 text-[13px] leading-5 text-foreground/80 transition-colors hover:bg-surface-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand",
+                  active && "bg-brand font-semibold text-white hover:bg-brand hover:text-white",
                 )}
               >
-                <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{item.label}</span>
               </Link>
             );
           })}
@@ -175,7 +173,7 @@ export function AppShellClient({
           </section>)}
         </nav>
       </aside>
-      <main className="pl-[76px]">
+      <main className="lg:pl-[184px]">
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border bg-white/95 px-6 backdrop-blur">
           <div>
             <h1 className="text-xl font-bold text-foreground">{title}</h1>

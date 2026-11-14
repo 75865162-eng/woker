@@ -68,8 +68,9 @@ export async function middleware(request: NextRequest) {
   if (pathname === "/api/mcp/amazon") {
     return NextResponse.next();
   }
-  // Read-only Sellfox MCP server: authenticates with its own MCP_HTTP_TOKEN bearer.
-  if (pathname === "/api/mcp") {
+  // Read-only Sellfox MCP server: authenticates with its own sfmcp_ bearer.
+  // `/api/mcp` stays as the legacy alias; both are bound to the sellfox provider.
+  if (pathname === "/api/mcp/sellfox" || pathname === "/api/mcp") {
     return NextResponse.next();
   }
   if (["/api/lili/oauth/authorize", "/api/lili/oauth/token", "/api/lili/oauth/register", "/api/lili/oauth/revoke", "/.well-known/oauth-authorization-server", "/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/api/lili/mcp"].includes(pathname)) return NextResponse.next();

@@ -21,6 +21,8 @@
 /.next-dev */
 /.next-build/
 /.next-build*/
+/.next-b1/
+/.next-deploy/
 /.next-amazon-live/
 /.next-auth-check/
 /.next-verify/

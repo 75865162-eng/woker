@@ -89,22 +89,22 @@ export async function generateAdsProposals(organizationId: string, workspaceId: 
              max("targetingText") as "targetingText", max("matchType") as "matchType",
              max("asin") as asin, max("msku") as msku,
              sum(clicks)::int as clicks, sum(cost) as cost, sum("adOrders")::int as "adOrders", sum("adSales") as "adSales",
-             coalesce(sum(cost) filter (where "reportDate" > current_date - 7), 0) as "spend7d"
+             coalesce(sum(cost) filter (where "reportDate"::date > current_date - 7), 0) as "spend7d"
       from "SellfoxAdsTargetingDaily"
-      where "organizationId" = ${organizationId} and "workspaceId" = ${workspaceId} and "reportDate" >= ${from}::date
+      where "organizationId" = ${organizationId} and "workspaceId" = ${workspaceId} and "reportDate"::date >= ${from}::date
         and "adType" = 'sp'
       group by 1, 2`,
     // 补货口径（与 restock.ts 相同的 7/14/30 加权）
     prisma.$queryRaw<CoverRow[]>`
       with rates as (
         select "storeId", "msku",
-          (0.5 * avg(qty) filter (where d >= current_date - 7)
-         + 0.3 * avg(qty) filter (where d between current_date - 14 and current_date - 8)
-         + 0.2 * avg(qty) filter (where d between current_date - 30 and current_date - 15)) as daily_rate
+          (0.5 * avg(qty) filter (where d::date >= current_date - 7)
+         + 0.3 * avg(qty) filter (where d::date between current_date - 14 and current_date - 8)
+         + 0.2 * avg(qty) filter (where d::date between current_date - 30 and current_date - 15)) as daily_rate
         from (
-          select "storeId", "msku", "reportDate" as d, sum("productNum") as qty
+          select "storeId", "msku", "reportDate" as d, sum(quantity) as qty
           from "SellfoxSalesDailySnapshot"
-          where "organizationId" = ${organizationId} and "workspaceId" = ${workspaceId} and "reportDate" > current_date - 32
+          where "organizationId" = ${organizationId} and "workspaceId" = ${workspaceId} and "reportDate"::date > current_date - 32
           group by 1, 2, 3
         ) s
         where qty is not null
@@ -168,7 +168,7 @@ export async function generateAdsProposals(organizationId: string, workspaceId: 
     if (existing && !basisChanged && existing.status === "PENDING") continue; // 无变化不刷新
     const data = {
       storeId: candidate.storeId, asin: candidate.asin, msku: candidate.msku, action: candidate.action,
-      entityType: candidate.entityType, label: candidate.label, current: candidate.current,
+      entityType: candidate.entityType, externalId: candidate.externalId, label: candidate.label, current: candidate.current,
       proposed: candidate.proposed, basis: candidate.basis, expectedImpact: candidate.expectedImpact,
     };
     if (existing) {

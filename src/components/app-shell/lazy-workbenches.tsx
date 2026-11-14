@@ -42,6 +42,11 @@ export const ListingAiWorkbench = dynamic(
   { loading, ssr: false },
 );
 
+export const ListingAiStudioWorkbench = dynamic(
+  () => import("@/components/listing-ai/listing-ai-studio").then((module) => module.ListingAiStudio),
+  { loading, ssr: false },
+);
+
 export const LogisticsWorkbench = dynamic(
   () => import("@/components/logistics/logistics-workbench").then((module) => module.LogisticsWorkbench),
   { loading, ssr: false },

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { Prisma } from "@prisma/client";
 import { sellfoxOrderLines } from "@/lib/sellfox/order-contract";
-import { sellfoxFbaShipmentLines, sellfoxFbaShipmentStatus } from "@/lib/sellfox/fba-shipment-contract";
+import { sellfoxFbaShipmentHeader, sellfoxFbaShipmentLines, sellfoxFbaShipmentStatus } from "@/lib/sellfox/fba-shipment-contract";
 import { syncSellfoxOrders } from "@/lib/sellfox/order-sync";
 import { shipmentApiRows } from "@/lib/sellfox/shipments-read";
 
@@ -43,16 +43,40 @@ test("shipment lines keep Amazon inbound status and shipping-order codes", () =>
   assert.equal(sellfoxFbaShipmentStatus("3"), "SHIPPED");
   assert.equal(sellfoxFbaShipmentStatus(-1), "CANCELLED");
   assert.equal(sellfoxFbaShipmentStatus("in transit"), "IN_TRANSIT");
-  const [line] = sellfoxFbaShipmentLines({
-    shopId: "shop-fixture", shipSn: "FBA-1", shipmentName: "十一月货件", status: "SHIPPED", createTime: "2026-11-01 01:00:00",
-    items: [{ id: "item-1", asin: "B000", msku: "MSKU", commoditySku: "SKU", declaredQty: 10, shippedQty: 10, receivedQty: 4 }],
+  // 实测契约：头行无 shopId/items，商品行走 itemsBatch（shopId 在商品行上校验）。
+  const header = sellfoxFbaShipmentHeader({
+    shipSn: "FBA-1", status: "1", createTime: "2026-11-01 01:00:00", itemTotalSize: "1", warehouseId: "155348",
+  });
+  assert.equal(header.shipmentId, "FBA-1");
+  assert.equal(header.status, "WORKING");
+  assert.equal(header.expectedLineCount, 1);
+  const [line] = sellfoxFbaShipmentLines(header, {
+    shipSn: "FBA-1",
+    items: [{ shopId: "shop-fixture", asin: "B000", sellerSku: "MSKU", fnSku: "X000", quantity: "10", shipCount: "10", quantityReceived: "4", shipmentStatus: "SHIPPED" }],
   }, "shop-fixture");
   assert.equal(line.shipmentId, "FBA-1");
   assert.equal(line.status, "SHIPPED");
   assert.equal(line.declaredQty, 10);
+  assert.equal(line.shippedQty, 10);
   assert.equal(line.receivedQty, 4);
   assert.equal(line.msku, "MSKU");
-  assert.throws(() => sellfoxFbaShipmentLines({ shopId: "shop-fixture", shipSn: "FBA-1", status: "mystery", items: [] }, "shop-fixture"), /状态/);
+  assert.throws(() => sellfoxFbaShipmentHeader({ shipSn: "FBA-1", status: "mystery" }), /状态/);
+  assert.throws(() => sellfoxFbaShipmentLines(header, { shipSn: "FBA-1", items: [] }, "shop-fixture"), /明细缺失/);
+  assert.throws(() => sellfoxFbaShipmentLines(header, {
+    shipSn: "FBA-1",
+    items: [{ shopId: "other-shop", asin: "B000", sellerSku: "MSKU", quantity: "1" }],
+  }, "shop-fixture"), /归属/);
+  // 实测 FH11813300867：同一货件同一 SKU 分两行（20 件 + 10 件），合并为一行求和。
+  const [merged] = sellfoxFbaShipmentLines({ ...header, expectedLineCount: 2 }, {
+    shipSn: "FBA-1",
+    items: [
+      { shopId: "shop-fixture", asin: "B000", sellerSku: "MSKU", fnSku: "X000", quantity: "20", shipCount: "20", quantityReceived: "20" },
+      { shopId: "shop-fixture", asin: "B000", sellerSku: "MSKU", fnSku: "X000", quantity: "10", shipCount: "10", quantityReceived: "0" },
+    ],
+  }, "shop-fixture");
+  assert.equal(merged.declaredQty, 30);
+  assert.equal(merged.shippedQty, 30);
+  assert.equal(merged.receivedQty, 20);
 });
 
 test("shipment snapshot lines collapse to one API row with summed quantities", () => {

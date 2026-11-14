@@ -54,15 +54,20 @@ import {
   orchestratorToolDefinitions,
 } from "@/lib/agent-platform/orchestrator";
 import type { AgentRuntimeExecutor, JsonValue as AgentJsonValue } from "@/lib/agent-platform/types";
+import { createPpcInventoryConstraintResolver } from "@/lib/operations/ppc-inventory-guard";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { handoffProvenance, isObject, parseLaunchApproval, validateHandoff, type ChainStage } from "@/lib/agent-platform/handoff";
 import { verifyLaunchApproval } from "@/lib/agent-platform/launch-gate";
 import { createSelectionAdapter } from "@/lib/agent-platform/selection";
 import { selectionEvidenceLoader } from "@/lib/agent-platform/selection-evidence-server";
+import { startAgentMeter, type PointsMeter } from "@/lib/points/usage";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request, context: { params: Promise<{ agentId: string }> }) {
+  // 供 catch 释放预扣：执行失败时不能把积分留在冻结态。
+  let pointsMeter: PointsMeter | null = null;
+
   try {
     const permission = await requireApiPermission("agents", "create", request);
 
@@ -140,8 +145,7 @@ export async function POST(request: Request, context: { params: Promise<{ agentI
       );
     }
 
-    const requestedToolId = typeof body.requestedToolId === "string" ? body.requestedToolId : "platform.context.snapshot";
-    const requestedToolInput =
+    const requestedToolId = typeof body.requestedToolId === "string" ? body.requestedToolId : "platform.context.snapshot";    const requestedToolInput =
       body.requestedToolInput && typeof body.requestedToolInput === "object"
         ? (body.requestedToolInput as Prisma.JsonObject)
         : ({ includeKeys: ["company", "workspace", "user", "sku", "marketplace", "asin", "product", "historicalData", "currentData"] } satisfies Prisma.JsonObject);
@@ -214,6 +218,10 @@ export async function POST(request: Request, context: { params: Promise<{ agentI
           ? createPpcAgentExecutionExecutor({
               request: body,
               requestedByUserId: user.id,
+              inventoryConstraint: createPpcInventoryConstraintResolver({
+                body,
+                scope: { organizationId: user.organizationId, workspaceId: scope.workspaceId },
+              }),
             })
         : isOrchestratorAgent
           ? createOrchestratorExecutionExecutor({
@@ -318,6 +326,14 @@ export async function POST(request: Request, context: { params: Promise<{ agentI
           };
         };
 
+    // 积分计量：影子模式，任何异常都不阻断执行（见 lib/points/usage.ts）。
+    const meter = await startAgentMeter({
+      organizationId: user.organizationId,
+      userId: user.id,
+      agentId: definition.id,
+    });
+    pointsMeter = meter;
+
     const runtimeResult = await runtime.run({
       agentId: definition.id,
       context: executionContext,
@@ -339,8 +355,24 @@ export async function POST(request: Request, context: { params: Promise<{ agentI
       executor,
     });
 
+    // 只有请求成功返回才结算；任何一步抛错都由外层 catch 释放预扣。
+    const settlePointsOnSuccess = async () => {
+      if (runtimeResult.execution.status === "FAILED") {
+        await meter.release();
+        return 0;
+      }
+      const settled = await meter.settle(runtimeResult.execution.id);
+      return settled?.charged ?? 0;
+    };
+    const pointsReceipt = (charged: number) => ({
+      requestKey: meter.requestKey,
+      reserved: meter.reserved,
+      charged,
+      ...(meter.skipReason ? { skipReason: meter.skipReason } : {}),
+    });
+
     if (!hasAgentPersistence) {
-      return NextResponse.json(runtimeResult);
+      return NextResponse.json({ ...runtimeResult, points: pointsReceipt(await settlePointsOnSuccess()) });
     }
 
     const executionRecord = await prisma.agentExecution.create({
@@ -514,6 +546,7 @@ export async function POST(request: Request, context: { params: Promise<{ agentI
     });
 
     return NextResponse.json({
+      points: pointsReceipt(await settlePointsOnSuccess()),
       execution: {
         ...runtimeResult.execution,
         taskId: taskRecord.id,
@@ -525,6 +558,10 @@ export async function POST(request: Request, context: { params: Promise<{ agentI
       events: runtimeResult.events,
     });
   } catch (error) {
+    // 请求失败（含落库失败）：释放预扣，不把积分留在冻结态。
+    if (pointsMeter?.reserved) {
+      await pointsMeter.release();
+    }
     if (isMissingAgentPlatformPersistenceError(error)) {
       return NextResponse.json(
         { error: "Agent persistence is not ready. Run Prisma generate/migrate before saving executions." },

@@ -2,12 +2,15 @@ import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { sellfoxPost } from "./client";
-import { sellfoxFbaShipmentLines } from "./fba-shipment-contract";
+import { sellfoxFbaShipmentHeader, sellfoxFbaShipmentLines } from "./fba-shipment-contract";
 import { sellfoxSnapshotPage } from "./snapshot-contracts";
 import { nextSellfoxPage, SellfoxSyncInputError } from "./sync-contract";
 import { sellfoxStoreFailure, SellfoxStoreSyncError } from "./sync-errors";
 
 export type FbaShipmentCheckpoint = Record<string, { pageNo: number; done: boolean; count: number; error?: string }>;
+
+/** 实测 itemsBatch.json 单次 100 个 shipSn 返回 100 组（与 pageSize 对齐，避免多打 5 倍批量接口）。 */
+const shipmentItemBatchSize = 100;
 
 function lineId(storeId: string, shipmentId: string, lineKey: string) {
   return createHash("sha256").update(JSON.stringify(["sellfox-fba-shipment", storeId, shipmentId, lineKey])).digest("hex");
@@ -44,7 +47,27 @@ export async function syncSellfoxFbaShipments(input: {
           pageSize: "100",
           ...(input.startDate && input.endDate ? { createTimeStart: input.startDate, createTimeEnd: input.endDate } : {}),
         }), pageNo);
-        const lines = page.rows.flatMap((row) => sellfoxFbaShipmentLines(row, store.externalId));
+        const headers = page.rows.map(sellfoxFbaShipmentHeader);
+        // 头行接口不返回商品行，必须再走 itemsBatch（单次 100 个 shipSn 已实测可用）。
+        const groups = new Map<string, unknown>();
+        for (let offset = 0; offset < headers.length; offset += shipmentItemBatchSize) {
+          const shipSnList = headers.slice(offset, offset + shipmentItemBatchSize).map((header) => header.shipmentId);
+          const batch = await dependencies.post("/api/fba/shippingOrder/itemsBatch.json", { shipSnList });
+          if (!Array.isArray(batch)) throw new SellfoxSyncInputError("货件商品批量响应结构无效。");
+          for (const group of batch) {
+            if (!group || typeof group !== "object" || Array.isArray(group)) continue;
+            groups.set(String((group as { shipSn?: unknown }).shipSn ?? ""), group);
+          }
+        }
+        const lines: ReturnType<typeof sellfoxFbaShipmentLines> = [];
+        for (const header of headers) {
+          const group = groups.get(header.shipmentId);
+          if (group === undefined) {
+            if (header.expectedLineCount > 0) throw new SellfoxSyncInputError("货件商品批量响应缺少该发货单，已拒绝写入。");
+            continue;
+          }
+          lines.push(...sellfoxFbaShipmentLines(header, group, store.externalId));
+        }
         if (new Set(lines.map((line) => `${line.shipmentId}\u0000${line.lineKey}`)).size !== lines.length) throw new SellfoxSyncInputError("货件同页重复身份。");
         const next = nextSellfoxPage(page.rows.length, pageNo, page.totalPages);
         const state: FbaShipmentCheckpoint = { ...checkpoint, [store.externalId]: { pageNo: next ?? pageNo, done: next === null, count: (checkpoint[store.externalId]?.count ?? 0) + lines.length } };

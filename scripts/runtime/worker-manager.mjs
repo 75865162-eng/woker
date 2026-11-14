@@ -64,10 +64,18 @@ if (process.argv[1] === path.join(projectRoot, "scripts/runtime/worker-manager.m
     for (const item of registry) console.log(`${item.id}: ${item.label}`);
   } else {
     if (args.length > 1 || (args.length && !registry.some(item => item.id === args[0]))) throw new Error("Usage: npm run worker -- [--list|registration-id]");
+    // Single-instance pid file: the scheduled task repeats on a timer and must not spawn a second consumer.
+    const { existsSync, readFileSync, unlinkSync, writeFileSync } = await import("node:fs");
+    const pidPath = path.join(projectRoot, "tmp", `worker-${args[0] ?? "all"}.pid`);
+    const releasePid = () => {
+      try { if (existsSync(pidPath) && readFileSync(pidPath, "utf8").trim() === String(process.pid)) unlinkSync(pidPath); } catch { /* best effort */ }
+    };
+    writeFileSync(pidPath, String(process.pid));
+    process.on("exit", releasePid);
     const env = { ...applyRuntimeEnvironment(), ERP_RUNTIME_VERSION: runtimeVersion() };
     const manager = supervise(args.length ? registry.filter(item => item.id === args[0]) : registry, { env, onFatal: () => void stop(1) });
     let closing = false;
-    async function stop(code = 0) { if (closing) return; closing = true; await manager.stop(); process.exit(code); }
+    async function stop(code = 0) { if (closing) return; closing = true; await manager.stop(); releasePid(); process.exit(code); }
     process.on("SIGINT", () => void stop());
     process.on("SIGTERM", () => void stop());
     manager.start();

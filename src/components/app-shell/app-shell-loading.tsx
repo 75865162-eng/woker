@@ -1,17 +1,17 @@
 export function AppShellLoading() {
   return (
     <div className="min-h-screen bg-background">
-      <aside className="fixed inset-y-0 left-0 z-20 flex w-[76px] flex-col items-center border-r border-border bg-white">
-        <div className="flex h-16 w-full items-center justify-center border-b border-border">
-          <div className="h-10 w-10 animate-pulse rounded-lg bg-surface-muted" />
+      <aside className="fixed inset-y-0 left-0 z-20 hidden w-[184px] flex-col border-r border-border bg-white lg:flex">
+        <div className="flex h-16 w-full items-center border-b border-border px-4">
+          <div className="h-8 w-8 animate-pulse rounded-lg bg-surface-muted" />
         </div>
-        <div className="flex flex-1 flex-col items-center gap-2 py-4">
-          {Array.from({ length: 7 }).map((_, index) => (
-            <div key={index} className="h-11 w-11 animate-pulse rounded-md bg-surface-muted" />
+        <div className="flex flex-1 flex-col gap-1.5 px-4 py-4">
+          {Array.from({ length: 9 }).map((_, index) => (
+            <div key={index} className="h-6 w-full animate-pulse rounded bg-surface-muted" />
           ))}
         </div>
       </aside>
-      <main className="pl-[76px]">
+      <main className="lg:pl-[184px]">
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border bg-white/95 px-6 backdrop-blur">
           <div className="space-y-2">
             <div className="h-5 w-48 animate-pulse rounded bg-surface-muted" />

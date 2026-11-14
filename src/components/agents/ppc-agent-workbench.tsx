@@ -71,6 +71,8 @@ function parsePpcOutput(output: unknown): PpcExecutionOutput | null {
       report,
       evidence: (record.evidence as PpcExecutionOutput["evidence"]) ?? report.evidence ?? [],
       adjustmentDrafts: (record.adjustmentDrafts as AdjustmentDraft[]) ?? [],
+      inventoryGate: (record.inventoryGate as PpcExecutionOutput["inventoryGate"]) ?? null,
+      blockedBidIncreases: (record.blockedBidIncreases as PpcExecutionOutput["blockedBidIncreases"]) ?? undefined,
       amazonAdsPlan: record.amazonAdsPlan as PpcExecutionOutput["amazonAdsPlan"],
       memoryItems: [],
     };
@@ -82,6 +84,8 @@ function parsePpcOutput(output: unknown): PpcExecutionOutput | null {
       report: reportSnapshot,
       evidence: reportSnapshot.evidence ?? [],
       adjustmentDrafts: (record.adjustmentDrafts as AdjustmentDraft[]) ?? [],
+      inventoryGate: (record.inventoryGate as PpcExecutionOutput["inventoryGate"]) ?? null,
+      blockedBidIncreases: (record.blockedBidIncreases as PpcExecutionOutput["blockedBidIncreases"]) ?? undefined,
       amazonAdsPlan: record.amazonAdsPlan as PpcExecutionOutput["amazonAdsPlan"],
       memoryItems: [],
     };
@@ -108,6 +112,26 @@ function severityTone(severity: string) {
   return "gray";
 }
 
+function gateDecisionLabel(decision: string) {
+  switch (decision) {
+    case "BLOCK_BOOST": return "禁止加投";
+    case "ALLOW_CLEARANCE": return "允许清仓投放";
+    case "HOLD": return "维持现状";
+    case "OPTIMIZE_ACOS": return "优化 ACOS";
+    default: return "数据不足";
+  }
+}
+
+function gateTone(decision: string): "red" | "amber" | "blue" | "green" | "gray" {
+  switch (decision) {
+    case "BLOCK_BOOST": return "red";
+    case "ALLOW_CLEARANCE": return "amber";
+    case "HOLD": return "blue";
+    case "OPTIMIZE_ACOS": return "green";
+    default: return "gray";
+  }
+}
+
 export function PpcAgentWorkbench() {
   const shellUser = useAppShellUser();
   const chain = useChainHandoff("ppc");
@@ -128,6 +152,9 @@ export function PpcAgentWorkbench() {
   const [targetAcos, setTargetAcos] = useState("30");
   const [targetRoas, setTargetRoas] = useState("3");
   const [targetMargin, setTargetMargin] = useState("25");
+  const [sellerSku, setSellerSku] = useState("");
+  const [grossMargin, setGrossMargin] = useState("");
+  const [adsWindowDays, setAdsWindowDays] = useState("7");
   const [sellerSpriteKeywords, setSellerSpriteKeywords] = useState("core keyword\nlong tail keyword\ncompetitor keyword");
   const [productContext, setProductContext] = useState("当前 SKU 的商品背景、定位、生命周期、价格和利润假设。");
   const [handoffMessage, setHandoffMessage] = useState("");
@@ -193,6 +220,8 @@ export function PpcAgentWorkbench() {
   const currentExecution = executionMatchesHandoff(data?.latestExecution, chain.payload) ? data?.latestExecution ?? null : null;
   const ppcExecution = useMemo(() => parsePpcOutput(currentExecution?.output), [currentExecution?.output]);
   const report = ppcExecution?.report ?? null;
+  const inventoryGate = ppcExecution?.inventoryGate ?? null;
+  const blockedBidIncreases = ppcExecution?.blockedBidIncreases ?? [];
   const adjustmentDrafts = ppcExecution?.adjustmentDrafts ?? [];
   const amazonAdsPlan = ppcExecution?.amazonAdsPlan && typeof ppcExecution.amazonAdsPlan === "object" && !Array.isArray(ppcExecution.amazonAdsPlan)
     ? ppcExecution.amazonAdsPlan as Record<string, unknown>
@@ -270,6 +299,11 @@ export function PpcAgentWorkbench() {
         targetAcos: Number(targetAcos) || undefined,
         targetRoas: Number(targetRoas) || undefined,
         targetMargin: Number(targetMargin) || undefined,
+        sellerSku: sellerSku.trim() || undefined,
+        adsWindowDays: Number(adsWindowDays) || undefined,
+        productEconomics: grossMargin.trim() && Number.isFinite(Number(grossMargin))
+          ? { grossMarginPct: Number(grossMargin) }
+          : undefined,
         context: {
           currentData: {
             goal,
@@ -481,6 +515,9 @@ export function PpcAgentWorkbench() {
               <Input label="目标 ACOS %" value={targetAcos} onChange={setTargetAcos} />
               <Input label="目标 ROAS" value={targetRoas} onChange={setTargetRoas} />
               <Input label="目标利润率 %" value={targetMargin} onChange={setTargetMargin} />
+              <Input label="MSKU（启用库存门禁）" value={sellerSku} onChange={setSellerSku} />
+              <Input label="毛利率 %（库存门禁必需）" value={grossMargin} onChange={setGrossMargin} />
+              <Input label="广告报表天数" value={adsWindowDays} onChange={setAdsWindowDays} />
               <label className="block space-y-1 lg:col-span-2">
                 <span className="text-xs font-semibold text-muted">SellerSprite 关键词</span>
                 <textarea
@@ -641,6 +678,65 @@ export function PpcAgentWorkbench() {
               </div>
             </CardContent>
           </Card>
+
+          {inventoryGate ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>库存门禁</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone={gateTone(inventoryGate.decision)}>{gateDecisionLabel(inventoryGate.decision)}</Badge>
+                  <span className="text-xs font-semibold text-muted">
+                    拦截加投 {inventoryGate.removedBidIncreases} 条 · 保留降价 {inventoryGate.keptBidDecreases} 条
+                  </span>
+                  {inventoryGate.maxAdditionalDailySpend !== null ? (
+                    <span className="text-xs font-semibold text-muted">额外日预算上限 ${inventoryGate.maxAdditionalDailySpend.toFixed(2)}</span>
+                  ) : null}
+                  {inventoryGate.clearanceUnits !== null ? (
+                    <span className="text-xs font-semibold text-muted">可清仓 {inventoryGate.clearanceUnits} 件</span>
+                  ) : null}
+                </div>
+                {inventoryGate.reasons.length ? (
+                  <ul className="space-y-1">
+                    {inventoryGate.reasons.map((reason) => (
+                      <li key={reason} className="text-xs font-medium text-muted">· {reason}</li>
+                    ))}
+                  </ul>
+                ) : null}
+                {inventoryGate.missingInputs.length ? (
+                  <p className="text-xs font-semibold text-amber-700">缺数据：{inventoryGate.missingInputs.join("；")}</p>
+                ) : null}
+                {blockedBidIncreases.length ? (
+                  <div className="overflow-x-auto rounded-md border border-border">
+                    <table className="min-w-full divide-y divide-border text-sm">
+                      <thead className="bg-surface-muted text-xs font-bold text-muted">
+                        <tr>
+                          <th className="px-3 py-2 text-left">被拦关键词</th>
+                          <th className="px-3 py-2 text-right">当前</th>
+                          <th className="px-3 py-2 text-right">原建议</th>
+                          <th className="px-3 py-2 text-left">拦截原因</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border bg-white">
+                        {blockedBidIncreases.map((item) => (
+                          <tr key={item.rowId}>
+                            <td className="px-3 py-2 font-semibold text-foreground">{item.keyword || item.target}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-muted">${item.currentBid.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-muted line-through">${item.suggestedBid.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-muted">{item.reason}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : null}
+                <p className="text-xs font-medium text-muted">
+                  证据：{inventoryGate.evidence.snapshotId || "-"} · 快照 {inventoryGate.evidence.snapshotAgeHours === null ? "-" : `${inventoryGate.evidence.snapshotAgeHours}h`} · 需求来源 {inventoryGate.evidence.demandSource || "-"}
+                </p>
+              </CardContent>
+            </Card>
+          ) : null}
 
           <div className="space-y-3">
             <Card>

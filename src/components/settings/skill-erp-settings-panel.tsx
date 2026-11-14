@@ -1,6 +1,5 @@
 import { LiliDevicesPanel } from "./lili-devices-panel";
 import { ArrowRight } from "lucide-react";
-import { AmazonMcpPanel } from "@/components/operations/amazon-mcp-panel";
 
 export function SkillErpSettingsPanel() {
   return (
@@ -21,8 +20,15 @@ export function SkillErpSettingsPanel() {
       </section>
 
       <section className="border-t border-border pt-4">
-        <h3 className="mb-3 text-sm font-semibold">Skill MCP 凭证</h3>
-        <AmazonMcpPanel />
+        <div className="rounded-lg border border-border bg-surface-muted/60 p-4">
+          <h3 className="text-sm font-semibold">MCP 凭证、权限与状态</h3>
+          <p className="mt-1 max-w-3xl text-xs leading-5 text-muted">
+            Amazon 与赛狐两个 MCP 服务的凭证签发、可读范围、隔离检查、连接测试和审计记录，已统一放到「系统设置 → MCP 接入」。
+          </p>
+          <a href="/settings?tab=mcp" className="mt-3 inline-flex h-8 items-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-semibold text-foreground">
+            打开 MCP 接入 <ArrowRight className="h-4 w-4" />
+          </a>
+        </div>
       </section>
     </div>
   );

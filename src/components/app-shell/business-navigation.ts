@@ -7,17 +7,38 @@ export const accountMenuItems = [
   { href: "/settings", label: "系统设置", icon: Settings, moduleId: "settings" },
 ];
 
+// 亚马逊 ERP 常用归类：商品 → 销售 → 广告 → 采购 → 仓库 → 物流 → 财务 → 数据 → AI/工具 → 设置。
+// 只调整分组归属与顺序，href / moduleId 保持原值，权限过滤逻辑不变。
 export const navigationGroups = [
   { label: "商品管理", items: [
     { href: "/dashboard", label: "商品主档", icon: Boxes, moduleId: "products" },
     { href: "/operations?view=catalog", label: "Amazon 在线商品", icon: Store, moduleId: "operations" },
     { href: "/operations?view=listing_details", label: "Listing 信息", icon: ClipboardList, moduleId: "operations" },
     { href: "/listing-ai", label: "Listing AI", icon: Sparkles, moduleId: "listingAi" },
+    { href: "/listing-ai/studio", label: "Listing 生成台", icon: Target, moduleId: "listingAi" },
+    { href: "/operations/repricing", label: "跟卖与调价", icon: Tags, moduleId: "operations" },
+    { href: "/operations/calculators", label: "计算器中心", icon: Calculator, moduleId: "operations" },
   ] },
-  { label: "订单管理", items: [
+  { label: "销售管理", items: [
     { href: "/operations?view=orders", label: "Amazon 订单", icon: ClipboardList, moduleId: "operations" },
     { href: "/operations?view=order-items", label: "订单商品", icon: Boxes, moduleId: "operations" },
     { href: "/sellfox/orders", label: "Sellfox 订单快照", icon: Store, moduleId: "sellfox" },
+    { href: "/operations/reviews", label: "评论与店铺绩效", icon: Star, moduleId: "operations" },
+    { href: "/operations/sales-plans", label: "销售计划与预测", icon: Target, moduleId: "operations" },
+    { href: "/operations/multi-channel", label: "多渠道经营", icon: Store, moduleId: "operations" },
+  ] },
+  { label: "广告管理", items: [
+    { href: "/amazon-ads/campaigns", label: "Amazon Ads", icon: Activity, moduleId: "workspace" },
+    { href: "/workspace", label: "PPC Bulk 优化", icon: UploadCloud, moduleId: "workspace" },
+    { href: "/operations?view=ads", label: "PPC 经营指标", icon: ChartNoAxesCombined, moduleId: "operations" },
+  ] },
+  { label: "采购管理", items: [
+    { href: "/operations/purchase-plans", label: "采购计划", icon: ClipboardList, moduleId: "operations" },
+    { href: "/operations?view=purchase-orders", label: "采购订单", icon: ClipboardList, moduleId: "operations" },
+    { href: "/operations/purchase-invoices", label: "采购发票", icon: ReceiptText, moduleId: "operations" },
+    { href: "/operations?view=suppliers", label: "供应商档案", icon: Store, moduleId: "operations" },
+    { href: "/operations/procurement-collab", label: "采购协同", icon: Handshake, moduleId: "operations" },
+    { href: "/operations/ops-extensions", label: "运营资料与滞销", icon: Boxes, moduleId: "operations" },
   ] },
   { label: "仓库管理", items: [
     { href: "/operations?view=inventory", label: "FBA 库存", icon: Warehouse, moduleId: "operations" },
@@ -30,20 +51,12 @@ export const navigationGroups = [
     { href: "/logistics/warehouse?tab=balances", label: "公司库存与调拨", icon: Warehouse, moduleId: "wms" },
     { href: "/logistics/warehouse?tab=transfers", label: "调拨流水", icon: Warehouse, moduleId: "wms" },
     { href: "/operations/assembly", label: "组装", icon: Boxes, moduleId: "wms" },
-    { href: "/logistics", label: "物流文件工作台", icon: PackageSearch, moduleId: "logistics" },
   ] },
-  { label: "采购管理", items: [
-    { href: "/operations/purchase-plans", label: "采购计划", icon: ClipboardList, moduleId: "operations" },
-    { href: "/operations/purchase-invoices", label: "采购发票", icon: ReceiptText, moduleId: "operations" },
-    { href: "/operations/ops-extensions", label: "运营资料与滞销", icon: Boxes, moduleId: "operations" },
-    { href: "/operations?view=purchase-orders", label: "采购订单", icon: ClipboardList, moduleId: "operations" },
-    { href: "/operations?view=suppliers", label: "供应商档案", icon: Store, moduleId: "operations" },
-    { href: "/operations/procurement-collab", label: "采购协同", icon: Handshake, moduleId: "operations" },
-  ] },
-  { label: "FBA 物流", items: [
+  { label: "物流发货", items: [
     { href: "/operations?view=fulfillment", label: "FBA 在途货件", icon: Truck, moduleId: "operations" },
     { href: "/operations?view=fba-boxing", label: "FBA 装箱", icon: PackageSearch, moduleId: "operations" },
     { href: "/operations?view=first-mile", label: "头程物流", icon: Truck, moduleId: "operations" },
+    { href: "/logistics", label: "物流文件工作台", icon: PackageSearch, moduleId: "logistics" },
     { href: "/sellfox/shipments", label: "Sellfox 货件快照", icon: Store, moduleId: "sellfox" },
   ] },
   { label: "财务管理", items: [
@@ -54,31 +67,21 @@ export const navigationGroups = [
     { href: "/sellfox/performance", label: "Sellfox 经营报表", icon: ChartNoAxesCombined, moduleId: "sellfox" },
     { href: "/operations/tax", label: "税务与发票", icon: Landmark, moduleId: "operations" },
   ] },
-  { label: "广告管理", items: [
-    { href: "/amazon-ads/campaigns", label: "Amazon Ads", icon: Activity, moduleId: "workspace" },
-    { href: "/workspace", label: "PPC Bulk 优化", icon: UploadCloud, moduleId: "workspace" },
-    { href: "/operations?view=ads", label: "PPC 经营指标", icon: ChartNoAxesCombined, moduleId: "operations" },
-    { href: "/operations/repricing", label: "跟卖与调价", icon: Tags, moduleId: "operations" },
-  ] },
   { label: "数据中心", items: [
     { href: "/operations?view=sales-traffic", label: "销售与流量", icon: ChartNoAxesCombined, moduleId: "operations" },
     { href: "/operations?view=brand_analytics", label: "品牌分析", icon: SearchCheck, moduleId: "operations" },
-    { href: "/operations", label: "同步中心", icon: Activity, moduleId: "operations" },
     { href: "/sellfox", label: "Sellfox 数据", icon: Store, moduleId: "sellfox" },
-    { href: "/operations/reviews", label: "评论与店铺绩效", icon: Star, moduleId: "operations" },
-    { href: "/operations/sales-plans", label: "销售计划与预测", icon: Target, moduleId: "operations" },
-    { href: "/operations/multi-channel", label: "多渠道经营", icon: Store, moduleId: "operations" },
+    { href: "/operations", label: "同步中心", icon: Activity, moduleId: "operations" },
   ] },
-  { label: "系统管理", items: [
-    { href: "/operations?view=connections", label: "Amazon 账号与站点", icon: Store, moduleId: "operations" },
-    { href: "/amazon-ads/accounts", label: "Ads 账号授权", icon: Activity, moduleId: "workspace" },
-    { href: "/operations/calculators", label: "计算器中心", icon: Calculator, moduleId: "operations" },
-    { href: "/operations/data-dictionary", label: "数据字典", icon: BookMarked, moduleId: "operations" },
-    ...accountMenuItems,
-  ] },
-  { label: "其他工作区", items: [
-    { href: "/saihu-search-merge", label: "赛狐搜词合并", icon: SearchCheck, moduleId: "searchMerge" },
+  { label: "AI 与工具", items: [
     { href: "/agents", label: "Amazon AI Agent", icon: Bot, moduleId: "agents" },
     { href: "/lili", label: "粒粒 Lili 技能中心", icon: Sparkles, moduleId: "agents" },
+    { href: "/saihu-search-merge", label: "赛狐搜词合并", icon: SearchCheck, moduleId: "searchMerge" },
+  ] },
+  { label: "系统设置", items: [
+    { href: "/operations?view=connections", label: "Amazon 账号与站点", icon: Store, moduleId: "operations" },
+    { href: "/amazon-ads/accounts", label: "Ads 账号授权", icon: Activity, moduleId: "workspace" },
+    { href: "/operations/data-dictionary", label: "数据字典", icon: BookMarked, moduleId: "operations" },
+    ...accountMenuItems,
   ] },
 ];

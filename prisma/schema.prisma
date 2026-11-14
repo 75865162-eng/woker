@@ -26,6 +26,15 @@ model Organization {
   rolePermissions                OrganizationRolePermission?
   teamRoster                     TeamRosterMember[]
   workerHeartbeats               WorkerHeartbeat[]
+  pointsPolicy                   PointsPolicy?
+  pointsAccounts                 PointsAccount[]
+  pointsGrants                   PointsGrant[]
+  pointsLedgers                  PointsLedger[]
+  pointsPeriods                  PointsPeriod[]
+  pointsRequests                 PointsRequest[]
+  pointsPriceRules               PointsPriceRule[]
+  pointsOverrides                PointsMemberOverride[]
+  pointsAllocations              PointsAllocation[]
   workspaceScopes                WorkspaceScope[]
   imageUpscaleJobs               ImageUpscaleJob[]
   productAttachmentBindings      ProductAttachmentBinding[]
@@ -124,6 +133,12 @@ model User {
   sessions                                UserSession[]
   WorkspaceDataset                        WorkspaceDataset[]
   workspaceSnapshots                      WorkspaceSnapshot[]
+  pointsAccounts                          PointsAccount[]
+  pointsGrants                            PointsGrant[]
+  pointsLedgers                           PointsLedger[]
+  pointsPeriods                           PointsPeriod[]
+  pointsOverrides                         PointsMemberOverride[]
+  pointsAllocations                       PointsAllocation[]
   imageUpscaleJobs                        ImageUpscaleJob[]
   productOutboxEvents                     ProductOutboxEvent[]
   amazonDataCenterChangeRequestsRequested AmazonDataCenterChangeRequest[] @relation("AmazonDataCenterChangeRequestedBy")
@@ -3455,6 +3470,32 @@ model AmazonMcpCredential {
   updatedAt       DateTime  @updatedAt
 
   @@index([organizationId, workspaceId, userId, status])
+}
+
+/// Sellfox MCP credentials are physically separate from Amazon MCP credentials.
+/// A token from one table can never authenticate the other provider's endpoint.
+model SellfoxMcpCredential {
+  id              String    @id
+  organizationId  String
+  workspaceId     String
+  userId          String
+  name            String
+  tokenHash       String    @unique
+  tokenPrefix     String
+  tools           String[]
+  storeIds        String[]  @default([])
+  scopes          Json
+  status          String    @default("ACTIVE")
+  revision        Int       @default(1)
+  expiresAt       DateTime
+  createdByUserId String
+  rotatedFromId   String?
+  lastUsedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([organizationId, workspaceId, userId, status])
+  @@index([organizationId, workspaceId, expiresAt])
 }
 
 model AmazonOAuthAttempt {
@@ -6976,4 +7017,207 @@ model SellfoxAdsProposal {
 
   @@unique([organizationId, workspaceId, externalId, kind], map: "SellfoxAdsProposal_key")
   @@index([organizationId, workspaceId, status, createdAt], map: "SellfoxAdsProposal_scope_status")
+}
+
+// ============================================================
+// 积分额度（Points）
+// 设计：批次（Grant）分层 + 不可篡改流水（Ledger）+ 申请审批（Request）
+// 规则：每人每月 50 分基础额度；结转上限 50；审批补充额当月有效不结转。
+// ============================================================
+
+/// 组织级积分策略。1 组织 1 条，缺失时按硬编码默认值兜底。
+model PointsPolicy {
+  organizationId        String   @id
+  baseQuota             Int      @default(50)
+  carryoverCap          Int      @default(50)
+  maxRequestsPerPeriod  Int      @default(3)
+  maxRequestAmount      Int      @default(200)
+  maxExtraPerPeriod     Int      @default(300)
+  requestExpireDays     Int      @default(7)
+  reserveTimeoutMinutes Int      @default(15)
+  warnPercent           Int      @default(20)
+  grantOnCreate         Boolean  @default(true)
+  grantToDisabled       Boolean  @default(false)
+  timezone              String   @default("Asia/Shanghai")
+  updatedById           String?
+  createdAt             DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime @updatedAt @db.Timestamptz(3)
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+/// 按操作类型的定价，版本化。历史流水锁定 priceRuleVersion + unitCost。
+model PointsPriceRule {
+  id             String    @id @default(cuid())
+  organizationId String
+  operationCode  String
+  version        Int       @default(1)
+  unitCost       Int
+  maxCost        Int
+  dailyFreeCount Int       @default(0)
+  status         String    @default("ACTIVE")
+  effectiveFrom  DateTime  @default(now()) @db.Timestamptz(3)
+  effectiveTo    DateTime? @db.Timestamptz(3)
+  note           String?
+  createdById    String?
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, operationCode, version])
+  @@index([organizationId, operationCode, status, effectiveFrom])
+}
+
+/// 余额缓存聚合。真值由 Grant + Ledger 推导，每日对账校验。
+model PointsAccount {
+  organizationId String
+  userId         String
+  balance        Int      @default(0)
+  reserved       Int      @default(0)
+  lastPeriod     String?
+  revision       Int      @default(1)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, userId])
+  @@index([organizationId, balance])
+}
+
+/// 额度批次。只有 BASE 可结转，其余全部当月失效。
+model PointsGrant {
+  id              String    @id @default(cuid())
+  organizationId  String
+  userId          String
+  period          String
+  kind            String
+  amount          Int
+  remaining       Int
+  reserved        Int       @default(0)
+  carryable       Boolean   @default(false)
+  status          String    @default("ACTIVE")
+  expiresAt       DateTime  @db.Timestamptz(3)
+  sourceRequestId String?   @unique
+  sourceRunId     String?
+  reason          String?
+  operatorId      String?
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, userId, status, expiresAt])
+  @@index([organizationId, period, kind])
+}
+
+/// 不可篡改流水。requestKey 幂等，(org,user,requestKey,kind) 唯一。
+model PointsLedger {
+  id               String    @id @default(cuid())
+  organizationId   String
+  userId           String
+  requestKey       String
+  kind             String
+  operationCode    String?
+  delta            Int
+  status           String    @default("POSTED")
+  balanceAfter     Int
+  reservedAfter    Int       @default(0)
+  grantId          String?
+  priceRuleVersion Int?
+  unitCost         Int?
+  runId            String?
+  requestId        String?
+  note             String
+  createdById      String?
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId, requestKey, kind])
+  @@index([organizationId, userId, createdAt, id])
+  @@index([organizationId, status, createdAt])
+}
+
+/// 月度周期。发放时把生效额度快照进 baseQuota，避免事后改配置影响历史。
+model PointsPeriod {
+  organizationId String
+  userId         String
+  period         String
+  baseQuota      Int      @default(0)
+  carriedIn      Int      @default(0)
+  extraGranted   Int      @default(0)
+  consumed       Int      @default(0)
+  expiredAmount  Int      @default(0)
+  status         String   @default("OPEN")
+  openedAt       DateTime @default(now()) @db.Timestamptz(3)
+  closedAt       DateTime? @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, userId, period])
+  @@index([organizationId, period, status])
+}
+
+/// 补充额度申请单。审批通过生成 EXTRA grant，sourceRequestId 保证一单只发一次。
+model PointsRequest {
+  id              String    @id @default(cuid())
+  organizationId  String
+  requestNo       String
+  applicantId     String
+  period          String
+  requestedAmount Int
+  approvedAmount  Int?
+  reason          String
+  usagePlan       String?
+  status          String    @default("PENDING")
+  approverId      String?
+  decisionNote    String?
+  decidedAt       DateTime? @db.Timestamptz(3)
+  expiresAt       DateTime  @db.Timestamptz(3)
+  grantId         String?
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, requestNo])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, applicantId, period, status])
+}
+
+/// 预扣分配明细。一个 requestKey 可能跨多个批次，结算/释放必须逐批次回滚。
+model PointsAllocation {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  requestKey     String
+  grantId        String
+  amount         Int
+  status         String   @default("HELD")
+  settledAmount  Int      @default(0)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId, requestKey, grantId])
+  @@index([organizationId, grantId, status])
+  @@index([organizationId, requestKey, status])
+}
+
+/// 单个成员的额度覆盖。null 表示继承 PointsPolicy。
+model PointsMemberOverride {
+  organizationId String
+  userId         String
+  monthlyQuota   Int?
+  carryoverCap   Int?
+  canApprove     Boolean   @default(false)
+  canRequest     Boolean   @default(true)
+  note           String?
+  updatedById    String?
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, userId])
 }

@@ -23,6 +23,8 @@
     "worker:image-upscale": "node scripts/runtime/worker-manager.mjs image-upscale",
     "worker:amazon-sync": "node scripts/runtime/worker-manager.mjs amazon-sync",
     "worker:sellfox-sync": "node scripts/runtime/worker-manager.mjs sellfox-sync",
+    "worker:forecast": "node scripts/runtime/worker-manager.mjs forecast",
+    "forecast:run": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/forecast-run.ts",
     "sellfox:backfill-sales": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/sellfox-sales-backfill.ts",
     "sellfox:fixture-pipeline": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/sellfox-fixture-pipeline.ts",
     "sellfox:ads-reparse-cache": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/sellfox-ads-reparse-from-cache.ts",
@@ -68,7 +70,10 @@
     "test:amazon-orders:offline": "node scripts/test-amazon-sync-integration.mjs --orders",
     "test:amazon-sync:browser": "playwright test --config tests/browser/sync-center.config.ts",
     "worker:import": "node scripts/runtime/worker-manager.mjs import",
-    "test:runtime:integration": "node scripts/test-runtime-integration.mjs"
+    "test:runtime:integration": "node scripts/test-runtime-integration.mjs",
+    "mcp:roles": "node scripts/mcp-isolation/apply-roles.mjs",
+    "verify:points": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/smoke-points.ts",
+    "verify:points:usage": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/smoke-points-usage.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1129.0",

@@ -21,6 +21,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PointsQuickPanel, type PointsRow } from "@/components/accounts/points-quick-panel";
 import {
   permissionActions,
   permissionModules,
@@ -293,6 +294,9 @@ export function AccountWorkbench({
   );
   const [activeRoleId, setActiveRoleId] = useState<RoleId>("operations");
   const [activeTab, setActiveTab] = useState<"members" | "roles">("members");
+  const [pointsByUser, setPointsByUser] = useState<Record<string, PointsRow>>({});
+  const [canAdjustPoints, setCanAdjustPoints] = useState(false);
+  const [pointsReloadKey, setPointsReloadKey] = useState(0);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<AccountStatus | "all">("all");
   const [roleFilter, setRoleFilter] = useState<RoleId | "all">("all");
@@ -318,6 +322,28 @@ export function AccountWorkbench({
       })),
     [roles, visibleAccounts],
   );
+
+  useEffect(() => {
+    let canceled = false;
+
+    void fetch("/api/points/overview", { cache: "no-store" })
+      .then(async (response) => (response.ok ? response.json() : null))
+      .then((body: { rows?: PointsRow[]; access?: { canAdjust: boolean } } | null) => {
+        if (canceled || !body) return;
+
+        const map: Record<string, PointsRow> = {};
+        for (const row of body.rows ?? []) map[row.userId] = row;
+        setPointsByUser(map);
+        setCanAdjustPoints(Boolean(body.access?.canAdjust));
+      })
+      .catch(() => {
+        // 积分看板不可用时不影响账号管理主流程
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, [pointsReloadKey]);
 
   useEffect(() => {
     let canceled = false;
@@ -780,7 +806,7 @@ export function AccountWorkbench({
           </div>
           <CardContent className="p-0">
             <div className="overflow-auto">
-              <table className="w-full min-w-[860px] border-collapse text-sm">
+              <table className="w-full min-w-[960px] border-collapse text-sm">
                 <thead className="bg-surface-muted text-xs font-bold text-muted">
                   <tr>
                     <th className="px-5 py-3 text-left">姓名</th>
@@ -788,6 +814,7 @@ export function AccountWorkbench({
                     <th className="px-5 py-3 text-left">部门 / 岗位</th>
                     <th className="px-5 py-3 text-left">系统角色</th>
                     <th className="px-5 py-3 text-left">状态</th>
+                    <th className="px-5 py-3 text-left">本月积分</th>
                     <th className="px-5 py-3 text-left">最近活动</th>
                     <th className="px-5 py-3 text-right">操作</th>
                   </tr>
@@ -821,6 +848,24 @@ export function AccountWorkbench({
                         </select>
                       </td>
                       <td className="px-5 py-4"><Badge tone={account.status === "active" ? "green" : account.status === "disabled" ? "red" : "amber"}>{account.status === "active" ? "正常" : account.status === "disabled" ? "已停用" : account.status === "pending" ? "待激活" : "已归档"}</Badge></td>
+                      <td className="px-5 py-4">
+                        {pointsByUser[account.id] ? (
+                          <div>
+                            <p className={`text-sm font-bold ${pointsByUser[account.id].balance === 0 ? "text-red-600" : "text-foreground"}`}>
+                              {pointsByUser[account.id].balance}
+                              <span className="ml-1 text-xs font-normal text-muted">/ {pointsByUser[account.id].totalQuota}</span>
+                            </p>
+                            <div className="mt-1 h-1 w-16 overflow-hidden rounded-full bg-border">
+                              <div className="h-full bg-brand" style={{ width: `${pointsUsagePercent(pointsByUser[account.id])}%` }} />
+                            </div>
+                            {pointsByUser[account.id].pendingRequests > 0 ? (
+                              <p className="mt-0.5 text-xs text-amber-600">待审批 {pointsByUser[account.id].pendingRequests}</p>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted">—</span>
+                        )}
+                      </td>
                       <td className="px-5 py-4">
                         <p className="font-medium text-foreground">{account.lastLoginIp || "IP 未记录"}</p>
                         <p className="text-xs text-muted">{account.lastLoginAt || account.lastActiveAt || "时间未记录"}</p>
@@ -1061,7 +1106,15 @@ export function AccountWorkbench({
       {newRoleOpen ? <RoleDialog roles={availableRoleTemplates} onClose={() => setNewRoleOpen(false)} onSubmit={addRole} /> : null}
       {roleMembersOpen ? <RoleMembersDialog role={activeRole} accounts={activeRoleMembers} onClose={() => setRoleMembersOpen(false)} /> : null}
       {editAccount ? (
-        <EditAccountDialog account={editAccount} roles={roles} onClose={() => setEditAccount(null)} onSubmit={saveAccount} />
+        <EditAccountDialog
+          account={editAccount}
+          roles={roles}
+          onClose={() => setEditAccount(null)}
+          onSubmit={saveAccount}
+          pointsRow={pointsByUser[editAccount.id] ?? null}
+          canAdjustPoints={canAdjustPoints}
+          onPointsChanged={() => setPointsReloadKey((key) => key + 1)}
+        />
       ) : null}
       {archivedAccountsOpen ? <ArchivedAccountsDialog rows={archivedAccountRows} onClose={() => setArchivedAccountsOpen(false)} /> : null}
     </div>
@@ -1316,11 +1369,17 @@ function EditAccountDialog({
   roles,
   onClose,
   onSubmit,
+  pointsRow,
+  canAdjustPoints = false,
+  onPointsChanged,
 }: {
   account: Account;
   roles: Role[];
   onClose: () => void;
   onSubmit: (account: Account) => void;
+  pointsRow?: PointsRow | null;
+  canAdjustPoints?: boolean;
+  onPointsChanged?: () => void;
 }) {
   const [form, setForm] = useState(account);
   const [password, setPassword] = useState("");
@@ -1371,6 +1430,15 @@ function EditAccountDialog({
           </Field>
         </div>
       </div>
+      <div className="mt-4">
+        <PointsQuickPanel
+          userId={form.id}
+          userName={form.name}
+          row={pointsRow ?? null}
+          canAdjust={canAdjustPoints}
+          onChanged={onPointsChanged}
+        />
+      </div>
       <div className="mt-5 flex justify-end gap-2">
         <Button variant="secondary" onClick={onClose}>
           取消
@@ -1392,6 +1460,12 @@ function EditAccountDialog({
     </Modal>
   );
 }
+function pointsUsagePercent(row: PointsRow) {
+  if (row.totalQuota <= 0) return 0;
+
+  return Math.min(100, Math.round((row.consumed / row.totalQuota) * 100));
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="space-y-2">
