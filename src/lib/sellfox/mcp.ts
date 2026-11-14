@@ -19,8 +19,8 @@ import {
   McpIsolationError, mcpAuditAction, providerOfToken,
 } from "@/lib/mcp/isolation";
 import {
-  normalizeSellfoxToolGrants, sellfoxDataset, sellfoxDatasetKeys, sellfoxDatasets,
-  sellfoxMcpDefinition, sellfoxMcpToolDefinitions, sellfoxMcpToolNames, type SellfoxMcpToolDefinition,
+  normalizeSellfoxToolGrants, sellfoxDataset, sellfoxDatasetKeys, sellfoxDatasets, sellfoxTableAllowList,
+  sellfoxMcpDefinition, sellfoxMcpToolDefinitions, sellfoxMcpToolNames, type SellfoxDataset, type SellfoxMcpToolDefinition,
 } from "./mcp-tool-registry";
 
 export const SELLFOX_MCP_TOKEN_PREFIX = "sfmcp_";
@@ -221,20 +221,33 @@ class SellfoxScopeSql {
     this.params.push(identity.organizationId, identity.workspaceId);
   }
   /** Same array parameter is reused by every subquery of one statement. */
-  fence(alias: string, column = "storeId") {
+  private fence(alias: string, column: string, nullable = false) {
     if (this.identity.storeScope.includes("*")) return "";
     if (this.fenceIndex === null) {
       this.params.push(this.identity.storeScope);
       this.fenceIndex = this.params.length;
     }
-    return ` AND ${alias}."${column}" = ANY($${this.fenceIndex}::text[])`;
+    const match = `${alias}."${column}" = ANY($${this.fenceIndex}::text[])`;
+    return ` AND ${nullable ? `(${match} OR ${alias}."${column}" IS NULL)` : match}`;
   }
   add(value: unknown) {
     this.params.push(value);
     return `$${this.params.length}`;
   }
-  where(alias: string, column = "storeId") {
-    return `${alias}."organizationId" = $1 AND ${alias}."workspaceId" = $2${this.fence(alias, column)}`;
+  /** Analytical tools always query tables with a full tenant + store shape. */
+  where(alias: string, column: string | null = "storeId") {
+    const tenant = `${alias}."organizationId" = $1 AND ${alias}."workspaceId" = $2`;
+    return column ? `${tenant}${this.fence(alias, column)}` : tenant;
+  }
+  /** Dataset-aware fence covering all three table shapes in the closed catalog. */
+  whereDataset(alias: string, dataset: SellfoxDataset) {
+    const tenant = `${alias}."organizationId" = $1 AND ${alias}."workspaceId" = $2`;
+    if (dataset.scopeMode === "tenant_only") return tenant;
+    const column = dataset.storeColumn ?? "storeId";
+    if (dataset.scopeMode === "store_join") {
+      return `EXISTS (SELECT 1 FROM "SellfoxStore" sf WHERE sf."id" = ${alias}."${column}" AND sf."organizationId" = $1 AND sf."workspaceId" = $2)${this.fence(alias, column)}`;
+    }
+    return `${tenant}${this.fence(alias, column, dataset.nullableStore === true)}`;
   }
 }
 
@@ -256,6 +269,7 @@ function validateArgs(definition: SellfoxMcpToolDefinition, raw: unknown, storeS
       continue;
     }
     if (typeof value !== "string" || !value || value.length > 200 || value !== value.trim()) throw new McpIsolationError(`参数「${key}」无效。`, "TOOL_NOT_ALLOWED", 400, "sellfox");
+    if (Array.isArray(spec.enum) && !(spec.enum as readonly unknown[]).includes(value)) throw new McpIsolationError(`参数「${key}」取值无效。`, "TOOL_NOT_ALLOWED", 400, "sellfox");
     if (key === "dataset" && !sellfoxDatasetKeys.includes(value)) throw new McpIsolationError(`未知数据集「${value}」。`, "DATASET_NOT_ALLOWED", 403, "sellfox");
     if (typeof spec.format === "string" && spec.format === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new McpIsolationError(`参数「${key}」须为 YYYY-MM-DD。`, "TOOL_NOT_ALLOWED", 400, "sellfox");
   }
@@ -278,18 +292,40 @@ async function toolStores(identity: SellfoxMcpIdentity) {
   return { count: rows.length, rows };
 }
 
+/** Physical column list of the closed catalog, read from the catalog itself. */
+async function datasetPhysicalColumns(): Promise<Record<string, string[]>> {
+  try {
+    const rows = await readOnlyQuery<{ table: string; columns: string[] }>(
+      `SELECT table_name::text AS table, array_agg(column_name::text ORDER BY ordinal_position) AS columns
+       FROM information_schema.columns
+       WHERE table_schema = current_schema() AND table_name = ANY($1::text[])
+       GROUP BY table_name`,
+      [sellfoxTableAllowList],
+    );
+    return Object.fromEntries(rows.map(row => [row.table, row.columns]));
+  } catch {
+    return {};
+  }
+}
+
 async function toolOverview(identity: SellfoxMcpIdentity) {
+  const physical = await datasetPhysicalColumns();
   const rows = await Promise.all(Object.values(sellfoxDatasets).map(async dataset => {
     const scope = new SellfoxScopeSql(identity);
     const storeCount = dataset.storeColumn ? `, count(DISTINCT t."${dataset.storeColumn}")::int AS stores` : "";
+    const meta = {
+      dataset: dataset.key, label: dataset.label, table: dataset.table,
+      columns: physical[dataset.table] ?? dataset.columns.map(column => column.replace(/^"|"$/g, "")),
+      excludedColumns: dataset.excludedColumns ?? [], fieldsDefault: "all",
+    };
     try {
       const [row] = await readOnlyQuery<{ n: number; latest: string | null; stores?: number }>(
-        `SELECT count(*)::int AS n, max(t."${dataset.dateField}")::text AS latest${storeCount} FROM "${dataset.table}" t WHERE ${scope.where("t", dataset.storeColumn ?? "storeId")}`,
+        `SELECT count(*)::int AS n, max(t."${dataset.dateField}")::text AS latest${storeCount} FROM "${dataset.table}" t WHERE ${scope.whereDataset("t", dataset)}`,
         scope.params,
       );
-      return { dataset: dataset.key, label: dataset.label, rows: row?.n ?? 0, latest: row?.latest ?? null, stores: dataset.storeColumn ? row?.stores ?? 0 : null };
+      return { ...meta, rows: row?.n ?? 0, latest: row?.latest ?? null, stores: dataset.storeColumn ? row?.stores ?? 0 : null };
     } catch (error) {
-      return { dataset: dataset.key, label: dataset.label, rows: 0, latest: null, stores: null, error: error instanceof Error ? error.message.slice(0, 80) : "query failed" };
+      return { ...meta, rows: 0, latest: null, stores: null, error: error instanceof Error ? error.message.slice(0, 80) : "query failed" };
     }
   }));
   return { rows };
@@ -298,17 +334,28 @@ async function toolOverview(identity: SellfoxMcpIdentity) {
 async function toolQueryData(identity: SellfoxMcpIdentity, args: ToolArgs) {
   const dataset = sellfoxDataset(String(args.dataset ?? ""));
   const scope = new SellfoxScopeSql(identity);
-  const where = [scope.where("t", dataset.storeColumn ?? "storeId")];
-  if (dataset.storeColumn && typeof args.storeId === "string") where.push(`t."${dataset.storeColumn}" = ${scope.add(args.storeId)}`);
+  const where = [scope.whereDataset("t", dataset)];
+  if (typeof args.storeId === "string") {
+    if (!dataset.storeColumn) throw new McpIsolationError(`数据集「${dataset.key}」没有店铺维度，不接受 storeId。`, "TOOL_NOT_ALLOWED", 400, "sellfox");
+    where.push(`t."${dataset.storeColumn}" = ${scope.add(args.storeId)}`);
+  }
   if (typeof args.fromDate === "string") where.push(`t."${dataset.dateField}" >= ${scope.add(args.fromDate)}::date`);
   if (typeof args.toDate === "string") where.push(`t."${dataset.dateField}" <= ${scope.add(args.toDate)}::date`);
   const limit = limitOf(args, dataset.defaultLimit);
   const offset = args.offset === undefined ? 0 : Math.max(0, Number(args.offset));
-  const rows = await readOnlyQuery(
-    `SELECT t.${dataset.columns.join(", t.")} FROM "${dataset.table}" t WHERE ${where.join(" AND ")} ORDER BY t."${dataset.dateField}" DESC LIMIT ${limit} OFFSET ${offset}`,
+  const fields = args.fields === "summary" ? "summary" : "all";
+  const projection = fields === "summary" ? `t.${dataset.columns.join(", t.")}` : "t.*";
+  const rows = await readOnlyQuery<Record<string, unknown>>(
+    `SELECT ${projection} FROM "${dataset.table}" t WHERE ${where.join(" AND ")} ORDER BY t."${dataset.dateField}" DESC LIMIT ${limit} OFFSET ${offset}`,
     scope.params,
   );
-  return { dataset: dataset.key, count: rows.length, rows };
+  // Sensitive physical columns never leave this process, even in `all` mode.
+  const excluded = dataset.excludedColumns ?? [];
+  const projected = excluded.length
+    ? rows.map(row => { const copy = { ...row }; for (const column of excluded) delete copy[column]; return copy; })
+    : rows;
+  return { dataset: dataset.key, fields, count: projected.length, rows: projected,
+    ...(excluded.length ? { excludedColumns: excluded } : {}) };
 }
 
 async function toolRestock(identity: SellfoxMcpIdentity, args: ToolArgs) {
@@ -405,7 +452,7 @@ async function toolSalesTrend(identity: SellfoxMcpIdentity, args: ToolArgs) {
   const where = scope.where("s", "storeId");
   const storeFilter = typeof args.storeId === "string" ? ` AND s."storeId" = ${scope.add(args.storeId)}` : "";
   const rows = await readOnlyQuery(
-    `SELECT s."reportDate", sum(s."orderNum") AS orders, round(sum(s."salePrice")::numeric, 2) AS gmv, count(DISTINCT s."storeId")::int AS stores
+    `SELECT s."reportDate", sum(s."orders") AS orders, round(sum(s."revenue")::numeric, 2) AS gmv, count(DISTINCT s."storeId")::int AS stores
      FROM "SellfoxSalesDailySnapshot" s WHERE ${where} AND s."reportDate"::date > current_date - ${daysParam}::int${storeFilter}
      GROUP BY s."reportDate" ORDER BY s."reportDate" DESC`,
     scope.params,

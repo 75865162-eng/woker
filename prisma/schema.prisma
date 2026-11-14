@@ -1500,6 +1500,95 @@ model SellfoxSyncRun {
   @@index([status, leaseExpiresAt])
 }
 
+/// 同步分片断点：一次 run 按「资源 × 店铺(scopeKey) × 期间(period)」拆分记录进度。
+/// scopeKey 为店铺 externalId（store:<externalId>）或 "*"（无店铺粒度的资源）；
+/// period 为业务日期 "2026-11-14" 或区间 "2026-11-01..2026-11-07"、"latest"（当前状态）。
+/// 运行中的断点写在 cursor，重跑覆盖同一分片时 upsert，不做历史累积。
+model SellfoxSyncShard {
+  id             String    @id
+  organizationId String
+  workspaceId    String    @default("default")
+  resource       String
+  scopeKey       String
+  period         String
+  status         String    @default("running")
+  rows           Int       @default(0)
+  cursor         Json?
+  runId          String
+  startedAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  finishedAt     DateTime?
+
+  @@unique([organizationId, workspaceId, resource, scopeKey, period])
+  @@index([organizationId, workspaceId, resource, updatedAt])
+  @@index([resource, status])
+}
+
+/// 泛化覆盖度：每次 run 完成后按「资源 × 店铺」从事实表重新计算（min/max 日期 + 行数），
+/// 不是累加写入数，保证与落表数据一致。全局资源（stores）不产生覆盖记录。
+model SellfoxCoverage {
+  id             String   @id
+  organizationId String
+  workspaceId    String   @default("default")
+  resource       String
+  storeId        String
+  firstDate      String?
+  lastDate       String?
+  rowCount       Int      @default(0)
+  lastRunId      String?
+  lastStatus     String?
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, workspaceId, resource, storeId])
+  @@index([organizationId, workspaceId, resource])
+}
+
+/// 后台配置的赛狐 API 端点。新增接口只需填一条配置，编排器自动生成全量计划、定时与回填。
+model SellfoxApiEndpoint {
+  id             String   @id
+  organizationId String
+  workspaceId    String   @default("default")
+  code           String
+  label          String
+  path           String
+  dateMode       String   @default("range")
+  scopeMode      String   @default("store")
+  chunkDays      Int      @default(7)
+  pageSize       Int      @default(100)
+  rowsPath       String   @default("")
+  idFields       String   @default("")
+  params         String   @default("{}")
+  dateFormat     String   @default("yyyy-MM-dd")
+  maxRows        Int      @default(50000)
+  enabled        Boolean  @default(true)
+  historyFrom    String?
+  cursorDate     String?
+  lastPlannedAt  DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, workspaceId, code])
+  @@index([organizationId, workspaceId, enabled])
+}
+
+/// 通用采集原始行：payload 保留接口原始响应行，不猜字段、不补零、不跨币种计算。
+model SellfoxApiRecord {
+  id             String   @id
+  organizationId String
+  workspaceId    String   @default("default")
+  endpointCode   String
+  storeId        String?
+  scopeKey       String
+  period         String
+  externalId     String
+  payload        Json
+  syncedAt       DateTime @default(now())
+
+  @@unique([organizationId, workspaceId, endpointCode, scopeKey, period, externalId])
+  @@index([organizationId, workspaceId, endpointCode, period])
+  @@index([organizationId, workspaceId, endpointCode, storeId])
+}
+
 model SellfoxFbaInventorySnapshot {
   id                     String       @id
   organizationId         String

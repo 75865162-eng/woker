@@ -25,6 +25,17 @@ test("six sellfox replica routes keep data and stub split", () => {
   assert.ok(replicaPages.find((page) => page.id === "performance")?.columns.some((column) => column.label === "毛利润"));
 });
 
+test("sales matrix keeps the sellfox first-screen columns and 品名 grain", () => {
+  const sales = replicaPages.find((page) => page.id === "sales");
+  assert.equal(sales?.defaultDimension, "msku");
+  assert.deepEqual(
+    sales?.columns.filter((column) => column.defaultVisible !== false).map((column) => column.label),
+    ["品名/品SKU", "图片", "店铺/站点", "销量", "FBA总库存", "AWD库存", "AWD在途", "小计"],
+  );
+  assert.deepEqual(sales?.columns.filter((column) => column.sortable).map((column) => column.key), ["quantity", "subtotal"]);
+  assert.equal(sales?.columns.find((column) => column.key === "subtotal")?.kind, "metric");
+});
+
 test("date presets stay on the Asia/Shanghai calendar", () => {
   assert.equal(addCalendarDays("2026-11-06", -29), "2026-10-08");
   assert.deepEqual(rangeForPreset("d30", "2026-11-06"), { from: "2026-10-08", to: "2026-11-06" });

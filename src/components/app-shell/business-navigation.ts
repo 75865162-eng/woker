@@ -1,4 +1,4 @@
-import { Activity, Banknote, BookMarked, Bot, Boxes, Calculator, ChartNoAxesCombined, ClipboardList, Handshake, History, Landmark, ListChecks, PackageSearch, ReceiptText, SearchCheck, Settings, Sparkles, Star, Store, Tags, Target, Truck, UploadCloud, UsersRound, Warehouse } from "lucide-react";
+import { Activity, Banknote, BookMarked, Bot, Boxes, Calculator, ChartNoAxesCombined, ClipboardList, Handshake, History, Landmark, ListChecks, PackageSearch, ReceiptText, RefreshCw, SearchCheck, Settings, Sparkles, Star, Store, Tags, Target, Truck, UploadCloud, UsersRound, Warehouse } from "lucide-react";
 
 export const accountMenuItems = [
   { href: "/tasks", label: "任务中心", icon: ListChecks, moduleId: "tasks" },
@@ -12,6 +12,7 @@ export const accountMenuItems = [
 export const navigationGroups = [
   { label: "商品管理", items: [
     { href: "/dashboard", label: "商品主档", icon: Boxes, moduleId: "products" },
+    { href: "/sellfox/products", label: "Sellfox 商品资料", icon: Tags, moduleId: "sellfox" },
     { href: "/operations?view=catalog", label: "Amazon 在线商品", icon: Store, moduleId: "operations" },
     { href: "/operations?view=listing_details", label: "Listing 信息", icon: ClipboardList, moduleId: "operations" },
     { href: "/listing-ai", label: "Listing AI", icon: Sparkles, moduleId: "listingAi" },
@@ -21,6 +22,8 @@ export const navigationGroups = [
   ] },
   { label: "销售管理", items: [
     { href: "/operations?view=orders", label: "Amazon 订单", icon: ClipboardList, moduleId: "operations" },
+    { href: "/sellfox/sales", label: "Sellfox 销量统计", icon: ChartNoAxesCombined, moduleId: "sellfox" },
+    { href: "/sellfox/profit", label: "Sellfox 利润报表", icon: Banknote, moduleId: "sellfox" },
     { href: "/operations?view=order-items", label: "订单商品", icon: Boxes, moduleId: "operations" },
     { href: "/sellfox/orders", label: "Sellfox 订单快照", icon: Store, moduleId: "sellfox" },
     { href: "/operations/reviews", label: "评论与店铺绩效", icon: Star, moduleId: "operations" },
@@ -31,17 +34,21 @@ export const navigationGroups = [
     { href: "/amazon-ads/campaigns", label: "Amazon Ads", icon: Activity, moduleId: "workspace" },
     { href: "/workspace", label: "PPC Bulk 优化", icon: UploadCloud, moduleId: "workspace" },
     { href: "/operations?view=ads", label: "PPC 经营指标", icon: ChartNoAxesCombined, moduleId: "operations" },
+    { href: "/sellfox/ads", label: "Sellfox 广告报表", icon: Target, moduleId: "sellfox" },
   ] },
   { label: "采购管理", items: [
     { href: "/operations/purchase-plans", label: "采购计划", icon: ClipboardList, moduleId: "operations" },
     { href: "/operations?view=purchase-orders", label: "采购订单", icon: ClipboardList, moduleId: "operations" },
     { href: "/operations/purchase-invoices", label: "采购发票", icon: ReceiptText, moduleId: "operations" },
     { href: "/operations?view=suppliers", label: "供应商档案", icon: Store, moduleId: "operations" },
+    { href: "/sellfox/purchase", label: "Sellfox 采购", icon: ClipboardList, moduleId: "sellfox" },
     { href: "/operations/procurement-collab", label: "采购协同", icon: Handshake, moduleId: "operations" },
     { href: "/operations/ops-extensions", label: "运营资料与滞销", icon: Boxes, moduleId: "operations" },
   ] },
   { label: "仓库管理", items: [
     { href: "/operations?view=inventory", label: "FBA 库存", icon: Warehouse, moduleId: "operations" },
+    { href: "/sellfox/inventory", label: "Sellfox 库存", icon: Warehouse, moduleId: "sellfox" },
+    { href: "/sellfox/stock-ops", label: "Sellfox 出入库", icon: PackageSearch, moduleId: "sellfox" },
     { href: "/operations?view=inventory_age", label: "库存库龄", icon: Activity, moduleId: "operations" },
     { href: "/operations?view=inventory_events", label: "库存事件", icon: Activity, moduleId: "operations" },
     { href: "/operations?view=replenishment", label: "补货计划", icon: Boxes, moduleId: "operations" },
@@ -62,6 +69,7 @@ export const navigationGroups = [
   { label: "财务管理", items: [
     { href: "/operations?view=finance", label: "财务交易", icon: Banknote, moduleId: "operations" },
     { href: "/operations?view=settlements", label: "结算报告", icon: Banknote, moduleId: "operations" },
+    { href: "/sellfox/finance", label: "Sellfox 结算", icon: Landmark, moduleId: "sellfox" },
     { href: "/operations?view=reimbursements", label: "FBA 赔偿", icon: Banknote, moduleId: "operations" },
     { href: "/operations?view=expense-management", label: "ERP 费用单", icon: Banknote, moduleId: "operations" },
     { href: "/sellfox/performance", label: "Sellfox 经营报表", icon: ChartNoAxesCombined, moduleId: "sellfox" },
@@ -71,6 +79,7 @@ export const navigationGroups = [
     { href: "/operations?view=sales-traffic", label: "销售与流量", icon: ChartNoAxesCombined, moduleId: "operations" },
     { href: "/operations?view=brand_analytics", label: "品牌分析", icon: SearchCheck, moduleId: "operations" },
     { href: "/sellfox", label: "Sellfox 数据", icon: Store, moduleId: "sellfox" },
+    { href: "/sellfox/sync", label: "Sellfox 同步", icon: RefreshCw, moduleId: "sellfox" },
     { href: "/operations", label: "同步中心", icon: Activity, moduleId: "operations" },
   ] },
   { label: "AI 与工具", items: [

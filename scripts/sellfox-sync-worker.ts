@@ -17,6 +17,7 @@ import { sellfoxStoreFailure, SellfoxStoreSyncError } from "@/lib/sellfox/sync-e
 import { generateAdsProposals } from "@/lib/sellfox/ads-proposal";
 import { SellfoxRequestError, closeSellfoxClient } from "@/lib/sellfox/client";
 import { normalizeSellfoxDates, sellfoxSyncDisabledReason, SellfoxSyncInputError, SellfoxSyncUnavailableError, type SellfoxSyncResource } from "@/lib/sellfox/sync-contract";
+import { planSellfoxEndpointAuto, handleSellfoxAdaptiveSplits } from "@/lib/sellfox/sync-orchestrator";
 
 const workerName = process.env.SELLFOX_SYNC_WORKER_NAME?.trim() || `${sellfoxSyncQueueName}-${process.pid}`;
 const workerId = process.env.SELLFOX_SYNC_WORKER_ID?.trim() || `${workerName}-${process.pid}`;
@@ -78,6 +79,11 @@ async function recoverAndSchedule() {
         await tx.sellfoxSyncSchedule.update({ where: { id: schedule.id }, data: { lastEnqueuedAt: now } });
       });
     }
+    // 后台配置的 API 端点：历史全量按游标自动推进，失败块自动拆窗口，无需人工脚本。
+    try {
+      await planSellfoxEndpointAuto();
+      await handleSellfoxAdaptiveSplits();
+    } catch (error) { console.error("[sellfox-sync-worker] endpoint auto plan failed", tickFailure(error)); }
     const scheduledPending = await prisma.sellfoxSyncRun.findMany({ where: { status: "queued", summary: { path: ["trigger"], equals: "schedule" } }, orderBy: { startedAt: "asc" }, take: 50 });
     for (const run of scheduledPending) await recoverSellfoxQueueRun(run.id);
   } finally { recovering = false; }

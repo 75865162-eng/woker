@@ -93,7 +93,7 @@ test("UI browse SQL binds scope and search text, filters after entity aggregatio
   const query = sellfoxBrowseQuery(new URL('http://localhost/?from=2026-10-01&to=2026-10-07&search=%27%3BDROP%20TABLE&hideZero=1&dimension=asin'));
   const sql = workbenchReadSql("sales", query, { organizationId: "org-unique", workspaceId: "workspace-unique" });
   assert.ok(sql.values.includes("org-unique")); assert.ok(sql.values.includes("workspace-unique")); assert.ok(sql.values.includes("%';DROP TABLE%"));
-  assert.ok(!sql.text.includes("DROP TABLE")); assert.doesNotMatch(sql.text, /payload|jsonb_array_elements|JOIN "SellfoxListingSnapshot"/);
+  assert.ok(!sql.text.includes("DROP TABLE")); assert.doesNotMatch(sql.text, /payload|jsonb_array_elements\(p\.payload|JOIN "SellfoxListingSnapshot"/);
   assert.ok(sql.values.includes("org-unique"));
   assert.match(sql.text, /bool_and\(complete AND quantity IS NOT NULL\)/);
   assert.match(sql.text, /filtered AS \(SELECT \* FROM grouped WHERE true AND quantity IS DISTINCT FROM 0\)/);
@@ -116,7 +116,7 @@ test("sales excludes incomplete null-quantity/null-revenue shells even with orde
         assert.ok(base.includes(shellFilter));
         assert.doesNotMatch(base, /s\.orders IS NULL/);
         assert.match(sql, /FROM base GROUP BY/);
-        assert.match(sql, /FROM days GROUP BY/);
+        assert.match(sql, /FROM member_join/, "日聚合先拼单表再 rollup，避免逐行相关子查询");
         assert.match(sql, /FROM filtered GROUP BY currency/);
         assert.ok(sql.includes(`jsonb_object_agg("reportDate",${metric}) AS daily`));
       }
@@ -151,7 +151,7 @@ test("developer and SPU use one primary-resolved Listing row per fact without ar
     assert.match(sql.text, /s\.msku IS NOT NULL AND candidate\.msku=s\.msku/);
     assert.match(sql.text, /s\.asin IS NOT NULL AND candidate\.asin=s\.asin/);
     assert.match(sql.text, /COALESCE\(l\.developer,'未分配开发员'\) AS developer/);
-    assert.doesNotMatch(sql.text, /p\.payload|jsonb_array_elements|JOIN "SellfoxListingSnapshot"/);
+    assert.doesNotMatch(sql.text, /p\.payload|jsonb_array_elements\(p\.payload|JOIN "SellfoxListingSnapshot"/);
     assert.match(sql.text, /COALESCE\(l\.spu,'未分配SPU'\) AS spu/);
     assert.match(sql.text, /FROM base GROUP BY identity,currency/);
     assert.doesNotMatch(sql.text, /GROUP BY "storeId",(?:identity|currency,identity)/);
@@ -161,7 +161,7 @@ test("developer and SPU use one primary-resolved Listing row per fact without ar
     assert.match(sql.text, /jsonb_agg\(DISTINCT jsonb_build_array\((?:b\.)?"storeId",(?:b\.)?msku\)\)/);
     if (domain === "sales") {
       assert.match(sql.text, /FROM base GROUP BY identity,currency,"reportDate"/);
-      assert.match(sql.text, /FROM days GROUP BY identity,currency/);
+      assert.match(sql.text, /FROM member_join/);
       assert.doesNotMatch(sql.text, /b\."storeId"=days\."storeId"/);
     }
     assert.match(sql.text, /COALESCE\(l\.developer,'未分配开发员'\) ILIKE|COALESCE\(l\.spu,'未分配SPU'\) ILIKE/);
@@ -197,11 +197,15 @@ test("product dimensions retain store-scoped identity and sales members", () => 
     for (const dimension of ["asin", "parentAsin", "msku", "sku"]) {
       const query = sellfoxBrowseQuery(new URL(`http://localhost/?dimension=${dimension}`));
       const sql = workbenchReadSql(domain, query, { organizationId: "org", workspaceId: "ws" }).text;
-      assert.match(sql, /FROM base GROUP BY "storeId",(?:identity,currency|currency,identity)/);
-      assert.doesNotMatch(sql, /AS "stockMembers"/);
       if (domain === "sales") {
-        assert.match(sql, /FROM days GROUP BY "storeId",identity,currency/);
-        assert.match(sql, /b\."storeId"=days\."storeId"/);
+        // 销量商品维度按品名跨店铺合并；库存仍以 (storeId,msku) 成员精确配对，不跨店摊薄。
+        assert.match(sql, /FROM base GROUP BY identity,currency/);
+        assert.match(sql, /AS "stockMembers"/);
+        assert.match(sql, /FROM member_join/);
+        assert.doesNotMatch(sql, /b\."storeId"=days\."storeId"/);
+      } else {
+        assert.match(sql, /FROM base GROUP BY "storeId",(?:identity,currency|currency,identity)/);
+        assert.doesNotMatch(sql, /AS "stockMembers"/);
       }
     }
   }
@@ -1418,7 +1422,7 @@ test("untagged sales and performance browse keep label expansion out of the main
     const sql = workbenchReadSql(domain, query, scope);
     const listing = sql.text.slice(0, sql.text.indexOf("base AS ("));
     assert.doesNotMatch(listing, /productLabelList|labelDetailList|productTagNames|product_labels/);
-    assert.match(sql.text, /unnest\(l\."productTagNames"\)/); assert.doesNotMatch(sql.text, /p\.payload|jsonb_array_elements/);
+    assert.match(sql.text, /unnest\(l\."productTagNames"\)/); assert.doesNotMatch(sql.text, /p\.payload|jsonb_array_elements\(p\.payload/);
     assert.match(sql.text, /jsonb_build_object\('productTags',[\s\S]*SELECT DISTINCT tag\."labelName" FROM sellfox_listing_current l/);
     assert.doesNotMatch(workbenchReadSql(domain, query, scope, true).text, /productLabelList|AS facets/);
   }
@@ -1437,7 +1441,7 @@ test("productTag exact membership filters current Listing members before aggrega
           const base = sql.text.slice(sql.text.indexOf("base AS ("), sql.text.indexOf(domain === "sales" ? "days AS (" : "grouped AS ("));
           assert.match(listing, /l\."productTagNames" @> ARRAY\[\$\d+\]::text\[\] AS "matchesProductTag"/);
           assert.match(base, /AND l\."matchesProductTag"\)/);
-          assert.doesNotMatch(sql.text, /p\.payload|jsonb_array_elements|product_labels/);
+          assert.doesNotMatch(sql.text, /p\.payload|jsonb_array_elements\(p\.payload|product_labels/);
           assert.ok(sql.values.includes(tag));
           assert.ok(sql.values.includes(scope.organizationId)); assert.ok(sql.values.includes(scope.workspaceId));
           assert.ok(!sql.values.includes(`%${tag}%`));
@@ -1750,7 +1754,8 @@ test("sales default CSV/XLSX exports trend, average, totalInventory and inventor
     { storeId: "s1", msku: "m2", fulfillable: 1, totalInventory: null, inventoryCapturedAt: null },
   ];
   globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => {
-    if (sql.text.includes("sellfox_inventory_current")) return stocks;
+    // 主 SQL 里也含库存视图（汇总子查询），只有独立的库存查询才以 FROM ... WHERE 开头。
+    if (sql.text.includes("FROM sellfox_inventory_current i WHERE")) return stocks;
     return [{ total: 3, totals: [], rows: [
       { storeId: "s1", msku: "m0", dailyQuantity: quantities },
       { storeId: "s1", msku: "m1", dailyQuantity: { ...quantities, "2026-10-20": null } },

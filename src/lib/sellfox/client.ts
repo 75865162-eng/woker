@@ -16,9 +16,43 @@ function tokenState(namespace: string) {
   }
   return state;
 }
-let requestTail: Promise<void> = Promise.resolve();
-let lastRequestFinishedAt = 0;
 let lockClientReady: Promise<Client> | null = null;
+
+/**
+ * 限流：赛狐是「每个接口 1 请求/秒」，不是全局 1 请求/秒。
+ * - 同一 path 严格 ≥ requestSpacingMs（默认 1.1s，留 10% 余量）；
+ * - 不同 path 互不阻塞，吞吐 = 并发接口数 × 0.9 rps；
+ * - 跨进程用按 path 的 advisory lock（try 轮询，不阻塞连接）。
+ * SELLFOX_RATE_LIMIT_MODE=global 可退回旧的全局串行，用于排障。
+ */
+const rateLimitMode = process.env.SELLFOX_RATE_LIMIT_MODE === "global" ? "global" : "path";
+const requestSpacingMs = Math.min(Math.max(Number(process.env.SELLFOX_REQUEST_SPACING_MS) || 1_100, 1_050), 5_000);
+const rateLimitWaitMs = Math.min(Math.max(Number(process.env.SELLFOX_RATE_LIMIT_WAIT_MS) || 60_000, 5_000), 300_000);
+const globalBucketKey = "sellfox-open-api-global-rate-limit";
+const perPathNextAt = new Map<string, number>();
+const perPathTail = new Map<string, Promise<void>>();
+
+function rateBucketKey(path: string) {
+  return rateLimitMode === "global" ? globalBucketKey : `sellfox-rate:${path}`;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** 同一 path 串行；不同 path 并行。跨进程互斥由 advisory lock 兜底。 */
+function scheduleOnPath<T>(path: string, task: () => Promise<T>): Promise<T> {
+  if (rateLimitMode === "global") {
+    const previous = perPathTail.get(globalBucketKey) ?? Promise.resolve();
+    const run = previous.then(task, task);
+    perPathTail.set(globalBucketKey, run.then(() => undefined, () => undefined));
+    return run;
+  }
+  const previous = perPathTail.get(path) ?? Promise.resolve();
+  const run = previous.then(task, task);
+  perPathTail.set(path, run.then(() => undefined, () => undefined));
+  return run;
+}
 
 type SellfoxEnvelope<T> = { code?: number; msg?: string; data?: T };
 type HttpRequest = { url: string; init: RequestInit };
@@ -64,7 +98,7 @@ async function getAccessToken(credentials: SellfoxResolvedCredentials, state: To
       const params = new URLSearchParams({ client_id: clientId, client_secret: clientSecret, grant_type: "client_credentials" });
       const { response, payload } = await fetchJsonWithTimeout<{ access_token?: string; expires_in?: number }>(() => ({
         url: `${baseUrl}/api/oauth/v2/token.json?${params}`, init: { cache: "no-store" },
-      }));
+      }), "/api/oauth/v2/token.json");
       if (!response.ok || payload.code) throw responseError(response, payload.code);
       const ttlMs = payload.data?.expires_in;
       const token = payload.data?.access_token;
@@ -109,8 +143,38 @@ async function getLockClient() {
   }
 }
 
-async function fetchJsonWithTimeout<T>(buildRequest: () => HttpRequest) {
-  const request = requestTail.then(async () => {
+async function acquireRateSlot(path: string) {
+  if (!process.env.DATABASE_URL) return null;
+  const client = await getLockClient();
+  const key = rateBucketKey(path);
+  const deadline = Date.now() + rateLimitWaitMs;
+  while (Date.now() < deadline) {
+    const result = await client.query<{ ok: boolean }>("SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS ok", [key]);
+    if (result.rows[0]?.ok) return { client, key };
+    await sleep(120);
+  }
+  throw new SellfoxRequestError("赛狐限流排队超时，本次请求未发出。", true);
+}
+
+async function releaseRateSlot(slot: { client: Client; key: string } | null) {
+  if (!slot) return;
+  try {
+    // 补足间隔再释放：下一个持锁进程至少要等到本次起点 + spacing。
+    const waitMs = Math.max(0, (perPathNextAt.get(slot.key) ?? 0) - Date.now());
+    if (waitMs) await sleep(waitMs);
+    await slot.client.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [slot.key]);
+  } catch {
+    lockClientReady = null;
+    await slot.client.end().catch(() => undefined);
+  }
+}
+
+async function fetchJsonWithTimeout<T>(buildRequest: () => HttpRequest, path: string) {
+  return scheduleOnPath(path, async () => {
+    const bucket = rateBucketKey(path);
+    const waitMs = Math.max(0, (perPathNextAt.get(bucket) ?? 0) - Date.now());
+    if (waitMs) await sleep(waitMs);
+    const startedAt = Date.now();
     let lockClient: Client | null = null;
     const controller = new AbortController();
     let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -118,17 +182,15 @@ async function fetchJsonWithTimeout<T>(buildRequest: () => HttpRequest) {
     const abortOnDisconnect = () => { disconnected = true; controller.abort(); };
     try {
       if (process.env.DATABASE_URL) {
-        lockClient = await getLockClient();
-        lockClient.on("error", abortOnDisconnect);
-        lockClient.on("end", abortOnDisconnect);
-        await lockClient.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", ["sellfox-open-api-global-rate-limit"]);
-        await new Promise((resolve) => setTimeout(resolve, 1_200));
-      } else {
-        const waitMs = Math.max(0, lastRequestFinishedAt + 1_200 - Date.now());
-        if (waitMs) await new Promise((resolve) => setTimeout(resolve, waitMs));
+        const slot = await acquireRateSlot(path);
+        if (slot) {
+          lockClient = slot.client;
+          lockClient.on("error", abortOnDisconnect);
+          lockClient.on("end", abortOnDisconnect);
+        }
       }
-      if (disconnected) throw new SellfoxRequestError("赛狐全局限流连接已断开，未发送请求。", true);
-      // Build timestamp/nonce/sign after waiting for the global queue.
+      if (disconnected) throw new SellfoxRequestError("赛狐限流连接已断开，未发送请求。", true);
+      // Build timestamp/nonce/sign after waiting for this path's slot.
       const { url, init } = buildRequest();
       timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
       const response = await fetch(url, { ...init, signal: controller.signal });
@@ -144,29 +206,21 @@ async function fetchJsonWithTimeout<T>(buildRequest: () => HttpRequest) {
       return { response, payload };
     } catch (error) {
       if (error instanceof SellfoxRequestError) throw error;
-      if (disconnected) throw new SellfoxRequestError("赛狐全局限流连接已断开，本次请求已停止。", true);
+      if (disconnected) throw new SellfoxRequestError("赛狐限流连接已断开，本次请求已停止。", true);
       if (error instanceof Error && error.name === "AbortError") {
         throw new SellfoxRequestError(`赛狐接口请求超时（${Math.round(requestTimeoutMs / 1000)} 秒）。`, true);
       }
       throw new SellfoxRequestError("赛狐接口请求或限流连接暂时失败。", true);
     } finally {
       if (timeout) clearTimeout(timeout);
-      lastRequestFinishedAt = Date.now();
+      perPathNextAt.set(bucket, startedAt + requestSpacingMs);
       if (lockClient) {
-        try { if (!disconnected) await lockClient.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", ["sellfox-open-api-global-rate-limit"]); }
-        catch {
-          lockClientReady = null;
-          await lockClient.end().catch(() => undefined);
-        }
-        finally {
-          lockClient.removeListener("error", abortOnDisconnect);
-          lockClient.removeListener("end", abortOnDisconnect);
-        }
+        lockClient.removeListener("error", abortOnDisconnect);
+        lockClient.removeListener("end", abortOnDisconnect);
+        await releaseRateSlot({ client: lockClient, key: bucket });
       }
     }
   });
-  requestTail = request.then(() => undefined, () => undefined);
-  return request;
 }
 
 export async function sellfoxPost<T>(path: string, body: unknown, options?: { retry?: boolean }): Promise<T> {
@@ -185,7 +239,7 @@ export async function sellfoxPost<T>(path: string, body: unknown, options?: { re
         const sign = createHmac("sha256", clientSecret).update(signSource).digest("hex");
         const query = new URLSearchParams({ access_token: accessToken, client_id: clientId, timestamp, nonce, sign });
         return { url: `${baseUrl}${path}?${query}`, init: { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), cache: "no-store" } };
-      });
+      }, path);
       if (payload.code === 40001) {
         if (state.token?.value === accessToken) state.token = null;
         if (!refreshedToken && attempt < 3) { refreshedToken = true; continue; }
@@ -202,7 +256,7 @@ export async function sellfoxPost<T>(path: string, body: unknown, options?: { re
 
 /** Call only after the worker has drained its in-flight jobs. */
 export async function closeSellfoxClient() {
-  await requestTail;
+  await Promise.all([...perPathTail.values()]);
   const pending = lockClientReady;
   lockClientReady = null;
   if (pending) await pending.then(client => client.end()).catch(() => undefined);

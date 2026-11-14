@@ -1,13 +1,12 @@
 import { Prisma } from "@prisma/client";
 import { SellfoxBrowseError, type SellfoxBrowseQuery } from "./browse-query";
-import { sellfoxSortColumns } from "./sort-columns";
+import { isSellfoxSortable } from "./sort-columns";
 
 /** Return the allowlist's constant, never a request string for a SQL identifier. */
 export function sellfoxSortKey(domain: string, query: Pick<SellfoxBrowseQuery, "sortBy" | "sortOrder">) {
   if (!query.sortBy) return undefined;
-  const key = Object.hasOwn(sellfoxSortColumns, domain) ? sellfoxSortColumns[domain].find(key => key === query.sortBy) : undefined;
-  if (!key || !["asc", "desc"].includes(query.sortOrder)) throw new SellfoxBrowseError("当前域不支持该排序列或方向。");
-  return key;
+  if (!isSellfoxSortable(domain, query.sortBy) || !["asc", "desc"].includes(query.sortOrder)) throw new SellfoxBrowseError("当前域不支持该排序列或方向。");
+  return query.sortBy;
 }
 export function sellfoxSqlOrder(query: Pick<SellfoxBrowseQuery, "sortOrder">, expression: Prisma.Sql) {
   return Prisma.sql`${expression} ${query.sortOrder === "desc" ? Prisma.sql`DESC` : Prisma.sql`ASC`} NULLS LAST, id ASC`;

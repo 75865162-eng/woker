@@ -1,8 +1,18 @@
 export const sellfoxSyncResources = ["stores", "inventory", "sales", "performance", "hourly", "listings", "orders", "fba_shipments", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const;
 export type SellfoxSyncResource = (typeof sellfoxSyncResources)[number];
 
+/** 后台配置的自定义 API 端点：resource = endpoint:<code>，与内置域共用 run/队列/租约链路。 */
+const ENDPOINT_PREFIX = "endpoint:";
+export function sellfoxEndpointResource(code: string) { return `${ENDPOINT_PREFIX}${code}`; }
+export function sellfoxEndpointCode(resource: string) {
+  if (!resource.startsWith(ENDPOINT_PREFIX)) return null;
+  const code = resource.slice(ENDPOINT_PREFIX.length);
+  return /^[a-z0-9][a-z0-9_-]{1,63}$/.test(code) ? code : null;
+}
+export function isSellfoxEndpointResource(resource: string) { return sellfoxEndpointCode(resource) !== null; }
+
 export function sellfoxSyncDisabledReason(resource: string): string | null {
-  if (!isSellfoxSyncResource(resource)) return "此赛狐数据域尚未接入。";
+  if (!isSellfoxSyncResource(resource) && !isSellfoxEndpointResource(resource)) return "此赛狐数据域尚未接入。";
   // Listing/product verified live; additional CPC reports enabled with strict provisional XLSX contracts.
 
   return null;

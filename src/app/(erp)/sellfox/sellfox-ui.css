@@ -352,3 +352,426 @@
   justify-content: flex-end;
   margin-top: 12px;
 }
+
+/* 销量日矩阵：首列与汇总行固定，日列右对齐等宽数字，横向滚动时表头同步。 */
+.sellfox-ui .sf-matrix {
+  /* 表格顶部距视口约 350px：留出分页条后让表头与汇总行同时留在视口内。 */
+  max-height: calc(100dvh - 420px);
+  min-height: 280px;
+}
+
+.sellfox-ui .sf-matrix th,
+.sellfox-ui .sf-matrix td {
+  padding: 6px 8px;
+}
+
+.sellfox-ui .sf-th-main {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.sellfox-ui .sf-th-sub {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--sf-muted);
+}
+
+.sellfox-ui .sf-sort {
+  padding: 0 2px;
+  font-size: 12px;
+  line-height: 1;
+  color: #c0c4cc;
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+.sellfox-ui .sf-sort[aria-pressed="true"] { color: var(--sf-blue); }
+
+.sellfox-ui th.sf-num,
+.sellfox-ui td.sf-num,
+.sellfox-ui th.sf-day,
+.sellfox-ui td.sf-day {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.sellfox-ui th.sf-day {
+  min-width: 84px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.sellfox-ui thead th.sf-day .sf-th-main { font-size: 12px; }
+
+.sellfox-ui .sf-matrix thead th:first-child,
+.sellfox-ui .sf-matrix tbody td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  max-width: 260px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.sellfox-ui .sf-matrix thead th:first-child {
+  z-index: 3;
+  background: var(--sf-head);
+}
+
+.sellfox-ui .sf-matrix tbody td:first-child .sf-stack > * {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sellfox-ui .sf-matrix tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  font-weight: 500;
+  background: var(--sf-head);
+  border-top: 1px solid var(--sf-line);
+}
+
+.sellfox-ui .sf-matrix tfoot td:first-child {
+  left: 0;
+  z-index: 4;
+}
+
+.sellfox-ui .sf-goto {
+  width: 56px;
+  height: 28px;
+  padding: 0 4px;
+  border: 1px solid #dcdfe6;
+  border-radius: 2px;
+}
+
+.sellfox-ui .sf-checks { justify-content: flex-end; padding-bottom: 0; }
+.sellfox-ui .sf-actions { padding-top: 4px; }
+
+/* ── 承接页（/sellfox/products|profit|ads|inventory|purchase|finance|stock-ops|sync）──
+   与已有复刻页共用 .sf-tabs / .sf-filter / .sf-table-wrap，只补页头、数据集 tab、
+   未接入面板与同步控制台需要的容器。 */
+.sellfox-ui .sf-page {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 12px;
+}
+
+.sellfox-ui .sf-page-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid var(--sf-line);
+}
+
+.sellfox-ui .sf-page-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.sellfox-ui .sf-page-title h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+  color: #1f2329;
+}
+
+.sellfox-ui .sf-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 6px;
+  font-size: 11px;
+  color: #606266;
+  background: #f4f5f8;
+  border: 1px solid var(--sf-line);
+  border-radius: 2px;
+}
+
+.sellfox-ui .sf-badge-live { color: #0f7a4a; background: #eaf7f0; border-color: #c6e9d7; }
+.sellfox-ui .sf-badge-plan { color: #8a6d1f; background: #fdf6e3; border-color: #f0e0b8; }
+
+.sellfox-ui .sf-page-sub {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--sf-muted);
+}
+
+.sellfox-ui .sf-page-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--sf-muted);
+}
+
+.sellfox-ui .sf-page-meta code,
+.sellfox-ui .sf-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: #4b5563;
+}
+
+/* 数据集二级 tab：状态点区分已接入 / 待接入，避免「看起来有数据」。 */
+.sellfox-ui .sf-ds {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  background: #fff;
+  border: 1px solid var(--sf-line);
+  border-bottom: 0;
+}
+
+.sellfox-ui .sf-ds button {
+  flex: none;
+  height: 36px;
+  padding: 0 14px;
+  color: #606266;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+}
+
+.sellfox-ui .sf-ds button[aria-current="page"] {
+  color: var(--sf-blue);
+  border-bottom-color: var(--sf-blue);
+}
+
+.sellfox-ui .sf-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  vertical-align: middle;
+  background: #c8cbd2;
+  border-radius: 50%;
+}
+
+.sellfox-ui .sf-dot-live { background: #18a058; }
+
+.sellfox-ui .sf-note {
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 12px;
+  line-height: 18px;
+  color: #606266;
+  background: #fbfcfd;
+  border-top: 1px solid var(--sf-line);
+}
+
+/* 未接入数据集：字段结构照常展示，但明确说明没有行。 */
+.sellfox-ui .sf-pending {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid var(--sf-line);
+}
+
+.sellfox-ui .sf-pending-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+}
+
+.sellfox-ui .sf-pending-body h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sellfox-ui .sf-pending-body p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 19px;
+  color: #606266;
+}
+
+.sellfox-ui .sf-pending-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 6px 16px;
+  margin: 0;
+}
+
+.sellfox-ui .sf-pending-grid div {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 19px;
+}
+
+.sellfox-ui .sf-pending-grid dt { flex: none; color: var(--sf-muted); }
+.sellfox-ui .sf-pending-grid dd { margin: 0; color: #303133; }
+.sellfox-ui .sf-pending-grid dd code { display: block; }
+
+.sellfox-ui .sf-pending-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sellfox-ui .sf-pending-cell {
+  padding: 20px 16px;
+  color: var(--sf-muted);
+  text-align: center;
+}
+
+/* 同步控制台 */
+.sellfox-ui .sf-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
+}
+
+.sellfox-ui .sf-card {
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid var(--sf-line);
+}
+
+.sellfox-ui .sf-card-label { margin: 0; font-size: 11px; color: var(--sf-muted); }
+.sellfox-ui .sf-card-value { margin: 2px 0 0; font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sellfox-ui .sf-card-hint { margin: 2px 0 0; font-size: 10px; color: var(--sf-muted); }
+
+.sellfox-ui .sf-panel {
+  background: #fff;
+  border: 1px solid var(--sf-line);
+}
+
+.sellfox-ui .sf-panel-head,
+.sellfox-ui .sf-panel-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--sf-line);
+}
+
+.sellfox-ui .sf-panel-foot {
+  border-top: 1px solid var(--sf-line);
+  border-bottom: 0;
+}
+
+.sellfox-ui .sf-panel-head h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sellfox-ui .sf-panel-head .sf-muted,
+.sellfox-ui .sf-panel-foot .sf-muted { font-size: 11px; }
+
+.sellfox-ui .sf-panel th { font-size: 12px; line-height: 18px; }
+.sellfox-ui .sf-panel td { font-size: 12px; line-height: 18px; }
+.sellfox-ui .sf-table-scroll { max-height: 420px; overflow: auto; }
+.sellfox-ui .sf-wrap { white-space: normal; max-width: 420px; }
+
+.sellfox-ui .sf-state {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  font-size: 11px;
+  color: #606266;
+  background: #f4f5f8;
+  border: 1px solid var(--sf-line);
+  border-radius: 2px;
+}
+
+.sellfox-ui .sf-state-done { color: #0f7a4a; background: #eaf7f0; border-color: #c6e9d7; }
+.sellfox-ui .sf-state-running { color: #1d4ed8; background: #eef3ff; border-color: #cddcff; }
+.sellfox-ui .sf-state-queued { color: #8a6d1f; background: #fdf6e3; border-color: #f0e0b8; }
+.sellfox-ui .sf-state-failed { color: #b42318; background: #fef3f2; border-color: #fbd5d0; }
+
+.sellfox-ui .sf-order {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sellfox-ui .sf-order li {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid #eef0f3;
+}
+
+.sellfox-ui .sf-order li:last-child { border-bottom: 0; }
+.sellfox-ui .sf-order-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-size: 10px;
+  color: #606266;
+  background: #f4f5f8;
+  border-radius: 2px;
+}
+.sellfox-ui .sf-order-label { min-width: 160px; font-weight: 500; }
+
+/* 面板内的表宽度跟随容器，长文本列用 .sf-wrap 折行，避免把整页撑出横向滚动。 */
+.sellfox-ui .sf-panel > table { width: 100%; }
+.sellfox-ui .sf-panel > table td,
+.sellfox-ui .sf-panel > table th { white-space: normal; }
+
+/* 首列（节奏/数据域）不折行，避免「主数据」被拆成两行。 */
+.sellfox-ui .sf-panel > table th:first-child,
+.sellfox-ui .sf-panel > table td:first-child { white-space: nowrap; }
+
+/* 承接页的双行列（标题/ASIN、品名/SKU）限制宽度，避免长标题把整张表撑到只能看两三列。 */
+.sellfox-ui .sf-page .sf-table-wrap .sf-stack > * {
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 汇总行里的多币种金额很长：允许换行，否则会把金额列撑到 500px+。 */
+.sellfox-ui .sf-page .sf-table-wrap tfoot td {
+  max-width: 220px;
+  white-space: normal;
+}
+
+/* 全自动同步：后台 API 端点配置表单。 */
+.sellfox-ui .sf-ep-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px 14px;
+  padding: 14px;
+  border-top: 1px solid #e8eaf0;
+}
+.sellfox-ui .sf-ep-form > label { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.sellfox-ui .sf-ep-form > label > span { font-size: 12px; color: #606266; }
+.sellfox-ui .sf-ep-form input[type="text"],
+.sellfox-ui .sf-ep-form input:not([type]) {
+  width: 100%; min-width: 0; box-sizing: border-box;
+  padding: 6px 8px; border: 1px solid #dcdfe6; border-radius: 4px;
+  font-size: 12px; color: #303133; background: #fff;
+}
+.sellfox-ui .sf-ep-form > label.sf-check { flex-direction: row; align-items: center; gap: 8px; }
+.sellfox-ui .sf-ep-form > .sf-btn { align-self: end; }
+.sellfox-ui .sf-panel td .sf-btn + .sf-btn { margin-left: 4px; }

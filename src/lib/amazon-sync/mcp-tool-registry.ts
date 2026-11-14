@@ -77,6 +77,8 @@ const legacyTools = [
   ["data_query", "分页查询已接入 Skill 逻辑表的已发布数据"],
   ["data_sync_status", "查询当前授权数据源和同步状态"],
   ["data_sync_start", "提交同步申请；审批并应用后才会创建同步任务"],
+  ["amazon.data.local.tables", "只读列出 Amazon 本地承接池全部真实物理表、物理列清单、敏感列与授权围栏内的精确行数；口径为原始落地行，不是已发布业务事实"],
+  ["amazon.data.local.read", "只读分页读取 Amazon 本地承接池指定物理表的整行全部可见物理字段；强制租户与单账号单站点围栏，敏感列在 SQL 投影层剔除；原始落地行不等于已发布业务事实"],
 ] as const;
 function legacyToolInputSchema(name: string) {
   const scopeProperties: Record<string, unknown> = {
@@ -102,6 +104,11 @@ function legacyToolInputSchema(name: string) {
   if (name === "amazon.fields.catalog") return { type: "object", additionalProperties: false, properties: {
     ...scopeProperties, sourceId: { type: "string", minLength: 1, maxLength: 200 }, page: { type: "integer", minimum: 1, maximum: 9999 },
   }, required: ["sourceId"] };
+  if (name === "amazon.data.local.tables") return { type: "object", additionalProperties: false, properties: { ...scopeProperties } };
+  if (name === "amazon.data.local.read") return { type: "object", additionalProperties: false, required: ["table"], properties: {
+    ...scopeProperties, table: { type: "string", minLength: 1, maxLength: 100 },
+    page: { type: "integer", minimum: 1, maximum: 10000 }, pageSize: { type: "integer", minimum: 1, maximum: 1000 },
+  } };
   if (name === "data_query" || name === "data_describe_table") return datasetInputSchema(name === "data_query");
   if (["ads_get_sync_status", "ads_get_data_health", "ads_get_connection_status", "ads_get_settings"].includes(name)) return {
     type: "object", additionalProperties: false, properties: scopeProperties,
