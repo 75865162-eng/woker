@@ -14,9 +14,9 @@ export type AdsCapability = Readonly<{
   product: AdsCapabilityProduct;
   domain: AdsCapabilityDomain;
   priority: "P0" | "P1";
-  read: "AUTHORIZATION_FLOW" | "STRUCTURE_WORKER" | "NOT_IMPLEMENTED";
+  read: "AUTHORIZATION_FLOW" | "STRUCTURE_WORKER" | "REPORT_WORKER" | "NOT_IMPLEMENTED";
   write: "NOT_IMPLEMENTED";
-  contract: "DOCUMENTED_STRUCTURE" | "PROFILE_CONTRACT" | "UNVERIFIED";
+  contract: "DOCUMENTED_STRUCTURE" | "DOCUMENTED_REPORT_TYPE" | "PROFILE_CONTRACT" | "UNVERIFIED";
   apiVersion: string | null;
   endpoints: readonly string[];
   entityType: string | null;
@@ -33,6 +33,13 @@ export type AdsCapability = Readonly<{
   limitations: readonly string[];
 }>;
 
+const reportDomains: Record<string, { reportTypeId: string; maxDays: number; retentionDays: number; notes: string[] }> = {
+  "campaign-performance": { reportTypeId: "spCampaigns", maxDays: 31, retentionDays: 95, notes: ["groupBy=campaign；按 campaignId 落库。"] },
+  "advertised-product-performance": { reportTypeId: "spAdvertisedProduct", maxDays: 31, retentionDays: 95, notes: ["groupBy=advertiser；按 advertisedAsin 落库，同 ASIN 多 SKU 行按指标合并。"] },
+  "search-term-performance": { reportTypeId: "spSearchTerm", maxDays: 31, retentionDays: 65, notes: ["groupBy=searchTerm；keywordId 收进 targetingId，避免同一搜索词跨关键词合并。"] },
+  "placement-performance": { reportTypeId: "spCampaigns", maxDays: 31, retentionDays: 95, notes: ["SP 无独立位置报表类型，按官方做法用 spCampaigns + groupBy=campaignPlacement。"] },
+  "targeting-performance": { reportTypeId: "spTargeting", maxDays: 31, retentionDays: 95, notes: ["groupBy=targeting；按 targetingId 落库，关键词与定向表达式同表。"] },
+};
 const reports = new Set<AdsCapabilityDomain>([
   "campaign-performance", "advertised-product-performance", "search-term-performance",
   "placement-performance", "targeting-performance",
@@ -78,17 +85,21 @@ function capability(product: AdsCapabilityProduct, domain: AdsCapabilityDomain):
       limitations: ["Current snapshot only; missing rows are not deletions.", "Whole-domain atomic publication is not implemented. Optional persisted observations cover successful collected snapshot differences only; they are not complete Amazon change history."],
     };
   }
-  if (reports.has(domain)) return {
-    ...base, storage: "REPORT_VERSION_FOUNDATION", query: "PUBLISHED_REPORT_QUERY_ONLY",
-    acquisition: domain === "campaign-performance" ? "ISOLATED_FIXTURE_ONLY" : "NONE",
-    ui: "SYNCED_DATA", mcpTool: "amazon.ads.reports.list",
-    evidence: domain === "campaign-performance"
-      ? ["src/lib/amazon-ads/campaign-report-contract.ts", "src/lib/amazon-ads/report-acquisition.ts", "src/lib/amazon-ads/report-publication.ts"]
-      : ["src/lib/amazon-ads/report-query.ts", "src/lib/amazon-ads/report-publication.ts"],
-    limitations: domain === "campaign-performance"
-      ? ["Acquisition is isolated-fixture-only; no formal live adapter or worker is enabled.", "Live Profile permission and account acceptance are not verified."]
-      : ["Generic published-fact query is not a domain-specific report contract.", "Report acquisition is not implemented for this report domain."],
-  };
+  if (reports.has(domain)) {
+    const reportType = reportDomains[domain];
+    return {
+      ...base, read: "REPORT_WORKER", contract: "DOCUMENTED_REPORT_TYPE", apiVersion: "Reporting v3",
+      endpoints: ["/reporting/reports", "/reporting/reports/{reportId}"], entityType: reportType.reportTypeId,
+      storage: "REPORT_VERSION_FOUNDATION", query: "PUBLISHED_REPORT_QUERY_ONLY", ui: "SYNCED_DATA",
+      acquisition: "FORMAL_LIVE_ADAPTER", mcpTool: "amazon.ads.reports.list",
+      evidence: ["src/lib/amazon-ads/sp-report-types.ts", "src/lib/amazon-ads/reporting-v3-transport.ts", "src/lib/amazon-ads/report-service.ts", "docs/amazon-ads-api-integration.md"],
+      limitations: [
+        `${reportType.reportTypeId} 每日粒度，最多 ${reportType.maxDays} 天，数据保留 ${reportType.retentionDays} 天。`,
+        ...reportType.notes,
+        "真实采集仍需云端执行角色、Profile 报表权限与有效 LWA 授权；未做真实账号验收。",
+      ],
+    };
+  }
   return base;
 }
 

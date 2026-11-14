@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ArrowLeft, RefreshCw } from "lucide-react";
+import { AdsReportAcquisition } from "./ads-report-acquisition";
 
 type EntityRecord = {
   id: string;
@@ -173,6 +174,8 @@ export function AdsSyncedData({ onBack, onCampaigns }: { onBack: () => void; onC
       </div>
       <button type="button" className="ads-synced-refresh" onClick={() => setReloadKey(value => value + 1)} disabled={loading} title="重新读取已保存数据" aria-label="重新读取已保存数据"><RefreshCw size={15} /></button>
     </header>
+
+    <AdsReportAcquisition />
 
     <div className="ads-synced-notice" role="status">
       <strong>真实数据视图</strong>

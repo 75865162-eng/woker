@@ -75,8 +75,8 @@ Reporting v1 通用合同核验日期：2026-11-06。使用官方 OAS JSON 核�
 
 - OAuth 新账号首次授权与跨区域登录的人类验收；官方建议额外调用 LwA `GET /user/profile` 记录 `user_id`，诊断错误的区域账号，目前尚未接入该核验。
 - SB、SD、SP Campaign Management v1 与旧 v3 的具体实体端点、字段、分页和广告产品可用性矩阵。
-- Reporting v1 Search Term、Placement、Advertised Product 的具体 report query schema、维度组合、指标可用性、最小/最大日期范围、延迟窗口与保留范围。
-- 旧版 v3 报表各类型回溯范围、限流、报告生成/下载状态及重试语义；当前没有实现任何报表 worker。
+- （SP 旧版 v3 已用 `spSearchTerm`/`spCampaigns+campaignPlacement`/`spAdvertisedProduct` 覆盖，见文末 2026-11-13 条目；Reporting v1 的 query schema 仍未核验）Reporting v1 Search Term、Placement、Advertised Product 的具体 report query schema、维度组合、指标可用性、最小/最大日期范围、延迟窗口与保留范围。
+- 旧版 v3 报表各类型回溯范围、限流、报告生成/下载状态及重试语义；SP 五类已于 2026-11-13 按官方文档实现（见文末条目），SB/SD 报表仍无 adapter。
 - 当前生产读取 adapter 为 fail-closed scaffold。Campaign/Ad Group reader 仅是可注入 fetch 的独立 transport，覆盖地区 host、请求头、游标、必填字段、父子关系和脱敏错误分类；未挂接 `amazonAdsReadAdapter`，`adsReadAdapterReady()` 仍为 false，不能由环境变量启用。
 - Campaign list 的 429 `Retry-After` 按官方 schema 的秒数处理；缺失或非法时交由任务通用退避策略处理。解析器兼容 HTTP 日期格式，但官方合同只声明秒数。
 - 官方公开文档确认了每日平均容量，不等同于固定配额或 SLA；需通过 API Integration Dashboard 和隔离测试继续验证。
@@ -305,3 +305,29 @@ Reporting v1 通用合同核验日期：2026-11-06。使用官方 OAS JSON 核�
 - 本次回归：`npm test` 867/867、`node scripts/test-amazon-ads-offline.mjs --reports` 22/22、`node scripts/test-amazon-ads-offline.mjs --mcp` 10/10、`npm run typecheck`、相关文件定向 ESLint 和 `git diff --check` 均通过。
 - **仍未启用**：当前合同实现明确 `ISOLATED_FIXTURE_ONLY`/`liveEnabled=false`，无默认 live HTTP transport、正常 worker/scheduler 或真实测试 Profile。没有真实 Amazon API/凭证/生产数据验收，不宣称真实数据已同步。
 - **边界保持**：优化建议第一阶段只允许读取、分析和生成草稿；竞价、预算、状态、关键词、否定词和商品投放写操作仍须 Agent Gateway 审批，未开放 Ads 写 transport 或自动执行。
+
+
+### 2026-11-13：SP 五类绩效报表实盘采集（Reporting v3）
+
+依据 `亚马逊官方文档Ads-API官方文档配置.md` 第 7 章「报表」与各报表页落实，取代此前「campaign-performance 只有隔离夹具、其余四类未实现」的状态。
+
+| 报表类型 | reportTypeId / groupBy | 事实粒度 | 上限 / 保留 |
+| --- | --- | --- | --- |
+| 活动绩效 `campaign` | `spCampaigns` / `campaign` | campaignId | 31 天 / 95 天 |
+| 投放商品 `advertised-product` | `spAdvertisedProduct` / `advertiser` | campaignId + adGroupId + advertisedAsin | 31 天 / 95 天 |
+| 搜索词 `search-term` | `spSearchTerm` / `searchTerm` | campaignId + adGroupId + targetingId + keywordId + searchTerm | 31 天 / 65 天 |
+| 位置 `placement` | `spCampaigns` / `campaignPlacement` | campaignId + placement | 31 天 / 95 天 |
+| 定向绩效 `targeting` | `spTargeting` / `targeting` | campaignId + adGroupId + targetingId | 31 天 / 95 天 |
+
+官方文档明确 SP 没有独立的「位置」报表类型，必须用 `spCampaigns` + `groupBy=campaignPlacement` 取；因此位置报表与活动报表共用 reportTypeId，但走独立 domain state（`reportType=placement`）与独立粒度，二者互不覆盖。
+
+- **已完成（代码层）**：`sp-report-types.ts` 固化五类定义、请求体构造、窗口计算（终点固定为昨天，夹到 31 天与保留期）、GZIP_JSON 解析与同粒度行合并；`reporting-v3-transport.ts` 实现 create/retrieve/download 三步，带 `Amazon-Advertising-API-Scope`、v3 媒体类型、下载主机 allowlist（禁 http/端口/userinfo/重定向/超限字节）。
+- **已完成（编排层）**：`report-service.ts` 以加密 checkpoint 驱动 `CREATE → POLL → DOWNLOAD → PUBLISH → DONE`，调用次数上限 create 3 / poll 30 / download 3；幂等键 `sp-report:{planId}:{revision}:{type}:{from}:{to}`；`AmazonAdsReportVersion` STAGING → 校验 `facts.count === rowCount` → PUBLISHED 与任务成功、domain state CURRENT 同事务；重放复用既有版本并 `skipDuplicates` 写事实。
+- **官方 1 并发**：Profile 级 advisory lock，同 Profile 已有 RUNNING 报表时后续任务 `nextAttemptAt += 60s` 推迟；HTTP 425 映射为可重试节流（默认 retry-after 900s）。
+- **列拒绝降级**：400 且正文含 column/field/metric/invalid → `ADS_REPORT_COLUMNS_REJECTED`，用 `coreColumns` 重建请求重试一次，不让整类报表永久失败。
+- **已完成（worker/调度）**：queue job `process-amazon-ads-report-task` 携带 `adsReportTaskId + adsReportDispatchVersion` 派发；`tickAmazonAdsReports` 独立 try/catch 挂在结构同步 tick 之后，报表与结构互不阻塞；trigger `sp-report` 与结构任务 trigger 集合不相交。
+- **已完成（接口/页面）**：`GET/POST /api/integrations/amazon/ads/reports`（`settings:view` / `settings:edit`）提供五类状态矩阵与「立即同步 / 重试」；`ads-report-acquisition.tsx` 挂到已同步数据页顶部。`/api/integrations/amazon/ads/sync` 的 `reportSyncEnabled` 由硬编码 `false` 改为真实开关值。
+- **能力矩阵**：五类 report 域由 `ISOLATED_FIXTURE_ONLY` 改为 `read: REPORT_WORKER` + `contract: DOCUMENTED_REPORT_TYPE` + `acquisition: FORMAL_LIVE_ADAPTER`，`apiVersion: Reporting v3`，`entityType` 为上述 reportTypeId；`liveAcceptance` 保持 `NOT_VERIFIED`。
+- **验证**：`npx tsx --test tests/amazon-ads-sp-reports.test.ts` 12/12、`tests/amazon-ads-capabilities.test.ts` 4/4；`scripts/smoke-ads-reporting.ts` 在真实 PostgreSQL 上以注入传输跑完五类 CREATE→PUBLISH，5 个 PUBLISHED 版本，各类实实行数为 campaign 2 / advertised-product 2 / search-term 2 / targeting 2 / placement 4（placement 拆出 `TOP_OF_SEARCH` 与 `PRODUCT_PAGE`），只读 `queryPublishedAdsReports` 读回一致，5 个 domain state 全 CURRENT；统一入口 `npm run verify:ads:reports`；Ads 浏览器回归 60/60（新增「五类报表面板渲染并提交同步」用例，两个既有 spec 的 API mock 增加 reports 分支）；`npm run typecheck` 全仓 0 错误；生产构建通过，`http://localhost:3000` 已运行该构建（`/api/integrations/amazon/ads/reports` 返回 401 鉴权而非 404）。
+- **配置**：`AMAZON_API_EXECUTION_ROLE=cloud` 为执行闸门；`AMAZON_ADS_REPORTING_MODE`（默认 live，`off` 停采但保留已发布事实）；`AMAZON_ADS_REPORT_DOWNLOAD_HOSTS` 追加下载主机；仍需 `AMAZON_ADS_LWA_CLIENT_ID/SECRET`、`AMAZON_ADS_OAUTH_REDIRECT_URI`、`AMAZON_ADS_ENCRYPTION_KEY`。均已写入 `.env.example`。
+- **仍未验证**：真实 Amazon 账号的实盘采集（需要已授权 Profile、绑定活动 SellerAccount、`AmazonDataAccessGrant` 与 ACTIVE 计划）。本轮全部 HTTP 均为注入假传输，不触网；不据此宣称真实经营数据已同步。SB/SD 报表、Reporting v1 仍未实现。

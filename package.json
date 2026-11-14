@@ -62,6 +62,7 @@
     "test:amazon-sync:lifecycle": "node scripts/test-amazon-sync-integration.mjs --lifecycle",
     "test:amazon-sync:offline": "node scripts/test-amazon-sync-integration.mjs --offline-all",
     "test:amazon-ads:offline": "node scripts/test-amazon-ads-offline.mjs",
+    "verify:ads:reports": "tsx --test tests/amazon-ads-sp-reports.test.ts tests/amazon-ads-capabilities.test.ts && node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/smoke-ads-reporting.ts",
     "test:amazon-returns:offline": "node scripts/test-amazon-sync-integration.mjs --returns",
     "test:amazon-finance:offline": "node scripts/test-amazon-sync-integration.mjs --finance",
     "test:amazon-orders:offline": "node scripts/test-amazon-sync-integration.mjs --orders",

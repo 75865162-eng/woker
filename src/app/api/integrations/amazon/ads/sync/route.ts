@@ -3,6 +3,7 @@ import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { boundedJsonObject } from "@/lib/amazon-sync/request-body";
 import { cancelAdsTask, controlAdsPlan, runAdsPlanNow } from "@/lib/amazon-ads/sync-service";
+import { spReportPipelineEnabled } from "@/lib/amazon-ads/report-service";
 import { prisma } from "@/lib/db/prisma";
 import { amazonDataAccess } from "@/lib/amazon-sync/data-access";
 import { buildAdsProfileWhere } from "@/lib/amazon-ads/query-service";
@@ -73,7 +74,7 @@ export async function GET(request: Request) {
     ]);
     const freshness = plans.length ? await prisma.amazonAdsSyncDomainState.findMany({ where: { ...scope, profileId: { in: plans.map(plan => plan.profileId) } }, orderBy: [{ profileId: "asc" }, { dataDomain: "asc" }, { reportType: "asc" }], select: { profileId: true, dataDomain: true, reportType: true, status: true, coveredFrom: true, coveredTo: true, lastAttemptAt: true, lastSuccessAt: true, lastTaskId: true, warningCodes: true } }) : [];
     await auditAmazonDataRead(scope, permission.user.id, "amazon-ads-sync-status", permission.user.role);
-    return NextResponse.json({ plans, freshness, taskHistory, taskPagination: { page: query.page, pageSize: query.pageSize, total: taskTotal, pageCount: Math.ceil(taskTotal / query.pageSize), hasMore: query.page * query.pageSize < taskTotal }, taskFilters: { taskId: null, profileId: query.profileId ?? null, status: query.status ?? null }, dataDomain: "SP_STRUCTURE", reportSyncEnabled: false }, { headers });
+    return NextResponse.json({ plans, freshness, taskHistory, taskPagination: { page: query.page, pageSize: query.pageSize, total: taskTotal, pageCount: Math.ceil(taskTotal / query.pageSize), hasMore: query.page * query.pageSize < taskTotal }, taskFilters: { taskId: null, profileId: query.profileId ?? null, status: query.status ?? null }, dataDomain: "SP_STRUCTURE", reportSyncEnabled: spReportPipelineEnabled() }, { headers });
   } catch (error) {
     if (error instanceof SyncInputError) return NextResponse.json({ error: error.message }, { status: error.status, headers });
     if (error instanceof Error && /筛选|分页/.test(error.message)) return NextResponse.json({ error: error.message }, { status: 400, headers });

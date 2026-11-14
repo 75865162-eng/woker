@@ -71,3 +71,5 @@ standalone-start.*.log
 
 # Python helpers generate only local bytecode
 /scripts/lili/__pycache__/
+
+/.next-run/

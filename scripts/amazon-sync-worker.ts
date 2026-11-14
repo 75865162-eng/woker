@@ -14,6 +14,7 @@ import { createRedisConnectionOptions, getAmazonSyncQueueName, type AmazonSyncQu
 import { prisma } from "@/lib/db/prisma";
 import { refreshDueReplenishmentPlans } from "@/lib/operations/replenishment-service";
 import { processAmazonAdsSyncTask } from "@/lib/amazon-ads/sync-processor";
+import { processAmazonAdsReportTask } from "@/lib/amazon-ads/report-service";
 import { tickAmazonAds } from "@/lib/amazon-ads/sync-scheduler";
 import { rejectUnverifiedReportingV1Dispatch } from "@/lib/amazon-ads/report-dispatch";
 
@@ -26,7 +27,11 @@ const workerId = process.env.AMAZON_SYNC_WORKER_ID?.trim() || `${workerName}-${p
 const worker = new Worker<AmazonSyncQueueJob>(
   amazonSyncQueueName,
   async (job) => {
-    if (job.name === "process-amazon-ads-report-task") rejectUnverifiedReportingV1Dispatch();
+    if (job.name === "process-amazon-ads-report-task" && job.data.adsReportTaskId && Number.isInteger(job.data.adsReportDispatchVersion)) {
+      if (workerAllows(policy, "task", job.data.adsReportTaskId)) await processAmazonAdsReportTask(job.data.adsReportTaskId, job.data.adsReportDispatchVersion!);
+      return;
+    }
+    if (job.name === "process-amazon-ads-reporting-v1-task") rejectUnverifiedReportingV1Dispatch();
     if (job.name === "export-amazon-sales" && job.data.exportId && Number.isInteger(job.data.fence)) { if (workerAllows(policy, "export", job.data.exportId)) await processSalesExport(job.data.exportId, job.data.fence!); return; }
     if (job.name === "process-amazon-ads-sync-task" && job.data.adsTaskId && Number.isInteger(job.data.adsDispatchVersion)) { if (workerAllows(policy, "task", job.data.adsTaskId)) await processAmazonAdsSyncTask(job.data.adsTaskId, job.data.adsDispatchVersion!); return; }
     if (!Number.isInteger(job.data.dispatchVersion)) throw new Error("Legacy/unversioned jobs are rejected.");
