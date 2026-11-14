@@ -2,8 +2,8 @@
 /**
  * Provision the two read-only Postgres roles used by the MCP servers.
  *
- *   mcp_amazon_ro  -> SELECT on Amazon*/SellerAccount/AmazonAds* tables
- *   mcp_sellfox_ro -> SELECT on Sellfox* tables only
+ *   mcp_amazon_ro  -> SELECT on Amazon, SellerAccount and AmazonAds tables
+ *   mcp_sellfox_ro -> SELECT on Sellfox tables only
  *
  * Run once per database, as a role that may create roles:
  *   MCP_SELLFOX_RO_PASSWORD=... MCP_AMAZON_RO_PASSWORD=... npm run mcp:roles
