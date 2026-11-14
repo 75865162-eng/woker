@@ -68,6 +68,10 @@ export async function middleware(request: NextRequest) {
   if (pathname === "/api/mcp/amazon") {
     return NextResponse.next();
   }
+  // Read-only Sellfox MCP server: authenticates with its own MCP_HTTP_TOKEN bearer.
+  if (pathname === "/api/mcp") {
+    return NextResponse.next();
+  }
   if (["/api/lili/oauth/authorize", "/api/lili/oauth/token", "/api/lili/oauth/register", "/api/lili/oauth/revoke", "/.well-known/oauth-authorization-server", "/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/api/lili/mcp"].includes(pathname)) return NextResponse.next();
   // Public MCP connection/Skill discovery requires no browser session. The
   // handler still authenticates every private-data operation; neighboring APIs stay protected.

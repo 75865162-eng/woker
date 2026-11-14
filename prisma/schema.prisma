@@ -1460,6 +1460,7 @@ model SellfoxStore {
   SellfoxAdsSearchTermDaily   SellfoxAdsSearchTermDaily[]
   SellfoxReportTask           SellfoxReportTask[]
   SellfoxSalesDayCoverage     SellfoxSalesDayCoverage[]
+  SellfoxAdsProposal          SellfoxAdsProposal[]
 
   @@unique([organizationId, workspaceId, externalId])
   @@index([organizationId, workspaceId, updatedAt])
@@ -6944,4 +6945,35 @@ model CustomFieldDefinition {
   @@unique([organizationId, workspaceId, id])
   @@unique([organizationId, workspaceId, entity, code], map: "CustomFieldDefinition_key")
   @@index([organizationId, workspaceId, entity, sortOrder])
+}
+
+/// 库存×广告联动优化方案：分析器产出 → 用户批准 → 生成 AmazonAdsChangeDraft 执行。
+model SellfoxAdsProposal {
+  id             String   @id
+  organizationId String
+  workspaceId    String
+  storeId        String
+  asin           String
+  msku           String?
+  kind           String
+  action         String
+  entityType     String
+  externalId     String
+  label          String?
+  current        Json?
+  proposed       Json
+  basis          Json
+  expectedImpact String?
+  status         String   @default("PENDING")
+  reviewedBy     String?
+  decisionReason String?
+  changeDraftId  String?
+  executedAt     DateTime? @db.Timestamptz(3)
+  executionNote  String?
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+  store          SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, externalId, kind], map: "SellfoxAdsProposal_key")
+  @@index([organizationId, workspaceId, status, createdAt], map: "SellfoxAdsProposal_scope_status")
 }
