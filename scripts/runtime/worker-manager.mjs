@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { applyRuntimeEnvironment, projectRoot } from "./environment.mjs";
 import { runtimeVersion } from "./version.mjs";
@@ -65,7 +66,6 @@ if (process.argv[1] === path.join(projectRoot, "scripts/runtime/worker-manager.m
   } else {
     if (args.length > 1 || (args.length && !registry.some(item => item.id === args[0]))) throw new Error("Usage: npm run worker -- [--list|registration-id]");
     // Single-instance pid file: the scheduled task repeats on a timer and must not spawn a second consumer.
-    const { existsSync, readFileSync, unlinkSync, writeFileSync } = await import("node:fs");
     const pidPath = path.join(projectRoot, "tmp", `worker-${args[0] ?? "all"}.pid`);
     const releasePid = () => {
       try { if (existsSync(pidPath) && readFileSync(pidPath, "utf8").trim() === String(process.pid)) unlinkSync(pidPath); } catch { /* best effort */ }
