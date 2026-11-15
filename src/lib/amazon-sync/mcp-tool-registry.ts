@@ -77,8 +77,8 @@ const legacyTools = [
   ["data_query", "分页查询已接入 Skill 逻辑表的已发布数据"],
   ["data_sync_status", "查询当前授权数据源和同步状态"],
   ["data_sync_start", "提交同步申请；审批并应用后才会创建同步任务"],
-  ["amazon.data.local.tables", "只读列出 Amazon 本地承接池全部真实物理表、物理列清单、敏感列与授权围栏内的精确行数；口径为原始落地行，不是已发布业务事实"],
-  ["amazon.data.local.read", "只读分页读取 Amazon 本地承接池指定物理表的整行全部可见物理字段；强制租户与单账号单站点围栏，敏感列在 SQL 投影层剔除；原始落地行不等于已发布业务事实"],
+  ["amazon.data.local.tables", "只读列出 Amazon 本地承接池全部真实物理表、物理列清单、敏感列与授权围栏内的精确行数；同步日志/调度/审计等租户级表仅在全店铺授权下可读；口径为原始落地行，不是已发布业务事实"],
+  ["amazon.data.local.read", "只读分页读取 Amazon 本地承接池指定物理表的整行全部可见物理字段；强制租户与单账号单站点围栏，敏感列在 SQL 投影层剔除；租户级表（同步日志/调度/批次/审计）仅全店铺授权可读，单 Seller Account 凭证拒绝；原始落地行不等于已发布业务事实"],
 ] as const;
 function legacyToolInputSchema(name: string) {
   const scopeProperties: Record<string, unknown> = {
@@ -108,6 +108,11 @@ function legacyToolInputSchema(name: string) {
   if (name === "amazon.data.local.read") return { type: "object", additionalProperties: false, required: ["table"], properties: {
     ...scopeProperties, table: { type: "string", minLength: 1, maxLength: 100 },
     page: { type: "integer", minimum: 1, maximum: 10000 }, pageSize: { type: "integer", minimum: 1, maximum: 1000 },
+    fromDate: { type: "string", format: "date", description: "按该表真实时间列过滤；TEXT 列按 YYYY-MM-DD 文本比较，date/timestamp 列按含当天的日期边界" },
+    toDate: { type: "string", format: "date" },
+    sortDirection: { type: "string", enum: ["asc", "desc"], description: "排序方向；排序列固定为该表的真实时间列，不接受任意列名" },
+    filterColumn: { type: "string", maxLength: 100, description: "可选：必须是该表 information_schema 真实可见物理列（敏感列不可用）" },
+    filterValue: { type: "string", maxLength: 200, description: "与 filterColumn 同时提供，按参数化文本精确匹配" },
   } };
   if (name === "data_query" || name === "data_describe_table") return datasetInputSchema(name === "data_query");
   if (["ads_get_sync_status", "ads_get_data_health", "ads_get_connection_status", "ads_get_settings"].includes(name)) return {
@@ -168,6 +173,16 @@ export const amazonMcpToolDefinitions: readonly AmazonMcpToolDefinition[] = lega
       pagination: { type: "object", required: ["page", "pageSize", "total", "pageCount", "hasNext"], properties: { page: { type: "integer", minimum: 1 }, pageSize: { type: "integer", minimum: 1 }, total: { type: "integer", minimum: 0 }, pageCount: { type: "integer", minimum: 0 }, hasNext: { type: "boolean" } } },
       warnings: { type: "array", items: { type: "string" } },
       meta: { type: "object", required: ["requestId", "toolVersion", "dataset", "scope", "dateSemantics", "resultStatus", "schemaStatus"], properties: { requestId: { type: "string" }, toolVersion: { type: "string" }, resultStatus: { type: "string", enum: ["AVAILABLE", "EMPTY_RESULT"] } } },
+    },
+  } : ["amazon.data.local.tables", "amazon.data.local.read"].includes(name) ? {
+    type: "object", required: ["provider", "dataClass", "publicationStatus", "warnings", "meta"],
+    properties: {
+      provider: { const: "amazon" }, dataClass: { const: "RAW_LOCAL_ROWS" }, publicationStatus: { const: "NOT_PUBLISHED_FACTS" },
+      warnings: { type: "array", items: { type: "string" } }, meta: { type: "object" },
+      tables: { type: "array", items: { type: "object" } }, totals: { type: "object" },
+      excluded: { type: "array", items: { type: "object" } }, unscoped: { type: "array" },
+      table: { type: "string" }, columns: { type: "array", items: { type: "string" } },
+      data: { type: "object" }, pagination: { type: "object" },
     },
   } : arrayTools.has(name)
     ? { type: "array", items: { type: "object" } }

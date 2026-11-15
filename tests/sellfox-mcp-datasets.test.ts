@@ -116,3 +116,60 @@ test("MCP 分析工具里硬编码的物理表列引用也必须存在", () => {
   }
   assert.ok(referenced.size >= 10, "没有解析到足够的物理表列引用，检查正则是否失效");
 });
+
+function modelFieldTypes(model: string): Map<string, string> {
+  const block = schema.match(new RegExp(`^model ${model}\\s*\\{([\\s\\S]*?)^\\}`, "m"));
+  assert.ok(block, `prisma/schema.prisma 中不存在 model ${model}`);
+  return new Map([...block[1].matchAll(/^\s*([a-z][A-Za-z0-9_]*)\s+([A-Za-z][A-Za-z0-9_]*)/gm)].map(match => [match[1], match[2]]));
+}
+
+test("dateIsText 标注必须与 schema 真实类型一致，否则时间范围查询报 42883", () => {
+  // 实库核对：10 个业务日期列是 TEXT，15 个是 timestamp；写成 text >= date 会直接失败。
+  let textCount = 0;
+  for (const dataset of Object.values(sellfoxDatasets)) {
+    const type = modelFieldTypes(dataset.table).get(dataset.dateField);
+    assert.ok(type, `${dataset.key}.dateField=${dataset.dateField} 不是 ${dataset.table} 的真实列`);
+    const isText = type === "String";
+    assert.ok(isText || type === "DateTime", `${dataset.key}.${dataset.dateField} 类型是 ${type}，需要人工确认时间比较写法`);
+    assert.equal(Boolean(dataset.dateIsText), isText,
+      `${dataset.key}.${dataset.dateField} 在 schema 里是 ${type}，dateIsText 标注与真实类型不符`);
+    if (isText) textCount += 1;
+  }
+  assert.equal(textCount, 10, "TEXT 日期列数量变化时必须同步复核时间比较实现");
+});
+
+test("query_data 按列类型生成时间范围，返回总量、排序与当前态/历史版本口径", () => {
+  assert.ok(mcpSource.includes("dateRangeClauses"), "时间范围必须按真实列类型分支生成");
+  assert.ok(mcpSource.includes("::text"), "TEXT 日期列必须用文本比较");
+  assert.ok(mcpSource.includes("::date + 1"), "timestamp 列的 toDate 必须含当天");
+  assert.ok(mcpSource.includes("versionClause") && mcpSource.includes("SellfoxSnapshotHead"), "必须提供 Head 当前态过滤");
+  assert.ok(mcpSource.includes("count(*)::int AS n"), "必须返回围栏内精确总行数");
+  assert.ok(mcpSource.includes("rowCountBasis") && mcpSource.includes("latestDate"), "必须返回来源、更新时间与计数口径");
+  const queryData = sellfoxMcpToolDefinitions.find(tool => tool.name === "sellfox.query_data");
+  assert.equal(queryData?.version, "2.2.0");
+  const properties = (queryData!.inputSchema.properties ?? {}) as Record<string, { enum?: readonly string[] }>;
+  assert.deepEqual(properties.sortDirection?.enum, ["asc", "desc"]);
+  assert.deepEqual(properties.versionScope?.enum, ["current", "history", "all"]);
+});
+
+test("Head 版本配置指向真实列，且 resource 名与同步侧写入一致", () => {
+  const syncSources = ["snapshot-sync.ts", "listing-sync.ts", "fba-shipment-sync.ts"]
+    .map(file => readFileSync(fileURLToPath(new URL(`../src/lib/sellfox/${file}`, import.meta.url)), "utf8")).join("\n");
+  const configured = Object.values(sellfoxDatasets).filter(dataset => dataset.headResource);
+  for (const dataset of configured) {
+    assert.ok(dataset.versionColumn, `${dataset.key} 有 headResource 就必须有 versionColumn`);
+    assert.ok(modelFields(dataset.table).has(dataset.versionColumn!), `${dataset.key}.versionColumn 不是真实列`);
+    assert.ok(modelFields("SellfoxSnapshotHead").has("capturedAt"), "Head 表必须有 capturedAt");
+    assert.ok(syncSources.includes(`resource: \"${dataset.headResource}\"`),
+      `${dataset.key}.headResource=${dataset.headResource} 在同步侧没有对应的 Head 写入`);
+  }
+  assert.deepEqual(configured.map(dataset => dataset.headResource).sort(), ["fba_shipments", "inventory", "listings"]);
+});
+
+test("无店铺归属的全局行不得对单店凭证放行（实库验收发现的越权）", () => {
+  // api_records 有 storeId IS NULL 的全局采集行；旧实现用 (match OR IS NULL) 让任意凭证都能读到。
+  assert.ok(!/this\.fence\([^)]*nullableStore/.test(mcpSource), "whereDataset 不得再用 nullableStore 放宽店铺围栏");
+  assert.ok(!/fence\(alias: string, column: string, nullable/.test(mcpSource), "fence 不得保留 nullable 放行参数");
+  assert.ok(mcpSource.includes('storeScope.includes("*")'), "全店铺凭证仍需能读到全局行");
+  assert.equal(sellfoxDatasets.api_records.nullableStore, true, "api_records 的全局行形状必须保留标注");
+});

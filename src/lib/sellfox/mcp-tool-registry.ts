@@ -37,10 +37,16 @@ export type SellfoxDataset = {
   description: string;
   defaultLimit: number;
   scopeMode: SellfoxScopeMode;
-  /** storeId may be NULL for global capture rows; those rows belong to no store. */
+  /** 该表存在 storeId IS NULL 的全局采集行；这些行只对 storeScope 含 "*" 的全店铺凭证可见，不向单店凭证放行。 */
   nullableStore?: boolean;
   /** Physical columns removed server-side before rows are returned. */
   excludedColumns?: readonly string[];
+  /** dateField 的真实物理类型是 TEXT（YYYY-MM-DD）而非 date/timestamp：SQL 必须按文本比较，否则 PG 报 42883。 */
+  dateIsText?: boolean;
+  /** 该表按 capturedAt 保留多版本时，指向 SellfoxSnapshotHead.resource 的当前态指针。 */
+  headResource?: string;
+  /** 与 headResource 配对的物理版本列（capturedAt / latestCapturedAt）。 */
+  versionColumn?: string;
 };
 
 const q = (...names: string[]) => names.map(name => `"${name}"`);
@@ -57,57 +63,57 @@ export const sellfoxDatasets: Record<string, SellfoxDataset> = {
   listings: {
     key: "listings", table: "SellfoxListingSnapshot", label: "在线产品", dateField: "capturedAt", storeColumn: "storeId",
     columns: q("storeId", "msku", "asin", "title", "price", "listingQuantity", "status", "capturedAt"), description: "Listing 快照（价格/库存/状态）", defaultLimit: 50,
-    scopeMode: "tenant_store",
+    scopeMode: "tenant_store", headResource: "listings", versionColumn: "capturedAt",
   },
   inventory: {
     key: "inventory", table: "SellfoxFbaInventorySnapshot", label: "FBA库存", dateField: "reportDate", storeColumn: "storeId",
     columns: q("storeId", "msku", "asin", "totalInventory", "quantity", "reportDate"), description: "FBA 库存明细（库存量与采集日）", defaultLimit: 50,
-    scopeMode: "tenant_store",
+    scopeMode: "tenant_store", dateIsText: true, headResource: "inventory", versionColumn: "capturedAt",
   },
   sales: {
     key: "sales", table: "SellfoxSalesDailySnapshot", label: "销量日快照", dateField: "reportDate", storeColumn: "storeId",
     columns: q("storeId", "msku", "asin", "reportDate", "orders", "revenue", "quantity"), description: "店铺×日×MSKU 销量与销售额", defaultLimit: 50,
-    scopeMode: "tenant_store",
+    scopeMode: "tenant_store", dateIsText: true,
   },
   orders: {
     key: "orders", table: "SellfoxOrderSnapshot", label: "订单", dateField: "purchaseDate", storeColumn: "storeId",
     columns: q("storeId", "orderId", "asin", "msku", "purchaseDate", "qty", "itemAmount", "orderStatus", "fulfillmentChannel"), description: "订单明细（近 30 天滚动）", defaultLimit: 50,
-    scopeMode: "tenant_store",
+    scopeMode: "tenant_store", dateIsText: true,
   },
   performance: {
     key: "performance", table: "SellfoxProductDailySnapshot", label: "产品利润日报", dateField: "reportDate", storeColumn: "storeId",
     columns: q("storeId", "asin", "msku", "reportDate", "orderNum", "saleRevenue", "grossProfit", "grossProfitRate"), description: "产品维度日利润（全字段含 100+ 费用列与原始 payload）", defaultLimit: 50,
-    scopeMode: "tenant_store",
+    scopeMode: "tenant_store", dateIsText: true,
   },
   ads_product: {
     key: "ads_product", table: "SellfoxAdsProductDaily", label: "广告产品日报", dateField: "reportDate", storeColumn: "storeId",
     columns: q("storeId", "asin", "reportDate", "adType", "impressions", "clicks", "cost", "adSales", "adOrders"), description: "ASIN 维度广告表现（原始列，衍生指标由分析工具计算）", defaultLimit: 50,
-    scopeMode: "tenant_store",
+    scopeMode: "tenant_store", dateIsText: true,
   },
   ads_campaign: {
     key: "ads_campaign", table: "SellfoxAdsCampaignDaily", label: "广告活动日报", dateField: "reportDate", storeColumn: "storeId",
     columns: q("storeId", "campaignName", "reportDate", "adType", "impressions", "clicks", "cost", "adSales", "adOrders"), description: "广告活动维度表现（原始列，衍生指标由分析工具计算）", defaultLimit: 50,
-    scopeMode: "tenant_store",
+    scopeMode: "tenant_store", dateIsText: true,
   },
   ads_ad_group: {
     key: "ads_ad_group", table: "SellfoxAdsAdGroupDaily", label: "广告组日报", dateField: "reportDate", storeColumn: "storeId",
     columns: q("storeId", "campaignId", "adGroupId", "adGroupName", "reportDate", "adType", "impressions", "clicks", "cost", "adSales", "adOrders"), description: "广告组维度日表现", defaultLimit: 50,
-    scopeMode: "tenant_store",
+    scopeMode: "tenant_store", dateIsText: true,
   },
   ads_targeting: {
     key: "ads_targeting", table: "SellfoxAdsTargetingDaily", label: "广告投放日报", dateField: "reportDate", storeColumn: "storeId",
     columns: q("storeId", "campaignId", "adGroupId", "targetingId", "targetingText", "matchType", "reportDate", "adType", "impressions", "clicks", "cost", "adSales", "adOrders"), description: "投放/关键词维度日表现", defaultLimit: 50,
-    scopeMode: "tenant_store",
+    scopeMode: "tenant_store", dateIsText: true,
   },
   ads_search_term: {
     key: "ads_search_term", table: "SellfoxAdsSearchTermDaily", label: "广告搜索词日报", dateField: "reportDate", storeColumn: "storeId",
     columns: q("storeId", "campaignId", "adGroupId", "searchTerm", "reportDate", "adType", "impressions", "clicks", "cost", "adSales", "adOrders"), description: "用户搜索词维度日表现", defaultLimit: 50,
-    scopeMode: "tenant_store",
+    scopeMode: "tenant_store", dateIsText: true,
   },
   ads_placement: {
     key: "ads_placement", table: "SellfoxAdsPlacementDaily", label: "广告位日报", dateField: "reportDate", storeColumn: "storeId",
     columns: q("storeId", "campaignId", "placement", "reportDate", "adType", "impressions", "clicks", "cost", "adSales", "adOrders"), description: "广告位维度日表现", defaultLimit: 50,
-    scopeMode: "tenant_store",
+    scopeMode: "tenant_store", dateIsText: true,
   },
   ads_hourly: {
     key: "ads_hourly", table: "SellfoxHourlyMetric", label: "广告小时指标", dateField: "syncedAt", storeColumn: "storeId",
@@ -117,7 +123,7 @@ export const sellfoxDatasets: Record<string, SellfoxDataset> = {
   fba_shipments: {
     key: "fba_shipments", table: "SellfoxFbaShipmentSnapshot", label: "FBA货件", dateField: "latestCapturedAt", storeColumn: "storeId",
     columns: q("storeId", "shipmentId", "sku", "declaredQty", "shippedQty", "receivedQty", "status", "latestCapturedAt"), description: "FBA 入库货件", defaultLimit: 50,
-    scopeMode: "tenant_store",
+    scopeMode: "tenant_store", headResource: "fba_shipments", versionColumn: "latestCapturedAt",
   },
   api_records: {
     key: "api_records", table: "SellfoxApiRecord", label: "通用采集原始行", dateField: "syncedAt", storeColumn: "storeId",
@@ -230,11 +236,13 @@ const tools: Array<{ name: SellfoxMcpToolName; description: string; schema: Reco
   },
   {
     name: "sellfox.query_data",
-    description: "按数据集分页查询赛狐本地已落地的明细行，默认返回整行全部原始字段（含 payload 原始响应）；数据集为封闭清单，不接受任意表名",
+    description: "按数据集分页查询赛狐本地已落地的明细行，默认返回整行全部原始字段（含 payload 原始响应）；支持时间范围、排序方向与当前态/历史版本口径，返回围栏内总行数、来源表、更新时间与版本信息；数据集为封闭清单，不接受任意表名",
     schema: {
       type: "object", additionalProperties: false, required: ["dataset"],
       properties: { dataset: { type: "string", enum: sellfoxDatasetKeys }, ...scopeProperties, fromDate: { type: "string", format: "date" }, toDate: { type: "string", format: "date" },
-        fields: { type: "string", enum: ["all", "summary"], description: "all=整行全部物理字段（默认）；summary=仅返回兼容用的窄列投影" } },
+        fields: { type: "string", enum: ["all", "summary"], description: "all=整行全部物理字段（默认）；summary=仅返回兼容用的窄列投影" },
+        sortDirection: { type: "string", enum: ["asc", "desc"], description: "排序方向；排序列固定为数据集的日期列，不接受任意列名" },
+        versionScope: { type: "string", enum: ["current", "history", "all"], description: "current=仅 Head 指针指向的当前完整采集版本（默认，与 ERP 页面口径一致）；history=仅历史版本；all=不过滤。仅对按 capturedAt 保留多版本的快照表生效" } },
     },
   },
   {
@@ -259,7 +267,7 @@ export const sellfoxMcpToolDefinitions: readonly SellfoxMcpToolDefinition[] = to
   canonicalName: tool.name,
   description: tool.description,
   module: "sellfox",
-  version: "2.1.0",
+  version: "2.2.0",
   inputSchema: tool.schema,
   operationMode: "READ_ONLY",
   action: "view",

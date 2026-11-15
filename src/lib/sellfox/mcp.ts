@@ -221,14 +221,13 @@ class SellfoxScopeSql {
     this.params.push(identity.organizationId, identity.workspaceId);
   }
   /** Same array parameter is reused by every subquery of one statement. */
-  private fence(alias: string, column: string, nullable = false) {
+  private fence(alias: string, column: string) {
     if (this.identity.storeScope.includes("*")) return "";
     if (this.fenceIndex === null) {
       this.params.push(this.identity.storeScope);
       this.fenceIndex = this.params.length;
     }
-    const match = `${alias}."${column}" = ANY($${this.fenceIndex}::text[])`;
-    return ` AND ${nullable ? `(${match} OR ${alias}."${column}" IS NULL)` : match}`;
+    return ` AND ${alias}."${column}" = ANY($${this.fenceIndex}::text[])`;
   }
   add(value: unknown) {
     this.params.push(value);
@@ -247,7 +246,9 @@ class SellfoxScopeSql {
     if (dataset.scopeMode === "store_join") {
       return `EXISTS (SELECT 1 FROM "SellfoxStore" sf WHERE sf."id" = ${alias}."${column}" AND sf."organizationId" = $1 AND sf."workspaceId" = $2)${this.fence(alias, column)}`;
     }
-    return `${tenant}${this.fence(alias, column, dataset.nullableStore === true)}`;
+    // 无店铺归属的全局行不再对普通店铺凭证放行：只有 storeScope 含 "*" 的全店铺凭证
+    // 才会跳过围栏（见 fence），否则 api_records 这类全局采集行会被任意单店凭证读到。
+    return `${tenant}${this.fence(alias, column)}`;
   }
 }
 
@@ -292,8 +293,8 @@ async function toolStores(identity: SellfoxMcpIdentity) {
   return { count: rows.length, rows };
 }
 
-/** Physical column list of the closed catalog, read from the catalog itself. */
-async function datasetPhysicalColumns(): Promise<Record<string, string[]>> {
+/** Physical column list of the closed catalog. A failed lookup is reported, never silently passed off as complete. */
+async function datasetPhysicalColumns(): Promise<{ columns: Record<string, string[]>; observed: boolean }> {
   try {
     const rows = await readOnlyQuery<{ table: string; columns: string[] }>(
       `SELECT table_name::text AS table, array_agg(column_name::text ORDER BY ordinal_position) AS columns
@@ -302,14 +303,14 @@ async function datasetPhysicalColumns(): Promise<Record<string, string[]>> {
        GROUP BY table_name`,
       [sellfoxTableAllowList],
     );
-    return Object.fromEntries(rows.map(row => [row.table, row.columns]));
+    return { columns: Object.fromEntries(rows.map(row => [row.table, row.columns])), observed: true };
   } catch {
-    return {};
+    return { columns: {}, observed: false };
   }
 }
 
 async function toolOverview(identity: SellfoxMcpIdentity) {
-  const physical = await datasetPhysicalColumns();
+  const { columns: physical, observed } = await datasetPhysicalColumns();
   const rows = await Promise.all(Object.values(sellfoxDatasets).map(async dataset => {
     const scope = new SellfoxScopeSql(identity);
     const storeCount = dataset.storeColumn ? `, count(DISTINCT t."${dataset.storeColumn}")::int AS stores` : "";
@@ -317,18 +318,60 @@ async function toolOverview(identity: SellfoxMcpIdentity) {
       dataset: dataset.key, label: dataset.label, table: dataset.table,
       columns: physical[dataset.table] ?? dataset.columns.map(column => column.replace(/^"|"$/g, "")),
       excludedColumns: dataset.excludedColumns ?? [], fieldsDefault: "all",
+      dateField: dataset.dateField, dateColumnType: dataset.dateIsText ? "text" : "timestamp",
+      headResource: dataset.headResource ?? null, versionColumn: dataset.versionColumn ?? null,
+      versioned: Boolean(dataset.headResource),
+      schemaStatus: observed ? "PHYSICAL_SCHEMA_OBSERVED" : "CATALOG_FALLBACK",
+      ...(!observed ? { warning: "information_schema 不可读，字段清单回退到封闭目录的窄列，不代表完整物理字段" } : {}),
     };
     try {
       const [row] = await readOnlyQuery<{ n: number; latest: string | null; stores?: number }>(
         `SELECT count(*)::int AS n, max(t."${dataset.dateField}")::text AS latest${storeCount} FROM "${dataset.table}" t WHERE ${scope.whereDataset("t", dataset)}`,
         scope.params,
       );
-      return { ...meta, rows: row?.n ?? 0, latest: row?.latest ?? null, stores: dataset.storeColumn ? row?.stores ?? 0 : null };
+      return { ...meta, rows: row?.n ?? 0, latest: row?.latest ?? null, latestField: dataset.dateField,
+        latestBasis: `MAX(${dataset.dateField})`, stores: dataset.storeColumn ? row?.stores ?? 0 : null };
     } catch (error) {
-      return { ...meta, rows: 0, latest: null, stores: null, error: error instanceof Error ? error.message.slice(0, 80) : "query failed" };
+      return { ...meta, rows: 0, latest: null, latestField: dataset.dateField, stores: null,
+        error: error instanceof Error ? error.message.slice(0, 80) : "query failed" };
     }
   }));
-  return { rows };
+  return { rows, meta: { schemaStatus: observed ? "PHYSICAL_SCHEMA_OBSERVED" : "CATALOG_FALLBACK",
+    datasetCount: rows.length, rowCountBasis: "EXACT_COUNT_WITHIN_TENANT_AND_STORE_FENCE" } };
+}
+
+/**
+ * 时间范围比较必须匹配真实物理列类型。10 个业务日期列在库里是 TEXT（YYYY-MM-DD），
+ * 写成 `text >= date` 会直接报 42883；timestamp 列的 `<= toDate::date` 又会漏掉当天。
+ * 列类型来自封闭目录的静态标注，由测试与 schema.prisma 对齐，运行时不猜。
+ */
+function dateRangeClauses(alias: string, dataset: SellfoxDataset, args: ToolArgs, scope: SellfoxScopeSql) {
+  const clauses: string[] = [];
+  const ref = `${alias}."${dataset.dateField}"`;
+  if (typeof args.fromDate === "string") {
+    clauses.push(dataset.dateIsText
+      ? `${ref} >= ${scope.add(args.fromDate)}::text`
+      : `${ref} >= ${scope.add(args.fromDate)}::date`);
+  }
+  if (typeof args.toDate === "string") {
+    clauses.push(dataset.dateIsText
+      ? `${ref} <= ${scope.add(args.toDate)}::text`
+      : `${ref} < (${scope.add(args.toDate)}::date + 1)`);
+  }
+  return clauses;
+}
+
+/** 当前态 / 历史版本口径，与 ERP 页面的 SellfoxSnapshotHead JOIN 对齐。 */
+function versionClause(alias: string, dataset: SellfoxDataset, mode: "current" | "history" | "all", scope: SellfoxScopeSql) {
+  if (mode === "all" || !dataset.headResource || !dataset.versionColumn) return null;
+  const resource = scope.add(dataset.headResource);
+  const version = `${alias}."${dataset.versionColumn}"`;
+  const head = `(SELECT h."capturedAt" FROM "SellfoxSnapshotHead" h WHERE h."storeId" = ${alias}."storeId" AND h."resource" = ${resource})`;
+  if (mode === "history") {
+    return `EXISTS (SELECT 1 FROM "SellfoxSnapshotHead" hx WHERE hx."storeId" = ${alias}."storeId" AND hx."resource" = ${resource}) AND ${version} IS DISTINCT FROM ${head}`;
+  }
+  // 店铺还没有 Head 记录时不过滤，避免把历史数据误报成「数据消失」。
+  return `(${version} = ${head} OR NOT EXISTS (SELECT 1 FROM "SellfoxSnapshotHead" hx WHERE hx."storeId" = ${alias}."storeId" AND hx."resource" = ${resource}))`;
 }
 
 async function toolQueryData(identity: SellfoxMcpIdentity, args: ToolArgs) {
@@ -339,14 +382,23 @@ async function toolQueryData(identity: SellfoxMcpIdentity, args: ToolArgs) {
     if (!dataset.storeColumn) throw new McpIsolationError(`数据集「${dataset.key}」没有店铺维度，不接受 storeId。`, "TOOL_NOT_ALLOWED", 400, "sellfox");
     where.push(`t."${dataset.storeColumn}" = ${scope.add(args.storeId)}`);
   }
-  if (typeof args.fromDate === "string") where.push(`t."${dataset.dateField}" >= ${scope.add(args.fromDate)}::date`);
-  if (typeof args.toDate === "string") where.push(`t."${dataset.dateField}" <= ${scope.add(args.toDate)}::date`);
+  where.push(...dateRangeClauses("t", dataset, args, scope));
+  const versionScope = args.versionScope === "history" || args.versionScope === "all" ? args.versionScope : "current";
+  const versionFilter = versionClause("t", dataset, versionScope, scope);
+  if (versionFilter) where.push(versionFilter);
   const limit = limitOf(args, dataset.defaultLimit);
   const offset = args.offset === undefined ? 0 : Math.max(0, Number(args.offset));
   const fields = args.fields === "summary" ? "summary" : "all";
+  const direction = args.sortDirection === "asc" ? "ASC" : "DESC";
   const projection = fields === "summary" ? `t.${dataset.columns.join(", t.")}` : "t.*";
+  const filter = where.join(" AND ");
+  // 同一围栏内先取精确总量与最新日期，再取分页行；两次都走只读事务。
+  const [summary] = await readOnlyQuery<{ n: number; latest: string | null }>(
+    `SELECT count(*)::int AS n, max(t."${dataset.dateField}")::text AS latest FROM "${dataset.table}" t WHERE ${filter}`,
+    scope.params,
+  );
   const rows = await readOnlyQuery<Record<string, unknown>>(
-    `SELECT ${projection} FROM "${dataset.table}" t WHERE ${where.join(" AND ")} ORDER BY t."${dataset.dateField}" DESC LIMIT ${limit} OFFSET ${offset}`,
+    `SELECT ${projection} FROM "${dataset.table}" t WHERE ${filter} ORDER BY t."${dataset.dateField}" ${direction} NULLS LAST LIMIT ${limit} OFFSET ${offset}`,
     scope.params,
   );
   // Sensitive physical columns never leave this process, even in `all` mode.
@@ -354,8 +406,23 @@ async function toolQueryData(identity: SellfoxMcpIdentity, args: ToolArgs) {
   const projected = excluded.length
     ? rows.map(row => { const copy = { ...row }; for (const column of excluded) delete copy[column]; return copy; })
     : rows;
-  return { dataset: dataset.key, fields, count: projected.length, rows: projected,
-    ...(excluded.length ? { excludedColumns: excluded } : {}) };
+  const total = summary?.n ?? 0;
+  return { dataset: dataset.key, fields, count: projected.length, rows: projected, total,
+    pagination: { limit, offset, total, hasNext: offset + projected.length < total },
+    ...(excluded.length ? { excludedColumns: excluded } : {}),
+    meta: {
+      source: `SELLFOX_LOCAL_ROWS:${dataset.table}`, dataClass: "SELLFOX_LOCAL_ROWS",
+      table: dataset.table, dateField: dataset.dateField,
+      dateColumnType: dataset.dateIsText ? "text" : "timestamp",
+      versionScope, headResource: dataset.headResource ?? null, versionColumn: dataset.versionColumn ?? null,
+      versionFilterApplied: Boolean(versionFilter), sortDirection: args.sortDirection === "asc" ? "asc" : "desc",
+      latestDate: summary?.latest ?? null, latestDateBasis: `MAX(${dataset.dateField})`,
+      rowCountBasis: "EXACT_COUNT_WITHIN_TENANT_AND_STORE_FENCE",
+      warnings: [
+        "本地已落地行不等于已发布业务事实；历史版本不得与当前态同列相加，也不得与 Amazon 承接池混算。",
+        ...(versionFilter ? ["current 仅返回 SellfoxSnapshotHead 指向的采集版本；店铺尚无 Head 记录时不过滤，避免数据消失。"] : []),
+      ],
+    } };
 }
 
 async function toolRestock(identity: SellfoxMcpIdentity, args: ToolArgs) {
@@ -378,16 +445,17 @@ async function toolRestock(identity: SellfoxMcpIdentity, args: ToolArgs) {
         GROUP BY 1, 2, 4
       ) sd WHERE sd.qty_d IS NOT NULL AND sd.qty_d >= 0 GROUP BY 1, 2
     ), stock AS (
-      SELECT DISTINCT ON (i."storeId", i."msku") i."storeId", i."msku",
-        sum(i.quantity) OVER (PARTITION BY i."storeId", i."msku") AS on_hand
-      FROM "SellfoxFbaInventorySnapshot" i WHERE ${stock}
-      ORDER BY i."storeId", i."msku", i."reportDate" DESC
+      -- 只读 sellfox_inventory_current（按 SellfoxSnapshotHead 精确取当前完整采集版本）。
+      -- 直接读原始快照会把历次重采批次累加成虚假现货，方案 B 下历史版本不得计入当前库存。
+      SELECT i."storeId", i."msku", sum(i.quantity) AS on_hand
+      FROM sellfox_inventory_current i WHERE ${stock}
+      GROUP BY i."storeId", i."msku"
     ), transit AS (
       SELECT i2."storeId", i2."msku" AS sku,
         (COALESCE(i2."inTransit", 0) + COALESCE(i2."inboundShipped", 0) + COALESCE(i2."inboundWorking", 0))::int AS in_transit
       FROM (
         SELECT DISTINCT ON (i2."storeId", i2."msku") i2."storeId", i2."msku", i2."inTransit", i2."inboundShipped", i2."inboundWorking"
-        FROM "SellfoxFbaInventorySnapshot" i2 WHERE ${transit}
+        FROM sellfox_inventory_current i2 WHERE ${transit}
         ORDER BY i2."storeId", i2."msku", i2."reportDate" DESC
       ) i2
     )
@@ -401,7 +469,9 @@ async function toolRestock(identity: SellfoxMcpIdentity, args: ToolArgs) {
     WHERE r.daily_rate > 0${storeFilter}
     ORDER BY cover_days ASC NULLS LAST LIMIT ${limitOf(args, 100)}`;
   const rows = await readOnlyQuery(sql, scope.params);
-  return { count: rows.length, policy: "备货30天/安全7天，7:14:30 加权日销", rows };
+  return { count: rows.length, policy: "备货30天/安全7天，7:14:30 加权日销",
+    inventoryBasis: "CURRENT_HEAD_VERSION:sellfox_inventory_current",
+    inventoryWarning: "库存与在途仅取 SellfoxSnapshotHead 指向的当前完整采集版本；历史采集批次不重复计入。", rows };
 }
 
 async function toolAdsDiagnosis(identity: SellfoxMcpIdentity, args: ToolArgs) {
@@ -427,7 +497,7 @@ async function toolAdsDiagnosis(identity: SellfoxMcpIdentity, args: ToolArgs) {
           SELECT s."storeId", s."msku", max(s.asin) AS asin, s."reportDate" AS d, sum(s.quantity) AS qty
           FROM "SellfoxSalesDailySnapshot" s WHERE ${sales} AND s."reportDate"::date > current_date - 32 GROUP BY 1, 2, 4
         ) day, LATERAL (
-          SELECT sum(i.quantity) AS on_hand FROM "SellfoxFbaInventorySnapshot" i
+          SELECT sum(i.quantity) AS on_hand FROM sellfox_inventory_current i
           WHERE ${stock} AND i."storeId" = day."storeId" AND i."msku" = day."msku"
         ) oh
         WHERE day.qty IS NOT NULL GROUP BY 1, 2
@@ -442,7 +512,9 @@ async function toolAdsDiagnosis(identity: SellfoxMcpIdentity, args: ToolArgs) {
     FROM spend sp LEFT JOIN restock rs ON rs."storeId" = sp."storeId" AND rs.asin = sp.asin
     WHERE true${storeFilter} ORDER BY sp.spend DESC LIMIT ${limitOf(args, 100)}`;
   const rows = await readOnlyQuery(sql, scope.params);
-  return { windowDays: Math.min(90, Math.max(1, days)), count: rows.length, rows };
+  return { windowDays: Math.min(90, Math.max(1, days)), count: rows.length,
+    inventoryBasis: "CURRENT_HEAD_VERSION:sellfox_inventory_current",
+    inventoryWarning: "库存仅取 SellfoxSnapshotHead 指向的当前完整采集版本；历史采集批次不重复计入。", rows };
 }
 
 async function toolSalesTrend(identity: SellfoxMcpIdentity, args: ToolArgs) {

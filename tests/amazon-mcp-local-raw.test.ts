@@ -103,3 +103,30 @@ test("输出必须明确区分「原始落地行」与「已发布业务事实�
   assert.ok(amazonLocalRawDisclosure.warnings.some(warning => warning.includes("不得与")), "必须声明口径不可混算");
   assert.ok(readSource.includes("...amazonLocalRawDisclosure"), "两个读取入口都必须带上口径声明");
 });
+
+test("local.read 暴露时间范围、排序方向与封闭列过滤，且返回结构有契约", () => {
+  const definition = amazonMcpToolDefinitions.find(tool => tool.name === "amazon.data.local.read");
+  assert.ok(definition, "amazon.data.local.read 未注册");
+  const properties = (definition!.inputSchema.properties ?? {}) as Record<string, { enum?: readonly string[] }>;
+  for (const key of ["fromDate", "toDate", "sortDirection", "filterColumn", "filterValue"]) {
+    assert.ok(properties[key], `local.read 缺少 ${key} 参数`);
+  }
+  assert.deepEqual(properties.sortDirection?.enum, ["asc", "desc"]);
+  const output = definition!.outputSchema as { type?: string; properties?: Record<string, unknown> };
+  assert.equal(output.type, "object");
+  assert.ok(Object.keys(output.properties ?? {}).length >= 5, "outputSchema 不能退化成空 object");
+  const tables = amazonMcpToolDefinitions.find(tool => tool.name === "amazon.data.local.tables");
+  assert.ok(Object.keys((tables!.outputSchema as { properties?: Record<string, unknown> }).properties ?? {}).length >= 5,
+    "local.tables 也需要返回结构契约");
+});
+
+test("local.read 按真实列类型做时间比较，过滤/排序都不接受客户端拼 SQL", () => {
+  assert.ok(readSource.includes("dataTypes"), "必须从 information_schema 读取真实列类型，不猜类型");
+  assert.ok(readSource.includes("dateClauses"), "时间范围必须按真实列类型分支");
+  assert.ok(readSource.includes("::date + 1"), "timestamp 列的 toDate 必须含当天");
+  assert.ok(readSource.includes("visible.includes(filterColumn)"), "过滤列必须落在该表真实可见物理列内");
+  assert.ok(readSource.includes("Prisma.raw(direction)"), "排序方向只能是固定枚举，不能拼客户端字符串");
+  assert.ok(readSource.includes("latestDateBasis") && readSource.includes("observedAt"), "必须返回数据更新时间与观测时间");
+  assert.ok(readSource.includes("SET TRANSACTION READ ONLY"), "只读事务边界不能被移除");
+  assert.ok(mcpSource.includes("fromDate: args.fromDate"), "handler 必须把新参数传入读取服务");
+});

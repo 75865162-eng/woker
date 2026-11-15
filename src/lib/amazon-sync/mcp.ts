@@ -480,8 +480,10 @@ async function invokeRegisteredAmazonMcp(identity: McpIdentity, tool: AmazonMcpT
           meta: dataMeta(tableSources, "AmazonSyncDataSource", ["sellerAccountId", "marketplaceId", "resource"]) };
       } else if (tool === "amazon.data.local.tables" || tool === "amazon.data.local.read") {
         // 本地原始行读取不要求数据源处于「已发布」状态，但仍须验证账号分配与站点归属。
-        const localFence = { sellerAccountId: String(args.sellerAccountId), marketplaceId: String(args.marketplaceId) };
         const localAccess = await amazonDataAccess(scope, actor);
+        // 租户级表（同步日志/调度/审计）只有 organizationId+workspaceId，
+        // 仅全店铺授权可见；单 Seller Account 凭证保持拒绝，不扩大数据边界。
+        const localFence = { sellerAccountId: String(args.sellerAccountId), marketplaceId: String(args.marketplaceId), tenantWide: localAccess.allSellers };
         if (!localAccess.allSellers && !localAccess.sellerIds.includes(localFence.sellerAccountId)) throw new SyncInputError("数据范围不可访问。", 403);
         const localSource = await prisma.amazonSyncDataSource.findFirst({
           where: { ...scope, sellerAccountId: localFence.sellerAccountId, marketplaceId: localFence.marketplaceId },
@@ -493,6 +495,8 @@ async function invokeRegisteredAmazonMcp(identity: McpIdentity, tool: AmazonMcpT
           : await readAmazonLocalRawRows(scope, localFence, {
               table: String(args.table ?? ""), page,
               pageSize: args.pageSize === undefined ? undefined : Number(args.pageSize),
+              fromDate: args.fromDate, toDate: args.toDate, sortDirection: args.sortDirection,
+              filterColumn: args.filterColumn, filterValue: args.filterValue,
             });
       } else if (tool === "reimbursement_analyze") {
         const from = requiredText(args.from, "开始日期", 10), to = requiredText(args.to, "结束日期", 10);

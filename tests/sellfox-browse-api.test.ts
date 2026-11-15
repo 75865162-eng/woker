@@ -125,6 +125,7 @@ test("list/export filters agree, cross-workspace stores fail and exports never s
     $queryRaw: async () => overflow ? Array.from({ length: 10001 }, () => snapshot) : [snapshot],
     workspaceScope: { findUnique: async () => ({ id: "workspace-a" }) },
     sellfoxStore: { findMany: async () => foreign ? [] : [{ id: "store-a" }] },
+    sellfoxSnapshotHead: { findMany: async () => [{ storeId: "store-a", capturedAt: new Date("2026-10-24T00:00:00Z") }] },
     sellfoxFbaInventorySnapshot: snapshotTable, sellfoxProductDailySnapshot: snapshotTable,
     sellfoxSyncRun: snapshotTable,
   } as unknown as PrismaClient;
@@ -139,6 +140,8 @@ test("list/export filters agree, cross-workspace stores fail and exports never s
     const exported = await csv(await request(`inventory/export?${filters}`), context("inventory"));
     assert.equal(exported.status, 200); assert.match(await exported.text(), /'=formula/);
     assert.deepEqual(queries[0].where, queries[1].where);
+    assert.match(JSON.stringify(queries[0].where), /capturedAt/, "浏览必须把 Head 当前批次条件并入 where");
+    assert.match(JSON.stringify(queries[1].where), /capturedAt/, "导出必须把 Head 当前批次条件并入 where");
     assert.equal(queries[0].take, 50); assert.equal(queries[1].take, 10001);
     assert.equal((await browse(await request("inventory?page=1.5"), context("inventory"))).status, 400);
     foreign = true;
@@ -752,6 +755,7 @@ test("legacy browse shells apply validated server ordering with filters and pagi
   const sortedSql: Prisma.Sql[] = [];
   const model = { count: async () => 51, findMany: async (args: typeof calls[number]) => { calls.push(args); return []; } };
   globals.prisma = { workspaceScope: { findUnique: async () => ({ id: "ws" }) }, sellfoxStore: model, sellfoxSyncRun: model, sellfoxHourlyMetric: model, sellfoxFbaInventorySnapshot: model,
+    sellfoxSnapshotHead: { findMany: async () => [] },
     $queryRaw: async (sql: Prisma.Sql) => { sortedSql.push(sql); return [{ total: 0, rows: [], totals: [] }]; },
   } as unknown as PrismaClient;
   const session = await createLocalSession({ id: "actor", organizationId: "org", organizationName: "Fixture", role: "owner", email: "actor@example.test", name: "Actor" });
@@ -765,7 +769,9 @@ test("legacy browse shells apply validated server ordering with filters and pagi
         const args = calls.at(-1)!;
         assert.deepEqual(args.orderBy, [{ [key]: sortOrder }, { id: "asc" }]);
         assert.equal(args.skip, 20); assert.equal(args.take, 20);
-        assert.equal(args.where.organizationId, "org"); assert.equal(args.where.workspaceId, "ws");
+        // inventory 域的 where 由 AND 包裹 [原筛选条件, Head 当前批次条件]，取第一项校验原有围栏。
+        const flat = ((args.where.AND as Record<string, unknown>[] | undefined)?.[0] ?? args.where) as Record<string, unknown>;
+        assert.equal(flat.organizationId, "org"); assert.equal(flat.workspaceId, "ws");
         assert.match(JSON.stringify(args.where), /needle/);
       }
       const before = calls.length;

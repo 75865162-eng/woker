@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     const fileBuffer = Buffer.from(await file.arrayBuffer());
     const thumbBuffer = await sharp(fileBuffer)
       .rotate()
-      .resize({ width: 160, height: 160, fit: "inside", withoutEnlargement: true })
+      .resize({ width: 250, height: 250, fit: "inside", withoutEnlargement: true })
       .webp({ quality: 78 })
       .toBuffer();
     const previewBuffer = await createProductImagePreview(fileBuffer);

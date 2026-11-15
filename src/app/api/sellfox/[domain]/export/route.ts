@@ -7,6 +7,7 @@ import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import { assertSellfoxExportComplete, sellfoxBrowseQuery, sellfoxStoreWhere, sellfoxSnapshotWhere, sellfoxHourlyWhere, sellfoxRunWhere, sellfoxExportLimit, SellfoxBrowseError } from "@/lib/sellfox/browse-query";
 import { sellfoxBrowseStoreIds } from "@/lib/sellfox/browse-store-scope";
+import { sellfoxInventoryHeadWhere } from "@/lib/sellfox/inventory-head";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
@@ -44,7 +45,8 @@ export async function GET(request: Request, context: { params: Promise<{ domain:
       assertSellfoxExportComplete(rows);
       content = csv(["Shop ID", "店铺", "站点", "国家", "状态", "最近同步"], rows.map((row) => [row.externalId, row.name, row.marketplace, row.country, row.status, row.lastSyncedAt]));
     } else if (domain === "inventory") {
-      const rows = await prisma.sellfoxFbaInventorySnapshot.findMany({ where: snapshotWhere, select: { reportDate: true, capturedAt: true, sku: true, msku: true, asin: true, fnsku: true, quantity: true, SellfoxStore: { select: { name: true, externalId: true, marketplace: true } } }, orderBy: sellfoxPrismaOrder("inventory", query), take: sellfoxExportLimit + 1 });
+      const inventoryWhere = { AND: [snapshotWhere, await sellfoxInventoryHeadWhere(common, storeIds)] };
+      const rows = await prisma.sellfoxFbaInventorySnapshot.findMany({ where: inventoryWhere, select: { reportDate: true, capturedAt: true, sku: true, msku: true, asin: true, fnsku: true, quantity: true, SellfoxStore: { select: { name: true, externalId: true, marketplace: true } } }, orderBy: sellfoxPrismaOrder("inventory", query), take: sellfoxExportLimit + 1 });
       assertSellfoxExportComplete(rows);
       content = csv(["日期", "抓取时间", "店铺", "Shop ID", "站点", "ASIN", "MSKU", "SKU", "FNSKU", "可售库存"], rows.map((row) => [row.reportDate, row.capturedAt, row.SellfoxStore.name, row.SellfoxStore.externalId, row.SellfoxStore.marketplace, row.asin, row.msku, row.sku, row.fnsku, row.quantity]));
     } else if (domain === "sales") {
