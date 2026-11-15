@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { SellfoxTabs } from "@/components/sellfox/sellfox-nav";
 import { normalizeWorkspaceScope } from "@/lib/workspace/scope";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
+import { sellfoxSiteLabel } from "@/lib/sellfox/marketplace-site";
 import {
   datePresets,
   rangeForPreset,
-  replicaPages,
   type DatePreset,
   type ReplicaColumn,
   type ReplicaPage,
@@ -15,6 +15,8 @@ import {
 
 type Row = Record<string, unknown>;
 type Store = { externalId: string; name: string; marketplace: string };
+type SalesSummary = { quantity: number | null; fulfillable: number | null; totalInventory: number | null; daily: Record<string, { value: number | null; entities: number }> };
+type SortOrder = "asc" | "desc";
 type Filters = {
   dimension: string;
   metric: string;
@@ -33,11 +35,14 @@ type Filters = {
   exact: boolean;
   hideZero: boolean;
   onlySettle: boolean;
+  sortBy: string;
+  sortOrder: SortOrder;
   page: number;
   pageSize: number;
 };
 
 const noWrite = "此复刻页只读，不把同步或导入写入数据库。";
+const weekdays = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
 
 function readScope() {
   try { return normalizeWorkspaceScope(JSON.parse(localStorage.getItem("amazon_bulk_ad_workspace_scope") ?? "{}")); }
@@ -48,7 +53,7 @@ function initialFilters(page: ReplicaPage): Filters {
   const ranged = page.showDate && page.query !== "agent";
   const range = ranged ? rangeForPreset("d30") : { from: "", to: "" };
   return {
-    dimension: page.dimensions.find((item) => !item.disabled)?.id ?? "",
+    dimension: page.defaultDimension ?? page.dimensions.find((item) => !item.disabled)?.id ?? "",
     metric: page.metrics[0]?.id ?? "quantity",
     preset: ranged ? "d30" : "custom",
     from: range.from,
@@ -65,6 +70,8 @@ function initialFilters(page: ReplicaPage): Filters {
     exact: false,
     hideZero: false,
     onlySettle: false,
+    sortBy: "",
+    sortOrder: "desc",
     page: 1,
     pageSize: 20,
   };
@@ -107,9 +114,9 @@ function safeImage(value: unknown) {
 function cellText(column: ReplicaColumn, row: Row, metric: string) {
   if (column.kind === "image" || column.kind === "icon") return "";
   if (column.kind === "missing") return "-";
-  if (column.kind === "store") return [row.name, row.marketplace].filter(Boolean).join(" / ") || "-";
+  if (column.kind === "store") return [text(row.name), sellfoxSiteLabel(row.marketplace)].filter(Boolean).join(" / ") || "-";
   if (column.kind === "mskuPrice") return [text(row.msku), money(row.price, row.currency)].join(" / ");
-  if (column.kind === "skuName") return [text(row.title), text(row.sku)].filter((item) => item !== "-").join(" / ") || "-";
+  if (column.kind === "skuName") return [text(row.title ?? row.identity), text(row.sku)].filter((item) => item !== "-").join(" / ") || "-";
   if (column.kind === "titleAsin") return [text(row.title), text(row.asin ?? row.identity)].join(" / ");
   if (column.kind === "asinMsku") return [text(row.asin), text(row.msku)].join(" / ");
   if (column.kind === "salesWindow") return [qty(row.sales7), qty(row.sales14), qty(row.sales30)].join(" | ");
@@ -129,13 +136,14 @@ function Cell({ column, row, metric }: { column: ReplicaColumn; row: Row; metric
   }
   if (column.kind === "icon") return <button type="button" className="sf-btn" disabled title={noWrite}>—</button>;
   if (column.kind === "store") {
-    return <span className="sf-stack"><span>{text(row.name)}</span><small>{text(row.marketplace)}</small></span>;
+    const site = sellfoxSiteLabel(row.marketplace);
+    return <span className="sf-stack"><span>{text(row.name)}</span><small title={String(row.marketplace ?? "")}>{site || "-"}</small></span>;
   }
   if (column.kind === "mskuPrice") {
     return <span className="sf-stack"><span>{text(row.msku)}</span><small>{money(row.price, row.currency)}</small></span>;
   }
   if (column.kind === "skuName") {
-    return <span className="sf-stack"><span>{text(row.sku)}</span><small>{text(row.title)}</small></span>;
+    return <span className="sf-stack"><span>{text(row.title ?? row.identity)}</span><small>{text(row.sku)}</small></span>;
   }
   if (column.kind === "titleAsin") {
     return <span className="sf-stack"><span>{text(row.title)}</span><small className="sf-link">{text(row.asin ?? row.identity)}</small></span>;
@@ -146,6 +154,17 @@ function Cell({ column, row, metric }: { column: ReplicaColumn; row: Row; metric
   return <>{cellText(column, row, metric)}</>;
 }
 
+/** 日矩阵列由返回的日期生成，日期本身来自服务端，不按页面推断。 */
+function dayColumns(dates: string[]): (ReplicaColumn & { day: string })[] {
+  return [...dates].reverse().map((date) => ({
+    key: `day:${date}`,
+    label: date.slice(5),
+    kind: "qty" as const,
+    sortable: true,
+    day: date,
+  }));
+}
+
 export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
   const [ready, setReady] = useState(false);
   const [scope, setScope] = useState(normalizeWorkspaceScope());
@@ -153,7 +172,9 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
   const [applied, setApplied] = useState(() => initialFilters(page));
   const [rows, setRows] = useState<Row[]>([]);
   const [failures, setFailures] = useState<{ shopExternalId: string; shopName: string; error: string }[]>([]);
-  const [totals, setTotals] = useState<Row | null>(null);
+  const [totals, setTotals] = useState<Row[]>([]);
+  const [summary, setSummary] = useState<SalesSummary | null>(null);
+  const [dates, setDates] = useState<string[]>([]);
   const [total, setTotal] = useState(0);
   const [stores, setStores] = useState<Store[]>([]);
   const [tags, setTags] = useState<string[]>([]);
@@ -163,8 +184,10 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
   const [notice, setNotice] = useState("");
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
-  const [visible, setVisible] = useState<string[]>(() => page.columns.map((column) => column.key));
+  const [gotoPage, setGotoPage] = useState("1");
+  const [visible, setVisible] = useState<string[]>(() => page.columns.filter((column) => column.defaultVisible !== false).map((column) => column.key));
   const storageKey = `sellfox-replica-columns:${page.id}`;
+  const matrix = page.id === "sales";
 
   useEffect(() => {
     const saved = localStorage.getItem(storageKey);
@@ -228,6 +251,10 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
       if (applied.currency) params.set("currency", applied.currency);
       if (applied.hideZero) params.set("hideZero", "1");
       if (applied.onlySettle) params.set("onlySettle", "1");
+      if (applied.sortBy) {
+        params.set("sortBy", applied.sortBy);
+        params.set("sortOrder", applied.sortOrder);
+      }
       if (applied.search) {
         params.set("search", applied.search);
         if (applied.searchType) params.set("searchType", applied.searchType);
@@ -261,14 +288,16 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
     setError("");
     fetch(`${page.endpoint}?${params}`, { headers, cache: "no-store", signal: controller.signal })
       .then(async (response) => {
-        const body = await response.json() as { rows?: Row[]; totals?: Row[]; pagination?: { total?: number }; facets?: { productTags?: string[]; salespersons?: string[] }; failures?: { shopExternalId: string; shopName: string; error: string }[]; error?: string; message?: string };
+        const body = await response.json() as { rows?: Row[]; totals?: Row[]; summary?: SalesSummary; dates?: string[]; pagination?: { total?: number }; facets?: { productTags?: string[]; salespersons?: string[] }; failures?: { shopExternalId: string; shopName: string; error: string }[]; error?: string; message?: string };
         if (!response.ok) throw new Error(body.error || "读取失败");
         return body;
       })
       .then((body) => {
         if (controller.signal.aborted) return;
         setRows(Array.isArray(body.rows) ? body.rows : []);
-        setTotals(Array.isArray(body.totals) && body.totals[0] ? body.totals[0] : null);
+        setTotals(Array.isArray(body.totals) ? body.totals : []);
+        setSummary(body.summary ?? null);
+        setDates(Array.isArray(body.dates) ? body.dates : []);
         setTotal(body.pagination?.total ?? 0);
         setTags(body.facets?.productTags ?? []);
         setPeople(body.facets?.salespersons ?? []);
@@ -277,7 +306,9 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
         setRows([]);
-        setTotals(null);
+        setTotals([]);
+        setSummary(null);
+        setDates([]);
         setTotal(0);
         setFailures([]);
         setError(reason instanceof Error ? reason.message : "读取失败");
@@ -286,10 +317,13 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
     return () => controller.abort();
   }, [applied, headers, page.endpoint, page.id, page.query, ready, refreshNonce, scope]);
 
-  const columns = page.columns.filter((column) => visible.includes(column.key));
+  const days = useMemo(() => (matrix ? dayColumns(dates) : []), [matrix, dates]);
+  const columns: ReplicaColumn[] = [...page.columns.filter((column) => visible.includes(column.key)), ...days];
   const sites = [...new Set(stores.map((store) => store.marketplace).filter(Boolean))];
   const pages = Math.max(1, Math.ceil(total / applied.pageSize));
   const metricLabel = page.metrics.find((item) => item.id === applied.metric)?.label ?? "小计";
+
+  useEffect(() => { setGotoPage(String(applied.page)); }, [applied.page]);
 
   function patchDraft(patch: Partial<Filters>) { setDraft((current) => ({ ...current, ...patch })); }
   function applySearch() { setApplied({ ...draft, page: 1 }); }
@@ -312,13 +346,19 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
     setApplied((current) => ({ ...current, preset, ...range, page: 1 }));
   }
   function setPage(pageNumber: number) {
-    setDraft((current) => ({ ...current, page: pageNumber }));
-    setApplied((current) => ({ ...current, page: pageNumber }));
+    const safe = Math.min(Math.max(1, pageNumber), pages);
+    setDraft((current) => ({ ...current, page: safe }));
+    setApplied((current) => ({ ...current, page: safe }));
   }
   function setPageSize(pageSize: number) {
     const next = { ...applied, pageSize, page: 1 };
     setDraft(next);
     setApplied(next);
+  }
+  function toggleSort(key: string) {
+    const next = applied.sortBy === key ? (applied.sortOrder === "desc" ? "asc" : "desc") : "desc";
+    setDraft((current) => ({ ...current, sortBy: key, sortOrder: next, page: 1 }));
+    setApplied((current) => ({ ...current, sortBy: key, sortOrder: next, page: 1 }));
   }
   function runAction(id: string) {
     if (id === "columns") setColumnsOpen(true);
@@ -344,11 +384,49 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
     setColumnsOpen(false);
   }
 
+  /** 汇总行：数量/库存跨币种直接相加；金额按币种分别展示，不混算。 */
+  function totalNode(column: ReplicaColumn): ReactNode {
+    const currencies = [...new Set(totals.map((item) => String(item.currency ?? "")))].filter(Boolean);
+    const singleCurrency = currencies.length === 1 ? currencies[0] : "";
+    if (column.key.startsWith("day:")) {
+      const day = summary?.daily?.[column.key.slice(4)];
+      if (!day || day.value == null) return "-";
+      const label = `${day.entities}/${total} 个商品当日有快照`;
+      if (applied.metric === "revenue") return singleCurrency ? <span title={label}>{money(day.value, singleCurrency)}</span> : "-";
+      return <span title={label}>{qty(day.value)}</span>;
+    }
+    if (column.key === "quantity") return qty(summary?.quantity);
+    if (column.key === "totalInventory") return qty(summary?.totalInventory);
+    if (column.key === "fulfillable") return qty(summary?.fulfillable);
+    if (column.key === "subtotal") {
+      if (applied.metric === "quantity") return qty(summary?.quantity);
+      const values = totals.map((item) => numberOf(item.subtotal));
+      if (!values.length || values.some((value) => value == null)) return "-";
+      if (applied.metric === "orders") return qty(values.reduce<number>((sum, value) => sum + Number(value), 0));
+      return totals.map((item, index) => money(values[index], item.currency)).join(" / ");
+    }
+    return "";
+  }
+
+  function sortButton(column: ReplicaColumn) {
+    if (!column.sortable) return null;
+    const active = applied.sortBy === column.key;
+    return (
+      <button
+        type="button"
+        className="sf-sort"
+        aria-label={`按${column.label}排序`}
+        aria-pressed={active}
+        onClick={() => toggleSort(column.key)}
+      >
+        <span aria-hidden="true">{active ? (applied.sortOrder === "desc" ? "↓" : "↑") : "⇅"}</span>
+      </button>
+    );
+  }
+
   return (
     <section className="sellfox-ui">
-      <nav className="sf-tabs" aria-label="赛狐复刻页面">
-        {replicaPages.map((item) => <Link key={item.id} href={item.href} aria-current={item.id === page.id ? "page" : undefined}>{item.title}</Link>)}
-      </nav>
+      <SellfoxTabs current={page.href} />
       {page.dimensions.length ? (
         <div className="sf-dims" role="tablist" aria-label="维度">
           {page.dimensions.map((item) => (
@@ -364,7 +442,7 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
         ) : null}
         <select aria-label="全部站点" value={draft.site} onChange={(event) => patchDraft({ site: event.target.value })}>
           <option value="">全部站点</option>
-          {sites.map((site) => <option key={site} value={site}>{site}</option>)}
+          {sites.map((site) => <option key={site} value={site}>{sellfoxSiteLabel(site)}</option>)}
         </select>
         <select aria-label="全部店铺" value={draft.shop} onChange={(event) => patchDraft({ shop: event.target.value })}>
           <option value="">全部店铺</option>
@@ -435,7 +513,7 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
             {["USD", "EUR", "GBP", "JPY", "CAD"].map((code) => <option key={code} value={code}>{code}</option>)}
           </select>
         ) : null}
-        {page.id === "sales" ? <select aria-label="按日" disabled title="本地快照按日存储，不改周/月汇总。"><option>按日</option></select> : null}
+        {page.id === "sales" ? <select aria-label="按日" disabled title="快照按日存储，日列即原始粒度；不做周/月重采样。"><option>按日</option></select> : null}
         {page.id === "performance" ? <select aria-label="订购时间" disabled title="利润日期使用订购时间。"><option>订购时间</option></select> : null}
         <select aria-label="搜索字段" value={draft.searchType} onChange={(event) => patchDraft({ searchType: event.target.value })}>
           {page.searchTypes.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
@@ -452,8 +530,9 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
               <input
                 type="checkbox"
                 disabled={item.disabled}
-                checked={item.id === "aggregate" ? true : item.id === "hideZero" ? draft.hideZero : item.id === "onlySettle" ? draft.onlySettle : false}
+                checked={item.id === "aggregate" ? true : item.id === "parentAsin" ? applied.dimension === "parentAsin" : item.id === "hideZero" ? draft.hideZero : item.id === "onlySettle" ? draft.onlySettle : false}
                 onChange={(event) => {
+                  if (item.id === "parentAsin") setDimension(event.target.checked ? "parentAsin" : "msku");
                   if (item.id === "hideZero") patchDraft({ hideZero: event.target.checked });
                   if (item.id === "onlySettle") patchDraft({ onlySettle: event.target.checked });
                 }}
@@ -471,10 +550,15 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
       </div>
       {notice ? <p className="sf-notice" role="status">{notice}</p> : null}
       {failures.length ? <div className="sf-notice" role="alert">{failures.map((failure) => <p key={`${failure.shopExternalId}-${failure.error}`}>{failure.shopName || failure.shopExternalId || "店铺"}同步失败：{failure.error}</p>)}</div> : null}
-      <div className="sf-table-wrap">
+      <div className={matrix ? "sf-table-wrap sf-matrix" : "sf-table-wrap"}>
         <table>
           <thead>
-            <tr>{columns.map((column) => <th key={column.key} scope="col">{column.key === "subtotal" ? metricLabel : column.label}</th>)}</tr>
+            <tr>{columns.map((column) => (
+              <th key={column.key} scope="col" className={column.key.startsWith("day:") ? "sf-day" : column.kind === "qty" || column.kind === "metric" ? "sf-num" : undefined} title={column.hint ?? (column.kind === "missing" ? "赛狐页面有该列，本地快照无对应字段，不造数。" : undefined)}>
+                <span className="sf-th-main">{column.label}{sortButton(column)}</span>
+                {column.key.startsWith("day:") ? <span className="sf-th-sub">{weekdays[new Date(`${column.key.slice(4)}T00:00:00Z`).getUTCDay()]}</span> : null}
+              </th>
+            ))}</tr>
           </thead>
           <tbody>
             {loading ? <tr><td colSpan={Math.max(columns.length, 1)}>加载中</td></tr> : null}
@@ -485,14 +569,31 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
               </td></tr>
             ) : null}
             {!loading && !error ? rows.map((row, index) => (
-              <tr key={String(row.id ?? index)}>{columns.map((column) => <td key={column.key}><Cell column={column} row={row} metric={applied.metric} /></td>)}</tr>
+              <tr key={String(row.id ?? index)}>
+                {columns.map((column) => (
+                  <td key={column.key} className={column.key.startsWith("day:") ? "sf-day" : column.kind === "qty" || column.kind === "metric" ? "sf-num" : undefined}>
+                    <Cell column={column} row={row} metric={applied.metric} />
+                  </td>
+                ))}
+              </tr>
             )) : null}
           </tbody>
+          {matrix && !loading && !error && rows.length ? (
+            <tfoot>
+              <tr>
+                {columns.map((column, index) => (
+                  <td key={column.key} className={column.key.startsWith("day:") ? "sf-day" : column.kind === "qty" || column.kind === "metric" ? "sf-num" : undefined}>
+                    {index === 0 ? <strong>汇总</strong> : totalNode(column)}
+                  </td>
+                ))}
+              </tr>
+            </tfoot>
+          ) : null}
         </table>
       </div>
-      {totals && !page.stub ? (
+      {totals.length && !matrix ? (
         <div className="sf-totals">汇总 {columns.filter((column) => ["qty", "money", "metric"].includes(column.kind ?? "")).map((column) => {
-          const value = column.kind === "metric" ? (applied.metric === "revenue" ? money(totals.subtotal, totals.currency) : qty(totals.subtotal)) : column.kind === "money" ? money(totals[column.key], totals.currency) : qty(totals[column.key]);
+          const value = column.kind === "metric" ? (applied.metric === "revenue" ? money(totals[0].subtotal, totals[0].currency) : qty(totals[0].subtotal)) : column.kind === "money" ? money(totals[0][column.key], totals[0].currency) : qty(totals[0][column.key]);
           return <span key={column.key}>{column.key === "subtotal" ? metricLabel : column.label} {value}</span>;
         })}</div>
       ) : null}
@@ -506,6 +607,19 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
         <select aria-label="每页条数" value={applied.pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>
           {[20, 50, 100].map((size) => <option key={size} value={size}>{size}条/页</option>)}
         </select>
+        <span>前往</span>
+        <input
+          className="sf-goto"
+          aria-label="前往页码"
+          type="number"
+          min={1}
+          max={pages}
+          value={gotoPage}
+          onChange={(event) => setGotoPage(event.target.value)}
+          onKeyDown={(event) => { if (event.key === "Enter") setPage(Number(gotoPage) || 1); }}
+          onBlur={() => setPage(Number(gotoPage) || 1)}
+        />
+        <span>页</span>
       </div>
       {columnsOpen ? (
         <div className="sf-modal-back" role="presentation" onClick={() => setColumnsOpen(false)}>

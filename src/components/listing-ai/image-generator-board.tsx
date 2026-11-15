@@ -128,7 +128,7 @@ export function ImageGeneratorBoard({
                 运行按钮
               </Button>
               {error ? (
-                <p className="max-w-64 text-center text-xs font-semibold leading-5 text-red-600">
+                <p className="max-w-64 text-center text-xs font-semibold leading-5 text-danger-ink">
                   {error}
                 </p>
               ) : (
@@ -166,7 +166,7 @@ export function ImageGeneratorBoard({
                 {draft.history.map((record) => (
                   <article
                     key={record.id}
-                    className="grid grid-cols-[220px_1fr_minmax(260px,360px)] gap-3 rounded-md border border-border bg-white p-3"
+                    className="grid grid-cols-[220px_1fr_minmax(260px,360px)] gap-3 rounded-md border border-border bg-surface p-3"
                   >
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 text-xs font-bold text-foreground">

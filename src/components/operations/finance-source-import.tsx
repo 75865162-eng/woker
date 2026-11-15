@@ -48,6 +48,6 @@ export function FinanceSourceImport({ periodId, subjects, headers, onSaved }: { 
       <label className="flex items-center gap-2 text-xs">会计日期<input aria-label="来源凭证会计日期" className={inputClass} type="date" required disabled={busy || preview.kind === 'PURCHASE_PAYMENT' || preview.kind === 'PURCHASE_REFUND'} value={date} onChange={event => setDate(event.target.value)} />{(preview.kind === 'PURCHASE_PAYMENT' || preview.kind === 'PURCHASE_REFUND') && <span className="text-muted">使用实际收付日期</span>}</label>
       <Button size="sm" disabled={busy}>保存为总账草稿</Button>
     </form>}
-    {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+    {error && <p role="alert" className="text-sm text-danger-ink">{error}</p>}
   </section>;
 }

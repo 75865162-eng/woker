@@ -12,10 +12,13 @@ import {
   Package,
   UploadCloud,
 } from "lucide-react";
+import { WorkbenchPageTemplate } from "@/components/templates/page-templates";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { LogisticsLogEntry, LogisticsStatusTone, LogisticsTemplateOption, LogisticsWorkspaceState, UploadedFileState } from "@/lib/logistics/types";
+import { StandardDataTable } from "@/components/ui/table-variants";
+import { type DataTableColumn } from "@/components/ui/data-table";
+import type { AProductRow, LogisticsLogEntry, LogisticsStatusTone, LogisticsTemplateOption, LogisticsWorkspaceState, PdfSummary, UploadedFileState } from "@/lib/logistics/types";
 import { downloadBlob, downloadFilesAsZip, formatMetricNumber, makeId } from "@/lib/logistics/utils";
 import { FreightEstimator } from "@/components/logistics/freight-estimator";
 
@@ -430,6 +433,46 @@ export function LogisticsWorkbench() {
     [state.aSummary],
   );
 
+  const taskColumns: DataTableColumn<PdfSummary>[] = [
+    { key: "shipmentTitle", header: "货件标题", className: "font-semibold", render: (item) => item.shipmentTitle || "--" },
+    { key: "shipmentName", header: "货件号", className: "font-semibold", render: (item) => item.shipmentName || "--" },
+    { key: "warehouseCode", header: "仓库", render: (item) => item.warehouseCode || "--" },
+    { key: "fbaCode", header: "FBA编号", render: (item) => item.fbaCode || "--" },
+    { key: "totalBoxes", header: "箱数", numeric: true, render: (item) => formatMetricNumber(item.totalBoxes) },
+    { key: "pages", header: "页数", numeric: true, render: (item) => formatMetricNumber(item.pages.length) },
+    { key: "channelName", header: "渠道", render: (item) => item.channelName || "--" },
+    {
+      key: "actions",
+      header: "操作",
+      render: (item, index) => (
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="secondary" onClick={() => handleDownloadRenamedPdf(index)}>
+            <FileArchive className="h-4 w-4" />
+            下载箱唛
+          </Button>
+          <Button size="sm" onClick={() => handleDownloadInvoiceTemplate(index)} disabled={!state.dExports[index]}>
+            <Download className="h-4 w-4" />
+            下载发票
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
+  const aPreviewColumns: DataTableColumn<AProductRow>[] = [
+    { key: "sku", header: "SKU", className: "font-semibold", render: (row) => row.sku || "--" },
+    { key: "productName", header: "品名", render: (row) => row.productName || "--" },
+    { key: "hsCode", header: "海关编码", render: (row) => row.hsCode || "--" },
+    { key: "purchaseCost", header: "采购成本", numeric: true, render: (row) => formatMetricNumber(row.purchaseCost, 2) },
+    { key: "totalShipment", header: "发货总数", numeric: true, render: (row) => formatMetricNumber(row.totalShipment) },
+    {
+      key: "boxMap",
+      header: "箱号分布",
+      className: "text-xs text-muted",
+      render: (row) => Object.entries(row.boxMap).map(([box, qty]) => `${box}:${qty}`).join(" / ") || "--",
+    },
+  ];
+
   const downloadExport = (kind: "bExport" | "saihuExport" | "cExport" | "summaryExport" | "compareExport") => {
     const result = state[kind];
     if (!result) {
@@ -447,9 +490,8 @@ export function LogisticsWorkbench() {
   };
 
   return (
-    <>
-      <div className="space-y-6">
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+    <WorkbenchPageTemplate
+      context={<section className="grid gap-[var(--gap-section)] md:grid-cols-2 xl:grid-cols-5">
             <UploadCard
               title="装箱表 A"
               description="读取业务 sheet，提取 SKU、发货总数、箱号分布"
@@ -531,69 +573,29 @@ export function LogisticsWorkbench() {
                 void handleBuildD();
               }}
             />
-        </section>
+        </section>}
 
+        main={<div className="flex flex-col gap-[var(--gap-section)]">
         <FreightEstimator />
 
-        <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+        <section className="grid gap-[var(--gap-section)] xl:grid-cols-[1.15fr_0.85fr]">
           <Card>
             <CardHeader>
               <div>
-                <CardTitle>任务总览</CardTitle>
+                <CardTitle className="text-section">任务总览</CardTitle>
                 <p className="mt-1 text-sm text-muted">根据 PDF 页面解析结果展示货件信息，不再依赖文件名</p>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-muted">
-                      <th className="px-3 py-2">货件标题</th>
-                      <th className="px-3 py-2">货件号</th>
-                      <th className="px-3 py-2">仓库</th>
-                      <th className="px-3 py-2">FBA编号</th>
-                      <th className="px-3 py-2">箱数</th>
-                      <th className="px-3 py-2">页数</th>
-                      <th className="px-3 py-2">渠道</th>
-                      <th className="px-3 py-2">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {state.pdfSummaries.map((item, index) => (
-                      <tr key={`${item.fileNameBase}-${index}`} className="border-b border-border/70">
-                        <td className="px-3 py-3 font-semibold">{item.shipmentTitle || "--"}</td>
-                        <td className="px-3 py-3 font-semibold">{item.shipmentName || "--"}</td>
-                        <td className="px-3 py-3">{item.warehouseCode || "--"}</td>
-                        <td className="px-3 py-3">{item.fbaCode || "--"}</td>
-                        <td className="px-3 py-3">{formatMetricNumber(item.totalBoxes)}</td>
-                        <td className="px-3 py-3">{formatMetricNumber(item.pages.length)}</td>
-                        <td className="px-3 py-3">{item.channelName || "--"}</td>
-                        <td className="px-3 py-3">
-                          <div className="flex flex-wrap gap-2">
-                            <Button size="sm" variant="secondary" onClick={() => handleDownloadRenamedPdf(index)}>
-                              <FileArchive className="h-4 w-4" />
-                              下载箱唛
-                            </Button>
-                            <Button size="sm" onClick={() => handleDownloadInvoiceTemplate(index)} disabled={!state.dExports[index]}>
-                              <Download className="h-4 w-4" />
-                              下载发票
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {!state.pdfSummaries.length && (
-                      <tr>
-                        <td colSpan={8} className="px-3 py-8 text-center text-muted">
-                          上传 PDF 后，这里会按每个货件逐条展示
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <StandardDataTable
+                ariaLabel="物流任务总览"
+                rows={state.pdfSummaries}
+                getRowKey={(item) => item.fileNameBase}
+                columns={taskColumns}
+                empty="上传 PDF 后，这里会按每个货件逐条展示"
+              />
               <div className="overflow-x-auto pb-2">
-                <div className="flex min-w-max gap-4">
+                <div className="flex min-w-max gap-[var(--gap-section)]">
                   <MetricCard label="SKU数" value={formatMetricNumber(taskSummary.skuCount)} />
                   <MetricCard label="发货总数" value={formatMetricNumber(taskSummary.totalShipment)} />
                   <MetricCard label="PDF票数" value={formatMetricNumber(taskSummary.pdfCount)} />
@@ -605,7 +607,7 @@ export function LogisticsWorkbench() {
 
           <Card>
             <CardHeader>
-              <CardTitle>处理日志</CardTitle>
+              <CardTitle className="text-section">处理日志</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {state.logs.map((entry) => (
@@ -631,53 +633,29 @@ export function LogisticsWorkbench() {
 
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <section className="grid gap-[var(--gap-section)] xl:grid-cols-[1.1fr_0.9fr]">
           <Card className="min-w-0">
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <CardTitle>A 表数据预览</CardTitle>
+                <CardTitle className="text-section">A 表数据预览</CardTitle>
                 <p className="mt-1 text-sm text-muted">展示已解析的 SKU、发货总数、海关编码与箱号分布</p>
               </div>
               {state.aSummary ? <Badge tone="green">{state.aSummary.latestSheetName}</Badge> : <Badge>等待上传</Badge>}
             </CardHeader>
-            <CardContent className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-border text-muted">
-                    <th className="px-3 py-2">SKU</th>
-                    <th className="px-3 py-2">品名</th>
-                    <th className="px-3 py-2">海关编码</th>
-                    <th className="px-3 py-2">采购成本</th>
-                    <th className="px-3 py-2">发货总数</th>
-                    <th className="px-3 py-2">箱号分布</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleARows.slice(0, 12).map((row) => (
-                    <tr key={`${row.sku}-${row.rowIndex}`} className="border-b border-border/70">
-                      <td className="px-3 py-3 font-semibold">{row.sku || "--"}</td>
-                      <td className="px-3 py-3">{row.productName || "--"}</td>
-                      <td className="px-3 py-3">{row.hsCode || "--"}</td>
-                      <td className="px-3 py-3">{formatMetricNumber(row.purchaseCost, 2)}</td>
-                      <td className="px-3 py-3">{formatMetricNumber(row.totalShipment)}</td>
-                      <td className="px-3 py-3 text-xs text-muted">{Object.entries(row.boxMap).map(([box, qty]) => `${box}:${qty}`).join(" / ") || "--"}</td>
-                    </tr>
-                  ))}
-                  {!visibleARows.length && (
-                    <tr>
-                      <td colSpan={6} className="px-3 py-10 text-center text-muted">
-                        上传 A 表后将在这里展示预览
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+            <CardContent>
+              <StandardDataTable
+                ariaLabel="A 表数据预览"
+                rows={visibleARows.slice(0, 12)}
+                getRowKey={(row) => `${row.sku}-${row.rowIndex}`}
+                columns={aPreviewColumns}
+                empty="上传 A 表后将在这里展示预览"
+              />
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>PDF 解析列表</CardTitle>
+              <CardTitle className="text-section">PDF 解析列表</CardTitle>
               <Button variant="secondary" size="sm" onClick={handleBuildComparison} disabled={!state.aSummary || !state.pdfSummaries.length || busy}>
                 <Download className="h-4 w-4" />
                 下载创货件对比表
@@ -698,7 +676,7 @@ export function LogisticsWorkbench() {
                   </div>
                   <div className="mt-3 space-y-2">
                     {pdf.pages.map((page) => (
-                      <div key={`${pdf.fileNameBase}-${page.pageNumber}`} className="rounded-lg border border-white/70 bg-white px-3 py-2">
+                      <div key={`${pdf.fileNameBase}-${page.pageNumber}`} className="rounded-lg border border-white/70 bg-surface px-3 py-2">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <Badge tone="blue">第 {page.pageNumber} 页</Badge>
@@ -723,10 +701,10 @@ export function LogisticsWorkbench() {
 
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+        <section className="grid gap-[var(--gap-section)] xl:grid-cols-[0.9fr_1.1fr]">
           <Card>
             <CardHeader>
-              <CardTitle>结果文件</CardTitle>
+              <CardTitle className="text-section">结果文件</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <ExportRow label="B 发货表" ready={Boolean(state.bExport)} onDownload={() => downloadExport("bExport")} />
@@ -748,8 +726,8 @@ export function LogisticsWorkbench() {
           </Card>
 
         </section>
-      </div>
-    </>
+        </div>}
+    />
   );
 }
 
@@ -802,7 +780,7 @@ function UploadCard({
   return (
     <Card className="h-full min-w-0">
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
+        <CardTitle className="text-section">{title}</CardTitle>
       </CardHeader>
       <CardContent className="flex h-[248px] flex-col">
         <p className="text-sm leading-6 text-muted line-clamp-2">{description}</p>
@@ -812,7 +790,7 @@ function UploadCard({
             <span className="mt-2 text-sm font-semibold text-foreground" />
             {templateDownloadHref && templateDownloadLabel ? (
               <a
-                className="mt-3 inline-flex items-center gap-2 rounded-md border border-border bg-white px-3 py-2 text-xs font-medium text-foreground transition-colors hover:border-brand hover:text-brand"
+                className="mt-3 inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-xs font-medium text-foreground transition-colors hover:border-brand hover:text-brand"
                 href={templateDownloadHref}
                 download
               >
@@ -820,13 +798,13 @@ function UploadCard({
                 {templateDownloadLabel}
               </a>
             ) : templateDownloadLabel ? (
-              <span className="mt-3 inline-flex items-center gap-2 rounded-md border border-dashed border-border bg-white px-3 py-2 text-xs font-medium text-muted">
+              <span className="mt-3 inline-flex items-center gap-2 rounded-md border border-dashed border-border bg-surface px-3 py-2 text-xs font-medium text-muted">
                 {templateDownloadLabel}
               </span>
             ) : null}
           </div>
         ) : (
-          <label className="mt-3 flex flex-1 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface-muted px-3 text-center transition-colors hover:border-brand hover:bg-white">
+          <label className="mt-3 flex flex-1 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface-muted px-3 text-center transition-colors hover:border-brand hover:bg-surface">
             <UploadCloud className="h-7 w-7 text-brand" />
             <span className="mt-2 text-sm font-semibold text-foreground">{uploadLabel}</span>
             <span className="mt-1 line-clamp-2 max-w-full overflow-hidden text-ellipsis break-all text-xs leading-5 text-muted">{currentFileLabel}</span>
@@ -902,26 +880,29 @@ function TemplateLibraryCard({
   return (
     <Card className="h-full min-w-0">
       <CardHeader>
-        <CardTitle>发货模板 B</CardTitle>
+        <CardTitle className="text-section">发货模板 B</CardTitle>
       </CardHeader>
       <CardContent className="flex h-[248px] flex-col gap-3 pt-4">
         <div className="flex flex-1 flex-col gap-3">
           <div className="flex h-[102px] shrink-0 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-surface-muted px-4 py-3 text-center">
             <span className="text-base font-semibold text-foreground">亚马逊官方模板</span>
-            <button
-              type="button"
-              className="mt-4 inline-flex h-11 items-center gap-2 rounded-xl border border-border bg-white px-5 text-sm font-medium text-foreground transition-colors hover:border-brand hover:text-brand"
-              onClick={() => onDownloadB()}
+            <a
+              className="mt-4 inline-flex h-11 items-center gap-2 rounded-xl border border-border bg-surface px-5 text-sm font-medium text-foreground transition-colors hover:border-brand hover:text-brand"
+              href="#"
+              onClick={(event) => {
+                event.preventDefault();
+                onDownloadB();
+              }}
             >
               <Download className="h-4 w-4" />
               下载官方模板
-            </button>
+            </a>
           </div>
           <div className="flex h-[102px] shrink-0 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-surface-muted px-4 py-3 text-center">
             <FileSpreadsheet className="h-7 w-7 text-brand" />
             <span className="mt-2 text-base font-semibold text-foreground">赛狐模板</span>
             <div className="mt-4 flex items-center gap-3">
-              <label className="inline-flex h-11 min-w-[86px] cursor-pointer items-center justify-center gap-2 rounded-xl border border-border bg-white px-4 text-sm font-medium text-foreground transition-colors hover:border-brand hover:text-brand">
+              <label className="inline-flex h-11 min-w-[86px] cursor-pointer items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 text-sm font-medium text-foreground transition-colors hover:border-brand hover:text-brand">
                 <UploadCloud className="h-4 w-4" />
                 上传
                 <input
@@ -988,13 +969,13 @@ function LogisticsTemplateCard({
   return (
     <Card className="h-full min-w-0">
       <CardHeader>
-        <CardTitle>物流模板 D</CardTitle>
+        <CardTitle className="text-section">物流模板 D</CardTitle>
       </CardHeader>
       <CardContent className="flex h-[248px] flex-col">
         <div className="mt-1 flex flex-1 flex-col justify-start rounded-lg border border-dashed border-border bg-surface-muted p-4">
           <span className="text-sm font-semibold text-foreground">选择物流模板</span>
           <select
-            className="mt-4 h-11 rounded-xl border border-border bg-white px-3 text-sm text-foreground outline-none transition-colors focus:border-brand"
+            className="mt-4 h-11 rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none transition-colors focus:border-brand"
             value={selectedTemplate}
             onChange={(event) => onTemplateChange(event.target.value)}
           >

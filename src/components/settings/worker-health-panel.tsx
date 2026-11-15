@@ -149,21 +149,21 @@ export function WorkerHealthPanel() {
         </div>
       </CardHeader>
       <CardContent className="space-y-3 p-3">
-        {error ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</div> : null}
+        {error ? <div className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm font-semibold text-danger-ink">{error}</div> : null}
         {loading ? <div className="rounded-md border border-border bg-surface-muted px-3 py-2 text-sm font-semibold text-muted">正在读取 worker 状态...</div> : null}
         {!loading && data && data.driver !== "redis" ? (
-          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">
+          <div className="rounded-md border border-warning-ink/30 bg-warning-soft px-3 py-2 text-sm font-semibold text-warning-ink">
             当前未启用 Redis 队列，导入与导出任务将按同步模式执行，不适合 30 人并发场景。
           </div>
         ) : null}
 
-        {data?.queueAvailable === false ? <p role="status" className="text-xs text-red-700">Redis 队列不可用，任务数量暂不可确认；下方显示数据库中最近的 Worker 心跳。</p> : null}
+        {data?.queueAvailable === false ? <p role="status" className="text-xs text-danger-ink">Redis 队列不可用，任务数量暂不可确认；下方显示数据库中最近的 Worker 心跳。</p> : null}
         <div className="grid gap-2 sm:grid-cols-2">
           {data?.registeredWorkers?.map(worker => <div key={worker.id} className="rounded-md border border-border p-3 text-xs">
             <div className="flex items-center justify-between gap-2"><strong>{worker.label}</strong><Badge tone={worker.online ? "green" : "red"}>{worker.online ? "心跳在线" : "离线 / 未启动"}</Badge></div>
             <p className="mt-2 text-muted">队列连接：{worker.queueReady === null ? "未知" : worker.queueReady ? "已连接" : "不可用"} · 在线实例 {worker.instances}</p>
             {worker.id === "amazon-sync" && <p className="mt-1 text-muted">数据库任务恢复：{worker.recoveryReady == null ? "尚无扫描证据" : worker.recoveryReady ? "最近扫描正常" : "扫描过期或投递失败"}{worker.recovery?.lastSuccessAt ? ` · ${formatDate(worker.recovery.lastSuccessAt)}` : ""}{worker.recovery?.maintenanceFailures ? ` · 维护阶段失败 ${worker.recovery.maintenanceFailures}` : ""}</p>}
-            <p className={worker.connectionMatches === false ? "mt-1 text-red-700" : "mt-1 text-muted"}>与网页连接目标：{worker.connectionMatches === true ? "一致" : worker.connectionMatches === false ? "不一致，请检查配置与认证密钥" : "尚未确认"}</p>
+            <p className={worker.connectionMatches === false ? "mt-1 text-danger-ink" : "mt-1 text-muted"}>与网页连接目标：{worker.connectionMatches === true ? "一致" : worker.connectionMatches === false ? "不一致，请检查配置与认证密钥" : "尚未确认"}</p>
             <p className="mt-1 text-muted">版本：{worker.version ?? "未知"}{worker.online && !worker.versionMatches ? `（${worker.mismatchedInstances ?? 1} 个实例与网页版本不一致）` : ""}</p>
             <p className="mt-1 text-muted">最近心跳：{worker.lastSeenAt ? formatDate(worker.lastSeenAt) : "尚无记录"}</p>
           </div>)}
@@ -171,7 +171,7 @@ export function WorkerHealthPanel() {
 
         <div className="grid grid-cols-[repeat(auto-fit,104px)] justify-start gap-2">
           {["waiting", "active", "delayed", "failed", "completed", "paused"].map((key) => (
-            <div key={key} className="rounded-md border border-border bg-white px-3 py-2">
+            <div key={key} className="rounded-md border border-border bg-surface px-3 py-2">
               <p className="text-xs font-bold uppercase tracking-normal text-muted">{key}</p>
               <p className="mt-1 text-xl font-black metric-tabular text-foreground">{Number(counts[key] ?? 0).toLocaleString("zh-CN")}</p>
             </div>
@@ -179,7 +179,7 @@ export function WorkerHealthPanel() {
         </div>
 
         <div className="grid gap-2 lg:grid-cols-2">
-          <div className="rounded-md border border-border bg-white">
+          <div className="rounded-md border border-border bg-surface">
             <div className="flex items-center justify-between border-b border-border px-3 py-2">
               <p className="text-sm font-bold text-foreground">Worker 心跳</p>
               <Badge tone={data?.driver === "redis" ? "green" : "amber"}>{data?.driver ?? "-"}</Badge>
@@ -201,7 +201,7 @@ export function WorkerHealthPanel() {
             </div>
           </div>
 
-          <div className="rounded-md border border-border bg-white">
+          <div className="rounded-md border border-border bg-surface">
             <div className="flex items-center gap-2 border-b border-border px-3 py-2">
               <Activity className="h-4 w-4 text-brand" />
               <p className="text-sm font-bold text-foreground">近期运行 / 失败任务</p>
@@ -215,7 +215,7 @@ export function WorkerHealthPanel() {
                       <Badge tone={job.status === "failed" ? "red" : "blue"}>{job.status}</Badge>
                     </div>
                     <p className="mt-1 text-xs font-medium text-muted">进度 {job.progress}% · {formatDate(job.updatedAt)}</p>
-                    {job.error ? <p className="mt-1 line-clamp-2 text-xs font-semibold text-red-700">{job.error}</p> : null}
+                    {job.error ? <p className="mt-1 line-clamp-2 text-xs font-semibold text-danger-ink">{job.error}</p> : null}
                   </div>
                 ))
               ) : (
@@ -223,7 +223,7 @@ export function WorkerHealthPanel() {
               )}
             </div>
           </div>
-          <div className="rounded-md border border-border bg-white">
+          <div className="rounded-md border border-border bg-surface">
             <div className="flex items-center justify-between border-b border-border px-3 py-2">
               <p className="text-sm font-bold text-foreground">图片放大 Worker</p>
               <Badge tone={Number(imageCounts.failed ?? 0) > 0 ? "red" : "green"}>失败 {Number(imageCounts.failed ?? 0)}</Badge>
@@ -239,10 +239,10 @@ export function WorkerHealthPanel() {
                   <p className="mt-1 text-xs font-medium text-muted">并发 {worker.concurrency} · {formatDate(worker.lastSeenAt)}</p>
                 </div>
               ))}
-              {!data?.imageWorkers?.length ? <p className="mt-3 text-xs font-medium text-amber-700">图片 Worker 尚未上报心跳。</p> : null}
+              {!data?.imageWorkers?.length ? <p className="mt-3 text-xs font-medium text-warning-ink">图片 Worker 尚未上报心跳。</p> : null}
             </div>
           </div>
-          <div className="rounded-md border border-border bg-white">
+          <div className="rounded-md border border-border bg-surface">
             <div className="flex items-center justify-between border-b border-border px-3 py-2">
               <p className="text-sm font-bold text-foreground">商品域一致性</p>
               <Badge tone={(data?.productHealth?.projections.failed ?? 0) > 0 ? "red" : "green"}>

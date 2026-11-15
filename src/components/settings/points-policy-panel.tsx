@@ -5,6 +5,8 @@ import { AlertTriangle, Check, Coins, Loader2, RefreshCw, Save, ShieldCheck, X }
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StandardDataTable } from "@/components/ui/table-variants";
+import { type DataTableColumn } from "@/components/ui/data-table";
 
 type Access = {
   canViewSelf: boolean;
@@ -80,7 +82,7 @@ type RequestItem = {
 type PendingAction = { id: string; action: "approve" | "reject" } | null;
 
 const fieldClass =
-  "h-9 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none focus:border-brand";
+  "h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-brand";
 
 function statusBadge(row: OrgRow) {
   if (row.status === "disabled" || row.status === "archived") return <Badge tone="gray">已冻结</Badge>;
@@ -234,17 +236,33 @@ export function PointsPolicyPanel() {
     );
   }
 
+  const quotaColumns: DataTableColumn<OrgRow>[] = [
+    { key: "member", header: "成员", render: (row) => (<><p className="font-bold text-foreground">{row.name}</p><p className="text-xs text-muted">{row.department} · {row.title}</p></>) },
+    { key: "composition", header: "本月构成", render: (row) => <span className="text-xs text-muted">{row.baseQuota} 基础{row.carriedIn > 0 ? ` + ${row.carriedIn} 结转` : ""}{row.extraGranted > 0 ? ` + ${row.extraGranted} 补充` : ""}</span> },
+    { key: "consumed", header: "已用", render: (row) => (<><p className="font-medium text-foreground">{row.consumed}<span className="ml-1 text-xs text-muted">/ {row.totalQuota}</span></p><div className="mt-1 h-1 w-20 overflow-hidden rounded-full bg-border"><div className={`h-full ${usagePercent(row) >= 80 ? "bg-danger" : usagePercent(row) >= 60 ? "bg-accent" : "bg-brand"}`} style={{ width: `${usagePercent(row)}%` }} /></div></>) },
+    { key: "balance", header: "剩余", render: (row) => (<><span className={`text-base font-black ${row.balance === 0 ? "text-danger-ink" : "text-foreground"}`}>{row.balance}</span>{row.reserved > 0 ? <span className="ml-1 text-xs text-warning-ink">({row.reserved} 冻结)</span> : null}</>) },
+    { key: "status", header: "状态", render: (row) => (<div className="flex flex-wrap items-center gap-1.5">{statusBadge(row)}{row.pendingRequests > 0 ? <Badge tone="blue">待审批 {row.pendingRequests}</Badge> : null}</div>) },
+  ];
+
+  const priceColumns: DataTableColumn<PriceRule>[] = [
+    { key: "operation", header: "操作", render: (row) => (<><p className="font-medium text-foreground">{row.label}</p><p className="text-xs text-muted">{row.operationCode}</p></>) },
+    { key: "unitCost", header: "单价", render: (row) => String(row.unitCost) },
+    { key: "maxCost", header: "预扣上限", render: (row) => String(row.maxCost) },
+    { key: "dailyFreeCount", header: "每日免费次数", render: (row) => <span className="text-muted">{row.dailyFreeCount > 0 ? row.dailyFreeCount : "—"}</span> },
+    { key: "version", header: "版本", render: (row) => <span className="text-xs text-muted">v{row.version}</span> },
+  ];
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-[var(--gap-section)]">
       {error ? (
-        <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="flex items-start gap-2 rounded-md border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger-ink">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
       ) : null}
 
       {notice ? (
-        <div className="flex items-start gap-2 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+        <div className="flex items-start gap-2 rounded-md border border-success/30 bg-success-soft px-4 py-3 text-sm text-success-ink">
           <Check className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{notice}</span>
         </div>
@@ -277,7 +295,7 @@ export function PointsPolicyPanel() {
       {requests.length > 0 ? (
         <Card>
           <CardHeader className="flex items-center justify-between">
-            <CardTitle>待审批申请</CardTitle>
+            <CardTitle className="text-section">待审批申请</CardTitle>
             <Badge tone="amber">{requests.length} 单</Badge>
           </CardHeader>
           <CardContent className="space-y-3 p-0">
@@ -320,7 +338,7 @@ export function PointsPolicyPanel() {
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <CardTitle>成员额度</CardTitle>
+            <CardTitle className="text-section">成员额度</CardTitle>
             <p className="mt-1 text-sm text-muted">按剩余额度升序排列，快用完的排在前面。</p>
           </div>
           <div className="flex items-center gap-2">
@@ -337,74 +355,20 @@ export function PointsPolicyPanel() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-auto">
-            <table className="w-full min-w-[820px] border-collapse text-sm">
-              <thead className="bg-surface-muted text-xs font-bold text-muted">
-                <tr>
-                  <th className="px-5 py-3 text-left">成员</th>
-                  <th className="px-5 py-3 text-left">本月构成</th>
-                  <th className="px-5 py-3 text-left">已用</th>
-                  <th className="px-5 py-3 text-left">剩余</th>
-                  <th className="px-5 py-3 text-left">状态</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.userId} className="border-t border-border">
-                    <td className="px-5 py-3">
-                      <p className="font-bold text-foreground">{row.name}</p>
-                      <p className="text-xs text-muted">
-                        {row.department} · {row.title}
-                      </p>
-                    </td>
-                    <td className="px-5 py-3 text-xs text-muted">
-                      {row.baseQuota} 基础
-                      {row.carriedIn > 0 ? ` + ${row.carriedIn} 结转` : ""}
-                      {row.extraGranted > 0 ? ` + ${row.extraGranted} 补充` : ""}
-                    </td>
-                    <td className="px-5 py-3">
-                      <p className="font-medium text-foreground">
-                        {row.consumed}
-                        <span className="ml-1 text-xs text-muted">/ {row.totalQuota}</span>
-                      </p>
-                      <div className="mt-1 h-1 w-20 overflow-hidden rounded-full bg-border">
-                        <div
-                          className={`h-full ${usagePercent(row) >= 80 ? "bg-red-500" : usagePercent(row) >= 60 ? "bg-amber-500" : "bg-brand"}`}
-                          style={{ width: `${usagePercent(row)}%` }}
-                        />
-                      </div>
-                    </td>
-                    <td className="px-5 py-3">
-                      <span className={`text-base font-black ${row.balance === 0 ? "text-red-600" : "text-foreground"}`}>
-                        {row.balance}
-                      </span>
-                      {row.reserved > 0 ? <span className="ml-1 text-xs text-amber-600">({row.reserved} 冻结)</span> : null}
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {statusBadge(row)}
-                        {row.pendingRequests > 0 ? <Badge tone="blue">待审批 {row.pendingRequests}</Badge> : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-5 py-10 text-center text-sm text-muted">
-                      没有匹配成员。
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
+          <StandardDataTable
+            ariaLabel="成员额度"
+            rows={rows}
+            getRowKey={(row) => row.userId}
+            columns={quotaColumns}
+            empty="没有匹配成员。"
+          />
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-[var(--gap-section)] lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>发放规则</CardTitle>
+            <CardTitle className="text-section">发放规则</CardTitle>
             <p className="mt-1 text-sm text-muted">改动只影响下个周期，当月已发放的额度不变。</p>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -453,7 +417,7 @@ export function PointsPolicyPanel() {
 
         <Card>
           <CardHeader>
-            <CardTitle>申请与审批</CardTitle>
+            <CardTitle className="text-section">申请与审批</CardTitle>
             <p className="mt-1 text-sm text-muted">申请人不能审批自己的申请，系统强制校验。</p>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -522,7 +486,7 @@ export function PointsPolicyPanel() {
       <Card>
         <CardHeader className="flex items-center justify-between">
           <div>
-            <CardTitle>操作定价</CardTitle>
+            <CardTitle className="text-section">操作定价</CardTitle>
             <p className="mt-1 text-sm text-muted">调价会发布新版本，历史流水按原价保留。</p>
           </div>
           {access?.canConfigure ? (
@@ -535,40 +499,13 @@ export function PointsPolicyPanel() {
           )}
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-auto">
-            <table className="w-full min-w-[560px] border-collapse text-sm">
-              <thead className="bg-surface-muted text-xs font-bold text-muted">
-                <tr>
-                  <th className="px-5 py-3 text-left">操作</th>
-                  <th className="px-5 py-3 text-left">单价</th>
-                  <th className="px-5 py-3 text-left">预扣上限</th>
-                  <th className="px-5 py-3 text-left">每日免费次数</th>
-                  <th className="px-5 py-3 text-left">版本</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rules.map((rule) => (
-                  <tr key={rule.id} className="border-t border-border">
-                    <td className="px-5 py-3">
-                      <p className="font-medium text-foreground">{rule.label}</p>
-                      <p className="text-xs text-muted">{rule.operationCode}</p>
-                    </td>
-                    <td className="px-5 py-3">{rule.unitCost}</td>
-                    <td className="px-5 py-3">{rule.maxCost}</td>
-                    <td className="px-5 py-3 text-muted">{rule.dailyFreeCount > 0 ? rule.dailyFreeCount : "—"}</td>
-                    <td className="px-5 py-3 text-xs text-muted">v{rule.version}</td>
-                  </tr>
-                ))}
-                {rules.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-5 py-8 text-center text-sm text-muted">
-                      暂无定价，所有操作按免费处理。
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
+          <StandardDataTable
+            ariaLabel="操作定价"
+            rows={rules}
+            getRowKey={(row) => row.id}
+            columns={priceColumns}
+            empty="暂无定价，所有操作按免费处理。"
+          />
         </CardContent>
       </Card>
 

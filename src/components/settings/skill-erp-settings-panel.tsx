@@ -13,7 +13,7 @@ export function SkillErpSettingsPanel() {
               Skill 通过当前系统的 Amazon MCP 读取已发布数据。首批范围从当前用户可访问的数据源产生；工具调用仍受系统店铺授权和凭证范围共同约束。
             </p>
           </div>
-          <a href="/operations?view=connections" className="inline-flex h-8 items-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-semibold text-foreground">
+          <a href="/operations?view=connections" className="inline-flex h-8 items-center gap-2 rounded-md border border-border bg-surface px-3 text-xs font-semibold text-foreground">
             店铺与授权 <ArrowRight className="h-4 w-4" />
           </a>
         </div>
@@ -25,7 +25,7 @@ export function SkillErpSettingsPanel() {
           <p className="mt-1 max-w-3xl text-xs leading-5 text-muted">
             Amazon 与赛狐两个 MCP 服务的凭证签发、可读范围、隔离检查、连接测试和审计记录，已统一放到「系统设置 → MCP 接入」。
           </p>
-          <a href="/settings?tab=mcp" className="mt-3 inline-flex h-8 items-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-semibold text-foreground">
+          <a href="/settings?tab=mcp" className="mt-3 inline-flex h-8 items-center gap-2 rounded-md border border-border bg-surface px-3 text-xs font-semibold text-foreground">
             打开 MCP 接入 <ArrowRight className="h-4 w-4" />
           </a>
         </div>

@@ -12,6 +12,7 @@ import { SellfoxCredentialsPanel } from "@/components/settings/sellfox-credentia
 import { SkillErpSettingsPanel } from "@/components/settings/skill-erp-settings-panel";
 import { McpSettingsPanel } from "@/components/settings/mcp-settings-panel";
 import { Suspense } from "react";
+import { ConsolePageTemplate } from "@/components/templates/page-templates";
 
 export default function SettingsPage() {
   return (
@@ -21,17 +22,19 @@ export default function SettingsPage() {
         workspaceContent={<WorkspaceScopePanel />}
         notificationContent={<WeComNotificationSettingsPanel />}
         pointsContent={<PointsPolicyPanel />}
-        integrationsContent={<div className="space-y-4"><AmazonSpApiSettingsPanel /><SellfoxCredentialsPanel /></div>}
+        integrationsContent={<div className="space-y-[var(--gap-section)]"><AmazonSpApiSettingsPanel /><SellfoxCredentialsPanel /></div>}
         mcpContent={<McpSettingsPanel />}
         skillErpContent={<SkillErpSettingsPanel />}
         operationsContent={
-          <div className="space-y-3">
-            <Suspense fallback={<div className="h-16 animate-pulse rounded-md border border-border bg-white" />}>
-              <SystemDataStatusPanel />
-            </Suspense>
-            <WorkerHealthPanel />
-            <SellfoxHealthPanel />
-          </div>
+          <ConsolePageTemplate
+            health={
+              <Suspense fallback={<div className="h-16 animate-pulse rounded-md border border-border bg-surface" />}>
+                <SystemDataStatusPanel />
+              </Suspense>
+            }
+            tasks={<WorkerHealthPanel />}
+            logs={<SellfoxHealthPanel />}
+          />
         }
       />
     </AppShell>

@@ -45,6 +45,10 @@ required_paths=(
   "prisma/migrations/"
   "RELEASE-METADATA.json"
   "deployment-plan.json"
+  "src/lib/runtime/worker-registry.json"
+  "deploy/production.env.example"
+  "deploy/README.md"
+  "deploy/systemd/amazon-web.service"
 )
 for required_path in "${required_paths[@]}"; do
   if ! grep -Fq "$required_path" <<< "$tar_listing"; then
@@ -53,12 +57,25 @@ for required_path in "${required_paths[@]}"; do
   fi
 done
 
-for forbidden_path in "node_modules/" ".git/" "coverage/" "tests/" ".env" ".next/" ".next-dev/" "dist/"; do
+for forbidden_path in "node_modules/" ".git/" "coverage/" "tests/" ".next/" ".next-dev/" "dist/" "integration-evidence/"; do
   if grep -Fq "$forbidden_path" <<< "$tar_listing"; then
     echo "Artifact contains forbidden path: $forbidden_path" >&2
     exit 1
   fi
 done
+
+if grep -Eq '(^|/)[.]env($|[.])|^deploy/production[.]env$' <<< "$tar_listing"; then
+  echo "Artifact contains a forbidden environment file." >&2
+  exit 1
+fi
+registry_json="$(tar -xOzf "$ARTIFACT_PATH" ./src/lib/runtime/worker-registry.json)"
+worker_paths="$(node -e 'const r=JSON.parse(process.argv[1]); if(!Array.isArray(r)||!r.length) throw Error("Empty registry"); for(const w of r) { if(!/^scripts\/[a-z0-9-]+[.]ts$/.test(w.entry)||!/^amazon-[a-z0-9-]+$/.test(w.service)) throw Error("Invalid registry"); console.log(w.entry); console.log(`deploy/systemd/${w.service}.service`); }' "$registry_json")"
+while IFS= read -r worker_path; do
+  if ! grep -Fxq "$worker_path" <<< "$tar_listing"; then
+    echo "Artifact is missing registered worker asset: $worker_path" >&2
+    exit 1
+  fi
+done <<< "$worker_paths"
 
 node - "$MANIFEST_PATH" "$CHECK_PATH" "$artifact_sha256" "$artifact_size" "$EXPECTED_COMMIT" <<'NODE'
 const fs = require("fs");

@@ -149,7 +149,7 @@ function ChatAttachmentStrip({
         >
           {attachment.kind === "image" ? (
             <div className="flex w-[56px] shrink-0 flex-col gap-1">
-              <div className="h-14 w-14 overflow-hidden rounded border border-border bg-white">
+              <div className="h-14 w-14 overflow-hidden rounded border border-border bg-surface">
                 {attachment.url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -163,11 +163,11 @@ function ChatAttachmentStrip({
           ) : null}
           <div className="min-w-0 flex-1">
             <p className="truncate text-xs font-semibold text-foreground">{attachment.name}</p>
-            <p className="mt-0.5 text-[11px] text-muted">
+            <p className="mt-0.5 text-label text-muted">
               {attachment.kind === "image" ? "图片附件" : "文档附件"}
             </p>
             {attachment.kind === "document" ? (
-              <pre className="mt-1 max-h-20 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-4 text-muted thin-scrollbar">
+              <pre className="mt-1 max-h-20 overflow-auto whitespace-pre-wrap break-words text-label leading-4 text-muted thin-scrollbar">
                 {attachment.summary || "无摘要"}
               </pre>
             ) : null}
@@ -195,12 +195,12 @@ function AttachmentPreview({
 }) {
   if (attachment.kind === "image") {
     return (
-      <div className={`overflow-hidden rounded-md border border-border bg-white ${compact ? "w-20" : "w-28"}`}>
-        <div className={`${compact ? "h-20" : "h-28"} bg-white`}>
+      <div className={`overflow-hidden rounded-md border border-border bg-surface ${compact ? "w-20" : "w-28"}`}>
+        <div className={`${compact ? "h-20" : "h-28"} bg-surface`}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={attachment.url} alt={attachment.name} className="h-full w-full object-contain p-1" />
         </div>
-        <div className="truncate border-t border-border px-2 py-1 text-[10px] font-semibold text-muted">
+        <div className="truncate border-t border-border px-2 py-1 text-label font-semibold text-muted">
           {attachment.name}
         </div>
       </div>
@@ -208,12 +208,12 @@ function AttachmentPreview({
   }
 
   return (
-    <div className="rounded-md border border-border bg-white px-3 py-2 text-xs">
+    <div className="rounded-md border border-border bg-surface px-3 py-2 text-xs">
       <div className="flex items-center gap-2 font-semibold text-foreground">
         <FileText className="h-3.5 w-3.5 text-brand" />
         <span className="truncate">{attachment.name}</span>
       </div>
-      <pre className="mt-2 max-h-28 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-5 text-muted thin-scrollbar">
+      <pre className="mt-2 max-h-28 overflow-auto whitespace-pre-wrap break-words text-label leading-5 text-muted thin-scrollbar">
         {attachment.summary || "无摘要"}
       </pre>
     </div>
@@ -646,7 +646,7 @@ export function ListingAiChatPanel() {
                       className={`w-full rounded-md border px-2 py-2 text-left transition ${
                         active
                           ? "border-brand bg-brand/5"
-                          : "border-border bg-white hover:bg-surface-muted"
+                          : "border-border bg-surface hover:bg-surface-muted"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -658,7 +658,7 @@ export function ListingAiChatPanel() {
                           <p className="truncate text-xs font-bold text-foreground">
                             {conversation.title}
                           </p>
-                          <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-muted">
+                          <p className="mt-1 line-clamp-2 text-label leading-4 text-muted">
                             {lastMessage?.content || "尚未开始"}
                           </p>
                         </button>
@@ -672,23 +672,23 @@ export function ListingAiChatPanel() {
                         </button>
                       </div>
                       <div className="mt-2 flex items-center justify-between gap-2">
-                      <Badge tone={conversation.mode === "image" ? "amber" : "blue"} className="text-[10px]">
+                      <Badge tone={conversation.mode === "image" ? "amber" : "blue"} className="text-label">
                           {conversation.mode === "image" ? "图片" : "文本"}
                         </Badge>
-                        <span className="text-[10px] text-muted">{formatTime(conversation.updatedAt)}</span>
+                        <span className="text-label text-muted">{formatTime(conversation.updatedAt)}</span>
                       </div>
                     </div>
                   );
                 })
               ) : (
-                <div className="rounded-md border border-dashed border-border bg-white px-3 py-6 text-center text-xs font-semibold text-muted">
+                <div className="rounded-md border border-dashed border-border bg-surface px-3 py-6 text-center text-xs font-semibold text-muted">
                   暂无对话
                 </div>
               )}
             </div>
           </div>
 
-          <div className="min-w-0 rounded-md border border-border bg-white">
+          <div className="min-w-0 rounded-md border border-border bg-surface">
             <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2.5">
               <div className="min-w-0">
                 <p className="truncate text-sm font-bold text-foreground">
@@ -736,9 +736,9 @@ export function ListingAiChatPanel() {
                             <button
                               key={`${image.name}-${image.url.slice(0, 20)}`}
                               type="button"
-                              className="overflow-hidden rounded-md border border-border bg-white text-left"
+                              className="overflow-hidden rounded-md border border-border bg-surface text-left"
                             >
-                              <div className="h-28 bg-white">
+                              <div className="h-28 bg-surface">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img
                                   src={image.url}
@@ -746,7 +746,7 @@ export function ListingAiChatPanel() {
                                   className="h-full w-full object-contain p-1"
                                 />
                               </div>
-                              <div className="truncate border-t border-border px-2 py-1 text-[11px] font-semibold text-muted">
+                              <div className="truncate border-t border-border px-2 py-1 text-label font-semibold text-muted">
                                 {image.name}
                               </div>
                             </button>
@@ -755,13 +755,13 @@ export function ListingAiChatPanel() {
                       ) : null}
 
                       <div className="mt-2 flex items-center justify-between gap-2">
-                        <p className="text-[11px] font-semibold opacity-70">
+                        <p className="text-label font-semibold opacity-70">
                           {formatTime(message.createdAt)}
                         </p>
                         {message.role === "user" ? (
                           <button
                             type="button"
-                            className="rounded p-1 opacity-70 transition hover:bg-white/15 hover:opacity-100"
+                            className="rounded p-1 opacity-70 transition hover:bg-surface/15 hover:opacity-100"
                             onClick={() => editMessage(message)}
                             title="编辑后重新发送"
                           >
@@ -804,7 +804,7 @@ export function ListingAiChatPanel() {
 
               {attachmentUploadState ? (
                 <div className="space-y-1">
-                  <div className="flex items-center justify-between gap-2 text-[11px] font-semibold text-muted">
+                  <div className="flex items-center justify-between gap-2 text-label font-semibold text-muted">
                     <span>正在添加附件</span>
                     <span className="truncate">
                       {attachmentUploadState.currentName} · {attachmentUploadState.completed}/
@@ -832,7 +832,7 @@ export function ListingAiChatPanel() {
               ) : null}
 
               {error ? (
-                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                <div className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm font-medium text-danger-ink">
                   {error}
                 </div>
               ) : null}
@@ -858,7 +858,7 @@ export function ListingAiChatPanel() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <label
-                      className={`relative inline-flex h-8 items-center justify-center gap-2 overflow-hidden rounded-md border border-border bg-white px-3 text-xs font-semibold text-foreground transition-colors ${
+                      className={`relative inline-flex h-8 items-center justify-center gap-2 overflow-hidden rounded-md border border-border bg-surface px-3 text-xs font-semibold text-foreground transition-colors ${
                         attachmentUploadState
                           ? "cursor-not-allowed opacity-70"
                           : "cursor-pointer hover:bg-surface-muted"

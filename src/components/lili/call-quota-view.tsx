@@ -30,7 +30,7 @@ export function CallQuotaView() {
       <div className="flex items-center justify-between gap-3"><h1 className="text-xl font-semibold">调用额度与扣减记录</h1>
         <button className="lili-btn-ghost" disabled={busy} onClick={() => setRefresh(value => value + 1)}>刷新</button></div>
       <p>每个同事账号拥有独立账本，新建账号初始余额为 0。同一 ERP 账号与 Lili 共用额度，在当前组织内跨工作区使用，卖家精灵和西柚共同扣减。</p>
-      {error ? <p role="alert" className="text-red-700">{error}</p> : null}
+      {error ? <p role="alert" className="text-danger-ink">{error}</p> : null}
       {busy ? <p role="status">正在读取…</p> : null}
       {data && !error ? <div className="grid gap-4 sm:grid-cols-3" aria-busy={busy}>
         {[ ["剩余可用次数", data.balance], ["累计扣减次数（含待核对）", data.used], ["待核对请求", data.pending] ].map(([label, value]) =>

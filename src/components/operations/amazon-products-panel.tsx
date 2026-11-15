@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { StandardDataTable } from "@/components/ui/table-variants";
+import type { DataTableColumn } from "@/components/ui/data-table";
 import type { AmazonProductReadRow } from "@/lib/operations/amazon-products";
 export function AmazonProductsPanel({ headers }: { headers: () => Headers }) {
   const [rows, setRows] = useState<AmazonProductReadRow[]>([]);
@@ -13,6 +15,19 @@ export function AmazonProductsPanel({ headers }: { headers: () => Headers }) {
   const [hasNext, setHasNext] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const columns: DataTableColumn<AmazonProductReadRow>[] = [
+    { key: "thumbnail", header: "主图", render: row => row.thumbnailUrl ? <img src={row.thumbnailUrl} alt={row.title ?? row.asin ?? ""} width={150} height={150} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="h-[150px] w-[150px] object-contain" /> : <span className="flex h-[150px] w-[150px] items-center justify-center text-xs text-muted">未同步</span> },
+    { key: "title", header: "商品标题", className: "max-w-64", render: row => row.title ?? "未同步" },
+    { key: "sellerSku", header: "Seller SKU", render: row => <span className="font-semibold">{row.sellerSku}</span> },
+    { key: "asin", header: "ASIN", render: row => row.asin ?? "未同步" },
+    { key: "account", header: "店铺 / 站点", render: row => <>{row.sellerAccountId}<span className="block text-xs text-muted">{row.marketplaceId}</span></> },
+    { key: "status", header: "刊登状态", render: row => row.listingStatus ?? "未同步" },
+    { key: "available", header: "可售", render: row => row.available ?? "未同步" },
+    { key: "inbound", header: "在途", render: row => row.inbound ?? "未同步" },
+    { key: "reserved", header: "预留 / 不可售", render: row => <>{row.reserved ?? "未同步"} / {row.unfulfillable ?? "未同步"}</> },
+    { key: "snapshot", header: "快照时间", className: "text-xs", render: row => <>刊登 {row.catalogUpdatedAt ? new Date(row.catalogUpdatedAt).toLocaleString("zh-CN") : "未同步"}<br />库存 {row.inventoryUpdatedAt ? new Date(row.inventoryUpdatedAt).toLocaleString("zh-CN") : "未同步"} · {row.freshness}</> },
+    { key: "source", header: "字段来源 / 错误", className: "max-w-64 text-xs text-muted", render: row => <>{Object.values(row.fieldSources).join("；") || "无来源"}<br />{row.lastError}</> },
+  ];
 
   useEffect(() => {
     const readLocation = () => {
@@ -67,28 +82,8 @@ export function AmazonProductsPanel({ headers }: { headers: () => Headers }) {
       <input name="sku" aria-label="按 Seller SKU 查询" placeholder="Seller SKU" value={skuInput} onChange={event => setSkuInput(event.target.value)} className="h-9 border border-border px-3" />
       <Button size="sm" variant="secondary">搜索</Button>
     </form>
-    {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
-    <div className="overflow-x-auto border border-border">
-      <table className="w-full min-w-[1400px] text-left text-sm">
-        <thead className="bg-surface-muted text-xs"><tr>{["主图", "商品标题", "Seller SKU", "ASIN", "店铺 / 站点", "刊登状态", "可售", "在途", "预留 / 不可售", "快照时间", "字段来源 / 错误"].map(item => <th className="px-3 py-2" key={item}>{item}</th>)}</tr></thead>
-        <tbody>
-          {rows.map((row, index) => <tr key={`${row.sellerAccountId}:${row.marketplaceId}:${row.sellerSku}:${index}`} className="border-t border-border">
-            <td className="px-3 py-2">{row.thumbnailUrl ? <img src={row.thumbnailUrl} alt={row.title ?? row.asin ?? ""} width={150} height={150} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="h-[150px] w-[150px] object-contain" /> : <span className="flex h-[150px] w-[150px] items-center justify-center text-xs text-muted">未同步</span>}</td>
-            <td className="max-w-64 px-3 py-2">{row.title ?? "未同步"}</td>
-            <td className="px-3 py-2 font-semibold">{row.sellerSku}</td>
-            <td>{row.asin ?? "未同步"}</td>
-            <td>{row.sellerAccountId}<span className="block text-xs text-muted">{row.marketplaceId}</span></td>
-            <td>{row.listingStatus ?? "未同步"}</td>
-            <td>{row.available ?? "未同步"}</td>
-            <td>{row.inbound ?? "未同步"}</td>
-            <td>{row.reserved ?? "未同步"} / {row.unfulfillable ?? "未同步"}</td>
-            <td className="text-xs">刊登 {row.catalogUpdatedAt ? new Date(row.catalogUpdatedAt).toLocaleString("zh-CN") : "未同步"}<br />库存 {row.inventoryUpdatedAt ? new Date(row.inventoryUpdatedAt).toLocaleString("zh-CN") : "未同步"} · {row.freshness}</td>
-            <td className="max-w-64 text-xs text-muted">{Object.values(row.fieldSources).join("；") || "无来源"}<br />{row.lastError}</td>
-          </tr>)}
-          {!rows.length && <tr><td colSpan={11} className="py-8 text-center text-muted">{loading ? "读取数据库快照中..." : "当前工作区暂无已同步刊登或库存快照。"}</td></tr>}
-        </tbody>
-      </table>
-    </div>
+    {error && <p role="alert" className="text-sm text-danger-ink">{error}</p>}
+    <StandardDataTable rows={rows} columns={columns} getRowKey={(row) => `${row.sellerAccountId}:${row.marketplaceId}:${row.sellerSku}`} empty={loading ? "读取数据库快照中..." : "当前工作区暂无已同步刊登或库存快照。"} ariaLabel="Amazon 在线商品与库存快照" className="min-w-[1400px] text-sm" />
     <div className="flex justify-end gap-2 text-sm">
       <span>第 {page} 页</span>
       <Button size="sm" variant="secondary" disabled={page <= 1 || loading} onClick={() => setPage(page - 1)}>上一页</Button>

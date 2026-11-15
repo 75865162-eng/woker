@@ -15,7 +15,10 @@ export type WorkspaceTab = {
 };
 
 export const HOME_HREF = "/dashboard";
-export const MAX_TABS = 8;
+/** 标签上限。ERP 实际使用常在 10–20 个标签，标签本身只是元数据，不占页面状态。 */
+export const MAX_TABS = 20;
+/** 同时保留「组件状态 + DOM」的页面数上限；超出后按最近使用时间淘汰最久没打开的那个。 */
+export const MAX_VIEWS = 6;
 
 const navLabels = new Map<string, string>();
 for (const group of navigationGroups) {
@@ -48,6 +51,8 @@ function fallbackLabel(href: string): string {
 export function labelForHref(href: string, linkText?: string): { label: string; locked: boolean } {
   const known = navLabels.get(href) ?? navLabels.get(splitHref(href).pathname);
   if (known) return { label: known, locked: true };
+  // 帮助中心的文章详情归到「帮助中心」这一个入口下，标签不跟着文章名变化。
+  if (splitHref(href).pathname.startsWith("/help/")) return { label: "帮助中心", locked: true };
   const text = (linkText ?? "").trim().replace(/\s+/g, " ").replace(/[→»>]+$/g, "").trim();
   if (text && text.length <= 16) return { label: text, locked: false };
   return { label: fallbackLabel(href), locked: false };
@@ -78,8 +83,8 @@ export function WorkspaceTabBar({ tabs, activeId, cachedIds, onSelect, onClose, 
   }, [menuOpen]);
 
   return (
-    <div className="sticky top-14 z-[9] flex h-10 items-center gap-2 border-b border-border bg-white/95 px-4 backdrop-blur">
-      <div className="thin-scrollbar flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto py-0.5">
+    <div className="sticky top-[var(--shell-topbar)] z-[9] flex h-[var(--shell-tabbar)] items-center gap-2 border-b border-border bg-surface/95 px-6 backdrop-blur">
+      <div className="thin-scrollbar flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto py-1">
         {tabs.map((tab) => {
           const active = tab.id === activeId;
           const cached = cachedIds.includes(tab.id);
@@ -89,10 +94,10 @@ export function WorkspaceTabBar({ tabs, activeId, cachedIds, onSelect, onClose, 
               role="tab"
               aria-selected={active}
               title={`${tab.label}${cached ? " · 已缓存，切换不重新加载" : ""}`}
-              className={`group flex h-7 shrink-0 items-center gap-1 rounded-full border px-2.5 text-[12px] font-medium transition-colors ${
+              className={`group flex h-6 shrink-0 items-center gap-1 rounded-full border px-2.5 text-xs font-medium transition-colors ${
                 active
                   ? "border-brand/30 bg-brand/10 text-brand"
-                  : "border-border bg-white text-foreground/70 hover:border-brand/30 hover:text-brand"
+                  : "border-border bg-surface text-foreground/70 hover:border-brand/30 hover:text-brand"
               }`}
             >
               <button
@@ -107,7 +112,7 @@ export function WorkspaceTabBar({ tabs, activeId, cachedIds, onSelect, onClose, 
                 type="button"
                 aria-label={`关闭 ${tab.label}`}
                 title="关闭标签页"
-                className="ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[13px] leading-none text-muted outline-none hover:bg-danger/10 hover:text-danger focus-visible:ring-2 focus-visible:ring-brand"
+                className="ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-body leading-none text-muted outline-none hover:bg-danger/10 hover:text-danger focus-visible:ring-2 focus-visible:ring-brand"
                 onClick={() => onClose(tab.id)}
               >
                 ×
@@ -128,7 +133,7 @@ export function WorkspaceTabBar({ tabs, activeId, cachedIds, onSelect, onClose, 
           <span className="hidden sm:inline">{tabs.length} 个页签</span>
         </button>
         {menuOpen ? (
-          <div className="absolute right-0 top-full z-30 mt-1 w-40 rounded-lg border border-border bg-white p-1.5 text-xs shadow-lg">
+          <div className="absolute right-0 top-full z-30 mt-1 w-40 rounded-lg border border-border bg-surface p-1.5 text-xs shadow-lg">
             {[
               { label: "刷新当前页", action: onRefresh },
               { label: "关闭其他页签", action: onCloseOthers },

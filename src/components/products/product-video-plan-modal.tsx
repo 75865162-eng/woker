@@ -17,8 +17,8 @@ import {
   type ProductVideoShot,
 } from "@/lib/products/video-plan";
 
-const inputClass = "h-9 w-full rounded-md border border-border bg-white px-2 text-sm text-foreground outline-none focus:border-brand";
-const textareaClass = "w-full resize-y rounded-md border border-border bg-white px-2 py-2 text-sm leading-6 text-foreground outline-none focus:border-brand";
+const inputClass = "h-9 w-full rounded-md border border-border bg-surface px-2 text-sm text-foreground outline-none focus:border-brand";
+const textareaClass = "w-full resize-y rounded-md border border-border bg-surface px-2 py-2 text-sm leading-6 text-foreground outline-none focus:border-brand";
 
 export function ProductVideoPlanModal({
   sku,
@@ -181,7 +181,7 @@ export function ProductVideoPlanModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-foreground/35 p-4 backdrop-blur-sm">
-      <div className="mx-auto flex h-full w-full max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg bg-white shadow-xl">
+      <div className="mx-auto flex h-full w-full max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg bg-surface shadow-xl">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div>
             <h2 className="text-lg font-bold text-foreground">视频策划</h2>
@@ -428,7 +428,7 @@ export function ProductVideoPlanModal({
       </div>
       {previewAsset ? (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/70 p-6" onClick={() => setPreviewAsset(null)}>
-          <div className="max-h-full max-w-5xl overflow-hidden rounded-lg bg-white p-3 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <div className="max-h-full max-w-5xl overflow-hidden rounded-lg bg-surface p-3 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="mt-2 flex items-center justify-center" onClick={() => setPreviewAsset(null)}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={previewImageUrls[previewAsset.id] || previewAsset.url} alt={previewAsset.name} className="max-h-[82vh] max-w-full object-contain" onClick={(event) => event.stopPropagation()} />
@@ -487,7 +487,7 @@ function AssetUploader({
 
   return (
     <div className="mt-2 rounded-md border border-border bg-surface-muted p-2">
-      <label className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-md border border-border bg-white px-2 text-xs font-bold text-foreground hover:border-brand">
+      <label className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-md border border-border bg-surface px-2 text-xs font-bold text-foreground hover:border-brand">
         <Upload className="h-3.5 w-3.5" />
         {uploading ? "上传中" : "上传素材"}
         <input className="hidden" type="file" accept={accept} multiple onChange={(event) => {
@@ -498,7 +498,7 @@ function AssetUploader({
       {assets.length ? (
         <div className="mt-2 grid gap-2">
           {assets.map((asset) => (
-            <div key={asset.id} className="flex items-center justify-between gap-2 rounded-md border border-border bg-white px-2 py-1.5">
+            <div key={asset.id} className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface px-2 py-1.5">
               <a className="min-w-0 truncate text-xs font-semibold text-brand hover:underline" href={asset.url} target="_blank" rel="noreferrer">
                 {asset.name}
               </a>
@@ -553,7 +553,7 @@ function ImageAppendUploader({
   return (
     <div className="flex flex-wrap gap-2">
       {images.map((asset) => (
-        <div key={asset.id} className="group relative h-20 w-20 overflow-hidden rounded-md border border-border bg-white">
+        <div key={asset.id} className="group relative h-20 w-20 overflow-hidden rounded-md border border-border bg-surface">
           <button className="h-full w-full" type="button" onClick={() => onPreview(asset)}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -569,7 +569,7 @@ function ImageAppendUploader({
             />
           </button>
           <button
-            className="absolute bottom-1 right-1 rounded bg-white/95 px-1.5 py-0.5 text-[10px] font-bold text-danger shadow"
+            className="absolute bottom-1 right-1 rounded bg-surface/95 px-1.5 py-0.5 text-label font-bold text-danger shadow"
             type="button"
             onClick={() => onRemove(asset.id)}
           >
@@ -578,7 +578,7 @@ function ImageAppendUploader({
         </div>
       ))}
       {images.length < 5 ? (
-        <label className="flex h-20 w-20 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-border bg-white text-center text-xs font-bold text-foreground hover:border-brand">
+        <label className="flex h-20 w-20 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-border bg-surface text-center text-xs font-bold text-foreground hover:border-brand">
           <Upload className="h-5 w-5 text-brand" />
           <span className="mt-1">{uploading ? "上传中" : "上传图片"}</span>
           <input

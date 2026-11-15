@@ -47,10 +47,10 @@ test("Sellfox HTTP client uses official token, signature, retry and queue contra
     respond = () => ({ code: 0, data: { accepted: true } });
   }
   try {
-    await t.test("one cached token serves concurrent signed requests, spaced after HTTP completion", async () => {
+    await t.test("one cached token serves concurrent paths; same path is spaced by the rate bucket", async () => {
       reset();
       const starts: number[] = []; const ends: number[] = [];
-      respond = async (call) => {
+      const slowRespond = async (call: Call) => {
         starts.push(call.at);
         const query = call.url.searchParams;
         const values = { access_token: query.get("access_token"), client_id: "fixture-client", method: "post", nonce: query.get("nonce"), timestamp: query.get("timestamp"), url: call.url.pathname };
@@ -63,11 +63,21 @@ test("Sellfox HTTP client uses official token, signature, retry and queue contra
         ends.push(Date.now());
         return { data: { accepted: true } };
       };
+      respond = slowRespond;
+      // 限流按接口 path 分桶：不同接口并行，不再全局串行（赛狐每接口 1 req/s）。
       await drive(Promise.all([sellfoxPost("/api/test/a.json", { shopIdList: ["shop-a"] }), sellfoxPost("/api/test/b.json", { shopIdList: ["shop-a"] })]));
       assert.equal(tokenCount, 1);
       assert.equal(calls.length, 3);
-      for (let i = 1; i < calls.length; i += 1) assert.ok(calls[i].at - calls[i - 1].at >= 1200);
-      assert.ok(starts[1] - ends[0] >= 1200);
+      assert.ok(Math.abs(starts[1] - starts[0]) < 1100, "不同 path 应并行发出");
+      assert.ok(starts[1] - ends[0] < 1100, "不同 path 不等待彼此响应完成");
+      // 同一 path 仍串行且至少间隔一个限流窗口。
+      reset();
+      respond = slowRespond;
+      starts.length = 0; ends.length = 0;
+      await drive(Promise.all([sellfoxPost("/api/test/a.json", { shopIdList: ["shop-a"] }), sellfoxPost("/api/test/a.json", { shopIdList: ["shop-a"] })]));
+      assert.equal(starts.length, 2);
+      assert.ok(starts[1] - starts[0] >= 1100, "同一 path 至少间隔 1.1 秒");
+      assert.ok(starts[1] >= ends[0], "同一 path 等待前一次响应完成");
     });
     await t.test("expires_in is milliseconds; expired cache refreshes without a 1000x extension", async () => {
       reset(); tokenTtl = 10_000;

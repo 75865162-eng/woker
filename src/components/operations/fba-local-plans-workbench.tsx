@@ -122,11 +122,11 @@ function PlanWorkbench({ workspaceId, sellerAccountId, marketplaceId, lineId, mo
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">{mode === "packing" ? "FBA 本地装箱" : "FBA 本地发货计划"}</h2><p className="mt-1 text-xs text-muted">创建计划 → 主管审批 → 预占库存 → 仓库拣货出库。Amazon 建货件尚未接入。</p></div><div className="flex gap-2"><Button variant="secondary" disabled={loading || busy} onClick={() => void load()}>刷新计划</Button>{canCreate && !lineId && <Button disabled={loading || busy || !!error} onClick={() => setOpen(true)}>新建本地计划</Button>}</div></div>
     {mode === "plans" && <div role="group" aria-label="发货计划显示方式" className="flex gap-2"><Button type="button" size="sm" variant="secondary" aria-pressed={displayMode === "table"} onClick={() => { setSelectedPlanId(null); setDisplayMode("table"); }}>单据列表</Button><Button type="button" size="sm" variant="secondary" aria-pressed={displayMode === "expanded"} onClick={() => { setSelectedPlanId(null); setDisplayMode("expanded"); }}>展开计划</Button></div>}
     {lineId && <p className="text-sm text-muted">当前显示仓库关联计划。<a className="ml-2 text-brand hover:underline" href="/operations?view=first-mile">返回全部计划</a></p>}
-    {error && <p role="alert" className="text-sm text-red-600">{error}</p>}{notice && <p role="status" className="text-sm text-brand">{notice}</p>}
+    {error && <p role="alert" className="text-sm text-danger-ink">{error}</p>}{notice && <p role="status" className="text-sm text-brand">{notice}</p>}
     {loading && <p role="status" className="text-sm text-muted">读取本地计划…</p>}
     {!loading && result?.items.length === 0 && <p className="py-8 text-center text-sm text-muted">当前店铺和站点暂无本地计划。</p>}
     {mode === "packing" && <>
-      <p role="status" className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">本地装箱资料已接入。Amazon 装箱组生成、方案选择、标签与确认提交尚未接入；本地保存不代表 Amazon 已接受。</p>
+      <p role="status" className="rounded border border-warning-ink/30 bg-warning-soft p-3 text-xs text-warning-ink">本地装箱资料已接入。Amazon 装箱组生成、方案选择、标签与确认提交尚未接入；本地保存不代表 Amazon 已接受。</p>
       {result && !loading && <FbaPlanTable plans={result.items} disabled={busy} onSelect={setSelectedPlanId} />}
     </>}
     {mode === "plans" && displayMode === "table" && result && !loading && <FbaPlanTable purpose="shipping" plans={result.items} disabled={busy} onSelect={setSelectedPlanId} />}
@@ -166,7 +166,7 @@ function PlanWorkbench({ workspaceId, sellerAccountId, marketplaceId, lineId, mo
         </div>
         <div className="space-y-1 border-b border-border px-3 py-2 text-xs" aria-label="计划出库进度">
           <p>计划 {plan.fulfillment.plannedQty} · 待预占 {plan.fulfillment.unreservedQty} · 剩余预占 {plan.fulfillment.reservedQty} · 待拣 {plan.fulfillment.unpickedQty} · 已拣待出库 {plan.fulfillment.pickedQty} · 累计出库 {plan.fulfillment.dispatchedQty} · 已释放 {plan.fulfillment.releasedQty}</p>
-          {plan.fulfillment.releasedQty > 0 && plan.status !== "CANCELLED" && <p className="text-amber-700">已释放数量不会自动补占；需核对差额，未出库计划可全部释放后取消重建。</p>}
+          {plan.fulfillment.releasedQty > 0 && plan.status !== "CANCELLED" && <p className="text-warning-ink">已释放数量不会自动补占；需核对差额，未出库计划可全部释放后取消重建。</p>}
           {plan.fulfillment.dispatchedQty > 0 && <p className="text-muted">出库仅表示公司仓实物扣减，Amazon 收货状态尚未接入。</p>}
           {plan.stockReady && <p className="text-muted">库存已就绪</p>}
         </div>
@@ -192,7 +192,7 @@ function PlanWorkbench({ workspaceId, sellerAccountId, marketplaceId, lineId, mo
     <WorkbenchDialog open={!!costPlan} title="头程费用分摊" busy={formBusy} onClose={() => setCostPlan(null)}>{costPlan && <FbaLocalCostForm plan={costPlan} workspaceId={workspaceId} onBusyChange={setFormBusy} onSaved={() => { setCostPlan(null); setNotice("费用分摊草稿已保存，尚未过账。"); void load(); }} />}</WorkbenchDialog>
     <WorkbenchDialog open={!!ledgerPlan} title={ledgerPlan?.fee?'确认货代账单':'新增独立费用'} busy={formBusy} onClose={()=>setLedgerPlan(null)}>{ledgerPlan&&<FbaLocalCostForm key={ledgerPlan.fee?.id??ledgerPlan.plan.id} plan={ledgerPlan.plan} workspaceId={workspaceId} ledger={{fee:ledgerPlan.fee}} onBusyChange={setFormBusy} onSaved={()=>{setLedgerPlan(null);setNotice('费用台账已更新，差额调整尚未过账。');void load();}}/>}</WorkbenchDialog>
     <WorkbenchDialog open={!!packingPlan} title="本地装箱资料" busy={formBusy} onClose={() => setPackingPlan(null)}>{packingPlan && <FbaLocalPackingForm plan={packingPlan} workspaceId={workspaceId} onBusyChange={setFormBusy} onSaved={() => { setPackingPlan(null); setNotice("装箱资料已保存，尚未提交 Amazon。"); void load(); }} />}</WorkbenchDialog>
-    <WorkbenchDialog open={!!cancelling} title="取消本地计划" busy={busy} onClose={() => setCancelling(null)}>{cancelling && <div className="space-y-3"><p>确认取消计划 {cancelling.number}？</p><Button disabled={busy} onClick={() => void perform("/api/operations/fba-local-plans", { action: "CANCEL", id: cancelling.id, expectedRevision: cancelling.revision }, "计划已取消。")}>确认取消计划</Button>{error && <p role="alert" className="text-red-600">{error}</p>}</div>}</WorkbenchDialog>
+    <WorkbenchDialog open={!!cancelling} title="取消本地计划" busy={busy} onClose={() => setCancelling(null)}>{cancelling && <div className="space-y-3"><p>确认取消计划 {cancelling.number}？</p><Button disabled={busy} onClick={() => void perform("/api/operations/fba-local-plans", { action: "CANCEL", id: cancelling.id, expectedRevision: cancelling.revision }, "计划已取消。")}>确认取消计划</Button>{error && <p role="alert" className="text-danger-ink">{error}</p>}</div>}</WorkbenchDialog>
   </section>;
 }
 

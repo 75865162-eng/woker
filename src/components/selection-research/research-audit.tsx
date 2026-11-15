@@ -20,7 +20,7 @@ export function ResearchAudit({ run }: { run: Run }) {
   return <section className="space-y-3 rounded border p-3 text-sm" aria-label="审批与保存记录">
     <h3 className="font-semibold">审批与保存记录</h3>
     <p>首次付费授权作用于当前研究任务；每笔付费查询分别保存调用、请求和费用状态。选品及最终结论等业务确认独立记录；确认研究结论仅允许生成报告，不授权修改店铺业务数据。</p>
-    {run.paidCallAuthorization && <div className="rounded bg-slate-50 p-2">
+    {run.paidCallAuthorization && <div className="rounded bg-surface-muted p-2">
       <p className="font-medium">任务付费授权已记录</p>
       <p>时间：{run.paidCallAuthorization.approvedAt} · 操作者 ID：{run.paidCallAuthorization.approvedByUserId}</p>
       <p>授权模式：{run.paidCallAuthorization.budgetMode === "uncapped" ? "任务次数不限额" : "有限额度（保留原授权）"}</p>
@@ -28,18 +28,18 @@ export function ResearchAudit({ run }: { run: Run }) {
     </div>}
     <p>研究积分：已确认 {researchCreditUsage(run).confirmed}，估算 {researchCreditUsage(run).estimated}，待核实 {researchCreditUsage(run).pendingCalls} 笔。1积分=¥0.01；估算和待核实费用未计入确认实耗。</p>
     <ol className="space-y-2">
-      <li className="rounded bg-slate-50 p-2"><strong>第一次业务确认：{first ? "已记录" : "尚未确认"}</strong>
+      <li className="rounded bg-surface-muted p-2"><strong>第一次业务确认：{first ? "已记录" : "尚未确认"}</strong>
         {first && <><p className="break-all">已选方向：{selected?.name ?? first.decision.candidateId}</p><p className="break-all">确认时间：{first.at} · 操作者 ID：{first.actorId}</p>{first.decision.confirmation && <p>对话确认：{first.decision.confirmation.text}</p>}</>}
       </li>
-      <li className="rounded bg-slate-50 p-2"><strong>第二次业务确认：{final ? "已记录" : "尚未确认"}</strong>
+      <li className="rounded bg-surface-muted p-2"><strong>第二次业务确认：{final ? "已记录" : "尚未确认"}</strong>
         {final && <><p className="break-all">确认时间：{final.at} · 操作者 ID：{final.actorId}</p>{final.decision.confirmation && <p>对话确认：{final.decision.confirmation.text}</p>}</>}
       </li>
     </ol>
-    {run.report ? <div className="space-y-1 rounded bg-slate-50 p-2">
+    {run.report ? <div className="space-y-1 rounded bg-surface-muted p-2">
       <p className="font-medium">HTML 报告保存记录已存在</p>
       <p className="break-all">FileObject：{run.report.fileId} · 保存时间：{run.report.savedAt}</p>
       <p>可通过下方下载入口读取保存文件；文件可用性与完整性由下载接口校验。</p>
-    </div> : <p className="rounded bg-amber-50 p-2 text-amber-900">{first && final ? "报告尚无保存记录。若保存失败，可重试保存，无需重复两次业务确认。" : "报告尚无保存记录；需先完成两次业务确认。"}</p>}
+    </div> : <p className="rounded bg-warning-soft p-2 text-warning-ink">{first && final ? "报告尚无保存记录。若保存失败，可重试保存，无需重复两次业务确认。" : "报告尚无保存记录；需先完成两次业务确认。"}</p>}
     <details open={expanded} onToggle={event => setExpanded(event.currentTarget.open)}>
       <summary>工具授权、费用及额度记录（{technical.length} 条）</summary>
       {expanded && <>

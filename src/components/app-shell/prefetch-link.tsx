@@ -1,7 +1,6 @@
 "use client";
 
 import Link, { type LinkProps } from "next/link";
-import { useRouter } from "next/navigation";
 import type { AnchorHTMLAttributes } from "react";
 
 type PrefetchLinkProps = LinkProps &
@@ -9,26 +8,11 @@ type PrefetchLinkProps = LinkProps &
     href: string;
   };
 
-export function PrefetchLink({ href, onFocus, onMouseEnter, ...props }: PrefetchLinkProps) {
-  const router = useRouter();
-
-  function prefetch() {
-    router.prefetch(href);
-  }
-
-  return (
-    <Link
-      href={href}
-      prefetch={false}
-      onFocus={(event) => {
-        prefetch();
-        onFocus?.(event);
-      }}
-      onMouseEnter={(event) => {
-        prefetch();
-        onMouseEnter?.(event);
-      }}
-      {...props}
-    />
-  );
+// Kept as a named wrapper so call sites stay stable, but the previous
+// `prefetch={false}` + hover-only `router.prefetch()` combination made clicks
+// race against a half-finished prefetch (which is slower than no prefetch at
+// all). Next's built-in viewport prefetch finishes long before the pointer
+// arrives, so just delegate to <Link>.
+export function PrefetchLink({ href, ...props }: PrefetchLinkProps) {
+  return <Link href={href} {...props} />;
 }

@@ -135,7 +135,7 @@ export function TrialProductEditor({
 
   return (
     <div className="fixed inset-0 z-30 bg-foreground/35 p-4 backdrop-blur-sm">
-      <div className="mx-auto flex h-full max-w-7xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
+      <div className="mx-auto flex h-full max-w-7xl flex-col overflow-hidden rounded-lg bg-surface shadow-xl">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
             <h2 className="text-lg font-bold text-foreground">新增试算商品</h2>

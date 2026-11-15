@@ -38,28 +38,7 @@ export type AuthCookie = {
   };
 };
 
-export function isSecureRequest(request: Request) {
-  try {
-    const url = new URL(request.url);
-    const hostname = url.hostname;
-    const isTemporaryIpHost =
-      /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname) || hostname.endsWith(".sslip.io") || hostname === "localhost" || hostname === "127.0.0.1";
-
-    if (isTemporaryIpHost) {
-      return false;
-    }
-
-    const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
-
-    if (forwardedProto) {
-      return forwardedProto === "https";
-    }
-
-    return url.protocol === "https:";
-  } catch {
-    return process.env.NODE_ENV === "production";
-  }
-}
+export { isSecureRequest } from "@/lib/auth/request-security";
 
 function getAuthSecret() {
   const secret = process.env.AUTH_SECRET;

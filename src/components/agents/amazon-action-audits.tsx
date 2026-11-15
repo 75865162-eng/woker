@@ -53,7 +53,7 @@ export function AmazonActionAudits({ refreshToken = 0, onChanged }: { refreshTok
     <CardContent className="space-y-3 text-sm">
       <p className="text-muted">仅 update_bid 预览。默认 dry_run；真实 HTTP 尚未实现，打开开关仍会明确失败。广告报表日期和实时旧出价需人工复核。</p>
       {loading && <p>读取审计中...</p>}
-      {error && <p role="alert" className="text-red-600">{error}</p>}
+      {error && <p role="alert" className="text-danger-ink">{error}</p>}
       {message && <p role="status">{message}</p>}
       {!loading && !error && !rows.length && <p className="text-muted">当前工作区暂无审计。</p>}
       {rows.map((row) => <article key={row.id} className="space-y-2 rounded border border-border p-3">

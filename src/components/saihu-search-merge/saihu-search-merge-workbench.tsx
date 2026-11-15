@@ -4,6 +4,8 @@ import { useMemo, useRef, useState, type RefObject } from "react";
 import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, SearchCheck, UploadCloud } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { StandardDataTable } from "@/components/ui/table-variants";
+import { type DataTableColumn } from "@/components/ui/data-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   buildSaihuSearchMergeWorkbook,
@@ -53,7 +55,7 @@ function isSupportedFile(file: File) {
 
 function MetricCard({ label, value, tone = "gray" }: { label: string; value: string; tone?: "gray" | "blue" | "green" | "amber" }) {
   return (
-    <div className="rounded-md border border-border bg-white px-4 py-3">
+    <div className="rounded-md border border-border bg-surface px-4 py-3">
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs font-medium text-muted">{label}</p>
         <Badge tone={tone}>{tone === "green" ? "合并" : "统计"}</Badge>
@@ -64,47 +66,30 @@ function MetricCard({ label, value, tone = "gray" }: { label: string; value: str
 }
 
 function PreviewTable({ rows }: { rows: SaihuMergedRow[] }) {
+  const previewColumns: DataTableColumn<SaihuMergedRow>[] = [
+    { key: "searchTerm", header: "用户搜索词", render: (row) => <span className="font-semibold text-foreground">{row.searchTerm}</span> },
+    { key: "translation", header: "翻译", render: (row) => <span className="text-muted">{row.translation || "--"}</span> },
+    { key: "orderCount", header: "订单", numeric: true, render: (row) => formatNumber(row.orderCount) },
+    { key: "impressions", header: "曝光", numeric: true, render: (row) => formatNumber(row.impressions) },
+    { key: "clicks", header: "点击", numeric: true, render: (row) => formatNumber(row.clicks) },
+    { key: "spend", header: "花费", numeric: true, render: (row) => formatNumber(row.spend, 2) },
+    { key: "sales", header: "销售额", numeric: true, render: (row) => formatNumber(row.sales, 2) },
+    { key: "cpc", header: "CPC", numeric: true, render: (row) => formatNumber(row.cpc, 2) },
+    { key: "cpa", header: "CPA", numeric: true, render: (row) => formatNumber(row.cpa, 2) },
+    { key: "ctr", header: "CTR", numeric: true, render: (row) => formatPercent(row.ctr) },
+    { key: "acos", header: "ACoS", numeric: true, render: (row) => formatPercent(row.acos) },
+    { key: "sourceRows", header: "来源行", numeric: true, render: (row) => formatNumber(row.sourceRows) },
+  ];
+
   return (
-    <div className="overflow-hidden rounded-md border border-border">
-      <div className="max-h-[520px] overflow-auto thin-scrollbar">
-        <table className="min-w-[1120px] w-full border-collapse text-left text-sm">
-          <thead className="sticky top-0 z-[1] bg-surface-muted text-xs font-semibold text-muted">
-            <tr>
-              <th className="w-[260px] border-b border-border px-3 py-2">用户搜索词</th>
-              <th className="border-b border-border px-3 py-2">翻译</th>
-              <th className="border-b border-border px-3 py-2 text-right">订单</th>
-              <th className="border-b border-border px-3 py-2 text-right">曝光</th>
-              <th className="border-b border-border px-3 py-2 text-right">点击</th>
-              <th className="border-b border-border px-3 py-2 text-right">花费</th>
-              <th className="border-b border-border px-3 py-2 text-right">销售额</th>
-              <th className="border-b border-border px-3 py-2 text-right">CPC</th>
-              <th className="border-b border-border px-3 py-2 text-right">CPA</th>
-              <th className="border-b border-border px-3 py-2 text-right">CTR</th>
-              <th className="border-b border-border px-3 py-2 text-right">ACoS</th>
-              <th className="border-b border-border px-3 py-2 text-right">来源行</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border bg-white">
-            {rows.map((row) => (
-              <tr key={row.searchTerm} className="hover:bg-surface-muted/50">
-                <td className="px-3 py-2 font-semibold text-foreground">{row.searchTerm}</td>
-                <td className="px-3 py-2 text-muted">{row.translation || "--"}</td>
-                <td className="px-3 py-2 text-right metric-tabular">{formatNumber(row.orderCount)}</td>
-                <td className="px-3 py-2 text-right metric-tabular">{formatNumber(row.impressions)}</td>
-                <td className="px-3 py-2 text-right metric-tabular">{formatNumber(row.clicks)}</td>
-                <td className="px-3 py-2 text-right metric-tabular">{formatNumber(row.spend, 2)}</td>
-                <td className="px-3 py-2 text-right metric-tabular">{formatNumber(row.sales, 2)}</td>
-                <td className="px-3 py-2 text-right metric-tabular">{formatNumber(row.cpc, 2)}</td>
-                <td className="px-3 py-2 text-right metric-tabular">{formatNumber(row.cpa, 2)}</td>
-                <td className="px-3 py-2 text-right metric-tabular">{formatPercent(row.ctr)}</td>
-                <td className="px-3 py-2 text-right metric-tabular">{formatPercent(row.acos)}</td>
-                <td className="px-3 py-2 text-right metric-tabular">{formatNumber(row.sourceRows)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <StandardDataTable
+      ariaLabel="赛狐搜索词合并预览"
+      rows={rows}
+      getRowKey={(row) => row.searchTerm}
+      columns={previewColumns}
+      empty="暂无合并结果。"
+      maxHeight="520px"
+    />
   );
 }
 
@@ -137,7 +122,7 @@ function DiffUploadBox({
         type="button"
         onClick={() => inputRef.current?.click()}
         disabled={disabled}
-        className="flex min-h-[118px] w-full flex-col items-center justify-center rounded-md border border-dashed border-border bg-surface-muted/50 px-5 py-6 text-center transition-colors hover:border-brand hover:bg-white disabled:pointer-events-none disabled:opacity-70"
+        className="flex min-h-[118px] w-full flex-col items-center justify-center rounded-md border border-dashed border-border bg-surface-muted/50 px-5 py-6 text-center transition-colors hover:border-brand hover:bg-surface disabled:pointer-events-none disabled:opacity-70"
       >
         <FileSpreadsheet className="h-8 w-8 text-brand" />
         <span className="mt-3 text-sm font-semibold text-foreground">{file ? file.name : label}</span>
@@ -192,7 +177,7 @@ function DiffTable({ columns, rows }: { columns: string[]; rows: SaihuExcelDiffR
                 <th className="border-b border-border px-3 py-2">B value</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border bg-white">
+            <tbody className="divide-y divide-border bg-surface">
               {diffCells.map((cell, index) => (
                 <tr key={`${cell.pairKey}-${cell.column}-${index}`} className="hover:bg-surface-muted/50">
                   <td className="max-w-[220px] truncate px-3 py-2 font-semibold text-foreground" title={cell.sheetName}>
@@ -204,7 +189,7 @@ function DiffTable({ columns, rows }: { columns: string[]; rows: SaihuExcelDiffR
                   </td>
                   <td
                     className={`max-w-[320px] truncate px-3 py-2 ${
-                      cell.secondOnly ? "bg-red-50 text-muted" : "bg-blue-50/60 text-foreground"
+                      cell.secondOnly ? "bg-danger-soft text-muted" : "bg-info-soft/60 text-foreground"
                     }`}
                     title={cell.firstValue}
                   >
@@ -212,7 +197,7 @@ function DiffTable({ columns, rows }: { columns: string[]; rows: SaihuExcelDiffR
                   </td>
                   <td
                     className={`max-w-[320px] truncate px-3 py-2 font-semibold ${
-                      cell.firstOnly ? "bg-red-50 text-muted" : "bg-yellow-200 text-foreground"
+                      cell.firstOnly ? "bg-danger-soft text-muted" : "bg-accent text-foreground"
                     }`}
                     title={cell.secondValue}
                   >
@@ -225,7 +210,7 @@ function DiffTable({ columns, rows }: { columns: string[]; rows: SaihuExcelDiffR
         </div>
       </div>
 
-      <details className="rounded-md border border-border bg-white">
+      <details className="rounded-md border border-border bg-surface">
         <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-foreground">Full row detail</summary>
         <div className="max-h-[520px] overflow-auto thin-scrollbar border-t border-border">
         <table className="w-full min-w-[960px] border-collapse text-left text-sm">
@@ -241,11 +226,11 @@ function DiffTable({ columns, rows }: { columns: string[]; rows: SaihuExcelDiffR
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-border bg-white">
+          <tbody className="divide-y divide-border bg-surface">
             {rows.map((row, index) => (
               <tr
                 key={`${row.pairKey}-${row.side}-${row.rowNumber}-${index}`}
-                className={`${row.side === "first" ? "bg-white" : "border-b-2 border-b-border bg-amber-50/20"} hover:bg-surface-muted/50`}
+                className={`${row.side === "first" ? "bg-surface" : "border-b-2 border-b-border bg-warning-soft/20"} hover:bg-surface-muted/50`}
               >
                 <td className="px-3 py-2">
                   <Badge tone={row.side === "first" ? "blue" : "amber"}>{row.side === "first" ? "表 A" : "表 B"}</Badge>
@@ -258,7 +243,7 @@ function DiffTable({ columns, rows }: { columns: string[]; rows: SaihuExcelDiffR
                   <td
                     key={column}
                     className={`max-w-[260px] truncate px-3 py-2 text-foreground ${
-                      row.side === "second" && row.changedColumns.includes(column) ? "bg-yellow-200 font-semibold" : ""
+                      row.side === "second" && row.changedColumns.includes(column) ? "bg-accent font-semibold" : ""
                     }`}
                     title={row.values[column] || ""}
                   >
@@ -353,7 +338,7 @@ function ExcelDiffWorkbench() {
         </div>
 
         {error ? (
-          <div className="mt-4 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="mt-4 flex items-start gap-2 rounded-md border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger-ink">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -385,7 +370,7 @@ function ExcelDiffWorkbench() {
                 <DiffTable columns={result.columns} rows={previewRows} />
               </>
             ) : (
-              <div className="flex items-center gap-3 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+              <div className="flex items-center gap-3 rounded-md border border-success/30 bg-success-soft px-4 py-3 text-sm text-success-ink">
                 <CheckCircle2 className="h-5 w-5" />
                 两个表没有发现不同的数据行。
               </div>
@@ -492,7 +477,7 @@ export function SaihuSearchMergeWorkbench() {
               type="button"
               onClick={() => inputRef.current?.click()}
               disabled={busy}
-              className="flex min-h-[150px] w-full flex-col items-center justify-center rounded-md border border-dashed border-border bg-surface-muted/50 px-6 py-8 text-center transition-colors hover:border-brand hover:bg-white disabled:pointer-events-none disabled:opacity-70"
+              className="flex min-h-[150px] w-full flex-col items-center justify-center rounded-md border border-dashed border-border bg-surface-muted/50 px-6 py-8 text-center transition-colors hover:border-brand hover:bg-surface disabled:pointer-events-none disabled:opacity-70"
             >
               <FileSpreadsheet className="h-10 w-10 text-brand" />
               <span className="mt-3 text-sm font-semibold text-foreground">{file ? file.name : "点击上传赛狐搜索词报表"}</span>
@@ -500,7 +485,7 @@ export function SaihuSearchMergeWorkbench() {
             </button>
 
             {error ? (
-              <div className="mt-4 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <div className="mt-4 flex items-start gap-2 rounded-md border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger-ink">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>{error}</span>
               </div>

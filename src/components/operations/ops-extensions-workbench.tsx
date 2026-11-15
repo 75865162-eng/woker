@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { WorkbenchPageTemplate } from "@/components/templates/page-templates";
 import { Button } from "@/components/ui/button";
+import { StandardDataTable } from "@/components/ui/table-variants";
+import { type DataTableColumn } from "@/components/ui/data-table";
+import { extHeaders as headers } from "@/lib/workspace/ext-headers";
 
-const scopeKey = "tiaotiao.workspace.scope";
-function workspaceId() { try { return (JSON.parse(localStorage.getItem(scopeKey) ?? "{}") as { workspaceId?: string }).workspaceId || "default"; } catch { return "default"; } }
-function headers(json = false) { const result = new Headers({ "x-workspace-id": workspaceId() }); if (json) result.set("content-type", "application/json"); return result; }
 
 type Carrier = { id: string; code: string; name: string; serviceLevel: string; contactName: string; trackingUrlPattern: string; enabled: boolean; notes: string; revision: number };
 type ThirdPartyWarehouse = { id: string; code: string; name: string; provider: string; accountRef: string; region: string; status: string; enabled: boolean; notes: string; revision: number };
@@ -73,10 +74,37 @@ export function OpsExtensionsWorkbench() {
     return <label key={label} className="grid gap-1 text-xs">{label}<input className={inputCls} value={value} placeholder={placeholder} onChange={event => onChange(event.target.value)} /></label>;
   }
 
-  return <div className="space-y-6">
-    {error && <p role="alert" className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>}
-    {notice && <p className="rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">{notice}</p>}
-
+  const carrierColumns: DataTableColumn<Carrier>[] = [
+    { key: "code", header: "编码", render: (row) => <span className="font-mono">{row.code}</span> },
+    { key: "name", header: "名称", render: (row) => row.name },
+    { key: "serviceLevel", header: "时效", render: (row) => row.serviceLevel || "—" },
+    { key: "contactName", header: "联系人", render: (row) => row.contactName || "—" },
+    { key: "status", header: "状态", render: (row) => row.enabled ? "启用" : "停用" },
+    { key: "action", header: "操作", render: (row) => <div className="flex gap-1">
+      <Button size="sm" variant="ghost" onClick={() => { setEditCarrierId(row.id); setCarrier({ code: row.code, name: row.name, serviceLevel: row.serviceLevel, contactName: row.contactName, trackingUrlPattern: row.trackingUrlPattern, enabled: row.enabled, notes: row.notes }); }}>编辑</Button>
+      <Button size="sm" variant="ghost" onClick={() => void act({ action: "update-carrier", id: row.id, revision: row.revision, code: row.code, name: row.name, serviceLevel: row.serviceLevel, contactName: row.contactName, trackingUrlPattern: row.trackingUrlPattern, enabled: !row.enabled, notes: row.notes }, row.enabled ? "承运商已停用。" : "承运商已启用。")}>{row.enabled ? "停用" : "启用"}</Button>
+    </div> },
+  ];
+  const warehouseColumns: DataTableColumn<ThirdPartyWarehouse>[] = [
+    { key: "code", header: "编码", render: (row) => <span className="font-mono">{row.code}</span> },
+    { key: "name", header: "名称", render: (row) => row.name },
+    { key: "provider", header: "服务商", render: (row) => row.provider },
+    { key: "accountRef", header: "账户", render: (row) => row.accountRef || "—" },
+    { key: "region", header: "区域", render: (row) => row.region || "—" },
+    { key: "status", header: "状态", render: (row) => <Button size="sm" variant="ghost" onClick={() => { setEditWarehouseId(row.id); setWarehouse({ code: row.code, name: row.name, provider: row.provider, accountRef: row.accountRef, region: row.region, status: row.status, enabled: row.enabled, notes: row.notes }); }}>{row.status} / 编辑</Button> },
+  ];
+  const recordColumns: DataTableColumn<Assessment["records"][number]>[] = [
+    { key: "sku", header: "SKU", render: (item) => <span className="font-mono">{item.sku}</span> },
+    { key: "onHand", header: "在库", numeric: true, render: (item) => String(item.onHand) },
+    { key: "ageDays", header: "库龄", render: (item) => `${item.ageDays} 天` },
+    { key: "salesQty", header: "窗口销量", numeric: true, render: (item) => String(item.salesQty) },
+    { key: "level", header: "判定", render: (item) => <span className={item.level === "UNSALABLE" ? "text-danger-ink" : ""}>{levelLabels[item.level] ?? item.level}</span> },
+    { key: "action", header: "建议", render: (item) => item.action },
+  ];
+  return <WorkbenchPageTemplate context={<div className="space-y-2">
+    {error && <p role="alert" className="rounded border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger-ink">{error}</p>}
+    {notice && <p className="rounded border border-success/30 bg-success-soft px-3 py-2 text-sm text-success-ink">{notice}</p>}
+  </div>} main={<div className="space-y-6">
     <section className="space-y-3">
       <div><h2 className="text-sm font-semibold">承运商主数据</h2><p className="text-xs text-muted">把头程与海外调拨里的自由文本承运商收敛为可维护资料；编码在同一工作区唯一。</p></div>
       <form className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6" onSubmit={async event => {
@@ -91,11 +119,7 @@ export function OpsExtensionsWorkbench() {
         {field("轨迹地址", carrier.trackingUrlPattern, value => setCarrier(current => ({ ...current, trackingUrlPattern: value })), "https://…/{trackingNo}")}
         <div className="flex items-end gap-2"><Button size="sm" disabled={busy}>{editCarrierId ? "保存修改" : "新增承运商"}</Button>{editCarrierId && <Button size="sm" variant="ghost" type="button" onClick={() => { setEditCarrierId(""); setCarrier({ ...blankCarrier }); }}>取消</Button>}</div>
       </form>
-      <div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-xs"><thead className="text-muted"><tr>{["编码", "名称", "时效", "联系人", "状态", "操作"].map(head => <th key={head} className="pb-1 font-medium">{head}</th>)}</tr></thead><tbody>{carriers.map(row => <tr key={row.id} className="border-t border-border">
-        <td className="py-1.5 font-mono">{row.code}</td><td>{row.name}</td><td>{row.serviceLevel || "—"}</td><td>{row.contactName || "—"}</td>
-        <td>{row.enabled ? "启用" : "停用"}</td>
-        <td><div className="flex gap-1"><Button size="sm" variant="ghost" onClick={() => { setEditCarrierId(row.id); setCarrier({ code: row.code, name: row.name, serviceLevel: row.serviceLevel, contactName: row.contactName, trackingUrlPattern: row.trackingUrlPattern, enabled: row.enabled, notes: row.notes }); }}>编辑</Button><Button size="sm" variant="ghost" onClick={() => void act({ action: "update-carrier", id: row.id, revision: row.revision, code: row.code, name: row.name, serviceLevel: row.serviceLevel, contactName: row.contactName, trackingUrlPattern: row.trackingUrlPattern, enabled: !row.enabled, notes: row.notes }, row.enabled ? "承运商已停用。" : "承运商已启用。")}>{row.enabled ? "停用" : "启用"}</Button></div></td>
-      </tr>)}</tbody></table></div>
+      <StandardDataTable ariaLabel="承运商主数据" rows={carriers} getRowKey={(row) => row.id} columns={carrierColumns} empty="还没有承运商主数据。" />
     </section>
 
     <section className="space-y-3">
@@ -112,10 +136,7 @@ export function OpsExtensionsWorkbench() {
         {field("区域", warehouse.region, value => setWarehouse(current => ({ ...current, region: value })))}
         <div className="flex items-end gap-2"><Button size="sm" disabled={busy}>{editWarehouseId ? "保存修改" : "新增三方仓"}</Button>{editWarehouseId && <Button size="sm" variant="ghost" type="button" onClick={() => { setEditWarehouseId(""); setWarehouse({ ...blankWarehouse }); }}>取消</Button>}</div>
       </form>
-      <div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-xs"><thead className="text-muted"><tr>{["编码", "名称", "服务商", "账户", "区域", "状态"].map(head => <th key={head} className="pb-1 font-medium">{head}</th>)}</tr></thead><tbody>{warehouses.map(row => <tr key={row.id} className="border-t border-border">
-        <td className="py-1.5 font-mono">{row.code}</td><td>{row.name}</td><td>{row.provider}</td><td>{row.accountRef || "—"}</td><td>{row.region || "—"}</td>
-        <td><Button size="sm" variant="ghost" onClick={() => { setEditWarehouseId(row.id); setWarehouse({ code: row.code, name: row.name, provider: row.provider, accountRef: row.accountRef, region: row.region, status: row.status, enabled: row.enabled, notes: row.notes }); }}>{row.status} / 编辑</Button></td>
-      </tr>)}</tbody></table></div>
+      <StandardDataTable ariaLabel="三方仓账户" rows={warehouses} getRowKey={(row) => row.id} columns={warehouseColumns} empty="还没有三方仓账户。" />
     </section>
 
     <section className="space-y-3">
@@ -136,8 +157,8 @@ export function OpsExtensionsWorkbench() {
         <summary className="cursor-pointer text-brand">{row.asOfDate} · 仓库 {wmsWarehouses.find(item => item.id === row.warehouseId)?.code ?? row.warehouseId} · {row.recordCount} 个 SKU · 库龄 ≥ {row.slowDays} 天 / 销量 ≤ {row.minSalesQty}</summary>
         <p className="mt-2 text-muted">口径：{row.policyReference}</p>
         <p className="text-muted">来源摘要 {row.sourceHash.slice(0, 16)}…</p>
-        {row.records.length ? <table className="mt-2 w-full min-w-[600px] text-left"><thead className="text-muted"><tr>{["SKU", "在库", "库龄", "窗口销量", "判定", "建议"].map(head => <th key={head} className="pb-1 font-medium">{head}</th>)}</tr></thead><tbody>{row.records.map(item => <tr key={item.sku} className="border-t border-border"><td className="py-1 font-mono">{item.sku}</td><td>{item.onHand}</td><td>{item.ageDays} 天</td><td>{item.salesQty}</td><td className={item.level === "UNSALABLE" ? "text-red-800" : ""}>{levelLabels[item.level] ?? item.level}</td><td>{item.action}</td></tr>)}</tbody></table> : <p className="mt-2">该仓库暂无在库 SKU。</p>}
+        <StandardDataTable ariaLabel="滞销判定明细" rows={row.records} getRowKey={(item) => item.sku} columns={recordColumns} empty="该仓库暂无在库 SKU。" />
       </details>)}
     </section>
-  </div>;
+  </div>} />;
 }

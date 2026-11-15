@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { agingFromEstimate, readSkuAgingFacts } from "@/lib/operations/aging-source";
 
-const bands = (overrides: Record<string, string | number | null> = {}) => ({
+const bands = (overrides: Record<string, string | null> = {}) => ({
   days0To30: "0",
   days30To60: "0",
   days60To90: "0",
@@ -39,7 +39,7 @@ function fakeDb(input: { listings: Array<{ sku: string; productRecordId: string 
   } as unknown as Parameters<typeof readSkuAgingFacts>[0];
 }
 
-const record = (productRecordId: string, estimate: Record<string, unknown>, dataStatus = "COMPLETE") => ({
+const record = (productRecordId: string, estimate: Record<string, string>, dataStatus = "COMPLETE") => ({
   productRecordId,
   warehouseCode: "WH1",
   sku: "REC-SKU",

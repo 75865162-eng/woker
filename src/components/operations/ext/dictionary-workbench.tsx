@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { WorkbenchPageTemplate } from "@/components/templates/page-templates";
 import { Button } from "@/components/ui/button";
 import { Badge, Field, Kpis, Notice, Section, SelectField, Table, Tabs, extPost, useExt } from "./kit";
 
@@ -38,14 +39,12 @@ export function DictionaryWorkbench() {
   const selectedDict = dictionaries.data?.items.find(row => row.id === item.dictionaryId);
   const totalItems = (dictionaries.data?.items ?? []).reduce((sum, row) => sum + row.items.length, 0);
 
-  return <div className="space-y-6">
-    <Notice error={error || dictionaries.error || fields.error || ""} notice={notice} />
-    <Kpis items={[
+  return <WorkbenchPageTemplate context={<Notice error={error || dictionaries.error || fields.error || ""} notice={notice} />} kpis={<Kpis items={[
       { label: "字典数", value: String(dictionaries.data?.items.length ?? 0) },
       { label: "字典项", value: String(totalItems) },
       { label: "自定义字段", value: String(fields.data?.items.length ?? 0) },
       { label: "启用字段", value: String((fields.data?.items ?? []).filter(row => row.enabled).length) },
-    ]} />
+    ]} />} main={<div className="space-y-6">
     <Tabs value={tab} onChange={value => setTab(value as "DICT" | "FIELD")} tabs={[{ id: "DICT", label: "数据字典", count: dictionaries.data?.items.length }, { id: "FIELD", label: "自定义字段", count: fields.data?.items.length }]} />
 
     {tab === "DICT" && <>
@@ -150,5 +149,5 @@ export function DictionaryWorkbench() {
         />
       </Section>
     </>}
-  </div>;
+  </div>} />;
 }

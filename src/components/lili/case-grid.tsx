@@ -72,7 +72,7 @@ export function CaseGrid({ locale, items }: { locale: Locale; items: CaseCard[] 
           return (
             <article key={item.slug} className="lili-card flex w-full flex-col p-4 sm:w-[280px]">
               {sunset ? <Archive className="h-4 w-4 text-brand" /> : <Icon className="h-4 w-4 text-brand" />}
-              <h3 className="mt-2 truncate text-[15px] font-semibold">{tx(locale, item.titleZh, item.titleEn)}</h3>
+              <h3 className="mt-2 truncate text-section font-semibold">{tx(locale, item.titleZh, item.titleEn)}</h3>
               <p className="mt-1 line-clamp-2 text-sm leading-5 text-muted">{tx(locale, item.summaryZh, item.summaryEn)}</p>
               <button
                 className="lili-btn-orange mt-3 self-start "

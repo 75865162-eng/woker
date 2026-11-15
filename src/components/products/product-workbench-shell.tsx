@@ -96,8 +96,12 @@ export function ProductFiltersBar({
 
   return (
     <div className="rounded-lg border border-border bg-surface-muted p-3">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.2fr_0.8fr_0.7fr_0.7fr_0.7fr_0.9fr_0.8fr_0.9fr_auto]">
+      <div
+        className="grid gap-x-3 gap-y-2.5"
+        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(148px, 1fr))" }}
+      >
         <LabeledInput
+          className="col-span-2"
           label="品名 / SKU / 关键词"
           value={filters.keyword}
           placeholder="搜索品名、SKU、关键词"
@@ -108,10 +112,10 @@ export function ProductFiltersBar({
         <FilterCheckboxMenu label="选品" value={filters.selectionOwners} options={selectionOwnerOptions} placeholder="全部选品" onChange={(value) => onChange({ ...filters, selectionOwners: value })} />
         <FilterCheckboxMenu label="美工" value={filters.designerAssignees} options={designerAssigneeOptions} placeholder="全部美工" onChange={(value) => onChange({ ...filters, designerAssignees: value })} />
         <LabeledInput label="供应商名称" value={filters.supplierName} placeholder="供应商" onChange={(value) => onChange({ ...filters, supplierName: value })} />
-        <label className="text-xs font-semibold text-muted">
+        <label className="block min-w-0 text-meta font-semibold text-muted">
           状态
           <select
-            className="mt-1 h-10 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none focus:border-brand"
+            className="mt-1 h-[var(--control-h)] w-full rounded-md border border-border bg-surface px-3 text-body text-foreground outline-none transition-colors hover:border-border-strong focus:border-brand"
             value={filters.status}
             onChange={(event) => onChange({ ...filters, status: event.target.value as ProductFilters["status"] })}
           >
@@ -127,10 +131,10 @@ export function ProductFiltersBar({
           <LabeledInput label="到" type="number" value={filters.maxPrice} placeholder="10" onChange={(value) => onChange({ ...filters, maxPrice: value })} />
         </div>
         <div className="flex items-end gap-2">
-          <Button className="h-10" size="icon" title="搜索" onClick={onSearch ?? (() => onChange({ ...filters }))}>
+          <Button className="h-[var(--control-h)]" size="icon" title="搜索" onClick={onSearch ?? (() => onChange({ ...filters }))}>
             <Search className="h-4 w-4" />
           </Button>
-          <Button className="h-10" size="icon" title="重置" variant="secondary" onClick={onReset}>
+          <Button className="h-[var(--control-h)]" size="icon" title="重置" variant="secondary" onClick={onReset}>
             <RotateCcw className="h-4 w-4" />
           </Button>
         </div>
@@ -160,14 +164,14 @@ function FilterCheckboxMenu({
   }
 
   return (
-    <div className="relative text-xs font-semibold text-muted">
+    <div className="relative min-w-0 text-meta font-semibold text-muted">
       <span>{label}</span>
       <details className="group mt-1">
-        <summary className="flex h-10 cursor-pointer list-none items-center justify-between rounded-md border border-border bg-white px-3 text-sm font-medium text-foreground outline-none focus:border-brand [&::-webkit-details-marker]:hidden">
+        <summary className="flex h-[var(--control-h)] cursor-pointer list-none items-center justify-between rounded-md border border-border bg-surface px-3 text-body font-medium text-foreground outline-none transition-colors hover:border-border-strong focus:border-brand [&::-webkit-details-marker]:hidden">
           <span className="truncate">{summary}</span>
           <span className="ml-2 text-xs text-muted">▾</span>
         </summary>
-        <div className="absolute z-20 mt-1 max-h-64 w-full min-w-[160px] overflow-auto rounded-md border border-border bg-white p-2 shadow-lg">
+        <div className="absolute z-20 mt-1 max-h-64 w-full min-w-[160px] overflow-auto rounded-md border border-border bg-surface p-2 shadow-lg">
           {normalizedOptions.length ? (
             normalizedOptions.map((option) => (
               <label key={option} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm font-medium text-foreground hover:bg-surface-muted">
@@ -236,10 +240,10 @@ export function ProductTable({
   };
 
   return (
-    <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-white">
+    <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-surface">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
-          <p className="text-sm font-bold text-foreground">筛选结果</p>
+          <p className="text-section text-foreground">筛选结果</p>
           {loading && products.length ? (
             <span className="inline-flex items-center gap-1 text-xs font-semibold text-muted">
               <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
@@ -250,7 +254,7 @@ export function ProductTable({
         <div className="flex items-center gap-3 text-xs font-semibold text-muted">{copiedSku && <span role="status">已复制 SKU：{copiedSku}</span>}{copyError && <span role="alert" className="text-danger">{copyError}</span>}<span>共 {totalCount.toLocaleString("zh-CN")} 个商品</span></div>
       </div>
       <div ref={virtualRows.containerRef} className="thin-scrollbar max-h-[min(68vh,720px)] overflow-auto">
-        <table className="w-[1844px] table-fixed text-left text-sm [&_th]:overflow-hidden [&_tbody_td]:h-[61px] [&_tbody_td]:max-h-[61px] [&_tbody_td]:py-0 [&_tbody_td]:overflow-hidden [&_tbody_td]:align-middle [&_tbody_tr]:h-[61px] [&_tbody_tr]:max-h-[61px]">
+        <table className="w-[1844px] table-fixed text-left text-table [&_th]:overflow-hidden [&_tbody_td]:h-[var(--row-h-thumb)] [&_tbody_td]:max-h-[var(--row-h-thumb)] [&_tbody_td]:py-0 [&_tbody_td]:overflow-hidden [&_tbody_td]:align-middle [&_tbody_tr]:h-[var(--row-h-thumb)] [&_tbody_tr]:max-h-[var(--row-h-thumb)]">
           <colgroup>
             <col className="w-[84px]" />
             <col className="w-[96px]" />
@@ -271,22 +275,22 @@ export function ProductTable({
           </colgroup>
           <thead className="sticky top-0 z-10 bg-surface-muted text-xs text-muted">
             <tr>
-              <th className="px-3 py-3">图片</th>
-              <th className="px-3 py-3">{sortableHeader("SKU", "sku")}</th>
-              <th className="px-3 py-3">{sortableHeader("品名", "chineseName")}</th>
-              <th className="px-3 py-3">ASIN</th>
-              <th className="px-3 py-3">{sortableHeader("采购价格", "purchasePrice")}</th>
-              <th className="px-3 py-3">{sortableHeader("主状态", "status")}</th>
-              <th className="px-3 py-3">当前负责人</th>
-              <th className="px-3 py-3">运营</th>
-              <th className="px-3 py-3">美工</th>
-              <th className="px-3 py-3">{sortableHeader("供应商名称", "supplierName")}</th>
-              <th className="px-3 py-3">规格</th>
-              <th className="px-3 py-3">{sortableHeader("创建日期", "createdAt")}</th>
-              <th className="px-3 py-3">选品关键词</th>
-              <th className="px-3 py-3">备注</th>
-              <th className="px-3 py-3 text-right">版本</th>
-              <th className="px-3 py-3">操作</th>
+              <th className="px-[var(--cell-px)] py-2">图片</th>
+              <th className="px-[var(--cell-px)] py-2">{sortableHeader("SKU", "sku")}</th>
+              <th className="px-[var(--cell-px)] py-2">{sortableHeader("品名", "chineseName")}</th>
+              <th className="px-[var(--cell-px)] py-2">ASIN</th>
+              <th className="px-[var(--cell-px)] py-2">{sortableHeader("采购价格", "purchasePrice")}</th>
+              <th className="px-[var(--cell-px)] py-2">{sortableHeader("主状态", "status")}</th>
+              <th className="px-[var(--cell-px)] py-2">当前负责人</th>
+              <th className="px-[var(--cell-px)] py-2">运营</th>
+              <th className="px-[var(--cell-px)] py-2">美工</th>
+              <th className="px-[var(--cell-px)] py-2">{sortableHeader("供应商名称", "supplierName")}</th>
+              <th className="px-[var(--cell-px)] py-2">规格</th>
+              <th className="px-[var(--cell-px)] py-2">{sortableHeader("创建日期", "createdAt")}</th>
+              <th className="px-[var(--cell-px)] py-2">选品关键词</th>
+              <th className="px-[var(--cell-px)] py-2">备注</th>
+              <th className="px-[var(--cell-px)] py-2 text-right">版本</th>
+              <th className="px-[var(--cell-px)] py-2">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -347,7 +351,7 @@ export function ProductTable({
                               setCopiedSku("");
                               setCopyError(`SKU ${product.sku} 复制失败，请检查浏览器剪贴板权限。`);
                             }
-                          }}>{copiedSku === product.sku ? <Check className="h-3.5 w-3.5 text-green-700" /> : <Copy className="h-3.5 w-3.5" />}</button>
+                          }}>{copiedSku === product.sku ? <Check className="h-3.5 w-3.5 text-success-ink" /> : <Copy className="h-3.5 w-3.5" />}</button>
                         </div>
                       </td>
                       <td className="px-3">
@@ -358,7 +362,7 @@ export function ProductTable({
                       </td>
                       <td className="px-3 font-mono text-xs">
                         <p className="truncate" title={product.asin || "--"}>{product.asin || "--"}</p>
-                        {product.amazonSnapshotError ? <p className="text-[10px] text-amber-800" title={product.amazonSnapshotError}>Amazon 快照暂不可读</p> : product.amazonSnapshots ? product.amazonSnapshots.length ? <div className="space-y-0.5">{product.amazonSnapshots.map((row) => <a key={`${row.sellerAccountId}:${row.marketplaceId}`} href={`/operations?${new URLSearchParams({ view: "catalog", sku: row.sellerSku, sellerAccountId: row.sellerAccountId, marketplaceId: row.marketplaceId })}`} className="block truncate text-[10px] text-brand" title={`${row.sellerAccountId}/${row.marketplaceId}: ${row.listingStatus ?? "刊登未同步"} · 可售 ${row.available ?? "未知"} · ${row.freshness} · 库存更新 ${row.inventoryUpdatedAt ?? "未同步"} · ${row.lastError ?? ""}`}>{row.marketplaceId} · 可售 {row.available ?? "未知"} · 查看快照</a>)}</div> : <span className="text-[10px] text-muted">Amazon 未同步</span> : null}
+                        {product.amazonSnapshotError ? <p className="text-label text-warning-ink" title={product.amazonSnapshotError}>Amazon 快照暂不可读</p> : product.amazonSnapshots ? product.amazonSnapshots.length ? <div className="space-y-0.5">{product.amazonSnapshots.map((row) => <a key={`${row.sellerAccountId}:${row.marketplaceId}`} href={`/operations?${new URLSearchParams({ view: "catalog", sku: row.sellerSku, sellerAccountId: row.sellerAccountId, marketplaceId: row.marketplaceId })}`} className="block truncate text-label text-brand" title={`${row.sellerAccountId}/${row.marketplaceId}: ${row.listingStatus ?? "刊登未同步"} · 可售 ${row.available ?? "未知"} · ${row.freshness} · 库存更新 ${row.inventoryUpdatedAt ?? "未同步"} · ${row.lastError ?? ""}`}>{row.marketplaceId} · 可售 {row.available ?? "未知"} · 查看快照</a>)}</div> : <span className="text-label text-muted">Amazon 未同步</span> : null}
                       </td>
                       <td className="px-3 font-semibold metric-tabular">{product.purchasePrice.toFixed(2)}</td>
                       <td className="px-3">
@@ -384,11 +388,11 @@ export function ProductTable({
                         {(() => {
                           const createdAt = formatProductCreatedAtDisplay(product.createdAt);
                           if (typeof createdAt === "string") {
-                            return <p className="text-[11px] leading-tight text-foreground">--</p>;
+                            return <p className="text-label leading-tight text-foreground">--</p>;
                           }
 
                           return (
-                            <p className="text-[11px] leading-tight tabular-nums text-foreground" title={product.createdAt}>
+                            <p className="text-label leading-tight tabular-nums text-foreground" title={product.createdAt}>
                               <span className="block">{createdAt.dateText}</span>
                               <span className="block">{createdAt.timeText}</span>
                             </p>
@@ -447,7 +451,7 @@ export function ActivityLogModal({
 }) {
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-foreground/40 p-6 backdrop-blur-sm">
-      <div className="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-lg bg-white shadow-2xl">
+      <div className="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-lg bg-surface shadow-2xl">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
             <h3 className="text-lg font-bold text-foreground">处理记录</h3>

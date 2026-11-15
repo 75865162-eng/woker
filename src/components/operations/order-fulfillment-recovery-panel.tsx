@@ -108,7 +108,7 @@ export function OrderFulfillmentRecoveryPanel({ sourceId, taskId, sellerName, ma
     </form>
     <p className="text-xs text-muted">单次最多 10 份详情原件。预览不写库，也不请求 Amazon；只接受本任务已保存且核验通过的原件页。</p>
     {working && <p role="status" className="text-xs text-muted">正在处理…</p>}
-    {error && <p role="alert" className="text-xs text-red-700">{error}</p>}
+    {error && <p role="alert" className="text-xs text-danger-ink">{error}</p>}
     {preview && <div className="space-y-2 text-xs">
       <p>已核对 {preview.manifest.checkedRows} 行，拟补齐 {preview.manifest.changedRows} 行、{preview.manifest.addedFields} 个字段值。</p>
       <p className="text-muted">解析器 {preview.manifest.parserVersion} · 原件 {preview.manifest.archives.length} 页。只填充缺失字段，金额、商品明细和同步游标保持不变。</p>

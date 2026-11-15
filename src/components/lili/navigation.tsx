@@ -31,7 +31,7 @@ export function LiliNavigation({ locale, allowedPaths }: { locale: Locale; allow
         } catch (err) { setError(err instanceof Error ? err.message : "语言切换失败。"); }
       }}>{locale === "zh" ? "English" : "中文"}</button>
     </div>
-    {error && <p role="alert" className="mb-3 text-sm text-red-700">{error}</p>}
-    {toast && <div role="status" className="fixed bottom-5 right-5 z-50 rounded-lg bg-slate-900 px-4 py-3 text-white">{toast}</div>}
+    {error && <p role="alert" className="mb-3 text-sm text-danger-ink">{error}</p>}
+    {toast && <div role="status" className="fixed bottom-5 right-5 z-50 rounded-lg bg-foreground px-4 py-3 text-white">{toast}</div>}
   </>;
 }

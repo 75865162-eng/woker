@@ -2,6 +2,8 @@
 
 import {
   createContext,
+  memo,
+  startTransition,
   useCallback,
   useContext,
   useEffect,
@@ -10,18 +12,22 @@ import {
   useRef,
   useState,
   type ComponentProps,
+  type ContextType,
   type Dispatch,
   type ReactNode,
   type SetStateAction,
 } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { LayoutRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import { PathnameContext, SearchParamsContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
 import { AppShellClient } from "./app-shell-client";
-import { AppShellUserProvider } from "./app-shell-context";
+import { TabActivityProvider, useTabActive } from "./tab-activity";
 import { setWorkspaceApiCacheScope } from "@/lib/workspace/workspace-api-cache";
-import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
+import { prefetchRouteData } from "@/lib/workspace/route-data-prefetch";
 import {
   HOME_HREF,
   MAX_TABS,
+  MAX_VIEWS,
   WorkspaceTabBar,
   labelForHref,
   normalizeHref,
@@ -35,423 +41,469 @@ export type AppShellConfiguration = Omit<
 > & { authorizationRevision?: string };
 
 const ConfigurationContext = createContext<Dispatch<SetStateAction<AppShellConfiguration>> | null>(null);
-const NOOP_CONFIGURATION: Dispatch<SetStateAction<AppShellConfiguration>> = () => {};
-const STORAGE_KEY = "woker:workspace-tabs:v2";
-const INITIAL_TAB_ID = "tab-initial";
-const FRAME_SCOPE_MESSAGE = "woker:workspace-scope-changed";
-/** iframe 内页面地址变化时上报给顶层，用来同步侧栏高亮（顶层 URL 不随 iframe 内跳转改变）。 */
-const FRAME_HREF_MESSAGE = "woker:frame-href-changed";
+const STORAGE_KEY = "woker:workspace-tabs:v3";
+const PREFETCH_DELAY_MS = 60;
+/** 页面稳定多久之后开始预热同组路由：太早会和首屏自己的请求抢带宽。 */
+const IDLE_PREFETCH_DELAY_MS = 1200;
 
-type StoredTabs = { tabs: WorkspaceTab[]; activeId: string };
+type StoredTabs = { tabs: WorkspaceTab[] };
+
+/** `(erp)` 这一层的路由分段上下文，决定「children 现在解析成哪个页面」。 */
+type SegmentContext = ContextType<typeof LayoutRouterContext>;
 
 /**
- * 顶层持久外壳 + 顶部多标签。
+ * 一个被保活的页面。
  *
- * Next.js App Router 的 children 是由路由上下文驱动的 slot，单纯把 RSC 节点缓存起来
- * 并 display:none 并不能保活（切换路由时隐藏页会被重新解析、组件状态丢失）。
- * 因此每个标签用一个同源 iframe 承载完整页面：iframe 拥有独立的路由树和 DOM，
- * 隐藏时用 visibility:hidden 保持挂载，切回来时筛选条件、分页、滚动位置全部原样保留。
+ * `element` 是它当初的 RSC 子树，`context` 是同一时刻的路由分段上下文——两者必须成对保存：
+ * App Router 的 `children` 本身不带「我是哪个页面」的信息，它靠 `LayoutRouterContext` 里的
+ * `parentTree` 现场解析当前分段。只留 element 会让隐藏的视图跟着当前地址一起变；
+ * 连同上下文一起冻住，它才稳定渲染自己那一段。`seq` 用来做 LRU 排序。
  *
- * - 最外层（window.top）：渲染侧边栏 / 顶栏 / 标签栏 + 若干 iframe。
- * - iframe 内（window.self !== window.top）：只渲染页面内容，不再嵌套外壳。
- * - 点击站内链接自动新建标签；切换标签同步 URL；标签清单存 sessionStorage；最多 MAX_TABS 个。
+ * 注意：`LayoutRouterContext` 是 Next 的内部模块（`next/dist/shared/lib/app-router-context`），
+ * 在 15.5.x 上验证有效；升级 Next 后需要复核这条保活路径（页面若整片渲染成当前路由就是它失效了）。
  */
-export function PersistentAppShell({ children, initialConfiguration }: {
-  children: React.ReactNode;
-  initialConfiguration: AppShellConfiguration;
+type CachedView = { href: string; element: ReactNode; context: SegmentContext; seq: number };
+
+/**
+ * 单文档多标签外壳。
+ *
+ * 标签栏是「访问过的页面」的索引，页面本身由 Next 客户端路由渲染在同一份 document 里：
+ * 没有 iframe，也就没有「每开一个标签重新下载一遍整个应用」的成本。
+ *
+ * 页面状态按三层保住，越靠前越快、越靠后越省内存：
+ * 1. **保活视图**：访问过的页面留在 React 树里（隐藏但不卸载），切回来组件状态原样还在，
+ *    切换开销只有一次 display 切换。数量受 MAX_VIEWS 约束，超出按 LRU 淘汰最久没打开的。
+ * 2. **查询缓存**：`/api/operations/ext` 的结果进 LRU + SWR 缓存，被淘汰的页面重新挂载时
+ *    先用缓存出内容，再后台校验，不会闪空。
+ * 3. **提前预取**：指针停在链接上就拉目标路由的 RSC 与首屏查询，点击时大多已经就绪。
+ *
+ * 内存方面：保活的视图只保留「状态」，不保留重内容——长列表在标签转入后台时释放行级 DOM
+ * （见 `useTabActive`），回到前台按原状态重建。
+ */
+export function WorkspaceShell({ children, configuration }: {
+  children: ReactNode;
+  configuration: AppShellConfiguration;
 }) {
-  const [mode, setMode] = useState<"boot" | "frame" | "top">("boot");
-  const cacheScope = `${initialConfiguration.organizationId ?? ""}:${initialConfiguration.userId ?? ""}:${initialConfiguration.userRole ?? ""}:${initialConfiguration.authorizationRevision ?? ""}`;
-  const pathname = usePathname() || "/";
-  const searchParams = useSearchParams();
-
-  useLayoutEffect(() => { setWorkspaceApiCacheScope(cacheScope); }, [cacheScope]);
-  useLayoutEffect(() => {
-    // iframe 内只渲染页面；useLayoutEffect 在首次绘制前执行，顶层用户不会看到不带外壳的中间态。
-    setMode(window.self !== window.top ? "frame" : "top");
-  }, []);
-
-  // iframe 内跳转（含页面内部按钮跳转）时把真实地址上报给顶层侧栏。
-  const frameSearch = searchParams?.toString() ?? "";
-  useEffect(() => {
-    if (mode !== "frame") return;
-    try {
-      window.parent.postMessage(
-        { type: FRAME_HREF_MESSAGE, href: `${pathname}${frameSearch ? `?${frameSearch}` : ""}` },
-        window.location.origin,
-      );
-    } catch {
-      // 被嵌入到非同源容器时忽略。
-    }
-  }, [mode, pathname, frameSearch]);
-
-  // 顶层切换工作区时，把事件转发进每个 iframe，让里面的工作台刷新自己的数据。
-  useEffect(() => {
-    if (mode !== "frame") return;
-    function onMessage(event: MessageEvent) {
-      if (event.source !== window.parent) return;
-      const data = event.data as { type?: string; detail?: unknown } | null;
-      if (data?.type === FRAME_SCOPE_MESSAGE) {
-        window.dispatchEvent(new CustomEvent(workspaceScopeChangedEventName, { detail: data.detail }));
-      }
-    }
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, [mode]);
-
-  const pageOnly = (
-    <AppShellUserProvider value={{
-      organizationId: initialConfiguration.organizationId,
-      userId: initialConfiguration.userId,
-      userName: initialConfiguration.userName,
-      userRole: initialConfiguration.userRole,
-      rolePermissions: initialConfiguration.rolePermissions,
-      userInitials: initialConfiguration.userInitials ?? "AM",
-    }}>
-      <ConfigurationContext.Provider value={NOOP_CONFIGURATION}>
-        <div className="min-h-screen bg-background p-6">{children}</div>
-      </ConfigurationContext.Provider>
-    </AppShellUserProvider>
-  );
-
-  // boot 与 frame 输出一致，保证服务端渲染和水合结果一致。
-  if (mode !== "top") return pageOnly;
-  return <TabbedErpShell initialConfiguration={initialConfiguration} />;
-}
-
-function TabLoading() {
-  return (
-    <div className="absolute inset-0 z-[2] flex items-center justify-center gap-2 bg-background text-sm text-muted">
-      <span aria-hidden className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-brand border-t-transparent" />
-      正在打开页面…
-    </div>
-  );
-}
-
-function TabbedErpShell({ initialConfiguration }: { initialConfiguration: AppShellConfiguration }) {
   const router = useRouter();
   const pathname = usePathname() || "/";
-  const searchParams = useSearchParams();
-  const queryString = searchParams?.toString() ?? "";
+  const queryString = useSearchParams()?.toString() ?? "";
   const currentHref = useMemo(
     () => normalizeHref(`${pathname}${queryString ? `?${queryString}` : ""}`),
     [pathname, queryString],
   );
 
+  const [display, setDisplay] = useState<AppShellConfiguration>(configuration);
   const [tabs, setTabs] = useState<WorkspaceTab[]>(() => {
     const { label, locked } = labelForHref(currentHref);
-    return [{ id: INITIAL_TAB_ID, href: currentHref, src: currentHref, label, locked }];
+    return [{ id: currentHref, href: currentHref, src: currentHref, label, locked }];
   });
-  const [activeId, setActiveId] = useState(INITIAL_TAB_ID);
-  const [readyIds, setReadyIds] = useState<string[]>([]);
-  /** 每个标签 iframe 内部当前真实地址，用于侧栏高亮与标题。 */
-  const [frameHrefs, setFrameHrefs] = useState<Record<string, string>>({});
+  // 当前分段的路由上下文：视图登记时一并快照，隐藏视图靠它固定住自己的页面。
+  const segmentContext = useContext(LayoutRouterContext);
+  const [views, setViews] = useState<CachedView[]>(() => [{ href: currentHref, element: children, context: segmentContext, seq: 1 }]);
+  const [restored, setRestored] = useState(false);
+  // 乐观切换：保活视图已经在了，点标签就没必要等 Next 把 RSC 拉回来再提交。
+  // 先把它亮出来，路由在后台跟上；地址栏晚几十毫秒，页面本身是立刻可见的。
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const shownHref = pendingHref ?? currentHref;
 
-  const tabsRef = useRef(tabs);
-  const activeIdRef = useRef(activeId);
   const currentHrefRef = useRef(currentHref);
-  const nextIdRef = useRef(1);
-  const pendingHrefRef = useRef<string | null>(null);
-  const restoredRef = useRef(false);
-  const skipPersistRef = useRef(false);
-  const frameRefs = useRef<Record<string, HTMLIFrameElement | null>>({});
-
-  tabsRef.current = tabs;
-  activeIdRef.current = activeId;
+  const tabsRef = useRef(tabs);
+  const usedAtRef = useRef(new Map<string, number>());
+  const scrollRef = useRef(new Map<string, number>());
+  /** 正在恢复滚动位置的窗口期内，忽略由布局收缩产生的 scroll 事件。 */
+  const restoringRef = useRef(false);
+  const shownHrefRef = useRef(shownHref);
+  const seqRef = useRef(0);
   currentHrefRef.current = currentHref;
+  tabsRef.current = tabs;
+  shownHrefRef.current = shownHref;
 
-  const makeId = useCallback(() => `tab-${Date.now().toString(36)}-${nextIdRef.current++}`, []);
+  // 路由跟上（或被重定向）后，乐观状态就失效，回到以地址为准。
+  useEffect(() => { setPendingHref(null); }, [currentHref]);
 
-  function dropReady(ids: string[]) {
-    if (!ids.length) return;
-    setReadyIds((prev) => prev.filter((id) => !ids.includes(id)));
-    setFrameHrefs((prev) => {
-      const next = { ...prev };
-      for (const id of ids) delete next[id];
-      return next;
-    });
-    for (const id of ids) delete frameRefs.current[id];
-  }
+  useLayoutEffect(() => {
+    setWorkspaceApiCacheScope(`${configuration.organizationId ?? ""}:${configuration.userId ?? ""}:${configuration.userRole ?? ""}:${configuration.authorizationRevision ?? ""}`);
+  }, [configuration]);
 
-  const activate = useCallback((id: string, navigate: boolean) => {
-    const target = tabsRef.current.find((tab) => tab.id === id);
-    if (!target) return;
-    if (activeIdRef.current === id && !navigate) return;
-    activeIdRef.current = id;
-    setActiveId(id);
-    if (navigate) {
-      pendingHrefRef.current = target.href;
-      router.push(target.href);
-    }
-  }, [router]);
+  const touch = useCallback((href: string) => {
+    usedAtRef.current.set(href, ++seqRef.current);
+  }, []);
 
-  const ensureTab = useCallback((href: string, linkText?: string) => {
-    const normalized = normalizeHref(href);
-    const existing = tabsRef.current.find((tab) => tab.href === normalized);
-    if (existing) {
-      activate(existing.id, false);
-      return existing.id;
-    }
-    const { label, locked } = labelForHref(normalized, linkText);
-    const tab: WorkspaceTab = { id: makeId(), href: normalized, src: normalized, label, locked };
-    const next = [...tabsRef.current, tab];
-    const evicted: string[] = [];
+  // 超过上限时淘汰最久没被使用的标签（当前页和刚打开的除外）。
+  const appendTab = useCallback((prev: WorkspaceTab[], tab: WorkspaceTab) => {
+    const next = [...prev, tab];
     while (next.length > MAX_TABS) {
-      const index = next.findIndex((item) => item.id !== tab.id);
-      if (index < 0) break;
-      evicted.push(next[index].id);
-      next.splice(index, 1);
+      let victim = -1;
+      let victimUsedAt = Number.POSITIVE_INFINITY;
+      for (let index = 0; index < next.length; index += 1) {
+        const candidate = next[index];
+        if (candidate.id === tab.id || candidate.href === currentHrefRef.current) continue;
+        const usedAt = usedAtRef.current.get(candidate.href) ?? 0;
+        if (usedAt < victimUsedAt) {
+          victimUsedAt = usedAt;
+          victim = index;
+        }
+      }
+      if (victim < 0) break;
+      next.splice(victim, 1);
     }
-    if (evicted.length) dropReady(evicted);
-    tabsRef.current = next;
-    setTabs(next);
-    activate(tab.id, false);
-    return tab.id;
-  }, [activate, makeId]);
+    return next;
+  }, []);
+
+  // 刷新浏览器后恢复标签清单；当前地址必须在列表里。
+  useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem(STORAGE_KEY);
+      const stored = raw ? (JSON.parse(raw) as StoredTabs).tabs : [];
+      const valid = Array.isArray(stored)
+        ? stored
+            .filter((tab): tab is WorkspaceTab => Boolean(tab && typeof tab.href === "string" && typeof tab.label === "string"))
+            .map((tab) => ({ ...tab, id: tab.href, src: tab.href }))
+            .slice(0, MAX_TABS)
+        : [];
+      const href = currentHrefRef.current;
+      if (!valid.some((tab) => tab.href === href)) {
+        const { label, locked } = labelForHref(href);
+        valid.push({ id: href, href, src: href, label, locked });
+      }
+      setTabs(valid);
+    } catch {
+      // 本地数据损坏时保留初始标签即可。
+    }
+    setRestored(true);
+  }, []);
+
+  useEffect(() => {
+    if (!restored) return;
+    try {
+      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ tabs } satisfies StoredTabs));
+    } catch { /* 隐私模式下忽略 */ }
+  }, [tabs, restored]);
+
+  // 地址变化（标签点击、浏览器前进后退、代码里的 router.push）统一同步进标签栏。
+  useEffect(() => {
+    if (!restored) return;
+    touch(currentHref);
+    setTabs((prev) => {
+      if (prev.some((tab) => tab.href === currentHref)) return prev;
+      const { label, locked } = labelForHref(currentHref);
+      return appendTab(prev, { id: currentHref, href: currentHref, src: currentHref, label, locked });
+    });
+  }, [currentHref, restored, touch, appendTab]);
+
+  // 视图登记：只有「没见过的地址」在渲染期登记，保证新页面第一帧就渲染出来。
+  // 已有视图的 RSC 更新（路由缓存过期后的重新校验、router.refresh）放到 effect 里用
+  // transition 采用：先让用户看到保活的内容，新数据到了再无缝换上，不会卡在等 RSC 上。
+  const activeView = views.find((view) => view.href === currentHref);
+  const needsRegister = !activeView;
+  const syncedViews = needsRegister ? upsertView(views, currentHref, children, segmentContext) : views;
+  if (needsRegister) setViews(syncedViews);
+
+  const viewsRef = useRef(views);
+  viewsRef.current = views;
+
+  useEffect(() => {
+    const current = viewsRef.current.find((view) => view.href === currentHref);
+    if (!current || current.element === children) return;
+    startTransition(() => {
+      setViews((prev) => upsertView(prev, currentHref, children, segmentContext));
+    });
+  }, [children, currentHref, segmentContext]);
+
+  // 只渲染仍在标签栏里的视图；被关掉或被标签上限挤掉的视图顺带释放。
+  const renderedViews = syncedViews.filter(
+    (view) => view.href === currentHref || view.href === shownHref || tabs.some((tab) => tab.href === view.href),
+  );
+
+  // 记住每个标签的滚动位置：隐藏视图是 display:none，滚动位置不会自己留下来。
+  useEffect(() => {
+    let frame = 0;
+    function onScroll() {
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        // 切换过程中隐藏当前视图会让文档高度骤减，浏览器会把 scrollY 归 0，
+        // 这个由布局收缩引起的滚动事件不能写进缓存，否则被切走的页面会记住 0。
+        if (restoringRef.current) return;
+        scrollRef.current.set(shownHrefRef.current, window.scrollY);
+      });
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    const target = scrollRef.current.get(shownHref) ?? 0;
+    restoringRef.current = true;
+    window.scrollTo(0, target);
+    // 缓存视图重新显示时内容高度可能晚一帧才稳定（表格、图片），补两次 rAF 再解除屏蔽。
+    const frames: number[] = [];
+    frames.push(window.requestAnimationFrame(() => {
+      window.scrollTo(0, target);
+      frames.push(window.requestAnimationFrame(() => {
+        restoringRef.current = false;
+        scrollRef.current.set(shownHref, window.scrollY);
+      }));
+    }));
+    return () => {
+      frames.forEach((id) => window.cancelAnimationFrame(id));
+      restoringRef.current = false;
+    };
+  }, [shownHref]);
 
   const closeTab = useCallback((id: string) => {
     const current = tabsRef.current;
     const index = current.findIndex((tab) => tab.id === id);
     if (index < 0) return;
+    setViews((prev) => prev.filter((view) => view.href !== id));
+    scrollRef.current.delete(id);
     const next = current.filter((tab) => tab.id !== id);
-    dropReady([id]);
     if (!next.length) {
       const { label, locked } = labelForHref(HOME_HREF);
-      const home: WorkspaceTab = { id: makeId(), href: HOME_HREF, src: HOME_HREF, label, locked };
-      tabsRef.current = [home];
-      setTabs([home]);
-      activate(home.id, true);
+      setTabs([{ id: HOME_HREF, href: HOME_HREF, src: HOME_HREF, label, locked }]);
+      usedAtRef.current.delete(HOME_HREF);
+      router.push(HOME_HREF, { scroll: false });
       return;
     }
-    tabsRef.current = next;
     setTabs(next);
-    if (activeIdRef.current === id) activate(next[Math.min(index, next.length - 1)].id, true);
-  }, [activate, makeId]);
+    if (id === currentHrefRef.current) {
+      scrollRef.current.set(shownHrefRef.current, window.scrollY);
+      router.push(next[Math.min(index, next.length - 1)].href, { scroll: false });
+    }
+  }, [router]);
 
   const closeOthers = useCallback(() => {
-    const keep = activeIdRef.current;
-    const removed = tabsRef.current.filter((tab) => tab.id !== keep).map((tab) => tab.id);
-    const next = tabsRef.current.filter((tab) => tab.id === keep);
-    tabsRef.current = next;
-    setTabs(next);
-    dropReady(removed);
+    const keep = currentHrefRef.current;
+    setTabs((prev) => prev.filter((tab) => tab.href === keep));
+    setViews((prev) => prev.filter((view) => view.href === keep));
   }, []);
 
   const closeAll = useCallback(() => {
-    const removed = tabsRef.current.map((tab) => tab.id);
     const { label, locked } = labelForHref(HOME_HREF);
-    const home: WorkspaceTab = { id: makeId(), href: HOME_HREF, src: HOME_HREF, label, locked };
-    tabsRef.current = [home];
-    setTabs([home]);
-    dropReady(removed);
-    activate(home.id, true);
-  }, [activate, makeId]);
+    setTabs([{ id: HOME_HREF, href: HOME_HREF, src: HOME_HREF, label, locked }]);
+    setViews([]);
+    usedAtRef.current.clear();
+    scrollRef.current.clear();
+    router.push(HOME_HREF, { scroll: false });
+  }, [router]);
 
-  const refreshCurrent = useCallback(() => {
-    const frame = frameRefs.current[activeIdRef.current];
-    try { frame?.contentWindow?.location.reload(); } catch { /* 跨域时忽略 */ }
-  }, []);
+  const refreshCurrent = useCallback(() => { router.refresh(); }, [router]);
 
-  // iframe 内地址变化 → 记录到对应标签，侧栏据此高亮/展开。
-  useEffect(() => {
-    function onFrameHref(event: MessageEvent) {
-      if (event.origin !== window.location.origin) return;
-      const data = event.data as { type?: string; href?: string } | null;
-      if (data?.type !== FRAME_HREF_MESSAGE || typeof data.href !== "string") return;
-      const entry = Object.entries(frameRefs.current).find(([, element]) => element?.contentWindow === event.source);
-      if (!entry) return;
-      const [id] = entry;
-      const href = data.href;
-      setFrameHrefs((prev) => (prev[id] === href ? prev : { ...prev, [id]: href }));
-    }
-    window.addEventListener("message", onFrameHref);
-    return () => window.removeEventListener("message", onFrameHref);
-  }, []);
-
-  // 顶层切换工作区：通知所有已打开的页面，而不是重建 iframe（否则缓存失效）。
-  useEffect(() => {
-    function forward(event: Event) {
-      const detail = (event as CustomEvent).detail;
-      for (const frame of Object.values(frameRefs.current)) {
-        try { frame?.contentWindow?.postMessage({ type: FRAME_SCOPE_MESSAGE, detail }, "*"); } catch { /* ignore */ }
-      }
-    }
-    window.addEventListener(workspaceScopeChangedEventName, forward);
-    return () => window.removeEventListener(workspaceScopeChangedEventName, forward);
-  }, []);
-
-  // 标签切换 / 新建标签后把顶层地址收敛到当前标签：
-  // activate() 里的 router.push 与 setActiveId 同批更新时可能被 React 的紧急更新打断，
-  // 放到 effect 里重试更稳定，保证地址栏、刷新恢复与复制链接都指向正在看的页面。
-  useEffect(() => {
-    const tab = tabsRef.current.find((item) => item.id === activeIdRef.current);
-    if (!tab || tab.href === currentHrefRef.current) return;
-    router.replace(tab.href);
-  }, [activeId, router, currentHref]);
-
-  // 刷新浏览器后恢复标签清单；页面内容由各 iframe 自行加载。
-  useLayoutEffect(() => {
-    if (restoredRef.current) return;
-    restoredRef.current = true;
-    try {
-      const raw = window.sessionStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as StoredTabs;
-      const stored = (Array.isArray(parsed.tabs) ? parsed.tabs : [])
-        .filter((tab): tab is WorkspaceTab => Boolean(tab && typeof tab.href === "string" && typeof tab.label === "string" && typeof tab.id === "string"))
-        .map((tab) => ({ ...tab, src: typeof tab.src === "string" && tab.src ? tab.src : tab.href }))
-        .slice(0, MAX_TABS);
-      if (!stored.length) return;
-      skipPersistRef.current = true;
-      const next = [...stored];
-      let active = next.find((tab) => tab.href === currentHref);
-      if (!active) {
-        const { label, locked } = labelForHref(currentHref);
-        active = { id: makeId(), href: currentHref, src: currentHref, label, locked };
-        next.push(active);
-      }
-      tabsRef.current = next;
-      setTabs(next);
-      activeIdRef.current = active.id;
-      setActiveId(active.id);
-    } catch {
-      // 本地数据损坏时保持初始标签即可。
-    }
-    // 仅在挂载时执行一次
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (skipPersistRef.current) {
-      skipPersistRef.current = false;
-      return;
-    }
-    try {
-      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ tabs, activeId } satisfies StoredTabs));
-    } catch { /* 隐私模式下忽略 */ }
-  }, [tabs, activeId]);
-
-  // 站内链接点击：在 Next 导航生效前先建好标签。
+  // 站内链接如果指向「已经保活」的页面，就没必要等 Next 把 RSC 重新拉回来才提交。
+  // 捕获阶段接管点击、立刻把那页亮出来，路由在后台跟上；其余链接照旧交给 <Link>。
+  // Next 的 Link 会检查 defaultPrevented，这里 preventDefault 之后它不会再推一次。
   useEffect(() => {
     function handleClick(event: MouseEvent) {
-      if (window.self !== window.top) return;
       if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      const target = event.target as Element | null;
-      const anchor = target?.closest?.("a[href]") as HTMLAnchorElement | null;
+      const anchor = (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
       if (!anchor) return;
-      if (anchor.target && anchor.target !== "_self") return;
-      if (anchor.hasAttribute("download")) return;
-      const raw = anchor.getAttribute("href");
-      if (!raw || raw.startsWith("#") || raw.startsWith("mailto:") || raw.startsWith("tel:")) return;
-      let href: string;
-      try {
-        const url = new URL(raw, window.location.href);
-        if (url.origin !== window.location.origin) return;
-        href = url.pathname + url.search;
-      } catch { return; }
-      const path = splitHref(href).pathname;
-      if (path.startsWith("/api/") || path.startsWith("/_next/") || path === "/login" || path === "/logout" || /\.[a-z0-9]+$/i.test(path)) return;
-      if (href === currentHrefRef.current) return;
-      pendingHrefRef.current = normalizeHref(href);
-      ensureTab(href, anchor.textContent ?? undefined);
+      const href = internalHrefFromAnchor(anchor);
+      if (!href || href === shownHrefRef.current) return;
+      if (!viewsRef.current.some((view) => view.href === href)) return;
+      event.preventDefault();
+      // 切走之前先把当前页的滚动位置落下来，别等布局收缩把 scrollY 归 0。
+      scrollRef.current.set(shownHrefRef.current, window.scrollY);
+      setPendingHref(href);
+      // 滚动位置由本组件按标签恢复，别再让路由导航把页面滚回顶部。
+      router.push(href, { scroll: false });
     }
     document.addEventListener("click", handleClick, true);
     return () => document.removeEventListener("click", handleClick, true);
-  }, [ensureTab]);
+  }, [router]);
 
-  // 浏览器前进后退、代码里 router.push 等未经过链接点击的路由变化。
+  // 悬停预取：指针在链接上停一下，就把目标路由的 RSC 和首屏查询都提前拉回来。
   useEffect(() => {
-    const pending = pendingHrefRef.current;
-    pendingHrefRef.current = null;
-    if (pending === currentHref) return;
-
-    const active = tabsRef.current.find((tab) => tab.id === activeIdRef.current);
-    if (!active || active.href === currentHref) return;
-
-    const existing = tabsRef.current.find((tab) => tab.href === currentHref);
-    if (existing) {
-      activate(existing.id, false);
-      return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let pendingHref: string | null = null;
+    function handleOver(event: Event) {
+      const anchor = (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!anchor) return;
+      const href = internalHrefFromAnchor(anchor);
+      if (!href || href === currentHrefRef.current || href === pendingHref) return;
+      pendingHref = href;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        router.prefetch(href);
+        prefetchRouteData(href);
+      }, PREFETCH_DELAY_MS);
     }
-    if (splitHref(currentHref).pathname === splitHref(active.href).pathname) {
-      const next = tabsRef.current.map((tab) => (tab.id === active.id ? { ...tab, href: currentHref } : tab));
-      tabsRef.current = next;
-      setTabs(next);
-      return;
-    }
-    ensureTab(currentHref);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentHref]);
+    document.addEventListener("pointerover", handleOver, { passive: true });
+    return () => {
+      if (timer) clearTimeout(timer);
+      document.removeEventListener("pointerover", handleOver);
+    };
+  }, [router]);
 
-  const activeTab = tabs.find((tab) => tab.id === activeId) ?? tabs[0];
-  // 优先使用 iframe 内部真实地址，保证「页面内跳转」后侧栏高亮、自动展开与标题都正确。
-  const activeFrameHref = activeTab ? frameHrefs[activeTab.id] ?? activeTab.href : currentHref;
-  const activeFrameLabel = activeTab && activeFrameHref !== activeTab.href ? labelForHref(activeFrameHref) : null;
-  const headerTitle = activeFrameLabel?.locked ? activeFrameLabel.label : activeTab?.label ?? initialConfiguration.title;
-  const frames: ReactNode[] = tabs.map((tab) => {
-    const isActive = tab.id === activeTab?.id;
-    const ready = readyIds.includes(tab.id);
-    return (
-      <div
-        key={tab.id}
-        className="absolute inset-0"
-        style={{
-          visibility: isActive && ready ? "visible" : "hidden",
-          pointerEvents: isActive ? "auto" : "none",
-          zIndex: isActive ? 1 : -1,
-        }}
-      >
-        <iframe
-          ref={(element) => {
-            if (element) frameRefs.current[tab.id] = element;
-            else delete frameRefs.current[tab.id];
-          }}
-          src={tab.src}
-          title={tab.label}
-          data-workspace-frame={tab.id}
-          onLoad={() => setReadyIds((prev) => (prev.includes(tab.id) ? prev : [...prev, tab.id]))}
-          className="h-full w-full border-0 bg-background"
-        />
-      </div>
-    );
-  });
+  // 空闲预热同组路由：只靠悬停预热有个前提——用户会先把指针停在链接上。实际用起来
+  // 常常是一路点下去，第三、第四个标签根本没经过悬停，于是每次都要现等一次 RSC。
+  // 页面稳定一会儿后，把当前业务分组里的兄弟页面提前取回来，按「离当前页最近」排序，
+  // 因为下一个多半就是隔壁那个。生产取 8 个，开发只取 1 个：dev 下每次预取都会触发
+  // 一次 Turbopack 编译，取太多反而抢当前页的 CPU。
+  useEffect(() => {
+    if (!restored) return;
+    let cancelled = false;
+    const timers: number[] = [];
+    const limit = process.env.NODE_ENV === "production" ? 8 : 1;
+    const kickoff = window.setTimeout(() => {
+      if (cancelled || document.visibilityState !== "visible") return;
+      const section = Array.from(document.querySelectorAll("aside section"))
+        .find((item) => item.querySelector('a[aria-current="page"]'));
+      if (!section) return;
+      const anchors = Array.from(section.querySelectorAll<HTMLAnchorElement>('a[href^="/"]'));
+      const activeIndex = anchors.findIndex((anchor) => anchor.getAttribute("aria-current") === "page");
+      const targets = anchors
+        .map((anchor, index) => ({ href: internalHrefFromAnchor(anchor), index }))
+        .filter((item): item is { href: string; index: number } => Boolean(item.href) && item.href !== currentHrefRef.current)
+        .filter((item) => !viewsRef.current.some((view) => view.href === item.href))
+        .sort((a, b) => Math.abs(a.index - activeIndex) - Math.abs(b.index - activeIndex))
+        .slice(0, limit)
+        .map((item) => item.href);
+      targets.forEach((href, index) => {
+        timers.push(window.setTimeout(() => {
+          if (cancelled) return;
+          router.prefetch(href);
+          prefetchRouteData(href);
+        }, index * 250));
+      });
+    }, IDLE_PREFETCH_DELAY_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(kickoff);
+      for (const timer of timers) window.clearTimeout(timer);
+    };
+  }, [currentHref, restored, router]);
+
+  const activeTab = tabs.find((tab) => tab.href === shownHref) ?? tabs.find((tab) => tab.id === shownHref);
 
   return (
-    <AppShellClient
-      {...initialConfiguration}
-      title={headerTitle}
-      currentHref={activeFrameHref}
-      tabBar={
-        <WorkspaceTabBar
-          tabs={tabs}
-          activeId={activeId}
-          cachedIds={readyIds}
-          onSelect={(id) => activate(id, true)}
-          onClose={closeTab}
-          onRefresh={refreshCurrent}
-          onCloseOthers={closeOthers}
-          onCloseAll={closeAll}
-        />
-      }
-      contentClassName="p-0"
-      preserveContent
-    >
-      <div className="relative h-[calc(100vh-96px)] min-h-[420px] w-full overflow-hidden bg-background">
-        {frames}
-        {!readyIds.includes(activeTab?.id ?? "") ? <TabLoading /> : null}
-      </div>
-    </AppShellClient>
+    <ConfigurationContext.Provider value={setDisplay}>
+      <AppShellClient
+        {...display}
+        title={display.title ?? activeTab?.label ?? configuration.title}
+        tabBar={
+          <WorkspaceTabBar
+            tabs={tabs}
+            activeId={activeTab?.id ?? shownHref}
+            cachedIds={renderedViews.map((view) => view.href)}
+            onSelect={(id) => {
+              const target = tabsRef.current.find((tab) => tab.id === id);
+              if (!target || target.href === shownHrefRef.current) return;
+              scrollRef.current.set(shownHrefRef.current, window.scrollY);
+              // 已经在保活视图里的标签：立刻切过去，路由在后台跟上。
+              if (viewsRef.current.some((view) => view.href === target.href)) setPendingHref(target.href);
+              router.push(target.href, { scroll: false });
+            }}
+            onClose={closeTab}
+            onRefresh={refreshCurrent}
+            onCloseOthers={closeOthers}
+            onCloseAll={closeAll}
+          />
+        }
+        preserveContent
+      >
+        {renderedViews.map((view) => (
+          <KeptView
+            key={view.href}
+            href={view.href}
+            visible={view.href === shownHref}
+            element={view.element}
+            context={view.href === currentHref ? segmentContext : view.context}
+          />
+        ))}
+      </AppShellClient>
+    </ConfigurationContext.Provider>
   );
 }
 
-// Page authorization still runs on the server for every new page request.
-// Only the display configuration changes; the sidebar, workspace and notification owners persist.
+/**
+ * 一个被保活的页面容器。
+ *
+ * `memo` 是这里的关键：打开第三个、第五个标签时外壳会因为 tabs/views 变化重渲染，
+ * 但已经保活的那几页 props 一个都没变（element 是它当初的 RSC 子树、context 是快照），
+ * 于是直接跳过调和。没有这层 memo，每开一个标签都要把所有老页面重新 patch 一遍，
+ * 标签越多越慢——这正是「第三个标签特别慢」的放大器。
+ */
+const KeptView = memo(function KeptView({ href, visible, element, context }: {
+  href: string;
+  visible: boolean;
+  element: ReactNode;
+  context: SegmentContext;
+}) {
+  // 隐藏视图必须看到「自己那一页」的地址：否则它订阅的是当前路由，
+  // 每次切标签都会被牵动重渲染并重发自己的查询（实测同一条 sync-center 查询会重复 2–4 次）。
+  const { pathname, search } = splitHref(href);
+  const searchParams = useMemo(() => new URLSearchParams(search), [search]);
+  return (
+    <TabActivityProvider value={visible}>
+      <LayoutRouterContext.Provider value={context}>
+        <PathnameContext.Provider value={pathname}>
+          <SearchParamsContext.Provider value={searchParams}>
+            <div hidden={!visible} data-workspace-view={href}>
+              {element}
+            </div>
+          </SearchParamsContext.Provider>
+        </PathnameContext.Provider>
+      </LayoutRouterContext.Provider>
+    </TabActivityProvider>
+  );
+});
+
+/**
+ * 登记/更新一个视图并做 LRU 淘汰。
+ * `seq` 由现有视图的最大值推出来，函数本身是纯的，重复调用结果一致（渲染期同步 state 要求这点）。
+ */
+function upsertView(views: CachedView[], href: string, element: ReactNode, context: SegmentContext): CachedView[] {
+  const seq = views.reduce((max, view) => Math.max(max, view.seq), 0) + 1;
+  const index = views.findIndex((view) => view.href === href);
+  const next: CachedView[] = index >= 0
+    ? views.map((view, position) => (position === index ? { href, element, context, seq } : view))
+    : [...views, { href, element, context, seq }];
+
+  if (next.length <= MAX_VIEWS) return next;
+  const evicted = new Set(
+    next
+      .filter((view) => view.href !== href)
+      .sort((a, b) => a.seq - b.seq)
+      .slice(0, next.length - MAX_VIEWS)
+      .map((view) => view.href),
+  );
+  return next.filter((view) => !evicted.has(view.href));
+}
+
+/** 把站内 <a> 归一化成标签身份；站外链接、下载、API 与登录页一律返回 null。 */
+function internalHrefFromAnchor(anchor: HTMLAnchorElement): string | null {
+  if (anchor.target && anchor.target !== "_self") return null;
+  if (anchor.hasAttribute("download")) return null;
+  const raw = anchor.getAttribute("href");
+  if (!raw || raw.startsWith("#") || raw.startsWith("mailto:") || raw.startsWith("tel:")) return null;
+  let href: string;
+  try {
+    const url = new URL(raw, window.location.href);
+    if (url.origin !== window.location.origin) return null;
+    href = url.pathname + url.search;
+  } catch {
+    return null;
+  }
+  const path = splitHref(href).pathname;
+  if (path.startsWith("/api/") || path.startsWith("/_next/") || path === "/login" || path === "/logout" || /\.[a-z0-9]+$/i.test(path)) return null;
+  return normalizeHref(href);
+}
+
+// 页面的 title / subtitle / actions 通过这里回填到顶栏，只改显示配置，不重建外壳。
+// 隐藏的标签不抢顶栏：只有在前台时才写配置，切回来时再补一次。
 export function AppShellPage({ children, configuration }: {
   children: React.ReactNode;
   configuration: AppShellConfiguration;
 }) {
   const setConfiguration = useContext(ConfigurationContext);
+  const active = useTabActive();
+  useLayoutEffect(() => {
+    if (active) setConfiguration?.(configuration);
+  }, [active, configuration, setConfiguration]);
   if (!setConfiguration) throw new Error("Business pages must use the persistent ERP layout.");
-  useLayoutEffect(() => { setConfiguration(configuration); }, [configuration, setConfiguration]);
   return children;
 }

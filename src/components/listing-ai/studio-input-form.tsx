@@ -125,7 +125,7 @@ export function StudioInputForm({
                     "h-8 rounded-full border px-3 text-xs font-bold transition",
                     input.tone === item.id
                       ? "border-brand bg-brand text-white"
-                      : "border-border bg-white text-muted hover:border-brand/50 hover:text-foreground",
+                      : "border-border bg-surface text-muted hover:border-brand/50 hover:text-foreground",
                   )}
                 >
                   {item.label}
@@ -143,8 +143,8 @@ export function StudioInputForm({
               placeholder={"免打孔安装，不伤墙面\n承重 15kg，放满锅具不塌\n304 不锈钢，厨房潮湿环境不生锈"}
             />
             <div className="mt-1 flex items-center justify-between">
-              <span className="text-[11px] text-muted">已填 {lineCount(input.features)} 条</span>
-              <span className="text-[11px] text-muted">
+              <span className="text-label text-muted">已填 {lineCount(input.features)} 条</span>
+              <span className="text-label text-muted">
                 这些是模型唯一允许引用的卖点来源
               </span>
             </div>

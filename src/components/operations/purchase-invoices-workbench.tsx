@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { StandardDataTable } from "@/components/ui/table-variants";
+import { type DataTableColumn } from "@/components/ui/data-table";
+import { extHeaders as headers } from "@/lib/workspace/ext-headers";
+import { ListPageTemplate } from "@/components/templates/page-templates";
 
-const scopeKey = "tiaotiao.workspace.scope";
-function workspaceId() { try { return (JSON.parse(localStorage.getItem(scopeKey) ?? "{}") as { workspaceId?: string }).workspaceId || "default"; } catch { return "default"; } }
-function headers(json = false) { const result = new Headers({ "x-workspace-id": workspaceId() }); if (json) result.set("content-type", "application/json"); return result; }
 
 type OrderOption = { id: string; number: string; status: string; currency: string; supplier: { id: string; name: string } };
 type ReconciliationLine = { productRecordId: string; sku: string; name: string; orderedQty: number; receivedQty: number; invoicedQty: number; remainingQty: number; unitPrice: string; orderedAmount: string; invoicedAmount: string };
@@ -19,6 +20,29 @@ const codeLabels: Record<string, string> = {
   NO_RECEIPT: "未收货", QTY_OVER_ORDER: "超订单量", QTY_OVER_RECEIPT: "超验收量",
   CUMULATIVE_OVER_RECEIPT: "累计超验收", PRICE_VARIANCE: "单价差异", AMOUNT_MISMATCH: "金额不符",
 };
+
+const invoiceLineColumns: DataTableColumn<InvoiceLine>[] = [
+  { key: "sku", header: "SKU", width: 120, render: (line) => line.product?.sku ?? line.productRecordId },
+  { key: "orderedQty", header: "订单量", width: 70, numeric: true, render: (line) => line.orderedQty },
+  { key: "receivedQty", header: "已验收", width: 70, numeric: true, render: (line) => line.receivedQty },
+  { key: "invoicedQty", header: "开票量", width: 70, numeric: true, render: (line) => line.invoicedQty },
+  { key: "poUnitPrice", header: "订单单价", width: 90, numeric: true, render: (line) => line.poUnitPrice },
+  { key: "unitPrice", header: "开票单价", width: 90, numeric: true, render: (line) => line.unitPrice },
+  { key: "amount", header: "金额", width: 100, numeric: true, render: (line) => line.amount },
+  {
+    key: "variance",
+    header: "差异",
+    width: 110,
+    numeric: true,
+    render: (line) => <span className={Number(line.varianceAmount) === 0 ? "text-muted" : "text-danger-ink"}>{line.varianceQty} / {line.varianceAmount}</span>,
+  },
+  {
+    key: "problem",
+    header: "问题",
+    width: 160,
+    render: (line) => (line.exceptionCodes.length ? line.exceptionCodes.map((code) => codeLabels[code] ?? code).join("、") : "—"),
+  },
+];
 const inputCls = "h-9 min-w-0 rounded border border-border bg-background px-2 text-sm";
 const today = () => new Date().toISOString().slice(0, 10);
 const money = (value: string | number) => Number(value).toFixed(2);
@@ -118,9 +142,10 @@ export function PurchaseInvoicesWorkbench() {
   }
 
   return (
-    <div className="space-y-6">
-      <section className="rounded border border-border p-4">
-        <h3 className="text-sm font-semibold">登记供应商发票 · 三单匹配</h3>
+    <ListPageTemplate
+      filters={<>
+      <section className="rounded border border-border p-[var(--pad-card)]">
+        <h3 className="text-section">登记供应商发票 · 三单匹配</h3>
         <p className="mt-1 text-xs text-muted">
           可开票数量 = 质检合格数量（acceptedQty），被拒收的数量不能开票。开票数量超过验收量、单价超出容差、累计开票超验收都会记为差异；差异发票必须写明放行理由才能提交审批，且申请人不能自批。
         </p>
@@ -175,10 +200,10 @@ export function PurchaseInvoicesWorkbench() {
       </section>
 
       {notice && <p role="status" className="rounded border border-border p-3 text-xs">{notice}</p>}
-      {error && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-xs text-red-800">{error}</p>}
-
-      <section className="rounded border border-border p-4">
-        <h3 className="text-sm font-semibold">发票台账</h3>
+      {error && <p role="alert" className="rounded border border-danger/30 bg-danger-soft p-3 text-xs text-danger-ink">{error}</p>}
+      </>}
+      table={<section className="rounded border border-border p-[var(--pad-card)]">
+        <h3 className="text-section">发票台账</h3>
         {!invoices.length && <p className="mt-2 text-sm text-muted">还没有登记发票。选择一张已下单的采购单，按验收数量登记第一张发票。</p>}
         <div className="mt-3 space-y-2">
           {invoices.map(invoice => {
@@ -191,7 +216,7 @@ export function PurchaseInvoicesWorkbench() {
                   <span className="text-muted">采购单 {invoice.purchaseOrder.number}</span>
                   <span>{invoice.invoiceDate}{invoice.dueDate ? ` → ${invoice.dueDate}` : ""}</span>
                   <span className="font-semibold">{invoice.currency} {money(invoice.totalAmount)}</span>
-                  <span className={invoice.matchStatus === "EXCEPTION" ? "rounded bg-red-50 px-2 py-0.5 text-xs text-red-800" : "rounded bg-surface-muted px-2 py-0.5 text-xs"}>{matchLabels[invoice.matchStatus] ?? invoice.matchStatus}</span>
+                  <span className={invoice.matchStatus === "EXCEPTION" ? "rounded bg-danger-soft px-2 py-0.5 text-xs text-danger-ink" : "rounded bg-surface-muted px-2 py-0.5 text-xs"}>{matchLabels[invoice.matchStatus] ?? invoice.matchStatus}</span>
                   <span className="rounded bg-surface-muted px-2 py-0.5 text-xs">{invoiceStatusLabels[invoice.status] ?? invoice.status}</span>
                   <span className="ml-auto flex flex-wrap gap-2">
                     {invoice.status === "DRAFT" && <Button size="sm" variant="secondary" disabled={busy} onClick={() => void act({ action: "rematch", id: invoice.id, revision: invoice.revision }, "已按最新收货与开票情况重新匹配。")}>重新匹配</Button>}
@@ -201,33 +226,22 @@ export function PurchaseInvoicesWorkbench() {
                     {invoice.status === "APPROVED" && <a className="inline-flex h-8 items-center rounded border border-border px-3 text-xs hover:bg-surface-muted" href={`/operations/finance-ledger?${new URLSearchParams({ sourceKind: "PURCHASE_INVOICE", sourceId: invoice.id })}`}>转入总账</a>}
                   </span>
                 </div>
-                {invoice.exceptionSummary && <p className="mt-2 text-xs text-red-800">{invoice.exceptionSummary}{invoice.overrideReason ? `　放行理由：${invoice.overrideReason}` : "　（未填放行理由，无法提交审批）"}</p>}
+                {invoice.exceptionSummary && <p className="mt-2 text-xs text-danger-ink">{invoice.exceptionSummary}{invoice.overrideReason ? `　放行理由：${invoice.overrideReason}` : "　（未填放行理由，无法提交审批）"}</p>}
                 <details className="mt-2 text-xs">
                   <summary className="cursor-pointer text-brand">三单对比明细</summary>
-                  <table className="mt-2 w-full min-w-[760px] text-left">
-                    <thead><tr className="text-muted">{["SKU", "订单量", "已验收", "开票量", "订单单价", "开票单价", "金额", "差异", "问题"].map(head => <th key={head} className="pb-1 font-medium">{head}</th>)}</tr></thead>
-                    <tbody>
-                      {invoice.lines.map(line => (
-                        <tr key={line.id} className="border-t border-border">
-                          <td className="py-1">{line.product?.sku ?? line.productRecordId}</td>
-                          <td>{line.orderedQty}</td>
-                          <td>{line.receivedQty}</td>
-                          <td>{line.invoicedQty}</td>
-                          <td>{line.poUnitPrice}</td>
-                          <td>{line.unitPrice}</td>
-                          <td>{line.amount}</td>
-                          <td className={Number(line.varianceAmount) === 0 ? "text-muted" : "text-red-800"}>{line.varianceQty} / {line.varianceAmount}</td>
-                          <td>{line.exceptionCodes.length ? line.exceptionCodes.map(code => codeLabels[code] ?? code).join("、") : "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <StandardDataTable
+                    ariaLabel={`发票 ${invoice.number} 的三单对比明细`}
+                    rows={invoice.lines}
+                    getRowKey={(line) => line.id}
+                    columns={invoiceLineColumns}
+                    empty="该发票无明细行。"
+                  />
                 </details>
               </article>
             );
           })}
         </div>
-      </section>
-    </div>
+      </section>}
+    />
   );
 }

@@ -97,6 +97,27 @@ const knownLogicalTables = new Set([
   "pricing_daily", "search_terms_weekly", "economics_daily", "economics_fees", "restock_plan", "restock_stockout", "restock_clearance",
 ]);
 
+/**
+ * 逻辑表别名 → 已验证数据集。
+ *
+ * 只登记「数据已通过真实 API 响应逐行落库、且有已绑定 reader，仅缺一个业务命名」的 9 项；
+ * 其余 11 个逻辑表没有任何同名 createMany/upsert，也没有真实报表样本，保持 SCHEMA_UNVERIFIED。
+ * pin 是别名自带的固定筛选：5 类 Ads 日报共用 AmazonAdsReportFact，
+ * 不固定 reportType 就会把五类报表混成一张表，属于伪造口径。
+ */
+const verifiedAliases: Record<string, { dataset: string; pin?: Record<string, string>; note: string }> = {
+  ads_campaign_daily: { dataset: "ads_report_daily", pin: { reportType: "campaign" }, note: "别名固定 reportType=campaign；数据来自 AmazonAdsReportFact 已发布事实，非独立表。" },
+  ads_advertised_product_daily: { dataset: "ads_report_daily", pin: { reportType: "advertised-product" }, note: "别名固定 reportType=advertised-product；数据来自 AmazonAdsReportFact 已发布事实。" },
+  ads_targeting_daily: { dataset: "ads_report_daily", pin: { reportType: "targeting" }, note: "别名固定 reportType=targeting；数据来自 AmazonAdsReportFact 已发布事实。" },
+  ads_search_term_daily: { dataset: "ads_report_daily", pin: { reportType: "search-term" }, note: "别名固定 reportType=search-term；数据来自 AmazonAdsReportFact 已发布事实。" },
+  ads_placement_daily: { dataset: "ads_report_daily", pin: { reportType: "placement" }, note: "别名固定 reportType=placement；与活动报表复用 spCampaigns + groupBy campaignPlacement，独立目录状态。" },
+  storage_fees_monthly: { dataset: "storage_fees", note: "别名指向已验证的 storage_fees 报告（GET_FBA_STORAGE_FEE_CHARGES_DATA）；按报告版本读取，不是按月累加的独立表。" },
+  inventory_ledger_daily: { dataset: "inventory_events", note: "别名指向已验证的 inventory_events（GET_LEDGER_DETAIL_VIEW_DATA）；事件流水，不是按日汇总快照。" },
+  inbound_shipments: { dataset: "fulfillment", note: "别名指向 Fulfillment Inbound 观察；数量是申报数量与当前观察快照，不是历史完整入库记录，不得与 fba_shipments（出库发货）混用。" },
+  finance_events: { dataset: "finance_transactions", note: "别名指向已验证的 finance_transactions（Finances API listTransactions）；若产品口径指 listFinancialEvents 则尚未登记该 operation，需先核验官方契约。" },
+};
+export const verifiedAliasNames = Object.keys(verifiedAliases);
+
 
 export class McpDatasetError extends SyncInputError {
   constructor(readonly businessCode: string, message: string, status = 400) {
@@ -110,6 +131,10 @@ export type McpDataset = SkillTable & {
   module: "amazon_sync" | "amazon_ads";
   dataType: string;
   legacyTable: string | null;
+  /** 逻辑表别名解析结果：仅用于「数据已真实落库、只差命名映射」的场景。 */
+  aliasOf?: string;
+  /** 别名必须固定的筛选语义，防止把混合口径包装成单一业务事实。 */
+  pinnedFilters?: Record<string, string>;
   filters: Record<string, FieldSchema>;
   aliases: Record<string, string>;
   maxPageSize: number;
@@ -171,6 +196,14 @@ const byTable = new Map(mcpDatasets.filter(item => item.legacyTable).map(item =>
 export function datasetForTable(name: string): McpDataset {
   const dataset = byTable.get(name);
   if (dataset) return dataset;
+  const alias = verifiedAliases[name];
+  if (alias) {
+    const target = byTable.get(alias.dataset);
+    if (!target) throw new McpDatasetError("SCHEMA_UNVERIFIED", `SCHEMA_UNVERIFIED: 别名 ${name} 的目标数据集尚未发布。`, 409);
+    // 保留目标数据集的 name/module/dataType，reader 分派与已发布口径完全不变。
+    return { ...target, aliasOf: name, ...(alias.pin ? { pinnedFilters: alias.pin } : {}),
+      warnings: [...(target.warnings ?? []), alias.note] };
+  }
   if (knownLogicalTables.has(name)) throw new McpDatasetError("SCHEMA_UNVERIFIED", "SCHEMA_UNVERIFIED: 该逻辑表尚无已验证的系统数据源。", 409);
   throw new McpDatasetError("TABLE_NOT_ALLOWED", "TABLE_NOT_ALLOWED: 逻辑表不在允许清单中。", 403);
 }
@@ -210,16 +243,21 @@ export function datasetInputSchema(query: boolean) {
     ...(query ? { allOf: mcpDatasets.map(dataset => {
       const locator = { properties: { module: { const: dataset.module }, dataType: { const: dataset.dataType } }, required: ["module", "dataType"] };
       const supported = datasetFilterProperties(dataset);
+      const aliasNames = verifiedAliasNames.filter(alias => verifiedAliases[alias].dataset === dataset.name);
       return { if: { anyOf: [locator, ...(dataset.legacyTable ? [
         { properties: { table: { const: dataset.legacyTable } }, required: ["table"] },
         { properties: { tableName: { const: dataset.legacyTable } }, required: ["tableName"] },
-      ] : [])] },
+      ] : []), ...aliasNames.flatMap(alias => [
+        { properties: { table: { const: alias } }, required: ["table"] },
+        { properties: { tableName: { const: alias } }, required: ["tableName"] },
+      ])] },
         then: { properties: { pageSize: { maximum: dataset.maxPageSize }, ...Object.fromEntries(datasetFilterNames.map(name => [name, supported[name] ?? false])), filters: { type: "object", additionalProperties: false, properties: supported } } } };
     }) } : {}),
   };
 }
 export function describeMcpDataset(dataset: McpDataset) {
-  return { name: dataset.name, module: dataset.module, dataType: dataset.dataType, legacyTable: dataset.legacyTable,
+  return { name: dataset.name, ...(dataset.aliasOf ? { aliasOf: dataset.aliasOf, pinnedFilters: dataset.pinnedFilters ?? {} } : {}),
+    module: dataset.module, dataType: dataset.dataType, legacyTable: dataset.legacyTable,
     source: dataset.source, grain: dataset.grain, fields: dataset.fields, filters: datasetFilterProperties(dataset),
     maxPageSize: dataset.maxPageSize, defaultPageSize: dataset.defaultPageSize,
     dateSemantics: dataset.dateSemantics, publicationPolicy: dataset.publicationPolicy,
@@ -245,6 +283,12 @@ export function normalizeDatasetQuery(dataset: McpDataset, input: Record<string,
     const canonical = Object.hasOwn(dataset.aliases, key) ? dataset.aliases[key] : key;
     if (filters[canonical] !== undefined && filters[canonical] !== normalized) throw new McpDatasetError("FILTER_CONFLICT", "筛选参数或别名冲突。");
     filters[canonical] = normalized;
+  }
+  if (dataset.pinnedFilters) {
+    for (const [key, value] of Object.entries(dataset.pinnedFilters)) {
+      if (filters[key] !== undefined && filters[key] !== value) throw new McpDatasetError("FILTER_CONFLICT", `别名 ${dataset.aliasOf} 固定 ${key}=${value}，不能覆盖。`);
+      filters[key] = value;
+    }
   }
   filters.sortBy ??= dataset.defaultSort;
   filters.sortDirection ??= dataset.defaultDirection;

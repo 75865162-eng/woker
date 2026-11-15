@@ -8,6 +8,8 @@ import { ConditionBuilder } from "@/components/rule-builder/condition-builder";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { type DataTableColumn } from "@/components/ui/data-table";
+import { StandardDataTable } from "@/components/ui/table-variants";
 import { useWorkspaceStore } from "@/lib/stores/workspace-store";
 import type { Condition, ConditionGroup, LifecycleGroup, Rule, RuleAction } from "@/lib/types";
 
@@ -323,6 +325,26 @@ export function RulesEditorShell({
     setFeedback("已创建临时规则草稿，保存后会加入当前产品周期。");
   };
 
+  const priorityColumns: DataTableColumn<Rule>[] = [
+    { key: "priority", header: "优先级", numeric: true, className: "font-bold", render: (rule) => rule.priority },
+    {
+      key: "name",
+      header: "规则名称",
+      className: "font-semibold",
+      render: (rule) => (
+        <button
+          type="button"
+          onClick={() => navigateToRule(activeLifecycleGroup.id, rule.id)}
+          className="text-left hover:text-brand"
+        >
+          {rule.name}
+        </button>
+      ),
+    },
+    { key: "lifecycle", header: "产品周期", className: "text-muted", render: (rule) => rule.lifecycleGroupId },
+    { key: "status", header: "状态", render: (rule) => <Badge tone={rule.enabled ? "green" : "gray"}>{rule.enabled ? "开启" : "关闭"}</Badge> },
+  ];
+
   return (
     <div className="grid grid-cols-1 gap-5 xl:grid-cols-[360px_1fr]">
       <Card>
@@ -336,7 +358,7 @@ export function RulesEditorShell({
               type="button"
               onClick={() => navigateToRule(group.id, rules.find((rule) => rule.lifecycleGroupId === group.id)?.id)}
               className={`block w-full rounded-lg border p-4 text-left transition-colors ${
-                group.id === activeLifecycleGroup.id ? "border-brand bg-blue-50" : "border-border hover:bg-surface-muted"
+                group.id === activeLifecycleGroup.id ? "border-brand bg-info-soft" : "border-border hover:bg-surface-muted"
               }`}
             >
               <div className="flex items-center justify-between">
@@ -361,7 +383,7 @@ export function RulesEditorShell({
               </p>
               <p className="mt-2 text-sm font-bold text-foreground">{draftRule?.name ?? "未选择规则"}</p>
               {feedback ? <p className="mt-2 text-xs font-semibold text-brand">{feedback}</p> : null}
-              <p className="mt-1 text-[11px] font-medium text-muted">
+              <p className="mt-1 text-label font-medium text-muted">
                 {persistenceStatus === "saving"
                   ? "规则仓库保存中..."
                   : persistenceStatus === "saved"
@@ -385,7 +407,7 @@ export function RulesEditorShell({
               <label className="block text-xs font-bold text-muted">保存名称</label>
               <div className="mt-2 flex flex-col gap-3 md:flex-row">
                 <input
-                  className="h-10 flex-1 rounded-md border border-border bg-white px-3 text-sm font-medium text-foreground"
+                  className="h-10 flex-1 rounded-md border border-border bg-surface px-3 text-sm font-medium text-foreground"
                   value={saveName}
                   onChange={(event) => setSaveName(event.target.value)}
                   placeholder={`例如：${activeLifecycleGroup.name} 新规则`}
@@ -412,7 +434,7 @@ export function RulesEditorShell({
               </div>
             </div>
             {preview ? (
-              <div className="rounded-lg border border-brand/20 bg-blue-50 p-4">
+              <div className="rounded-lg border border-brand/20 bg-info-soft p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-bold text-foreground">预览结果</p>
@@ -430,7 +452,7 @@ export function RulesEditorShell({
                     ["条件数量", String(preview.activeConditions)],
                     ["动作数量", String(preview.activeActions)],
                   ].map(([label, value]) => (
-                    <div key={label} className="rounded-md border border-border bg-white p-3">
+                    <div key={label} className="rounded-md border border-border bg-surface p-3">
                       <p className="text-xs font-bold text-muted">{label}</p>
                       <p className="metric-tabular mt-2 text-2xl font-black text-foreground">{value}</p>
                     </div>
@@ -458,7 +480,7 @@ export function RulesEditorShell({
               <div
                 key={rule.id}
                 className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3 ${
-                  rule.id === activeRule?.id ? "border-brand bg-blue-50" : "border-border bg-white"
+                  rule.id === activeRule?.id ? "border-brand bg-info-soft" : "border-border bg-surface"
                 }`}
               >
                 <div className="min-w-0 flex-1">
@@ -482,7 +504,7 @@ export function RulesEditorShell({
                   <button
                     type="button"
                     onClick={() => navigateToRule(activeLifecycleGroup.id, rule.id)}
-                    className="rounded-md border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground"
+                    className="rounded-md border border-border bg-surface px-3 py-2 text-xs font-semibold text-foreground"
                   >
                     编辑
                   </button>
@@ -498,7 +520,7 @@ export function RulesEditorShell({
                       <button
                         type="button"
                         onClick={() => setPendingDeleteRuleId(null)}
-                        className="rounded-md border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground"
+                        className="rounded-md border border-border bg-surface px-3 py-2 text-xs font-semibold text-foreground"
                       >
                         取消
                       </button>
@@ -507,7 +529,7 @@ export function RulesEditorShell({
                     <button
                       type="button"
                       onClick={() => setPendingDeleteRuleId(rule.id)}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-white text-muted"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-surface text-muted"
                       title="删除规则"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -536,38 +558,14 @@ export function RulesEditorShell({
             <CardTitle>规则优先级</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="thin-scrollbar max-h-[360px] overflow-auto">
-              <table className="w-full min-w-[760px] text-sm">
-                <thead className="bg-surface-muted text-xs font-bold text-muted">
-                  <tr>
-                    <th className="px-4 py-3 text-left">优先级</th>
-                    <th className="px-4 py-3 text-left">规则名称</th>
-                    <th className="px-4 py-3 text-left">产品周期</th>
-                    <th className="px-4 py-3 text-left">状态</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {lifecycleRules.map((rule) => (
-                    <tr key={rule.id} className={rule.id === activeRule?.id ? "bg-blue-50/60" : undefined}>
-                      <td className="px-4 py-3 font-bold">{rule.priority}</td>
-                      <td className="px-4 py-3 font-semibold">
-                        <button
-                          type="button"
-                          onClick={() => navigateToRule(activeLifecycleGroup.id, rule.id)}
-                          className="text-left hover:text-brand"
-                        >
-                          {rule.name}
-                        </button>
-                      </td>
-                      <td className="px-4 py-3 text-muted">{rule.lifecycleGroupId}</td>
-                      <td className="px-4 py-3">
-                        <Badge tone={rule.enabled ? "green" : "gray"}>{rule.enabled ? "开启" : "关闭"}</Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <StandardDataTable
+              ariaLabel="规则优先级列表"
+              rows={lifecycleRules}
+              getRowKey={(rule) => rule.id}
+              columns={priorityColumns}
+              rowClassName={(rule) => (rule.id === activeRule?.id ? "bg-info-soft/60" : undefined)}
+              empty="当前产品周期暂无规则，点击“添加规则”创建。"
+            />
           </CardContent>
         </Card>
       </div>

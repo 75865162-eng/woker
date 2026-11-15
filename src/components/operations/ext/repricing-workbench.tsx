@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { WorkbenchPageTemplate } from "@/components/templates/page-templates";
 import { Button } from "@/components/ui/button";
 import { Badge, Field, Kpis, Notice, Section, SelectField, Table, Tabs, extPost, money, statusLabel, useExt } from "./kit";
 
@@ -23,9 +24,11 @@ export function RepricingWorkbench() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const rules = useExt<{ items: Rule[] }>("repricing-rules");
-  const offers = useExt<{ items: Offer[]; summary: { total: number; losing: number; winning: number } }>("offers");
-  const queue = useExt<{ items: QueueItem[]; pending: number }>("queue", { status: queueFilter });
+  // 首屏数据合并成一次请求：三块数据同时到达，少两轮往返与两次权限校验。
+  const bundle = useExt<{ rules: { items: Rule[] }; offers: { items: Offer[]; summary: { total: number; losing: number; winning: number } }; queue: { items: QueueItem[]; pending: number } }>("repricing-bundle", { status: queueFilter });
+  const rules = { data: bundle.data?.rules ?? null, error: bundle.error, reload: bundle.reload };
+  const offers = { data: bundle.data?.offers ?? null, error: bundle.error, reload: bundle.reload };
+  const queue = { data: bundle.data?.queue ?? null, error: bundle.error, reload: bundle.reload };
 
   async function run(action: string, body: Record<string, unknown>, message: string, after: () => Promise<void> | void) {
     setBusy(true); setError(""); setNotice("");
@@ -34,14 +37,12 @@ export function RepricingWorkbench() {
     finally { setBusy(false); }
   }
 
-  return <div className="space-y-6">
-    <Notice error={error || rules.error || offers.error || queue.error || ""} notice={notice} />
-    <Kpis items={[
+  return <WorkbenchPageTemplate context={<Notice error={error || rules.error || offers.error || queue.error || ""} notice={notice} />} kpis={<Kpis items={[
       { label: "监控 ASIN", value: String(offers.data?.summary.total ?? 0) },
       { label: "丢失购物车", value: String(offers.data?.summary.losing ?? 0), tone: (offers.data?.summary.losing ?? 0) > 0 ? "warn" : undefined },
       { label: "待处理建议", value: String(queue.data?.pending ?? 0), tone: (queue.data?.pending ?? 0) > 0 ? "warn" : "good" },
       { label: "启用规则", value: String((rules.data?.items ?? []).filter(row => row.enabled).length) },
-    ]} />
+    ]} />} main={<div className="space-y-6">
     <Tabs value={tab} onChange={value => setTab(value as "RULE" | "WATCH" | "QUEUE")} tabs={[{ id: "QUEUE", label: "调价队列", count: queue.data?.pending }, { id: "WATCH", label: "跟卖监控", count: offers.data?.summary.total }, { id: "RULE", label: "调价规则", count: rules.data?.items.length }]} />
 
     {tab === "RULE" && <>
@@ -142,5 +143,5 @@ export function RepricingWorkbench() {
         ]}
       />
     </Section>}
-  </div>;
+  </div>} />;
 }

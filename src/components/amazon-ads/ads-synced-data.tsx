@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AdsScopeBoundary } from "./ads-scope-boundary";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { AdsReportAcquisition } from "./ads-report-acquisition";
+import { workspaceScopeHeaders } from "@/lib/workspace/workspace-scope-store";
 
 type EntityRecord = {
   id: string;
@@ -93,7 +95,11 @@ function entityExpression(row: EntityRecord) {
   return row.targetingExpression ?? (row.payload && typeof row.payload === "object" ? (row.payload as Record<string, unknown>).expression : null);
 }
 
-export function AdsSyncedData({ onBack, onCampaigns }: { onBack: () => void; onCampaigns?: () => void }) {
+export function AdsSyncedData(props: { onBack: () => void; onCampaigns?: () => void }) {
+  return <AdsScopeBoundary><AdsSyncedDataBody {...props} /></AdsScopeBoundary>;
+}
+
+function AdsSyncedDataBody({ onBack, onCampaigns }: { onBack: () => void; onCampaigns?: () => void }) {
   const [kind, setKind] = useState<DataKind>("entities");
   const [entityType, setEntityType] = useState("");
   const [profileId, setProfileId] = useState("");
@@ -134,7 +140,7 @@ export function AdsSyncedData({ onBack, onCampaigns }: { onBack: () => void; onC
     setData(null);
     setSelectedEntity(null);
     setError("");
-    fetch(`/api/integrations/amazon/ads/data?${params}`, { cache: "no-store", signal: controller.signal })
+    fetch(`/api/integrations/amazon/ads/data?${params}`, { cache: "no-store", signal: controller.signal, headers: workspaceScopeHeaders() })
       .then(async response => {
         const body = await response.json() as DataResponse<EntityRecord | ReportFact>;
         if (!response.ok) throw new Error(body.error || `读取失败（${response.status}）`);
@@ -169,8 +175,8 @@ export function AdsSyncedData({ onBack, onCampaigns }: { onBack: () => void; onC
       <div>
         <button type="button" className="ads-link ads-synced-back" onClick={onBack}><ArrowLeft size={15} />返回演示工作台</button>
         <h1>已同步 Ads 数据</h1>
-        {onCampaigns && <button type="button" className="ads-link" onClick={onCampaigns}>进入本地广告活动工作台</button>}
         <p>读取当前工作区 PostgreSQL 中已保存的 Amazon Ads 事实；此页面不会发起 Amazon 请求。当前只读，广告修改尚未启用。</p>
+        {onCampaigns && <button type="button" className="ads-link ads-synced-enter" onClick={onCampaigns}>进入本地广告活动工作台</button>}
       </div>
       <button type="button" className="ads-synced-refresh" onClick={() => setReloadKey(value => value + 1)} disabled={loading} title="重新读取已保存数据" aria-label="重新读取已保存数据"><RefreshCw size={15} /></button>
     </header>

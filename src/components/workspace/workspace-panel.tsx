@@ -121,7 +121,7 @@ export function WorkspacePanel() {
     <div id={workspacePanelAnchorId} className="min-w-0 flex-1 scroll-mt-24 space-y-5">
       <Card>
         <CardContent className="space-y-5 pt-5">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-white px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-3">
             <div className="text-xs font-semibold text-muted">
               <span className={persistenceStatus === "failed" ? "text-danger" : "text-success"}>{persistenceLabel}</span>
               <span className="ml-2">刷新页面后会自动恢复产品周期分组、Overall 数据和草稿勾选。</span>
@@ -159,7 +159,7 @@ export function WorkspacePanel() {
               {activeRules.slice(0, 4).map((rule) => (
                   <span
                     key={rule.id}
-                    className="rounded-md border border-border bg-white px-2 py-1 text-xs font-semibold text-muted"
+                    className="rounded-md border border-border bg-surface px-2 py-1 text-xs font-semibold text-muted"
                   >
                     {rule.name}
                   </span>
@@ -182,7 +182,7 @@ export function WorkspacePanel() {
               </div>
             </div>
           </div>
-          <div className="rounded-lg border border-border bg-white p-4">
+          <div className="rounded-lg border border-border bg-surface p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-bold text-foreground">Overall 所有日期广告数据</p>
@@ -292,7 +292,7 @@ function OverallDetailDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
-      <div className="flex max-h-[86vh] w-full max-w-6xl flex-col rounded-lg border border-border bg-white shadow-xl">
+      <div className="flex max-h-[86vh] w-full max-w-6xl flex-col rounded-lg border border-border bg-surface shadow-xl">
         <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div>
             <h2 className="text-lg font-black text-foreground">{title}</h2>
@@ -317,7 +317,7 @@ function OverallDetailDialog({
             </div>
           ) : visibleRows.length ? (
             <table className="w-full min-w-[960px] border-separate border-spacing-0 text-left text-xs">
-              <thead className="sticky top-0 bg-white text-muted">
+              <thead className="sticky top-0 bg-surface text-muted">
                 <tr>
                   {["状态", "关键词 / 投放对象", "匹配类型", "广告组", "曝光", "点击", "花费", "销售", "ACOS", "原因"].map((label) => (
                     <th key={label} className="border-b border-border px-3 py-2 font-bold">

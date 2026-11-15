@@ -19,7 +19,7 @@ export function MiniUploader({
   status?: string;
 }) {
   return (
-    <label className="inline-flex min-w-28 cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-white px-3 py-2 text-xs font-bold text-muted hover:bg-surface-muted">
+    <label className="inline-flex min-w-28 cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-xs font-bold text-muted hover:bg-surface-muted">
       <Upload className="h-4 w-4" />
       {status || (images.filter(image => image?.url).length ? `${images.filter(image => image?.url).length} Images` : label)}
       <input
@@ -68,12 +68,12 @@ export function ImagePreviewGrid({
           <button
             key={`${image.name}-${image.url.slice(0, 24)}`}
             type="button"
-            className="overflow-hidden rounded-md border border-border bg-white text-left"
+            className="overflow-hidden rounded-md border border-border bg-surface text-left"
             onClick={() => setPreviewImage(image)}
             title="查看原图"
           >
             <div
-              className={`flex items-center justify-center bg-white ${
+              className={`flex items-center justify-center bg-surface ${
                 compact ? "h-24" : "h-28"
               }`}
             >
@@ -85,7 +85,7 @@ export function ImagePreviewGrid({
                 loading="lazy"
               />
             </div>
-            <div className="truncate border-t border-border px-2 py-1 text-[11px] font-semibold text-muted">
+            <div className="truncate border-t border-border px-2 py-1 text-label font-semibold text-muted">
               {image.name}
             </div>
           </button>
@@ -99,7 +99,7 @@ export function ImagePreviewGrid({
           aria-modal="true"
         >
           <div
-            className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-md border border-border bg-white shadow-2xl"
+            className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-md border border-border bg-surface shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">

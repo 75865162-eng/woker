@@ -8,13 +8,29 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { defaultSellfoxReportDate, syncSellfoxProductDailySnapshots, type PerformanceCheckpoint } from "@/lib/sellfox/product-performance";
 import { sellfoxPost } from "@/lib/sellfox/client";
-import { isSellfoxSyncResource, normalizeSellfoxDates, sellfoxReportDates, sellfoxDateAt, SellfoxSyncInputError, nextSellfoxPage, sellfoxSyncResources, sellfoxSyncDisabledReason, SellfoxSyncUnavailableError, type SellfoxSyncResource } from "@/lib/sellfox/sync-contract";
+import { isSellfoxSyncResource, isSellfoxEndpointResource, sellfoxEndpointCode, normalizeSellfoxDates, sellfoxReportDates, sellfoxDateAt, SellfoxSyncInputError, nextSellfoxPage, sellfoxSyncResources, sellfoxSyncDisabledReason, SellfoxSyncUnavailableError, type SellfoxSyncResource } from "@/lib/sellfox/sync-contract";
 import { sellfoxStoreFailure, SellfoxStoreSyncError } from "@/lib/sellfox/sync-errors";
+import { sellfoxAdsAllowedAdTypes } from "@/lib/sellfox/sync-rules";
 import { syncSellfoxSnapshotStores, type SnapshotCheckpoint } from "@/lib/sellfox/snapshot-sync";
 import { withSellfoxCredentialScope } from "./credential-context";
+import { buildRunShards, recordSellfoxShards, refreshSellfoxCoverage } from "@/lib/sellfox/sync-shards";
+import { syncSellfoxGenericEndpoint, type SellfoxEndpointConfig } from "@/lib/sellfox/generic-endpoint-sync";
+
+function endpointConfig(row: {
+  code: string; label: string; path: string; dateMode: string; scopeMode: string;
+  chunkDays: number; pageSize: number; rowsPath: string; idFields: string; params: string; dateFormat: string; maxRows: number;
+}): SellfoxEndpointConfig {
+  const dateMode = ["none", "current", "range"].includes(row.dateMode) ? row.dateMode as SellfoxEndpointConfig["dateMode"] : "range";
+  return {
+    code: row.code, label: row.label, path: row.path, dateMode,
+    scopeMode: row.scopeMode === "global" ? "global" : "store",
+    chunkDays: row.chunkDays, pageSize: row.pageSize, rowsPath: row.rowsPath,
+    idFields: row.idFields, params: row.params, dateFormat: row.dateFormat || "yyyy-MM-dd", maxRows: row.maxRows,
+  };
+}
 
 export const sellfoxResources = sellfoxSyncResources;
-export type SyncResource = SellfoxSyncResource;
+export type SyncResource = SellfoxSyncResource | `endpoint:${string}`;
 type RecordLike = Record<string, unknown>;
 
 function asRecord(value: unknown): RecordLike | null {
@@ -172,10 +188,11 @@ export async function processSellfoxSyncRun(runId: string) {
     run = await prisma.sellfoxSyncRun.findUnique({ where: { id: runId } });
     if (!run) throw new SellfoxLeaseLostError();
     if (!(await canExecuteSellfoxSync(run))) throw new SellfoxSyncInputError("同步已停止：发起用户或工作区已失去有效权限。");
-    if (!isSellfoxSyncResource(run.resource)) throw new SellfoxSyncInputError("请选择有效的赛狐同步资源。");
+    if (!isSellfoxSyncResource(run.resource) && !isSellfoxEndpointResource(run.resource)) throw new SellfoxSyncInputError("请选择有效的赛狐同步资源。");
     if (sellfoxSyncDisabledReason(run.resource)) throw new SellfoxSyncUnavailableError(run.resource);
     let summary = asRecord(run.summary) ?? {};
     if (summary.datesFrozen !== true) {
+      if (!isSellfoxSyncResource(run.resource)) throw new SellfoxSyncInputError("通用端点任务必须含已冻结日期窗口。");
       const dates = normalizeSellfoxDates(run.resource, summary, run.startedAt ?? new Date());
       summary = { ...summary, ...dates, datesFrozen: true, requestVersion: 2 };
     }
@@ -200,6 +217,7 @@ export async function processSellfoxSyncRun(runId: string) {
       await tx.sellfoxSyncRun.update({ where: { id: runId }, data: { summary: summary as Prisma.InputJsonValue } });
     });
     const request = summary as { shopExternalIds?: string[]; reportDate?: string; startDate?: string; endDate?: string; progress?: Record<string, unknown>; capturedAt?: string; adTypes?: string[]; backfillFrom?: string; backfillTo?: string; scheduleId?: string };
+    if (!isSellfoxSyncResource(run.resource) && !isSellfoxEndpointResource(run.resource)) throw new SellfoxSyncInputError("无效同步资源。");
     const input: SyncInput = {
       organizationId: run.organizationId, workspaceId: run.workspaceId, userId: run.userId, runId, resource: run.resource, lease,
       shopExternalIds: request.shopExternalIds, reportDate: request.reportDate, startDate: request.startDate,
@@ -242,8 +260,19 @@ export async function processSellfoxSyncRun(runId: string) {
     else if (input.resource === "listings") result = await syncSellfoxListings({ ...input, shopExternalIds: input.shopExternalIds!, capturedAt: input.capturedAt!, checkpoint: input.progress?.listings as ListingCheckpoint | undefined, onProgress: async (listings, tx) => saveProgress(input, { listings, count: Object.values(listings).reduce((n, item) => n + item.count, 0) }, tx) });
     else if (input.resource === "orders") result = await syncSellfoxOrders({ ...input, shopExternalIds: input.shopExternalIds!, startDate: input.startDate!, endDate: input.endDate!, capturedAt: input.capturedAt!, checkpoint: input.progress?.orders as OrderCheckpoint | undefined, onProgress: async (orders, tx) => saveProgress(input, { orders, count: Object.values(orders).reduce((n, item) => n + item.count, 0) }, tx) });
     else if (input.resource === "fba_shipments") result = await syncSellfoxFbaShipments({ ...input, shopExternalIds: input.shopExternalIds!, startDate: input.startDate, endDate: input.endDate, capturedAt: input.capturedAt!, checkpoint: input.progress?.fba_shipments as FbaShipmentCheckpoint | undefined, onProgress: async (fbaShipments, tx) => saveProgress(input, { fba_shipments: fbaShipments, count: Object.values(fbaShipments).reduce((n, item) => n + item.count, 0) }, tx) });
-    else if (["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(input.resource)) result = await syncSellfoxAdsReports({ ...input, reportTypeCode: input.resource === "ads_campaign" ? "adCampaignReport" : input.resource === "ads_ad_group" ? "adGroupReport" : input.resource === "ads_placement" ? "adSpaceReport" : input.resource === "ads_targeting" ? "adTargeringReport" : input.resource === "ads_search_term" ? "adSearchTermReport" : "adProductReport", startDate: input.startDate!, endDate: input.endDate!, shopExternalIds: input.shopExternalIds!, adTypes: request.adTypes, onProgress: async (progress, tx) => saveProgress(input, progress, tx) });
+    else if (["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(input.resource)) result = await syncSellfoxAdsReports({ ...input, reportTypeCode: input.resource === "ads_campaign" ? "adCampaignReport" : input.resource === "ads_ad_group" ? "adGroupReport" : input.resource === "ads_placement" ? "adSpaceReport" : input.resource === "ads_targeting" ? "adTargeringReport" : input.resource === "ads_search_term" ? "adSearchTermReport" : "adProductReport", startDate: input.startDate!, endDate: input.endDate!, shopExternalIds: input.shopExternalIds!, adTypes: sellfoxAdsAllowedAdTypes(input.resource, request.adTypes), onProgress: async (progress, tx) => saveProgress(input, progress, tx) });
     else if (input.resource === "hourly") result = await syncHourly(input);
+    else if (isSellfoxEndpointResource(input.resource)) {
+      const code = sellfoxEndpointCode(input.resource)!;
+      const config = await prisma.sellfoxApiEndpoint.findUnique({ where: { organizationId_workspaceId_code: { organizationId: input.organizationId, workspaceId: input.workspaceId, code } } });
+      if (!config || !config.enabled) throw new SellfoxSyncInputError(`端点 ${code} 不存在或已停用。`);
+      result = await syncSellfoxGenericEndpoint({
+        runId: input.runId, organizationId: input.organizationId, workspaceId: input.workspaceId, lease: input.lease,
+        endpoint: endpointConfig(config), shopExternalIds: input.shopExternalIds ?? [],
+        startDate: request.startDate, endDate: request.endDate, progress: request.progress,
+        onProgress: async (progress, tx) => saveProgress(input, progress, tx),
+      });
+    }
     else throw new SellfoxSyncInputError("此赛狐数据域暂未接入 Open API。");
     // Re-read after page commits; never overwrite current progress with the initial summary.
     await prisma.$transaction(async (tx) => {
@@ -255,6 +284,16 @@ export async function processSellfoxSyncRun(runId: string) {
       }
       await finishSellfoxRun(lease, { status: "done", summary: { ...asRecord(current?.summary), result } as Prisma.InputJsonValue }, tx);
     });
+    // 分片与覆盖度是记账，不是业务数据：失败只打日志，不把成功的同步改判为失败。
+    try {
+      const shards = buildRunShards(input.resource, { reportDate: request.reportDate, startDate: request.startDate, endDate: request.endDate }, result, request.progress);
+      await recordSellfoxShards({ organizationId: input.organizationId, workspaceId: input.workspaceId, resource: input.resource, runId }, shards);
+      if (input.resource !== "stores") {
+        await refreshSellfoxCoverage({ organizationId: input.organizationId, workspaceId: input.workspaceId, resource: input.resource, runId, status: "done" });
+      }
+    } catch (bookkeepingError) {
+      console.error(JSON.stringify({ scope: "sellfox.sync-shards", resource: input.resource, runId, message: bookkeepingError instanceof Error ? bookkeepingError.message : "unknown" }));
+    }
     });
   } catch (error) {
     if (error instanceof SellfoxLeaseLostError) throw error;

@@ -30,7 +30,7 @@ export async function explicitAmazonDataAccess(scope: SyncScope, actor: string, 
   if (action === "view" || action === "export") {
     const grants = await db.amazonDataAccessGrant.findMany({ where: { ...scope, userId: actor, enabled: true, seller: { status: "active" } }, select: { sellerAccountId: true }, take: 201 });
     if (grants.length > 200) throw new SyncInputError("授权超过安全上限。", 403);
-    if (!grants.length) throw new SyncInputError("当前用户没有已分配的 Amazon 账号。", 403);
+    if (!grants.length) throw new SyncInputError("当前用户没有已分配的 Amazon 账号。", 403, "AMAZON_SCOPE_EMPTY");
     return { allSellers: false, sellerIds: [...new Set(grants.map(grant => grant.sellerAccountId))] };
   }
   await assertAmazonAction(scope, actor, action === "sync" ? "create" : action, db);

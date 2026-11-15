@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { WorkbenchPageTemplate } from "@/components/templates/page-templates";
 import { Button } from "@/components/ui/button";
+import { useDraftState } from "@/lib/workspace/use-draft-state";
 import { Badge, Field, Kpis, Notice, Section, SelectField, Table, extPost, money, statusLabel, today, useExt } from "./kit";
 
 type PlanRow = { id: string; name: string; marketplace: string; periodStart: string; periodEnd: string; status: string; lineCount: number; targetQty: number; targetRevenue: number; forecastQty: number; revision: number };
@@ -21,8 +23,8 @@ const monthEnd = () => {
 
 export function SalesPlansWorkbench() {
   const [selected, setSelected] = useState("");
-  const [header, setHeader] = useState({ name: "", marketplace: "US", currency: "CNY", periodType: "MONTH", periodStart: monthStart(), periodEnd: monthEnd(), forecastWindowDays: "90", seasonalityBp: "10000", notes: "" });
-  const [lines, setLines] = useState<LineDraft[]>([{ ...emptyLine }]);
+  const [header, setHeader, clearHeaderDraft] = useDraftState("sales-plans:header", { name: "", marketplace: "US", currency: "CNY", periodType: "MONTH", periodStart: monthStart(), periodEnd: monthEnd(), forecastWindowDays: "90", seasonalityBp: "10000", notes: "" });
+  const [lines, setLines, clearLinesDraft] = useDraftState<LineDraft[]>("sales-plans:lines", [{ ...emptyLine }]);
   const [editing, setEditing] = useState<{ id: string; revision: number } | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -57,7 +59,7 @@ export function SalesPlansWorkbench() {
       periodType: header.periodType, forecastWindowDays: Number(header.forecastWindowDays), seasonalityBp: Number(header.seasonalityBp),
       lines: payloadLines,
     }, editing ? "销售计划已更新。" : "销售计划已创建。", async () => {
-      setEditing(null); setLines([{ ...emptyLine }]); setHeader(current => ({ ...current, name: "" }));
+      setEditing(null); clearLinesDraft(); clearHeaderDraft();
       const response = await plans.reload() as unknown;
       void response;
     });
@@ -73,14 +75,12 @@ export function SalesPlansWorkbench() {
     setNotice(`已选择「${row.name}」，行明细在下方区域加载后可编辑。`);
   }
 
-  return <div className="space-y-6">
-    <Notice error={error || plans.error || detail.error || ""} notice={notice} />
-    <Kpis items={[
+  return <WorkbenchPageTemplate context={<Notice error={error || plans.error || detail.error || ""} notice={notice} />} kpis={<Kpis items={[
       { label: "计划数", value: String(plans.data?.items.length ?? 0) },
       { label: "在行 SKU", value: String((plans.data?.items ?? []).reduce((sum, row) => sum + row.lineCount, 0)) },
       { label: "目标销量合计", value: String((plans.data?.items ?? []).reduce((sum, row) => sum + row.targetQty, 0)) },
       { label: "预测销量合计", value: String((plans.data?.items ?? []).reduce((sum, row) => sum + row.forecastQty, 0)) },
-    ]} />
+    ]} />} main={<div className="space-y-6">
 
     <Section title={editing ? "编辑销售计划" : "新建销售计划"} description="预测取历史日均销量 × 计划天数 × 季节系数；实际销量取订单事实，两者都不允许手填覆盖。">
       <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
@@ -153,11 +153,11 @@ export function SalesPlansWorkbench() {
             { key: "targetQty", label: "目标", align: "right" },
             { key: "forecastQty", label: "预测", align: "right" },
             { key: "actualQty", label: "实际", align: "right" },
-            { key: "gap", label: "偏差", align: "right", render: row => <span className={row.gap < 0 ? "text-red-700" : "text-emerald-700"}>{row.gap}</span> },
+            { key: "gap", label: "偏差", align: "right", render: row => <span className={row.gap < 0 ? "text-danger-ink" : "text-success-ink"}>{row.gap}</span> },
             { key: "completionBp", label: "完成率", align: "right", render: row => `${(row.completionBp / 100).toFixed(1)}%` },
           ]}
         />
       </> : <p className="text-xs text-muted">正在读取计划明细…</p>}
     </Section>}
-  </div>;
+  </div>} />;
 }

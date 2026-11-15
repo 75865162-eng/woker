@@ -32,6 +32,7 @@ const plan = {
   requiresImageWorkerRestart: runtimeChanged,
   requiresAmazonSyncWorkerRestart: runtimeChanged,
   requiresSellfoxSyncWorkerRestart: runtimeChanged,
+  requiresForecastWorkerRestart: runtimeChanged,
   requiresRuntimeConfig: matches(/^deploy\/systemd\//),
   requiresCaddyReload: matches(/^deploy\/caddy\//),
   requiresInfraUpdate: matches(/^docker-compose\.yml$/),

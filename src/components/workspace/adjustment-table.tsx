@@ -140,7 +140,7 @@ function MetricCompareCell({
   return (
     <div className="metric-tabular text-right leading-tight">
       <div className="font-semibold text-foreground">{formatValue(current)}</div>
-      {recent !== undefined && <div className="mt-1 text-[11px] font-semibold text-brand">{formatValue(recent)}</div>}
+      {recent !== undefined && <div className="mt-1 text-label font-semibold text-brand">{formatValue(recent)}</div>}
     </div>
   );
 }
@@ -190,7 +190,7 @@ function SortableHeader({
       title={sortKey === "deltaPercent" ? "点击排序：大到小 / 小到大 / 复原" : "点击排序：升序 / 降序 / 复原"}
     >
       {label}
-      <span className="w-3 text-[10px]">{active ? (direction === "desc" ? "↓" : "↑") : ""}</span>
+      <span className="w-3 text-label">{active ? (direction === "desc" ? "↓" : "↑") : ""}</span>
     </button>
   );
 }
@@ -600,7 +600,7 @@ export function AdjustmentTable() {
   }
 
   return (
-    <div className="rounded-lg border border-border bg-white">
+    <div className="rounded-lg border border-border bg-surface">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
         <div>
           <h2 className="text-base font-bold text-foreground">规则执行与调整结果</h2>
@@ -616,7 +616,7 @@ export function AdjustmentTable() {
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           {operationProgress ? <OperationProgress label={operationProgress.label} progress={operationProgress.progress} /> : null}
-          <div className="inline-flex overflow-hidden rounded-md border border-border bg-white text-xs font-bold">
+          <div className="inline-flex overflow-hidden rounded-md border border-border bg-surface text-xs font-bold">
             <button
               type="button"
               onClick={() => handleSortDataSource("bulk")}

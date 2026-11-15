@@ -6,7 +6,7 @@ import type { StudioImage } from "@/lib/listing-ai/studio";
 import { cn } from "@/lib/utils";
 
 export const inputClass =
-  "w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-brand focus:ring-1 focus:ring-brand/30 disabled:bg-surface-muted disabled:text-muted";
+  "w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-brand focus:ring-1 focus:ring-brand/30 disabled:bg-surface-muted disabled:text-muted";
 
 export const textareaClass = cn(inputClass, "resize-y leading-relaxed");
 
@@ -25,7 +25,7 @@ export function FieldLabel({
         {label}
         {required ? <span className="ml-0.5 text-danger">*</span> : null}
       </span>
-      {hint ? <span className="shrink-0 text-[11px] text-muted">{hint}</span> : null}
+      {hint ? <span className="shrink-0 text-label text-muted">{hint}</span> : null}
     </div>
   );
 }
@@ -59,7 +59,7 @@ export function CharMeter({
       </div>
       <span
         className={cn(
-          "text-[11px] tabular-nums",
+          "text-label tabular-nums",
           over ? "font-bold text-danger" : warn ? "font-bold text-foreground" : "text-muted",
         )}
       >
@@ -96,19 +96,19 @@ export function ImageUploader({
         <span className="text-xs font-bold text-foreground">{title}</span>
         <span
           className={cn(
-            "text-[11px] tabular-nums",
+            "text-label tabular-nums",
             images.length >= limit ? "font-bold text-foreground" : "text-muted",
           )}
         >
           {images.length}/{limit}
         </span>
       </div>
-      <p className="mb-2 text-[11px] leading-relaxed text-muted">{hint}</p>
+      <p className="mb-2 text-label leading-relaxed text-muted">{hint}</p>
       <div className="grid grid-cols-4 gap-2">
         {images.map((image, index) => (
           <div
             key={`${image.assetId ?? image.url}-${index}`}
-            className="group relative aspect-square overflow-hidden rounded-md border border-border bg-white"
+            className="group relative aspect-square overflow-hidden rounded-md border border-border bg-surface"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -118,11 +118,11 @@ export function ImageUploader({
               loading="lazy"
             />
             {viewLabels?.[index] ? (
-              <span className="absolute left-0 top-0 bg-black/55 px-1 py-0.5 text-[9px] font-bold text-white">
+              <span className="absolute left-0 top-0 bg-black/55 px-1 py-0.5 text-label font-bold text-white">
                 {viewLabels[index]}
               </span>
             ) : null}
-            <span className="absolute inset-x-0 bottom-0 hidden truncate bg-black/55 px-1 py-0.5 text-[9px] text-white group-hover:block">
+            <span className="absolute inset-x-0 bottom-0 hidden truncate bg-black/55 px-1 py-0.5 text-label text-white group-hover:block">
               {image.name}
             </span>
             <button
@@ -138,7 +138,7 @@ export function ImageUploader({
         {images.length < limit ? (
           <button
             type="button"
-            className="flex aspect-square flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border bg-white text-muted transition hover:border-brand hover:text-brand disabled:opacity-60"
+            className="flex aspect-square flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border bg-surface text-muted transition hover:border-brand hover:text-brand disabled:opacity-60"
             onClick={() => inputRef.current?.click()}
             disabled={uploading}
           >
@@ -147,7 +147,7 @@ export function ImageUploader({
             ) : (
               <ImagePlus className="h-4 w-4" />
             )}
-            <span className="text-[10px]">上传</span>
+            <span className="text-label">上传</span>
           </button>
         ) : null}
       </div>

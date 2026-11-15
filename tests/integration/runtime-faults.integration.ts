@@ -16,6 +16,7 @@ import { processImportJob } from "../../src/lib/jobs/processor";
 import { processImageUpscaleJob } from "../../src/lib/image-upscale/processor";
 import { recoverExpiredExecutions } from "../../src/lib/runtime/job-execution";
 import { getStorageDriver } from "../../src/lib/storage";
+import { assertFixtureContainer } from "../../scripts/runtime/fixture-safety.mjs";
 
 assert.equal(process.env.ERP_RUNTIME_EXECUTION_FIXTURE, "1");
 const target = new URL(process.env.DATABASE_URL!);
@@ -148,10 +149,11 @@ main().catch(() => process.exit(1));
 });
 
 test("PostgreSQL restart inside final publication rolls back and permits one safe retry", { timeout: 90_000 }, async () => {
-  const inspected = JSON.parse((await execute("docker", ["inspect", pgContainer])).stdout)[0];
-  assert.equal(inspected.Config.Labels["codex.task"], "erp-runtime-fixture");
-  assert.equal(inspected.NetworkSettings.Ports["5432/tcp"][0].HostIp, "127.0.0.1");
-  assert.equal(inspected.NetworkSettings.Ports["5432/tcp"][0].HostPort, target.port);
+  const inspected = JSON.parse((await execute("docker", ["inspect", process.env.ERP_RUNTIME_FIXTURE_PG_ID!])).stdout)[0];
+  assertFixtureContainer(inspected, {
+    id: process.env.ERP_RUNTIME_FIXTURE_PG_ID!, name: pgContainer, tag: process.env.ERP_RUNTIME_FIXTURE_TAG!,
+    port: target.port, servicePort: 5432,
+  });
   const { file, job } = await importJob("product_export");
   const key = 191810;
   const holder = new Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 2000 });
@@ -169,7 +171,10 @@ test("PostgreSQL restart inside final publication rolls back and permits one saf
       const rows = await prisma.$queryRawUnsafe<Array<{ waiting: boolean }>>(`SELECT EXISTS(SELECT 1 FROM pg_locks WHERE locktype='advisory' AND objid=${key}::oid AND NOT granted) AS waiting`);
       return rows[0].waiting;
     }, "final audit blocked inside transaction");
-    await execute("docker", ["restart", pgContainer]);
+    assertFixtureContainer(JSON.parse((await execute("docker", ["inspect", inspected.Id])).stdout)[0], {
+      id: inspected.Id, name: pgContainer, tag: process.env.ERP_RUNTIME_FIXTURE_TAG!, port: target.port, servicePort: 5432,
+    });
+    await execute("docker", ["restart", inspected.Id]);
     await until(() => prisma.$queryRaw`SELECT 1`, "fixture PostgreSQL reconnect");
     await processing;
     const interrupted = await prisma.importJob.findUniqueOrThrow({ where: { id: job.id }, include: { file: true, exportRecords: true } });

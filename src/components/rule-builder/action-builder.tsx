@@ -125,7 +125,7 @@ export function ActionBuilder({
           return (
             <div
               key={action.id}
-              className="flex flex-col gap-3 rounded-md border border-border bg-white p-3 lg:flex-row lg:items-center lg:justify-between"
+              className="flex flex-col gap-3 rounded-md border border-border bg-surface p-3 lg:flex-row lg:items-center lg:justify-between"
             >
               <div className="flex min-w-0 items-start gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-surface-muted text-brand">
@@ -162,7 +162,7 @@ export function ActionBuilder({
                     cloneTemplateAction(actionTemplates.find((template) => template.type === action.type)!),
                   ])
                 }
-                className="flex w-full flex-col gap-3 rounded-md border border-dashed border-border bg-white p-3 text-left opacity-80 transition hover:opacity-100 lg:flex-row lg:items-center lg:justify-between"
+                className="flex w-full flex-col gap-3 rounded-md border border-dashed border-border bg-surface p-3 text-left opacity-80 transition hover:opacity-100 lg:flex-row lg:items-center lg:justify-between"
               >
                 <div className="flex items-center gap-3">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-surface-muted text-brand">

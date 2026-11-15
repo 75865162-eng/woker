@@ -64,13 +64,13 @@ export function SellfoxCredentialsForm({
     <div className="grid gap-3 sm:grid-cols-2">
       {([ ["clientId", "Client ID"], ["clientSecret", "Client Secret"] ] as const).map(([name, label]) => <label key={name} className="grid gap-1 text-xs font-medium">
         {label}{configured ? "（留空保留）" : "（必填）"}
-        <input className="h-9 w-full rounded border border-border bg-white px-3 text-sm font-normal" name={name} type="password" autoComplete="new-password" spellCheck={false} required={!configured} maxLength={16384} disabled={disabled} placeholder={configured ? "不回显已有值，留空保留" : `请输入 ${label}`} />
+        <input className="h-9 w-full rounded border border-border bg-surface px-3 text-sm font-normal" name={name} type="password" autoComplete="new-password" spellCheck={false} required={!configured} maxLength={16384} disabled={disabled} placeholder={configured ? "不回显已有值，留空保留" : `请输入 ${label}`} />
       </label>)}
     </div>
     <p className="text-xs text-muted">凭据只提交到服务端加密保存，不写入浏览器恢复缓存，不回显已有值。保存不会请求赛狐或开启同步计划。</p>
-    {!canEdit && <p className="text-xs text-amber-800">仅当前组织有配置权限的管理员可以保存凭据。</p>}
-    {!encryptionReady && <p role="alert" className="text-xs text-amber-800">服务端加密存储尚未就绪，请管理员先完成加密主密钥配置。</p>}
-    {message && <p role={failed ? "alert" : "status"} className={failed ? "text-sm text-red-700" : "text-sm text-emerald-700"}>{message}</p>}
+    {!canEdit && <p className="text-xs text-warning-ink">仅当前组织有配置权限的管理员可以保存凭据。</p>}
+    {!encryptionReady && <p role="alert" className="text-xs text-warning-ink">服务端加密存储尚未就绪，请管理员先完成加密主密钥配置。</p>}
+    {message && <p role={failed ? "alert" : "status"} className={failed ? "text-sm text-danger-ink" : "text-sm text-success-ink"}>{message}</p>}
     <Button type="submit" size="sm" disabled={disabled}>{busy ? "正在保存…" : "保存赛狐凭据"}</Button>
   </form>;
 }

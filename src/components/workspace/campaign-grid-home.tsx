@@ -5,6 +5,8 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { RulesEditorShell } from "@/components/app-shell/lazy-workbenches";
 import { Button } from "@/components/ui/button";
 import { OperationProgress } from "@/components/ui/operation-progress";
+import { StandardDataTable } from "@/components/ui/table-variants";
+import { type DataTableColumn } from "@/components/ui/data-table";
 import { defaultRules, lifecycleGroups } from "@/data/default-rules";
 import { useBulkUpload } from "@/lib/hooks/use-bulk-upload";
 import { useWorkspaceStore } from "@/lib/stores/workspace-store";
@@ -30,7 +32,8 @@ import {
 const pageSize = 10;
 const detailPageSize = 25;
 const dragMimeType = "application/x-campaign-group-id";
-type CampaignSortKey = "campaignName" | "adGroupName" | "overallCsv";
+
+type CampaignSortKey = "campaignName" | "adGroupName" | "overallCsv";
 type CampaignSortDirection = "asc" | "desc";
 type DetailSortKey =
   | "keyword"
@@ -546,33 +549,38 @@ export function CampaignGridHome() {
     { id: "decline", label: "衰退组" },
     { id: "clearance", label: "清库存组" },
   ];
-
-  function renderMetricCell(value: string | number, align: "left" | "right" = "left") {
-    return <td className={`px-3 py-2 ${align === "right" ? "text-right" : "text-left"}`}>{value}</td>;
-  }
-
-  function renderSortableHeader(label: string, sortKey: DetailSortKey, align: "left" | "right" = "left") {
-    const active = detailSortKey === sortKey;
-    const arrow = active ? (detailSortDirection === "asc" ? "↑" : "↓") : "";
-
-    return (
-      <th className={`px-3 py-3 ${align === "right" ? "text-right" : "text-left"}`}>
-        <button
-          type="button"
-          onClick={() => toggleDetailSort(sortKey)}
-          className={`inline-flex items-center gap-1 transition-colors ${active ? "text-brand" : "hover:text-foreground"}`}
-          title={`Sort by ${label}`}
-        >
-          <span>{label}</span>
-          <span className="min-w-3 text-[11px]">{arrow}</span>
-        </button>
-      </th>
-    );
-  }
+  const lifecycleRuleColumns: DataTableColumn<(typeof selectedLifecycleRules)[number]>[] = [
+    { key: "priority", header: "执行优先级", align: "center", render: (rule) => <span className="font-black metric-tabular">{rule.priority}</span> },
+    {
+      key: "type",
+      header: "规则类型",
+      align: "center",
+      render: (rule) => (
+        <span className={`inline-flex rounded px-2 py-1 text-xs font-bold ${rule.id.includes("bv-") ? "bg-warning-soft text-warning-ink" : "bg-info-soft text-brand"}`}>
+          {rule.id.includes("bv-") ? "BV 安全校验" : "投放规则"}
+        </span>
+      ),
+    },
+    { key: "condition", header: "条件", render: (rule) => <span className="font-semibold text-foreground">{flattenConditionGroup(rule.conditionGroup).map(summarizeCondition).join("，")}</span> },
+    { key: "adjustment", header: "调整", render: (rule) => <span className="font-black text-brand">{rule.actions.map(summarizeAction).join("，")}</span> },
+  ];
+  const keywordDetailColumns: DataTableColumn<PerformanceRow>[] = [
+    { key: "sheetName", header: "Sheet", sortable: true, sortDirection: detailSortKey === "sheetName" ? detailSortDirection : null, onSort: () => toggleDetailSort("sheetName"), render: (row) => row.sheetName ?? "Mock Sheet" },
+    { key: "adGroupName", header: "Ad Group", sortable: true, sortDirection: detailSortKey === "adGroupName" ? detailSortDirection : null, onSort: () => toggleDetailSort("adGroupName"), render: (row) => row.adGroupName },
+    { key: "keyword", header: "Keyword", sortable: true, sortDirection: detailSortKey === "keyword" ? detailSortDirection : null, onSort: () => toggleDetailSort("keyword"), render: (row) => row.keyword },
+    { key: "matchType", header: "Match Type", sortable: true, sortDirection: detailSortKey === "matchType" ? detailSortDirection : null, onSort: () => toggleDetailSort("matchType"), render: (row) => row.matchType },
+    { key: "currentBid", header: "Bid", numeric: true, sortable: true, sortDirection: detailSortKey === "currentBid" ? detailSortDirection : null, onSort: () => toggleDetailSort("currentBid"), render: (row) => row.currentBid.toFixed(2) },
+    { key: "impressions", header: "Impr.", numeric: true, sortable: true, sortDirection: detailSortKey === "impressions" ? detailSortDirection : null, onSort: () => toggleDetailSort("impressions"), render: (row) => row.impressions.toLocaleString("zh-CN") },
+    { key: "clicks", header: "Clicks", numeric: true, sortable: true, sortDirection: detailSortKey === "clicks" ? detailSortDirection : null, onSort: () => toggleDetailSort("clicks"), render: (row) => row.clicks.toLocaleString("zh-CN") },
+    { key: "orders", header: "Orders", numeric: true, sortable: true, sortDirection: detailSortKey === "orders" ? detailSortDirection : null, onSort: () => toggleDetailSort("orders"), render: (row) => row.orders.toLocaleString("zh-CN") },
+    { key: "sales", header: "Sales", numeric: true, sortable: true, sortDirection: detailSortKey === "sales" ? detailSortDirection : null, onSort: () => toggleDetailSort("sales"), render: (row) => row.sales.toFixed(2) },
+    { key: "spend", header: "Spend", numeric: true, sortable: true, sortDirection: detailSortKey === "spend" ? detailSortDirection : null, onSort: () => toggleDetailSort("spend"), render: (row) => row.spend.toFixed(2) },
+    { key: "status", header: "Status", render: (row) => row.status === "paused" ? "Paused" : "Enabled" },
+  ];
 
   return (
     <section className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-white p-4">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface p-4">
         <input
           ref={fileInputRef}
           type="file"
@@ -675,7 +683,7 @@ export function CampaignGridHome() {
                   }
                 }}
                 className={`h-9 min-w-9 rounded-md px-3 text-sm font-semibold transition-colors ${
-                  page === item ? "bg-brand text-white" : "border border-border bg-white text-muted hover:text-foreground"
+                  page === item ? "bg-brand text-white" : "border border-border bg-surface text-muted hover:text-foreground"
                 }`}
               >
                 {item}
@@ -685,7 +693,7 @@ export function CampaignGridHome() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-border bg-white">
+      <div className="overflow-x-auto rounded-lg border border-border bg-surface">
         <table className="w-full min-w-[1120px] border-collapse text-sm">
           <thead className="bg-surface-muted text-xs font-bold text-muted">
             <tr>
@@ -777,7 +785,7 @@ export function CampaignGridHome() {
                       mergeCampaignGroupsIntoWorkspaceUnit(sourceCampaignGroupId, campaign.id);
                     }
                   }}
-                  className={`${workspaceUnit ? "bg-slate-100" : "bg-white"} ${active ? "outline outline-2 -outline-offset-2 outline-brand" : ""} hover:bg-blue-50/60`}
+                  className={`${workspaceUnit ? "bg-surface-muted" : "bg-surface"} ${active ? "outline outline-2 -outline-offset-2 outline-brand" : ""} hover:bg-info-soft/60`}
                 >
                   <td className="border-b border-r border-border px-3 py-2.5 font-semibold text-muted">{campaign.sheetName ?? "Bulk"}</td>
                   <td className="border-b border-r border-border px-3 py-2.5 font-semibold text-foreground">{campaign.campaignName}</td>
@@ -791,7 +799,7 @@ export function CampaignGridHome() {
                             event.stopPropagation();
                             removeCampaignGroupFromWorkspaceUnit(campaign.id);
                           }}
-                          className="grid h-7 w-7 shrink-0 place-items-center rounded border border-border bg-white text-muted hover:border-brand hover:text-brand"
+                          className="grid h-7 w-7 shrink-0 place-items-center rounded border border-border bg-surface text-muted hover:border-brand hover:text-brand"
                           title="移出组合"
                         >
                           <RotateCcw className="h-3.5 w-3.5" />
@@ -822,7 +830,7 @@ export function CampaignGridHome() {
                             toggleLifecycle(campaign.id, column.id);
                           }}
                           className={`mx-auto grid h-8 w-8 place-items-center rounded border transition-colors ${
-                            checked ? "border-brand bg-brand text-white" : "border-border bg-white text-transparent hover:border-brand"
+                            checked ? "border-brand bg-brand text-white" : "border-border bg-surface text-transparent hover:border-brand"
                           }`}
                         >
                           <Check className="h-4 w-4" />
@@ -845,7 +853,7 @@ export function CampaignGridHome() {
                         上传
                       </Button>
                       {overallFileName ? (
-                        <span className="max-w-28 truncate text-[10px] font-semibold text-success" title={overallFileName}>
+                        <span className="max-w-28 truncate text-label font-semibold text-success" title={overallFileName}>
                           {overallFileName}
                         </span>
                       ) : null}
@@ -860,10 +868,10 @@ export function CampaignGridHome() {
                             event.stopPropagation();
                             runScope(campaign.id, workspaceUnit?.id);
                           }}
-                          className={`mx-auto grid h-9 w-9 place-items-center rounded border bg-white ${
+                          className={`mx-auto grid h-9 w-9 place-items-center rounded border bg-surface ${
                             workspaceLifecycleReady
-                              ? "border-border text-brand hover:border-brand hover:bg-blue-50"
-                              : "border-amber-300 text-amber-600 hover:bg-amber-50"
+                              ? "border-border text-brand hover:border-brand hover:bg-info-soft"
+                              : "border-warning-ink/30 text-warning-ink hover:bg-warning-soft"
                           }`}
                           title={workspaceLifecycleReady ? "运行规则" : "组合内生命周期必须一致后才能运行"}
                         >
@@ -885,7 +893,7 @@ export function CampaignGridHome() {
                         <History className="h-4 w-4" />
                         历史
                       </button>
-                      <span className="text-[10px] font-bold tabular-nums text-muted">已导出 {exportedCount}</span>
+                      <span className="text-label font-bold tabular-nums text-muted">已导出 {exportedCount}</span>
                     </div>
                   </td>
                   <td className="border-b border-border p-1.5 text-center">
@@ -893,7 +901,7 @@ export function CampaignGridHome() {
                       type="button"
                       aria-label={`屏蔽 ${campaign.campaignName} ${campaign.adGroupName}`}
                       onClick={() => blockCampaignGroup(campaign.id)}
-                      className="mx-auto grid h-8 w-8 place-items-center rounded border border-border bg-white text-transparent transition-colors hover:border-danger hover:text-danger"
+                      className="mx-auto grid h-8 w-8 place-items-center rounded border border-border bg-surface text-transparent transition-colors hover:border-danger hover:text-danger"
                       title="加入屏蔽名单"
                     >
                       <Check className="h-4 w-4" />
@@ -914,7 +922,7 @@ export function CampaignGridHome() {
       {rulesCenterOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6" onClick={() => setRulesCenterOpen(false)}>
           <section
-            className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-lg border border-border bg-white shadow-[0_24px_80px_rgba(15,23,42,0.25)]"
+            className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-lg border border-border bg-surface shadow-pop"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="flex items-center justify-between gap-4 border-b border-border px-4 py-3">
@@ -941,7 +949,7 @@ export function CampaignGridHome() {
       {ruleModalLifecycleId ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-8" onClick={() => setRuleModalLifecycleId(null)}>
           <section
-            className="max-h-[82vh] w-full max-w-4xl overflow-hidden rounded-lg border border-border bg-white shadow-[0_24px_80px_rgba(15,23,42,0.25)]"
+            className="max-h-[82vh] w-full max-w-4xl overflow-hidden rounded-lg border border-border bg-surface shadow-pop"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="flex items-center justify-between gap-4 border-b border-border px-5 py-4">
@@ -962,43 +970,13 @@ export function CampaignGridHome() {
               <div className="mb-4 rounded-lg border border-border bg-surface-muted px-4 py-3 text-xs font-semibold leading-5 text-muted">
                 优先级数字越小越先执行。BV 安全校验会按顺序连续校正竞价；随后执行常规投放规则，每条广告数据命中第一条常规规则后停止继续匹配。
               </div>
-              <table className="w-full min-w-[640px] border-collapse text-sm">
-                <thead className="bg-surface-muted text-xs font-black text-muted">
-                  <tr>
-                    <th className="w-24 border border-border px-3 py-3 text-center">执行优先级</th>
-                    <th className="w-28 border border-border px-3 py-3 text-center">规则类型</th>
-                    <th className="border border-border px-4 py-3 text-left">条件</th>
-                    <th className="border border-border px-4 py-3 text-left">调整</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedLifecycleRules.map((rule) => (
-                    <tr key={rule.id}>
-                      <td className="border border-border px-3 py-3 text-center font-black tabular-nums text-foreground">
-                        {rule.priority}
-                      </td>
-                      <td className="border border-border px-3 py-3 text-center text-xs font-bold">
-                        <span className={`inline-flex rounded px-2 py-1 ${rule.id.includes("bv-") ? "bg-amber-100 text-amber-700" : "bg-blue-50 text-brand"}`}>
-                          {rule.id.includes("bv-") ? "BV 安全校验" : "投放规则"}
-                        </span>
-                      </td>
-                      <td className="border border-border px-4 py-3 font-semibold text-foreground">
-                        {flattenConditionGroup(rule.conditionGroup).map(summarizeCondition).join("，")}
-                      </td>
-                      <td className="border border-border px-4 py-3 font-black text-brand">
-                        {rule.actions.map(summarizeAction).join("，")}
-                      </td>
-                    </tr>
-                  ))}
-                  {selectedLifecycleRules.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="border border-border px-4 py-10 text-center font-semibold text-muted">
-                        当前生命周期没有启用的运行规则。
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
+              <StandardDataTable
+                ariaLabel="生命周期运行规则"
+                rows={selectedLifecycleRules}
+                getRowKey={(rule) => rule.id}
+                columns={lifecycleRuleColumns}
+                empty="当前生命周期没有启用的运行规则。"
+              />
             </div>
           </section>
         </div>
@@ -1007,7 +985,7 @@ export function CampaignGridHome() {
       {blockedModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-8" onClick={() => setBlockedModalOpen(false)}>
           <section
-            className="max-h-[80vh] w-full max-w-3xl overflow-hidden rounded-lg border border-border bg-white shadow-[0_24px_80px_rgba(15,23,42,0.25)]"
+            className="max-h-[80vh] w-full max-w-3xl overflow-hidden rounded-lg border border-border bg-surface shadow-pop"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="flex items-center justify-between gap-4 border-b border-border px-5 py-4">
@@ -1056,7 +1034,7 @@ export function CampaignGridHome() {
       {historyScopeIds ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-8" onClick={() => setHistoryScopeIds(null)}>
           <section
-            className="max-h-[80vh] w-full max-w-3xl overflow-hidden rounded-lg border border-border bg-white shadow-[0_24px_80px_rgba(15,23,42,0.25)]"
+            className="max-h-[80vh] w-full max-w-3xl overflow-hidden rounded-lg border border-border bg-surface shadow-pop"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="flex items-center justify-between gap-4 border-b border-border px-5 py-4">
@@ -1086,7 +1064,7 @@ export function CampaignGridHome() {
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="text-sm font-black text-foreground">规则运行</p>
-                            <span className={`rounded px-2 py-1 text-[10px] font-black ${record.exportedAt ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                            <span className={`rounded px-2 py-1 text-label font-black ${record.exportedAt ? "bg-success-soft text-success-ink" : "bg-warning-soft text-warning-ink"}`}>
                               {record.exportedAt ? "已导出" : "待导出"}
                             </span>
                           </div>
@@ -1153,7 +1131,7 @@ export function CampaignGridHome() {
           onClick={closeDetailRows}
         >
           <div
-            className="max-h-[85vh] w-full max-w-6xl overflow-hidden rounded-2xl border border-border bg-white shadow-[0_24px_80px_rgba(15,23,42,0.25)]"
+            className="max-h-[85vh] w-full max-w-6xl overflow-hidden rounded-xl border border-border bg-surface shadow-pop"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-4 border-b border-border px-5 py-4">
@@ -1176,7 +1154,7 @@ export function CampaignGridHome() {
                 <select
                   value={detailSortDirection}
                   onChange={(event) => setDetailSortDirection(event.target.value as "asc" | "desc")}
-                  className="h-10 rounded-lg border border-border bg-white px-3 text-sm font-semibold text-foreground outline-none"
+                  className="h-10 rounded-lg border border-border bg-surface px-3 text-sm font-semibold text-foreground outline-none"
                 >
                   <option value="asc">A-Z</option>
                   <option value="desc">Z-A</option>
@@ -1200,7 +1178,7 @@ export function CampaignGridHome() {
                           }
                         }}
                         className={`h-9 min-w-9 rounded-md px-3 text-sm font-semibold transition-colors ${
-                          detailPage === item ? "bg-brand text-white" : "border border-border bg-white text-muted hover:text-foreground"
+                          detailPage === item ? "bg-brand text-white" : "border border-border bg-surface text-muted hover:text-foreground"
                         }`}
                       >
                         {item}
@@ -1217,40 +1195,13 @@ export function CampaignGridHome() {
                 </div>
               ) : (
                 <>
-                  <table className="w-full min-w-[1200px] text-sm">
-                    <thead className="sticky top-0 bg-surface-muted text-xs font-bold text-muted">
-                      <tr>
-                        {renderSortableHeader("Sheet", "sheetName")}
-                        {renderSortableHeader("Ad Group", "adGroupName")}
-                        {renderSortableHeader("Keyword", "keyword")}
-                        {renderSortableHeader("Match Type", "matchType")}
-                        {renderSortableHeader("Bid", "currentBid", "right")}
-                        {renderSortableHeader("Impr.", "impressions", "right")}
-                        {renderSortableHeader("Clicks", "clicks", "right")}
-                        {renderSortableHeader("Orders", "orders", "right")}
-                        {renderSortableHeader("Sales", "sales", "right")}
-                        {renderSortableHeader("Spend", "spend", "right")}
-                        <th className="px-3 py-3 text-left">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {detailRowsPreview.map((row: PerformanceRow) => (
-                        <tr key={row.id} className="bg-white">
-                          {renderMetricCell(row.sheetName ?? "Mock Sheet")}
-                          {renderMetricCell(row.adGroupName)}
-                          {renderMetricCell(row.keyword)}
-                          {renderMetricCell(row.matchType)}
-                          {renderMetricCell(row.currentBid.toFixed(2), "right")}
-                          {renderMetricCell(row.impressions.toLocaleString("zh-CN"), "right")}
-                          {renderMetricCell(row.clicks.toLocaleString("zh-CN"), "right")}
-                          {renderMetricCell(row.orders.toLocaleString("zh-CN"), "right")}
-                          {renderMetricCell(row.sales.toFixed(2), "right")}
-                          {renderMetricCell(row.spend.toFixed(2), "right")}
-                          {renderMetricCell(row.status === "paused" ? "Paused" : "Enabled")}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <StandardDataTable
+                    ariaLabel="已解析关键词明细"
+                    rows={detailRowsPreview}
+                    getRowKey={(row) => row.id}
+                    columns={keywordDetailColumns}
+                    empty="暂无可解析的关键词行。"
+                  />
                   <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-4">
                     <p className="text-sm font-medium text-muted">
                       Showing {detailRowsPreview.length.toLocaleString("zh-CN")} rows on this page
@@ -1265,7 +1216,7 @@ export function CampaignGridHome() {
       ) : null}
 
       {pagedCampaigns.length === 0 && (
-        <div className="rounded-xl border border-dashed border-border bg-white px-5 py-10 text-center text-sm font-medium text-muted">
+        <div className="rounded-xl border border-dashed border-border bg-surface px-5 py-10 text-center text-sm font-medium text-muted">
           No campaign groups match the current filters.
         </div>
       )}

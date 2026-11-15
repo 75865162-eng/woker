@@ -276,23 +276,23 @@ export async function executeAssembly(tx: Tx, scope: WmsScope, input: WmsCommand
 /** 页面初始化用的一次性选项：商品、可用库位、BOM 列表。 */
 export async function queryAssemblyOptions(scope: WmsScope) {
   const identity = scoped(scope);
-  const [products, rawLocations, boms] = await Promise.all([
+  const [products, warehouses, boms] = await Promise.all([
     prisma.productRecord.findMany({ where: identity, select: { id: true, sku: true, chineseName: true }, orderBy: { sku: 'asc' }, take: 500 }),
-    // WmsLocation 没有直接的 warehouse 关系，仓库名须经 area.warehouse 取得。
-    prisma.wmsLocation.findMany({
-      where: { ...identity, enabled: true, kind: 'STORAGE', area: { warehouse: { enabled: true } } },
-      select: { id: true, code: true, warehouseId: true, area: { select: { warehouse: { select: { name: true } } } } },
-      orderBy: [{ warehouseId: 'asc' }, { code: 'asc' }],
-      take: 1000,
-    }),
+    prisma.wmsWarehouse.findMany({ where: { ...identity, enabled: true }, select: { id: true, name: true }, orderBy: { code: 'asc' }, take: 200 }),
     prisma.wmsBom.findMany({ where: { ...identity, enabled: true }, select: { id: true, productRecordId: true, version: true }, orderBy: { createdAt: 'desc' }, take: 200 }),
   ]);
-  // 保持前端 assembly-workbench 使用的 location.warehouse.name 契约不变。
-  const locations = rawLocations.map(location => ({
-    id: location.id,
-    code: location.code,
-    warehouseId: location.warehouseId,
-    warehouse: { name: location.area?.warehouse?.name ?? '' },
+  // WmsLocation 只有 warehouseId，没有 warehouse 关系；先筛启用仓库，再按 id 过滤库位，
+  // 最后把仓库名拼回视图，保持页面 "仓库名 / 库位编码" 的展示契约不变。
+  const warehouseNames = new Map(warehouses.map(warehouse => [warehouse.id, warehouse.name]));
+  const rows = await prisma.wmsLocation.findMany({
+    where: { ...identity, enabled: true, kind: 'STORAGE', warehouseId: { in: warehouses.map(warehouse => warehouse.id) } },
+    select: { id: true, code: true, warehouseId: true },
+    orderBy: [{ warehouseId: 'asc' }, { code: 'asc' }],
+    take: 1000,
+  });
+  const locations = rows.map(location => ({
+    ...location,
+    warehouse: { name: warehouseNames.get(location.warehouseId) ?? location.warehouseId },
   }));
   return { products, locations, boms };
 }

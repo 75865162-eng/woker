@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { ArrowRight, CheckCircle2, Clock3, FileText, GitBranch, Play, RefreshCw, ShieldAlert } from "lucide-react";
 import { PrefetchLink } from "@/components/app-shell/prefetch-link";
+import { WorkbenchPageTemplate } from "@/components/templates/page-templates";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAppShellUser } from "@/components/app-shell/app-shell-context";
@@ -224,11 +225,10 @@ export function OrchestratorAgentWorkbench() {
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[360px_1fr]">
-      <div className="space-y-4">
+    <WorkbenchPageTemplate context={<div className="space-y-[var(--gap-section)]">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>运行编排</CardTitle>
+            <CardTitle className="text-section">运行编排</CardTitle>
             <Button type="button" size="sm" variant="ghost" onClick={refresh} disabled={loading}>
               <RefreshCw className="h-4 w-4" />
               刷新
@@ -236,13 +236,13 @@ export function OrchestratorAgentWorkbench() {
           </CardHeader>
           <CardContent className="space-y-3">
             <ChainHandoffNotice payload={chain.payload} error={chain.error} />
-            {error ? <div className="rounded-md border border-danger/30 bg-red-50 px-3 py-2 text-sm font-semibold text-danger">{error}</div> : null}
+            {error ? <div className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm font-semibold text-danger">{error}</div> : null}
             <label className="block text-xs font-bold text-muted">
               目标
               <textarea
                 value={goal}
                 onChange={(event) => setGoal(event.target.value)}
-                className="mt-1 min-h-28 w-full rounded-md border border-border bg-white px-3 py-2 text-sm font-semibold text-foreground outline-none ring-brand focus:ring-2"
+                className="mt-1 min-h-28 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm font-semibold text-foreground outline-none ring-brand focus:ring-2"
               />
             </label>
             <div className="grid grid-cols-2 gap-2">
@@ -251,7 +251,7 @@ export function OrchestratorAgentWorkbench() {
                 <input
                   value={marketplace}
                   onChange={(event) => setMarketplace(event.target.value)}
-                  className="mt-1 w-full rounded-md border border-border bg-white px-3 py-2 text-sm font-semibold text-foreground outline-none ring-brand focus:ring-2"
+                  className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm font-semibold text-foreground outline-none ring-brand focus:ring-2"
                 />
               </label>
               <label className="block text-xs font-bold text-muted">
@@ -259,7 +259,7 @@ export function OrchestratorAgentWorkbench() {
                 <input
                   value={category}
                   onChange={(event) => setCategory(event.target.value)}
-                  className="mt-1 w-full rounded-md border border-border bg-white px-3 py-2 text-sm font-semibold text-foreground outline-none ring-brand focus:ring-2"
+                  className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm font-semibold text-foreground outline-none ring-brand focus:ring-2"
                 />
               </label>
               <label className="block text-xs font-bold text-muted">
@@ -267,7 +267,7 @@ export function OrchestratorAgentWorkbench() {
                 <input
                   value={sku}
                   onChange={(event) => setSku(event.target.value)}
-                  className="mt-1 w-full rounded-md border border-border bg-white px-3 py-2 text-sm font-semibold text-foreground outline-none ring-brand focus:ring-2"
+                  className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm font-semibold text-foreground outline-none ring-brand focus:ring-2"
                 />
               </label>
               <label className="block text-xs font-bold text-muted">
@@ -275,7 +275,7 @@ export function OrchestratorAgentWorkbench() {
                 <input
                   value={asin}
                   onChange={(event) => setAsin(event.target.value)}
-                  className="mt-1 w-full rounded-md border border-border bg-white px-3 py-2 text-sm font-semibold text-foreground outline-none ring-brand focus:ring-2"
+                  className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm font-semibold text-foreground outline-none ring-brand focus:ring-2"
                 />
               </label>
             </div>
@@ -297,7 +297,7 @@ export function OrchestratorAgentWorkbench() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Agent 链接</CardTitle>
+            <CardTitle className="text-section">Agent 链接</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-2">
             {["market", "product", "supplier", "listing", "ppc"].map((agentId) => (
@@ -310,21 +310,18 @@ export function OrchestratorAgentWorkbench() {
             ))}
           </CardContent>
         </Card>
-      </div>
-
-      <div className="space-y-4">
-        <section className="grid gap-3 md:grid-cols-4">
+      </div>} kpis={<section className="grid gap-3 md:grid-cols-4">
           <MetricCard icon={<GitBranch className="h-5 w-5 text-brand" />} value={plan?.stages.length ?? 0} label="阶段" />
           <MetricCard icon={<FileText className="h-5 w-5 text-brand" />} value={handoffs.length} label="交接" />
           <MetricCard icon={<ShieldAlert className="h-5 w-5 text-brand" />} value={approvals.length} label="审批" />
           <MetricCard icon={<CheckCircle2 className="h-5 w-5 text-brand" />} value={toolCalls.length} label="工具调用" />
-        </section>
+        </section>} main={<div className="space-y-[var(--gap-section)]">
 
         <Card>
           <CardHeader>
             <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <CardTitle>商业链路</CardTitle>
+                <CardTitle className="text-section">商业链路</CardTitle>
                 <p className="mt-1 text-xs font-medium text-muted">{plan?.planId ?? "运行编排器以生成阶段计划。"}</p>
               </div>
               {runOutput ? <Badge tone={statusTone(lastRun?.execution.status ?? currentExecution?.status)}>{lastRun?.execution.status ?? currentExecution?.status ?? "READY"}</Badge> : null}
@@ -355,7 +352,7 @@ export function OrchestratorAgentWorkbench() {
 
         <Card>
           <CardHeader>
-            <CardTitle>交接</CardTitle>
+            <CardTitle className="text-section">交接</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {handoffs.length ? handoffs.map((handoff) => <HandoffRow key={`${handoff.from}-${handoff.to}`} handoff={handoff} onOpen={() => openHandoff(handoff)} />) : (
@@ -367,23 +364,23 @@ export function OrchestratorAgentWorkbench() {
         </Card>
 
         {runOutput?.executionRefs?.length ? <Card>
-          <CardHeader><CardTitle>链路执行</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-section">链路执行</CardTitle></CardHeader>
           <CardContent className="flex flex-wrap gap-2">
             {runOutput.executionRefs.map((ref) => <PrefetchLink key={ref.executionId} href={`/agents/${ref.stage === "launch" ? "orchestrator" : ref.stage}?executionId=${encodeURIComponent(ref.executionId)}`} className="rounded border border-border px-3 py-2 text-sm text-brand">{stageLabels[ref.stage] ?? "编排"} · {ref.executionId}</PrefetchLink>)}
           </CardContent>
         </Card> : null}
 
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="grid gap-[var(--gap-section)] xl:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle>执行轨迹</CardTitle>
+              <CardTitle className="text-section">执行轨迹</CardTitle>
             </CardHeader>
             <CardContent className="max-h-[420px] space-y-2 overflow-y-auto">
               {traces.length ? traces.map((trace) => (
                 <div key={trace.id} className="rounded-md border border-border p-3">
                   <div className="flex items-center justify-between gap-2">
                     <Badge tone="gray">{trace.type}</Badge>
-                    <span className="text-[11px] font-semibold text-muted">{formatDate(trace.createdAt)}</span>
+                    <span className="text-label font-semibold text-muted">{formatDate(trace.createdAt)}</span>
                   </div>
                   <div className="mt-2 text-sm font-semibold text-foreground">{trace.message}</div>
                 </div>
@@ -393,7 +390,7 @@ export function OrchestratorAgentWorkbench() {
 
           <Card>
             <CardHeader>
-              <CardTitle>工具调用</CardTitle>
+              <CardTitle className="text-section">工具调用</CardTitle>
             </CardHeader>
             <CardContent className="max-h-[420px] space-y-2 overflow-y-auto">
               {toolCalls.length ? toolCalls.map((toolCall) => (
@@ -408,8 +405,7 @@ export function OrchestratorAgentWorkbench() {
             </CardContent>
           </Card>
         </div>
-      </div>
-    </div>
+      </div>} />
   );
 }
 
@@ -430,7 +426,7 @@ function MetricCard({ icon, value, label }: { icon: ReactNode; value: number | s
 function StageNode({ stage, last }: { stage: OrchestratorStage; last: boolean }) {
   return (
     <>
-      <div className="min-h-[128px] w-[132px] rounded-md border border-border bg-white p-3">
+      <div className="min-h-[128px] w-[132px] rounded-md border border-border bg-surface p-3">
         <div className="text-sm font-black text-foreground">{stageLabels[stage.id]}</div>
         <div className="mt-2">
           <Badge tone={statusTone(stage.status)}>{stage.status}</Badge>

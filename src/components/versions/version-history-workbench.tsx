@@ -2,9 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { RotateCcw, Search } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { StatusPill } from "@/components/ui/status-pill";
+import { Toolbar, controlClassName } from "@/components/ui/toolbar";
+import { ListPageTemplate } from "@/components/templates/page-templates";
+import { cn } from "@/lib/utils";
 
 type VersionRecord = {
   id: string;
@@ -38,6 +42,8 @@ const entityTypes = [
   { value: "import_job", label: "导入任务" },
   { value: "export_record", label: "导出记录" },
 ];
+
+const entityTypeLabels = new Map(entityTypes.filter((item) => item.value).map((item) => [item.value, item.label]));
 
 const restorableEntityTypes = new Set([
   "ai_model_setting",
@@ -131,99 +137,152 @@ export function VersionHistoryWorkbench() {
     }
   }
 
-  return (
-    <Card>
-      <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <CardTitle>版本历史</CardTitle>
-          <p className="mt-1 text-xs font-medium text-muted">按当前工作区记录产品、Listing、PPC 草稿和规则配置的改动。</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={entityType}
-            onChange={(event) => setEntityType(event.target.value)}
-            className="h-9 rounded-md border border-border bg-white px-3 text-xs font-semibold text-foreground outline-none"
+  const columns: DataTableColumn<VersionRecord>[] = [
+    {
+      key: "entity",
+      header: "对象",
+      width: 288,
+      render: (version) => (
+        <>
+          <span className="block truncate font-semibold text-foreground" title={version.entityId}>
+            {version.entityId}
+          </span>
+          <span className="mt-0.5 block truncate text-xs text-muted">
+            {entityTypeLabels.get(version.entityType) ?? version.entityType}
+          </span>
+        </>
+      ),
+    },
+    {
+      key: "version",
+      header: "版本",
+      width: 84,
+      render: (version) => (
+        <StatusPill tone="info" className="metric-tabular">
+          v{version.version}
+        </StatusPill>
+      ),
+    },
+    {
+      key: "action",
+      header: "动作",
+      width: 204,
+      render: (version) => (
+        <span className="block break-all text-xs leading-4 text-muted" title={version.action}>
+          {version.action}
+        </span>
+      ),
+    },
+    {
+      key: "summary",
+      header: "说明",
+      width: 336,
+      render: (version) => (
+        <span className="block truncate text-sm text-muted" title={version.summary ?? undefined}>
+          {version.summary || "—"}
+        </span>
+      ),
+    },
+    {
+      key: "created",
+      header: "时间",
+      width: 190,
+      render: (version) => (
+        <span className="block truncate text-xs text-muted metric-tabular">{formatDate(version.createdAt)}</span>
+      ),
+    },
+    {
+      key: "actions",
+      header: "操作",
+      width: 120,
+      align: "right",
+      render: (version) => {
+        const restorable = restorableEntityTypes.has(version.entityType);
+
+        return (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="whitespace-nowrap"
+            disabled={restoringId === version.id || !restorable}
+            onClick={() => restoreVersion(version.id)}
           >
-            {entityTypes.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <input
-            value={entityId}
-            onChange={(event) => setEntityId(event.target.value)}
-            className="h-9 w-52 rounded-md border border-border px-3 text-xs font-semibold outline-none focus:border-brand"
-            placeholder="SKU / 实体 ID"
-          />
-          <Button type="button" size="sm" variant="secondary" onClick={submitSearch}>
-            <Search className="h-4 w-4" />
-            查询
+            <RotateCcw className="h-3.5 w-3.5" />
+            {restorable ? "恢复" : "审计"}
           </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {error ? <div className="rounded-md border border-danger/30 bg-red-50 px-3 py-2 text-sm font-semibold text-danger">{error}</div> : null}
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="min-w-full divide-y divide-border text-sm">
-            <thead className="bg-surface-muted text-xs font-bold text-muted">
-              <tr>
-                <th className="px-3 py-2 text-left">对象</th>
-                <th className="px-3 py-2 text-left">版本</th>
-                <th className="px-3 py-2 text-left">动作</th>
-                <th className="px-3 py-2 text-left">说明</th>
-                <th className="px-3 py-2 text-left">时间</th>
-                <th className="px-3 py-2 text-right">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border bg-white">
-              {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-sm font-semibold text-muted">加载中...</td>
-                </tr>
-              ) : versions.length ? (
-                versions.map((version) => (
-                  <tr key={version.id}>
-                    <td className="px-3 py-2">
-                      <div className="font-semibold text-foreground">{version.entityId}</div>
-                      <div className="text-xs text-muted">{version.entityType}</div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <Badge tone="blue">v{version.version}</Badge>
-                    </td>
-                    <td className="px-3 py-2 text-xs font-semibold text-muted">{version.action}</td>
-                    <td className="max-w-md px-3 py-2 text-xs font-medium text-muted">{version.summary || "无说明"}</td>
-                    <td className="px-3 py-2 text-xs font-semibold text-muted">{formatDate(version.createdAt)}</td>
-                    <td className="px-3 py-2 text-right">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        disabled={restoringId === version.id || !restorableEntityTypes.has(version.entityType)}
-                        onClick={() => restoreVersion(version.id)}
-                      >
-                        <RotateCcw className="h-4 w-4" />
-                        {restorableEntityTypes.has(version.entityType) ? "恢复" : "审计"}
-                      </Button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-sm font-semibold text-muted">暂无版本记录</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="flex items-center justify-between text-xs font-semibold text-muted">
-          <span>共 {pagination.total} 条，第 {pagination.page} / {pagination.pageCount} 页</span>
+        );
+      },
+    },
+  ];
+
+  return (
+    <ListPageTemplate
+      header={error ? <Alert tone="danger">{error}</Alert> : null}
+      filters={<Toolbar>
+        <select
+          value={entityType}
+          onChange={(event) => setEntityType(event.target.value)}
+          aria-label="对象类型筛选"
+          className={cn(controlClassName, "w-40")}
+        >
+          {entityTypes.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <input
+          value={entityId}
+          onChange={(event) => setEntityId(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") submitSearch();
+          }}
+          aria-label="按 SKU 或实体 ID 查询"
+          className={cn(controlClassName, "w-64")}
+          placeholder="SKU / 实体 ID"
+        />
+        <Button type="button" size="sm" variant="primary" onClick={submitSearch}>
+          <Search className="h-4 w-4" />
+          查询
+        </Button>
+      </Toolbar>}
+
+      table={<div className="overflow-hidden rounded-lg border border-border bg-surface">
+        <DataTable
+          className="rounded-none border-0"
+          columns={columns}
+          rows={versions}
+          getRowKey={(version) => version.id}
+          loading={loading}
+          empty="当前范围没有版本记录。产品资料、Listing 与 PPC 草稿的每次改动都会留下版本。"
+        />
+      </div>}
+      pagination={<div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface px-4 py-2.5 text-xs text-muted">
+          <span className="metric-tabular">
+            共 {pagination.total.toLocaleString("zh-CN")} 条，第 {pagination.page} / {pagination.pageCount} 页
+          </span>
           <div className="flex gap-2">
-            <Button type="button" size="sm" variant="secondary" disabled={pagination.page <= 1 || loading} onClick={() => setQuery((current) => ({ ...current, page: current.page - 1 }))}>上一页</Button>
-            <Button type="button" size="sm" variant="secondary" disabled={pagination.page >= pagination.pageCount || loading} onClick={() => setQuery((current) => ({ ...current, page: current.page + 1 }))}>下一页</Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={pagination.page <= 1 || loading}
+              onClick={() => setQuery((current) => ({ ...current, page: current.page - 1 }))}
+            >
+              上一页
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={pagination.page >= pagination.pageCount || loading}
+              onClick={() => setQuery((current) => ({ ...current, page: current.page + 1 }))}
+            >
+              下一页
+            </Button>
           </div>
-        </div>
-      </CardContent>
-    </Card>
+        </div>}
+    />
   );
 }

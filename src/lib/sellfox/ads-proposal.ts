@@ -12,24 +12,32 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { mergeRestockDays, restockDailyRates, type RestockDay } from "@/lib/sellfox/restock";
+import { sellfoxDateAt } from "@/lib/sellfox/sync-contract";
 
 export type ProposalKind = "NO_CONVERSION" | "HIGH_ACOS" | "STOCKOUT_RISK" | "HIGH_POTENTIAL";
 
 export const THRESHOLDS = {
   windowDays: 14,
-  noConversion: { minClicks: 15, minSpend: 5, bidMultiplier: 0.7 },
-  highAcos: { acosPct: 50, minSpend: 20, bidMultiplier: 0.8 },
+  noConversion: { minClicks: 15, bidMultiplier: 0.7 },
+  highAcos: { acosPct: 50, bidMultiplier: 0.8 },
   stockoutRisk: { maxCoverDays: 7, minSpend7d: 5 },
   highPotential: { maxAcosPct: 20, minSpend: 15, minCoverDays: 21, bidMultiplier: 1.15 },
-  minCoverDaysForRaise: 21,
 } as const;
 
 type AggRow = {
-  storeId: string; targetingId: string; adGroupId: string; campaignId: string;
+  storeId: string; targetingId: string; adGroupId: string; campaignId: string; currency: string | null;
   targetingText: string | null; matchType: string | null; asin: string | null; msku: string | null;
   clicks: number; cost: number; adOrders: number; adSales: number; spend7d: number;
 };
+type SalesDayRow = { storeId: string; msku: string; date: string; quantity: number | null };
+type InventoryDayRow = { storeId: string; msku: string; date: string; quantity: number | null };
+type StockRow = { storeId: string; msku: string; fulfillable: number | null };
+type CoverageRow = { storeId: string; reportDate: string };
 type CoverRow = { storeId: string; msku: string; coverDays: number; onHand: number; dailyRate: number };
+const proposalThresholdsByCurrency: Record<string, { noConversionSpend: number; highAcosSpend: number; highPotentialSpend: number }> = {
+  USD: { noConversionSpend: 5, highAcosSpend: 20, highPotentialSpend: 15 },
+};
 
 export type GeneratedProposal = {
   storeId: string; asin: string; msku: string | null; kind: ProposalKind; action: string;
@@ -45,11 +53,13 @@ function entityTypeOf(row: AggRow) {
 
 function toProposal(row: AggRow, cover: CoverRow | undefined, kind: ProposalKind): GeneratedProposal | null {
   const acosPct = row.adSales > 0 ? (row.cost / row.adSales) * 100 : null;
+  const amount = `${row.currency ?? ""} ${row.cost.toFixed(2)}`.trim();
   const basis = {
     windowDays: THRESHOLDS.windowDays,
     clicks: row.clicks, cost: Number(row.cost.toFixed(2)), adOrders: row.adOrders, adSales: Number(row.adSales.toFixed(2)),
     acosPct: acosPct == null ? null : Number(acosPct.toFixed(1)),
-    spend7d: Number(row.spend7d.toFixed(2)),
+    spend7d: row.spend7d == null ? null : Number(row.spend7d.toFixed(2)),
+    currency: row.currency,
     coverDays: cover ? Number(cover.coverDays.toFixed(1)) : null,
     onHand: cover?.onHand ?? null, dailyRate: cover ? Number(cover.dailyRate.toFixed(2)) : null,
     targetingText: row.targetingText, matchType: row.matchType,
@@ -59,12 +69,12 @@ function toProposal(row: AggRow, cover: CoverRow | undefined, kind: ProposalKind
   if (kind === "NO_CONVERSION") {
     return { storeId: row.storeId, asin, msku, kind, action: "LOWER_BID", entityType: entityTypeOf(row), externalId: row.targetingId, label: row.targetingText,
       current: null, proposed: { bidMultiplier: THRESHOLDS.noConversion.bidMultiplier }, basis,
-      expectedImpact: `点击 ${row.clicks} 次 0 转化、花费 $${row.cost.toFixed(2)}；降价 30% 预期以少量曝光损失止损。` };
+      expectedImpact: `点击 ${row.clicks} 次 0 转化、花费 ${amount}；降价 30% 预期以少量曝光损失止损。` };
   }
   if (kind === "HIGH_ACOS") {
     return { storeId: row.storeId, asin, msku, kind, action: "LOWER_BID", entityType: entityTypeOf(row), externalId: row.targetingId, label: row.targetingText,
       current: null, proposed: { bidMultiplier: THRESHOLDS.highAcos.bidMultiplier }, basis,
-      expectedImpact: `ACOS ${acosPct?.toFixed(0)}%（花费 $${row.cost.toFixed(2)}）；降价 20% 预期在不显著丢量的情况下压 ACOS。` };
+      expectedImpact: `ACOS ${acosPct?.toFixed(0)}%（花费 ${amount}）；降价 20% 预期在不显著丢量的情况下压 ACOS。` };
   }
   if (kind === "STOCKOUT_RISK") {
     return { storeId: row.storeId, asin, msku, kind, action: "PAUSE", entityType: entityTypeOf(row), externalId: row.targetingId, label: row.targetingText,
@@ -82,57 +92,101 @@ function toProposal(row: AggRow, cover: CoverRow | undefined, kind: ProposalKind
 export async function generateAdsProposals(organizationId: string, workspaceId: string, options?: { days?: number }) {
   const windowDays = options?.days ?? THRESHOLDS.windowDays;
   const from = new Date(Date.now() - windowDays * 86_400_000).toISOString().slice(0, 10);
-  const [agg, covers] = await Promise.all([
-    // 每关键词/投放 14 天聚合 + 近 7 天花费
+  const [agg, salesDays, inventoryDays, stocks, coverage] = await Promise.all([
     prisma.$queryRaw<AggRow[]>`
-      select "storeId", "targetingId", max("adGroupId") as "adGroupId", max("campaignId") as "campaignId",
-             max("targetingText") as "targetingText", max("matchType") as "matchType",
-             max("asin") as asin, max("msku") as msku,
-             sum(clicks)::int as clicks, sum(cost) as cost, sum("adOrders")::int as "adOrders", sum("adSales") as "adSales",
-             coalesce(sum(cost) filter (where "reportDate"::date > current_date - 7), 0) as "spend7d"
-      from "SellfoxAdsTargetingDaily"
-      where "organizationId" = ${organizationId} and "workspaceId" = ${workspaceId} and "reportDate"::date >= ${from}::date
-        and "adType" = 'sp'
-      group by 1, 2`,
-    // 补货口径（与 restock.ts 相同的 7/14/30 加权）
-    prisma.$queryRaw<CoverRow[]>`
-      with rates as (
-        select "storeId", "msku",
-          (0.5 * avg(qty) filter (where d::date >= current_date - 7)
-         + 0.3 * avg(qty) filter (where d::date between current_date - 14 and current_date - 8)
-         + 0.2 * avg(qty) filter (where d::date between current_date - 30 and current_date - 15)) as daily_rate
-        from (
-          select "storeId", "msku", "reportDate" as d, sum(quantity) as qty
-          from "SellfoxSalesDailySnapshot"
-          where "organizationId" = ${organizationId} and "workspaceId" = ${workspaceId} and "reportDate"::date > current_date - 32
-          group by 1, 2, 3
-        ) s
-        where qty is not null
-        group by 1, 2
-      ),
-      stock as (
-        select "storeId", "msku", sum(quantity) as on_hand
+      select a."storeId", a."targetingId", max(a."adGroupId") as "adGroupId", max(a."campaignId") as "campaignId",
+             max(a."targetingText") as "targetingText", max(a."matchType") as "matchType", max(a.currency) as currency,
+             max(a.asin) as asin, max(a."msku") as msku,
+             sum(a.clicks)::int as clicks, sum(a.cost) as cost, sum(a."adOrders")::int as "adOrders", sum(a."adSales") as "adSales",
+             sum(a.cost) filter (where a."reportDate"::date > current_date - 7) as "spend7d"
+      from "SellfoxAdsTargetingDaily" a
+      where a."organizationId" = ${organizationId} and a."workspaceId" = ${workspaceId} and a."reportDate"::date >= ${from}::date
+        and a."adType" = 'sp'
+      group by a."storeId", a."targetingId", a.currency`,
+    prisma.$queryRaw<SalesDayRow[]>`
+      select "storeId", "msku", "reportDate"::date::text as date,
+        case when bool_and(complete) and count(quantity) = count(*) then sum(quantity) end as quantity
+      from "sellfox_sales_daily"
+      where "organizationId" = ${organizationId} and "workspaceId" = ${workspaceId}
+        and "reportDate"::date > current_date - 32 and "reportDate"::date <= current_date - 2
+      group by 1, 2, 3`,
+    prisma.$queryRaw<InventoryDayRow[]>`
+      with latest as (
+        select "storeId", "reportDate", max("capturedAt") as "capturedAt"
         from "SellfoxFbaInventorySnapshot"
         where "organizationId" = ${organizationId} and "workspaceId" = ${workspaceId}
-          and ("reportDate", id) in (
-            select distinct on ("storeId", "msku") "reportDate", id from "SellfoxFbaInventorySnapshot"
-            where "organizationId" = ${organizationId} and "workspaceId" = ${workspaceId}
-            order by "storeId", "msku", "reportDate" desc
-          )
+          and "reportDate" > to_char(current_date - 32, 'YYYY-MM-DD') and "reportDate" <= to_char(current_date - 2, 'YYYY-MM-DD')
         group by 1, 2
       )
-      select r."storeId", r."msku",
-        case when r.daily_rate > 0 then (st.on_hand / r.daily_rate) else null end as "coverDays",
-        st.on_hand, r.daily_rate
-      from rates r join stock st on st."storeId" = r."storeId" and st."msku" = r."msku"
-      where r.daily_rate > 0`,
+      select i."storeId", i.msku, i."reportDate"::date::text as date,
+        case when count(i.quantity) = count(*) then sum(i.quantity)::double precision else null end as quantity
+      from "SellfoxFbaInventorySnapshot" i
+      join latest l on l."storeId" = i."storeId" and l."reportDate" = i."reportDate" and l."capturedAt" = i."capturedAt"
+      where i."organizationId" = ${organizationId} and i."workspaceId" = ${workspaceId}
+      group by 1, 2, 3`,
+    prisma.$queryRaw<StockRow[]>`
+      select l."storeId", l.msku, sum(l.fulfillable)::double precision as fulfillable
+      from sellfox_listing_current l
+      where l."organizationId" = ${organizationId} and l."workspaceId" = ${workspaceId}
+      group by 1, 2`,
+    prisma.$queryRaw<CoverageRow[]>`
+      select c."storeId", c."reportDate"
+      from "SellfoxSalesDayCoverage" c
+      join "SellfoxStore" s on s.id = c."storeId"
+      where s."organizationId" = ${organizationId} and s."workspaceId" = ${workspaceId}
+        and c."reportDate" > to_char(current_date - 32, 'YYYY-MM-DD')
+        and c."reportDate" <= to_char(current_date - 2, 'YYYY-MM-DD')`,
   ]);
 
-  const coverByKey = new Map(covers.map(c => [`${c.storeId}|${c.msku}`, c]));
+  const salesByKey = new Map<string, SalesDayRow[]>();
+  for (const row of salesDays) {
+    const key = `${row.storeId}|${row.msku}`;
+    salesByKey.set(key, [...(salesByKey.get(key) ?? []), row]);
+  }
+  const inventoryByKey = new Map<string, InventoryDayRow[]>();
+  for (const row of inventoryDays) {
+    const key = `${row.storeId}|${row.msku}`;
+    inventoryByKey.set(key, [...(inventoryByKey.get(key) ?? []), row]);
+  }
+  const stockByKey = new Map(stocks.map(row => [`${row.storeId}|${row.msku}`, row.fulfillable]));
+  const coveredDatesByStore = new Map<string, Set<string>>();
+  for (const row of coverage) {
+    const dates = coveredDatesByStore.get(row.storeId) ?? new Set<string>();
+    dates.add(row.reportDate);
+    coveredDatesByStore.set(row.storeId, dates);
+  }
+  const coverByKey = new Map<string, CoverRow>();
+  for (const [key, rows] of salesByKey) {
+    const inventoryByDate = new Map((inventoryByKey.get(key) ?? []).map(day => [day.date, day.quantity]));
+    const merged = mergeRestockDays(rows.map(row => {
+      const inventory = inventoryByDate.get(row.date);
+      return { date: row.date, quantity: row.quantity, stockout: inventory == null ? undefined : inventory === 0 };
+    }));
+    const byDate = new Map(merged.map(day => [day.date, day]));
+    const today = sellfoxDateAt(new Date());
+    const dayMs = 86_400_000;
+    const requiredDates = Array.from({ length: 30 }, (_, index) => new Date(`${today}T00:00:00+08:00`).getTime() - (31 - index) * dayMs)
+      .map(timestamp => new Date(timestamp).toISOString().slice(0, 10));
+    const coveredDates = coveredDatesByStore.get(key.slice(0, key.indexOf("|")));
+    if (!coveredDates || requiredDates.some(date => !coveredDates.has(date))) continue;
+    const completeWindow: RestockDay[] = requiredDates.map(date => byDate.get(date) ?? { date, quantity: null });
+    const rates = restockDailyRates(completeWindow, today);
+    const onHand = stockByKey.get(key);
+    if (onHand == null || rates.weighted == null || rates.weighted <= 0) continue;
+    const separator = key.indexOf("|");
+    const storeId = key.slice(0, separator);
+    const msku = key.slice(separator + 1);
+    coverByKey.set(key, { storeId, msku, coverDays: onHand / rates.weighted, onHand, dailyRate: rates.weighted });
+  }
   const candidates: GeneratedProposal[] = [];
   for (const row of agg) {
     if (row.clicks <= 0 && row.cost <= 0) continue;
-    const coverKey = `${row.storeId}|${row.msku ?? row.asin ?? ""}`;
+    const metrics = [row.clicks, row.cost, row.adOrders, row.adSales, row.spend7d];
+    if (metrics.some(value => !Number.isFinite(value) || value < 0)) continue;
+    const currency = (row.currency ?? "").trim().toUpperCase();
+    const threshold = proposalThresholdsByCurrency[currency];
+    if (!threshold) continue;
+    const coverKey = `${row.storeId}|${row.msku ?? ""}`;
     const cover = coverByKey.get(coverKey);
     const acosPct = row.adSales > 0 ? (row.cost / row.adSales) * 100 : null;
     // 优先级：断货 > 止血 > 压ACOS > 抢量（同一关键词只出一条最优先方案）。
@@ -141,18 +195,18 @@ export async function generateAdsProposals(organizationId: string, workspaceId: 
       if (proposal) candidates.push(proposal);
       continue;
     }
-    if (row.clicks >= THRESHOLDS.noConversion.minClicks && row.adOrders === 0 && row.cost >= THRESHOLDS.noConversion.minSpend) {
+    if (row.clicks >= THRESHOLDS.noConversion.minClicks && row.adOrders === 0 && row.cost >= threshold.noConversionSpend) {
       const proposal = toProposal(row, cover, "NO_CONVERSION");
       if (proposal) candidates.push(proposal);
       continue;
     }
-    if (acosPct != null && acosPct >= THRESHOLDS.highAcos.acosPct && row.cost >= THRESHOLDS.highAcos.minSpend) {
+    if (acosPct != null && acosPct >= THRESHOLDS.highAcos.acosPct && row.cost >= threshold.highAcosSpend) {
       const proposal = toProposal(row, cover, "HIGH_ACOS");
       if (proposal) candidates.push(proposal);
       continue;
     }
-    if (acosPct != null && acosPct <= THRESHOLDS.highPotential.maxAcosPct && row.cost >= THRESHOLDS.highPotential.minSpend
-      && (!cover || cover.coverDays == null || cover.coverDays >= THRESHOLDS.highPotential.minCoverDays)) {
+    if (acosPct != null && acosPct <= THRESHOLDS.highPotential.maxAcosPct && row.cost >= threshold.highPotentialSpend
+      && cover != null && cover.coverDays >= THRESHOLDS.highPotential.minCoverDays) {
       const proposal = toProposal(row, cover, "HIGH_POTENTIAL");
       if (proposal) candidates.push(proposal);
     }
@@ -161,16 +215,14 @@ export async function generateAdsProposals(organizationId: string, workspaceId: 
   let created = 0, updated = 0;
   for (const candidate of candidates) {
     const existing = await prisma.sellfoxAdsProposal.findUnique({
-      where: { organizationId_workspaceId_externalId_kind: { organizationId, workspaceId, externalId: candidate.externalId, kind: candidate.kind } },
+      where: { organizationId_workspaceId_storeId_entityType_externalId_kind: { organizationId, workspaceId, storeId: candidate.storeId, entityType: candidate.entityType, externalId: candidate.externalId, kind: candidate.kind } },
       select: { id: true, status: true, basis: true },
     });
     const basisChanged = !existing || JSON.stringify(existing.basis) !== JSON.stringify(candidate.basis);
     if (existing && !basisChanged && existing.status === "PENDING") continue; // 无变化不刷新
     const data = {
       storeId: candidate.storeId, asin: candidate.asin, msku: candidate.msku, action: candidate.action,
-      // Prisma 的 JSON 可空列不接受裸 null，须显式写 JsonNull（对应 SQL JSON null）。
-      entityType: candidate.entityType, externalId: candidate.externalId, label: candidate.label,
-      current: candidate.current ?? Prisma.JsonNull,
+      entityType: candidate.entityType, externalId: candidate.externalId, label: candidate.label, current: candidate.current ?? Prisma.DbNull,
       proposed: candidate.proposed, basis: candidate.basis, expectedImpact: candidate.expectedImpact,
     };
     if (existing) {

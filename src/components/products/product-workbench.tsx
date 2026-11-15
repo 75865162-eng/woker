@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAppShellUser } from "@/components/app-shell/app-shell-context";
 import { useSearchParams } from "next/navigation";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
+import { useDraftState } from "@/lib/workspace/use-draft-state";
 import { roleCanPerformAction } from "@/lib/accounts/permissions";
 import { newProductStatusOptions, productStatusOptions } from "@/data/products";
 import {
@@ -117,7 +118,7 @@ const productSummaryResponseCache = new Map<string, { cachedAt: number; data: { 
 const productSummaryInflight = new Map<string, Promise<{ summary?: ProductListSummary; error?: string }>>();
 const REQUEST_CACHE_TTL_MS = 30_000;
 const compactToolbarButtonClass =
-  "shrink-0 whitespace-nowrap max-sm:h-7 max-sm:px-2 max-sm:text-[10px] max-sm:leading-none max-sm:gap-1";
+  "shrink-0 whitespace-nowrap max-sm:h-7 max-sm:px-2 max-sm:text-label max-sm:leading-none max-sm:gap-1";
 type ProductListSummary = {
   total: number;
   developing: number;
@@ -150,13 +151,13 @@ const emptyProductListSummary: ProductListSummary = {
 
 function getProductExportNoticeClass(tone: ProductExportNotice["tone"]) {
   if (tone === "success") {
-    return "border-green-200 bg-green-50 text-green-700";
+    return "border-success/30 bg-success-soft text-success-ink";
   }
   if (tone === "error") {
-    return "border-red-200 bg-red-50 text-red-700";
+    return "border-danger/30 bg-danger-soft text-danger-ink";
   }
 
-  return "border-blue-200 bg-blue-50 text-blue-700";
+  return "border-info/30 bg-info-soft text-info-ink";
 }
 
 function normalizeProductFilters(filters?: Partial<ProductFilters> | null): ProductFilters {
@@ -352,7 +353,7 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
     (hasServerInitialData ? (initialData?.products as unknown as Product[]) : initialCachedWorkbench?.products ?? []).map(stripAmazonProductObservations)
   ));
   const [, setTrialProducts] = useState<TrialProductDraft[]>([]);
-  const [filters, setFilters] = useState<ProductFilters>(() => (
+  const [filters, setFilters] = useDraftState<ProductFilters>("products:filters", (
     hasServerInitialData ? normalizeProductFilters() : normalizeProductFilters(initialCachedWorkbench?.filters)
   ));
   const [activeProduct, setActiveProduct] = useState<Product | null>(null);
@@ -363,9 +364,9 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
   const [isTrialEditorOpen, setIsTrialEditorOpen] = useState(false);
   const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
   const [versionProduct, setVersionProduct] = useState<Product | null>(null);
-  const [page, setPage] = useState(() => (hasServerInitialData ? initialData?.pagination.page : initialCachedWorkbench?.page) ?? 1);
-  const [pageSize, setPageSize] = useState(() => (hasServerInitialData ? initialData?.pagination.pageSize : initialCachedWorkbench?.pageSize) ?? 20);
-  const [sort, setSort] = useState<ProductListSort>(defaultProductListSort);
+  const [page, setPage] = useDraftState("products:page", (hasServerInitialData ? initialData?.pagination.page : initialCachedWorkbench?.page) ?? 1);
+  const [pageSize, setPageSize] = useDraftState("products:page-size", (hasServerInitialData ? initialData?.pagination.pageSize : initialCachedWorkbench?.pageSize) ?? 20);
+  const [sort, setSort] = useDraftState<ProductListSort>("products:sort", defaultProductListSort);
   const [productsTotalCount, setProductsTotalCount] = useState(() => (
     hasServerInitialData ? initialData?.pagination.total : initialCachedWorkbench?.totalCount
   ) ?? 0);
@@ -805,7 +806,7 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
     if (page > pageCount) {
       setPage(pageCount);
     }
-  }, [page, pageCount]);
+  }, [page, pageCount, setPage]);
 
   function applyFilters(nextFilters: ProductFilters) {
     setPage(1);
@@ -870,7 +871,29 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
     void loadProductDetail(workspaceId, sku.trim()).catch(() => undefined);
   }, [loadProductDetail]);
 
-  async function openProduct(sku: string) {
+
+  const alignProductDetail = useCallback(async (workspaceId: string, sku: string) => {
+    setDetailError("");
+    const requestId = ++productDetailRequestSeq.current;
+    setDetailReady(false);
+    try {
+      const product = await loadProductDetail(workspaceId, sku);
+      if (requestId !== productDetailRequestSeq.current) {
+        return;
+      }
+      setActiveProduct(product);
+      setDetailReady(true);
+    } catch (error) {
+      if (requestId !== productDetailRequestSeq.current) {
+        return;
+      }
+      const message = error instanceof Error ? error.message : "商品详情读取失败";
+      setDetailError(message);
+      setDetailReady(false);
+    }
+  }, [loadProductDetail]);
+
+  const openProduct = useCallback(async (sku: string) => {
     setImportedEditorDraft(null);
     const normalizedSku = sku.trim();
     const workspaceId = readCurrentWorkspaceId();
@@ -887,7 +910,7 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
     setIsEditorOpen(true);
 
     await alignProductDetail(workspaceId, normalizedSku);
-  }
+  }, [alignProductDetail]);
 
   useEffect(() => {
     const sku = searchParams.get("sku")?.trim() ?? "";
@@ -918,28 +941,7 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
       window.removeEventListener(workspaceScopeChangedEventName, openWhenScopeReady);
       window.clearTimeout(timeout);
     };
-  }, [productsLoading, searchParams]);
-
-  async function alignProductDetail(workspaceId: string, sku: string) {
-    setDetailError("");
-    const requestId = ++productDetailRequestSeq.current;
-    setDetailReady(false);
-    try {
-      const product = await loadProductDetail(workspaceId, sku);
-      if (requestId !== productDetailRequestSeq.current) {
-        return;
-      }
-      setActiveProduct(product);
-      setDetailReady(true);
-    } catch (error) {
-      if (requestId !== productDetailRequestSeq.current) {
-        return;
-      }
-      const message = error instanceof Error ? error.message : "商品详情读取失败";
-      setDetailError(message);
-      setDetailReady(false);
-    }
-  }
+  }, [openProduct, productsLoading, searchParams]);
 
   async function persistProduct(product: Product, workspaceId = readCurrentWorkspaceId()) {
     const response = await fetch("/api/products", {
@@ -1196,12 +1198,12 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
   return (
     <>
       <div className="space-y-5">
-        {deepLinkMessage ? <div role="status" className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">{deepLinkMessage}</div> : null}
+        {deepLinkMessage ? <div role="status" className="rounded-md border border-warning-ink/30 bg-warning-soft px-3 py-2 text-sm font-medium text-warning-ink">{deepLinkMessage}</div> : null}
         {productsError ? (
-          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{productsError}</div>
+          <div className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm font-semibold text-danger-ink">{productsError}</div>
         ) : null}
         {productsLoading && !products.length ? (
-          <div className="rounded-md border border-border bg-white px-4 py-3 text-sm font-semibold text-muted">正在从数据库读取商品数据...</div>
+          <div className="rounded-md border border-border bg-surface px-4 py-3 text-sm font-semibold text-muted">正在从数据库读取商品数据...</div>
         ) : null}
         {exportNotice ? (
           <div className={`flex flex-col gap-2 rounded-md border px-3 py-2 text-sm font-semibold sm:flex-row sm:items-center sm:justify-between ${getProductExportNoticeClass(exportNotice.tone)}`}>
@@ -1286,7 +1288,7 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
                       setActiveProduct(row => row ? stripAmazonProductObservations(row) : null);
                       setAmazonAccountId(event.target.value);
                     }}
-                    className="h-8 border border-border bg-white px-2"
+                    className="h-8 border border-border bg-surface px-2"
                   >
                     <option value="">{amazonAccounts.length === 1 ? "自动选择已分配账号" : "请选择账号"}</option>
                     {amazonAccounts.map(account => <option key={account.id} value={account.id}>{account.displayName || account.id}</option>)}
@@ -2130,7 +2132,7 @@ export function ProductEditor({
 
   return (
     <div className="fixed inset-0 z-30 bg-foreground/35 p-4 backdrop-blur-sm">
-      <div className="mx-auto flex h-full w-full max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg bg-white shadow-xl">
+      <div className="mx-auto flex h-full w-full max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg bg-surface shadow-xl">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
             <h2 className="text-lg font-bold text-foreground">{isEditing ? `商品详情 ${draft.sku}` : "新增商品"}</h2>
@@ -2223,7 +2225,7 @@ export function ProductEditor({
                       主 ASIN
                       <div className="flex items-end gap-2">
                         <input
-                          className="h-8 w-full max-w-[220px] rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none focus:border-brand"
+                          className="h-8 w-full max-w-[220px] rounded-md border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-brand"
                           value={draft.asin}
                           onChange={(event) => setField("asin", event.target.value)}
                         />
@@ -2248,7 +2250,7 @@ export function ProductEditor({
                       <label className="text-xs font-semibold text-muted">
                         状态
                         <select
-                          className="mt-1 h-10 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none focus:border-brand"
+                          className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-brand"
                           value={draft.status}
                           onChange={(event) => updateStatus(event.target.value as ProductStatus)}
                         >
@@ -2320,14 +2322,14 @@ export function ProductEditor({
                     </div>
                     {!canMarkWorkflowDone ? <p className="mt-2 text-xs text-muted">请先在“运营进度”里完成必填项，再标记业务流转完成。</p> : null}
                     {workflowOverdue ? (
-                      <div className="mt-3 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                      <div className="mt-3 flex items-center gap-2 rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-xs font-semibold text-danger-ink">
                         <Bell className="h-4 w-4" />
                         当前阶段已超时，负责人：{workflowAssignee || "未分配"}
                       </div>
                     ) : null}
                     <div className="mt-3 space-y-2">
                       {(draft.workflowHistory ?? []).slice(0, 5).map((event) => (
-                        <div key={event.id} className="rounded-md border border-border bg-white px-3 py-2 text-xs">
+                        <div key={event.id} className="rounded-md border border-border bg-surface px-3 py-2 text-xs">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <p className="font-bold text-foreground">{event.stageLabel}</p>
                             <span className="text-muted">{formatWorkflowDate(event.createdAt)}</span>
@@ -2340,7 +2342,7 @@ export function ProductEditor({
                         </div>
                       ))}
                       {(draft.workflowHistory ?? []).length === 0 ? (
-                        <div className="rounded-md border border-border bg-white px-3 py-2 text-xs text-muted">
+                        <div className="rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted">
                           暂无流程记录，保存或点击流转按钮后会生成操作时间和人物。
                         </div>
                       ) : null}
@@ -2502,7 +2504,7 @@ function SummaryTile({
 
   return (
     <button
-      className={`flex min-h-[82px] w-32 flex-col rounded-md border bg-white px-3 py-2.5 text-left shadow-sm transition-colors hover:border-brand hover:bg-surface-muted ${
+      className={`flex min-h-[82px] w-32 flex-col rounded-md border bg-surface px-3 py-2.5 text-left shadow-sm transition-colors hover:border-brand hover:bg-surface-muted ${
         active ? "border-brand ring-2 ring-brand/15" : "border-border"
       }`}
       onClick={onClick}
@@ -2565,7 +2567,7 @@ function Pagination({
         下一页
       </Button>
       <select
-        className="h-8 rounded-md border border-border bg-white px-2 text-xs font-semibold text-foreground"
+        className="h-8 rounded-md border border-border bg-surface px-2 text-xs font-semibold text-foreground"
         value={pageSize}
         onChange={(event) => onPageSizeChange(Number(event.target.value))}
       >

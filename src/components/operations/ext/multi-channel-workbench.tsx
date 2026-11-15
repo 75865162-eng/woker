@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { WorkbenchPageTemplate } from "@/components/templates/page-templates";
 import { Button } from "@/components/ui/button";
 import { Badge, Field, Kpis, Notice, Section, SelectField, Table, Tabs, extPost, money, statusLabel, today, useExt } from "./kit";
 
@@ -34,14 +35,12 @@ export function MultiChannelWorkbench() {
   const channelLabel = (value: string) => channels.find(item => item.value === value)?.label ?? value;
   const accountName = (id: string) => accounts.data?.items.find(row => row.id === id)?.name ?? id.slice(0, 8);
 
-  return <div className="space-y-6">
-    <Notice error={error || accounts.error || orders.error || ""} notice={notice} />
-    <Kpis items={[
+  return <WorkbenchPageTemplate context={<Notice error={error || accounts.error || orders.error || ""} notice={notice} />} kpis={<Kpis items={[
       { label: "渠道店铺", value: String(accounts.data?.items.filter(row => row.status === "ACTIVE").length ?? 0) },
       { label: "渠道订单", value: String(orders.data?.items.length ?? 0) },
       { label: "待发货", value: String(orders.data?.items.filter(row => row.status === "PENDING").length ?? 0), tone: "warn" },
       { label: "覆盖渠道", value: String(new Set((accounts.data?.items ?? []).map(row => row.channel)).size) },
-    ]} />
+    ]} />} main={<div className="space-y-6">
     <Tabs value={tab} onChange={value => setTab(value as "ACCOUNT" | "ORDER")} tabs={[{ id: "ACCOUNT", label: "渠道店铺", count: accounts.data?.items.length }, { id: "ORDER", label: "渠道订单", count: orders.data?.items.length }]} />
 
     {tab === "ACCOUNT" && <>
@@ -118,5 +117,5 @@ export function MultiChannelWorkbench() {
         </div>}
       </Section>
     </>}
-  </div>;
+  </div>} />;
 }

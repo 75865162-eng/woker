@@ -18,9 +18,12 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
+import { ListPageTemplate } from "@/components/templates/page-templates";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StandardDataTable } from "@/components/ui/table-variants";
+import { type DataTableColumn } from "@/components/ui/data-table";
 import { PointsQuickPanel, type PointsRow } from "@/components/accounts/points-quick-panel";
 import {
   permissionActions,
@@ -65,7 +68,7 @@ type Role = {
 
 const defaultRoleCatalog = buildDefaultRoleCatalog();
 const fieldClass =
-  "w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
+  "w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
 const teamMembersApiPath = "/api/accounts/team-members";
 const rolesApiPath = "/api/accounts/roles";
 const accountPageSize = 10;
@@ -718,7 +721,7 @@ export function AccountWorkbench({
   }
 
   return (
-    <div className="space-y-4">
+    <ListPageTemplate header={<div className="space-y-[var(--gap-section)]">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="inline-flex w-fit items-center gap-1 border-b border-border" role="tablist" aria-label="账号权限视图">
           {([ ["members", "成员"], ["roles", "角色与权限"] ] as const).map(([tab, label]) => (
@@ -754,30 +757,28 @@ export function AccountWorkbench({
         </div> : null}
       </div>
       {accountSaveError ? (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+        <div className="rounded-md border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-medium text-danger-ink">
           {accountSaveError}
         </div>
       ) : null}
       {accountImportMessage ? (
-        <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
+        <div className="rounded-md border border-success/30 bg-success-soft px-4 py-3 text-sm font-medium text-success-ink">
           {accountImportMessage}
         </div>
       ) : null}
-
-      {activeTab === "members" ? <>
-      <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
+      </div>} stats={activeTab === "members" ? <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <button className="text-left" onClick={() => { setQuery(""); setStatusFilter("all"); setRoleFilter("all"); setDepartmentFilter("all"); }} type="button"><MetricCard title="账号总数" value={visibleAccounts.length} note="清除筛选并查看全部" icon={UsersRound} tone="blue" /></button>
         <button className="text-left" onClick={() => { setQuery(""); setRoleFilter("all"); setDepartmentFilter("all"); setStatusFilter(statusFilter === "disabled" ? "all" : "disabled"); }} type="button"><MetricCard title="停用账号" value={disabledAccounts.length} note="点击筛选停用账号" icon={UserCog} tone="gray" /></button>
         <button className="text-left" onClick={() => setArchivedAccountsOpen(true)} type="button">
           <MetricCard title="归档" value={archivedAccounts.length} note="查看已归档员工" icon={Archive} tone="gray" />
         </button>
-      </section>
-
-      <section className="grid grid-cols-1 gap-4">
+      </section> : undefined} table={<div className="space-y-[var(--gap-section)]">
+      {activeTab === "members" ? <>
+      <section className="grid grid-cols-1 gap-[var(--gap-field)]">
         <Card>
           <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <CardTitle>同事账号列表</CardTitle>
+              <CardTitle className="text-section">同事账号列表</CardTitle>
               <p className="mt-1 text-sm text-muted">用于创建账号、修改资料、重置密码和调整角色。</p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -851,7 +852,7 @@ export function AccountWorkbench({
                       <td className="px-5 py-4">
                         {pointsByUser[account.id] ? (
                           <div>
-                            <p className={`text-sm font-bold ${pointsByUser[account.id].balance === 0 ? "text-red-600" : "text-foreground"}`}>
+                            <p className={`text-sm font-bold ${pointsByUser[account.id].balance === 0 ? "text-danger-ink" : "text-foreground"}`}>
                               {pointsByUser[account.id].balance}
                               <span className="ml-1 text-xs font-normal text-muted">/ {pointsByUser[account.id].totalQuota}</span>
                             </p>
@@ -859,7 +860,7 @@ export function AccountWorkbench({
                               <div className="h-full bg-brand" style={{ width: `${pointsUsagePercent(pointsByUser[account.id])}%` }} />
                             </div>
                             {pointsByUser[account.id].pendingRequests > 0 ? (
-                              <p className="mt-0.5 text-xs text-amber-600">待审批 {pointsByUser[account.id].pendingRequests}</p>
+                              <p className="mt-0.5 text-xs text-warning-ink">待审批 {pointsByUser[account.id].pendingRequests}</p>
                             ) : null}
                           </div>
                         ) : (
@@ -926,7 +927,7 @@ export function AccountWorkbench({
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 py-2.5">
                   <div>
-                    <CardTitle className="text-sm">角色权限</CardTitle>
+                    <CardTitle className="text-section">角色权限</CardTitle>
                     <p className="mt-0.5 text-xs text-muted">按角色维护模块权限，新建账号时直接分配角色。</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
@@ -945,7 +946,7 @@ export function AccountWorkbench({
                     <div
                       key={role.id}
                       className={`flex w-full items-start gap-2 rounded-md border px-2.5 py-2 transition ${
-                        activeRole?.id === role.id ? "border-brand bg-brand/5" : "border-border bg-white hover:bg-surface-muted"
+                        activeRole?.id === role.id ? "border-brand bg-brand/5" : "border-border bg-surface hover:bg-surface-muted"
                       }`}
                     >
                       <button
@@ -964,7 +965,7 @@ export function AccountWorkbench({
                       {roleManageMode ? (
                         <button
                           aria-label={`删除${role.name}`}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted"
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted transition hover:bg-danger-soft hover:text-danger-ink disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted"
                           disabled={role.memberCount > 0 || !canManageRole(role.id)}
                           onClick={() => deleteRole(role.id)}
                           title={role.memberCount > 0 ? "已有成员的角色不能删除" : "删除角色"}
@@ -980,7 +981,7 @@ export function AccountWorkbench({
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between px-4 py-3">
-                  <CardTitle className="text-sm">人员分布</CardTitle>
+                  <CardTitle className="text-section">人员分布</CardTitle>
                   <Badge tone="gray">按部门</Badge>
                 </CardHeader>
                 <CardContent className="space-y-2 p-4">
@@ -995,9 +996,9 @@ export function AccountWorkbench({
             </div>
 
             <Card className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:self-start lg:overflow-y-auto">
-                <CardHeader className="sticky top-0 z-10 flex flex-row items-center justify-between gap-2 border-b border-border bg-white px-3 py-2.5">
+                <CardHeader className="sticky top-0 z-10 flex flex-row items-center justify-between gap-2 border-b border-border bg-surface px-3 py-2.5">
                   <div>
-                    <CardTitle className="text-sm">权限管理</CardTitle>
+                    <CardTitle className="text-section">权限管理</CardTitle>
                     <p className="mt-0.5 text-xs text-muted">
                       {activeRole ? `${activeRole.name} 当前实际绑定 ${roleMemberCount} 个账号。` : "暂无可编辑角色。"}
                       {roleRevision ? ` 版本 ${roleRevision}` : ""}
@@ -1009,7 +1010,7 @@ export function AccountWorkbench({
                   </Button>
                 </CardHeader>
                 <CardContent className="space-y-1.5 p-3">
-                  {roleSavedAt ? <p className="text-xs font-medium text-green-700">角色已保存：{roleSavedAt}，页面正在刷新。</p> : null}
+                  {roleSavedAt ? <p className="text-xs font-medium text-success-ink">角色已保存：{roleSavedAt}，页面正在刷新。</p> : null}
                   {activeRole ? (
                     <div className="space-y-3 rounded-md border border-border bg-surface-muted p-3">
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1044,7 +1045,7 @@ export function AccountWorkbench({
                       <div key={module.id} className="grid grid-cols-[150px_minmax(0,1fr)] items-center gap-1.5 rounded-md border border-border px-2 py-1.5">
                         <p className="text-xs font-bold text-foreground">{module.name.split(" /")[0]}</p>
                         <div className="grid grid-cols-6 gap-1">
-                          <label className="flex items-center justify-center gap-0.5 text-[11px] font-medium text-muted">
+                          <label className="flex items-center justify-center gap-0.5 text-label font-medium text-muted">
                             <input
                               checked={permissionActions.every((action) => activeRole.permissions[module.id]?.includes(action.id))}
                               className="h-3.5 w-3.5 accent-brand"
@@ -1057,7 +1058,7 @@ export function AccountWorkbench({
                             const checked = activeRole.permissions[module.id]?.includes(action.id) ?? false;
 
                             return (
-                              <label key={action.id} className="flex items-center justify-center gap-0.5 text-[11px] font-medium text-muted">
+                              <label key={action.id} className="flex items-center justify-center gap-0.5 text-label font-medium text-muted">
                                 <input
                                   checked={checked}
                                   className="h-3.5 w-3.5 accent-brand"
@@ -1072,17 +1073,17 @@ export function AccountWorkbench({
                       </div>
                     ))
                   ) : (
-                    <p className="rounded-md border border-border bg-white px-3 py-8 text-center text-sm text-muted">没有可编辑的角色。</p>
+                    <p className="rounded-md border border-border bg-surface px-3 py-8 text-center text-sm text-muted">没有可编辑的角色。</p>
                   )}
                 </CardContent>
               </Card>
           </div>
         </div>
-      <details className="rounded-md border border-border bg-white">
+      <details className="rounded-md border border-border bg-surface">
         <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-foreground">SKU 流转权限说明</summary>
         <Card className="border-0 shadow-none">
         <CardHeader className="px-4 py-3">
-          <CardTitle>SKU 流转权限</CardTitle>
+          <CardTitle className="text-section">SKU 流转权限</CardTitle>
           <p className="mt-1 text-sm text-muted">账号角色会直接决定商品页负责人下拉和 SKU 处理权限。</p>
         </CardHeader>
         <CardContent className="grid grid-cols-1 gap-3 p-4 lg:grid-cols-4">
@@ -1092,7 +1093,7 @@ export function AccountWorkbench({
             { title: "美工", body: "SKU 状态为美工处理中时必须选择，可多选；被选中的美工只有查看权。", tone: "blue" as const },
             { title: "停用账号", body: "不会出现在运营或美工负责人下拉里，也不会获得新的 SKU 权限。", tone: "red" as const },
           ].map((item) => (
-            <div key={item.title} className="rounded-md border border-border bg-white p-3">
+            <div key={item.title} className="rounded-md border border-border bg-surface p-3">
               <Badge tone={item.tone}>{item.title}</Badge>
               <p className="mt-2 text-sm leading-5 text-muted">{item.body}</p>
             </div>
@@ -1117,7 +1118,7 @@ export function AccountWorkbench({
         />
       ) : null}
       {archivedAccountsOpen ? <ArchivedAccountsDialog rows={archivedAccountRows} onClose={() => setArchivedAccountsOpen(false)} /> : null}
-    </div>
+    </div>} />
   );
 }
 
@@ -1135,10 +1136,10 @@ function MetricCard({
   tone: "blue" | "green" | "amber" | "gray";
 }) {
   const colorClass = {
-    blue: "border-t-blue-500 text-blue-700",
-    green: "border-t-emerald-500 text-emerald-700",
-    amber: "border-t-amber-500 text-amber-700",
-    gray: "border-t-slate-400 text-slate-600",
+    blue: "border-t-blue-500 text-info-ink",
+    green: "border-t-emerald-500 text-success-ink",
+    amber: "border-t-amber-500 text-warning-ink",
+    gray: "border-t-slate-400 text-muted",
   }[tone];
 
   return (
@@ -1174,31 +1175,20 @@ function DepartmentBar({ name, count, percent }: { name: string; count: number; 
 function ArchivedAccountsDialog({ rows, onClose }: { rows: ReturnType<typeof createAccountWorkbookRows>; onClose: () => void }) {
   return (
     <Modal title="已归档员工信息" onClose={onClose} size="wide">
-      <div className="overflow-auto rounded-md border border-border">
-        <table className="w-full min-w-[1280px] border-collapse text-xs">
-          <thead className="bg-surface-muted font-bold text-muted">
-            <tr>
-              {accountWorkbookColumns.map((column) => (
-                <th key={column} className="whitespace-nowrap px-3 py-2 text-left">
-                  {column}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id} className="border-t border-border">
-                {accountWorkbookColumns.map((column) => (
-                  <td key={column} className="whitespace-nowrap px-3 py-2 text-muted">
-                    {row[column]}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {rows.length === 0 ? <p className="px-5 py-10 text-center text-sm text-muted">暂无已归档员工。</p> : null}
-      </div>
+      <StandardDataTable
+        ariaLabel="已归档员工信息表"
+        rows={rows}
+        getRowKey={row => row.id}
+        columns={accountWorkbookColumns.map(column => ({
+          key: column,
+          header: column,
+          className: "whitespace-nowrap text-muted",
+          headerClassName: "whitespace-nowrap",
+          render: (row: ReturnType<typeof createAccountWorkbookRows>[number]) => row[column],
+        }))}
+        className="min-w-[1280px] text-xs"
+        empty="暂无已归档员工。"
+      />
     </Modal>
   );
 }
@@ -1218,7 +1208,7 @@ function RoleDialog({
   return (
     <Modal title="添加角色" onClose={onClose}>
       {roles.length ? (
-        <div className="space-y-4">
+        <div className="space-y-[var(--gap-section)]">
           <Field label="角色模板">
             <select className={fieldClass} value={selectedRoleId} onChange={(event) => setSelectedRoleId(event.target.value as RoleId)}>
               {roles.map((role) => (
@@ -1245,7 +1235,7 @@ function RoleDialog({
           </div>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-[var(--gap-section)]">
           <p className="rounded-md border border-border bg-surface-muted px-3 py-8 text-center text-sm text-muted">暂无可添加的内置角色。</p>
           <div className="flex justify-end">
             <Button variant="secondary" onClick={onClose}>
@@ -1259,6 +1249,25 @@ function RoleDialog({
 }
 
 function RoleMembersDialog({ role, accounts, onClose }: { role: Role; accounts: Account[]; onClose: () => void }) {
+  const memberColumns: DataTableColumn<Account>[] = [
+    {
+      key: "name",
+      header: "姓名",
+      render: (account) => (<>{account.name}<span className="block text-xs text-muted">{account.id}</span></>),
+    },
+    {
+      key: "contact",
+      header: "手机号",
+      className: "text-muted",
+      render: (account) => account.phone || account.username || account.email || "—",
+    },
+    {
+      key: "department",
+      header: "部门 / 岗位",
+      render: (account) => (<>{account.department}<span className="block text-xs text-muted">{account.title}</span></>),
+    },
+  ];
+
   return (
     <Modal title={`${role.name}成员`} onClose={onClose}>
       <div className="space-y-3">
@@ -1269,33 +1278,14 @@ function RoleMembersDialog({ role, accounts, onClose }: { role: Role; accounts: 
           </div>
           <Badge tone="blue">{accounts.length} 人</Badge>
         </div>
-        <div className="max-h-[420px] overflow-auto rounded-md border border-border">
-          <table className="w-full min-w-[560px] border-collapse text-sm">
-            <thead className="bg-surface-muted text-xs font-bold text-muted">
-              <tr>
-                <th className="px-4 py-2.5 text-left">姓名</th>
-                <th className="px-4 py-2.5 text-left">手机号</th>
-                <th className="px-4 py-2.5 text-left">部门 / 岗位</th>
-              </tr>
-            </thead>
-            <tbody>
-              {accounts.map((account) => (
-                <tr key={account.id} className="border-t border-border">
-                  <td className="px-4 py-3">
-                    <p className="font-bold text-foreground">{account.name}</p>
-                    <p className="text-xs text-muted">{account.id}</p>
-                  </td>
-                  <td className="px-4 py-3 text-muted">{account.phone || account.username || account.email || "—"}</td>
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-foreground">{account.department}</p>
-                    <p className="text-xs text-muted">{account.title}</p>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {accounts.length === 0 ? <p className="px-5 py-10 text-center text-sm text-muted">当前角色暂无绑定成员。</p> : null}
-        </div>
+        <StandardDataTable
+          ariaLabel="角色成员列表"
+          rows={accounts}
+          getRowKey={(account) => account.id}
+          columns={memberColumns}
+          maxHeight="420px"
+          empty="当前角色暂无绑定成员。"
+        />
       </div>
     </Modal>
   );
@@ -1325,7 +1315,7 @@ function AccountDialog({
 
   return (
     <Modal title={title} onClose={onClose}>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-[var(--gap-field)] sm:grid-cols-2">
         <Field label="姓名">
           <input className={fieldClass} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
         </Field>
@@ -1390,7 +1380,7 @@ function EditAccountDialog({
 
   return (
     <Modal title="编辑账号资料" onClose={onClose}>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-[var(--gap-field)] sm:grid-cols-2">
         <Field label="姓名">
           <input className={fieldClass} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
         </Field>
@@ -1421,7 +1411,7 @@ function EditAccountDialog({
           </div>
           <div className="text-xs text-muted">登录账号：{form.phone || form.username || form.email || form.id}</div>
         </div>
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="mt-4 grid grid-cols-1 gap-[var(--gap-field)] sm:grid-cols-2">
           <Field label="新密码">
             <input className={fieldClass} type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
           </Field>
@@ -1490,7 +1480,7 @@ function Modal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-8" onClick={onClose}>
-      <div className={`w-full ${widthClass} rounded-lg bg-white shadow-xl`} onClick={(event) => event.stopPropagation()} role="dialog">
+      <div className={`w-full ${widthClass} rounded-lg bg-surface shadow-xl`} onClick={(event) => event.stopPropagation()} role="dialog">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-md bg-brand text-white">

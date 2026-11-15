@@ -5,6 +5,8 @@ import { BriefcaseBusiness, Plus, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StandardDataTable } from "@/components/ui/table-variants";
+import { type DataTableColumn } from "@/components/ui/data-table";
 import { isWorkspaceScopeComplete } from "@/lib/workspace/scope";
 import { fetchWorkspacesCached, invalidateWorkspaceApiCache, saveWorkspaceScope } from "@/lib/workspace/workspace-api-cache";
 
@@ -18,7 +20,7 @@ type WorkspaceScope = {
 };
 
 const fieldClass =
-  "h-9 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
+  "h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
 
 export function WorkspaceScopePanel() {
   const [workspaces, setWorkspaces] = useState<WorkspaceScope[]>([]);
@@ -101,6 +103,14 @@ export function WorkspaceScopePanel() {
     void loadWorkspaces();
   }, []);
 
+  const workspaceColumns: DataTableColumn<WorkspaceScope>[] = [
+    { key: "workspace", header: "Workspace", render: (workspace) => (<><p className="font-bold text-foreground">{workspace.name}</p><p className="text-xs font-medium text-muted">{workspace.id}</p></>) },
+    { key: "account", header: "账号", render: (workspace) => workspace.accountId || "-" },
+    { key: "marketplace", header: "站点", render: (workspace) => workspace.marketplace || "-" },
+    { key: "status", header: "状态", render: (workspace) => <Badge tone={!workspace.accountId || !workspace.marketplace ? "amber" : workspace.isDefault ? "green" : "blue"}>{!workspace.accountId || !workspace.marketplace ? "待补齐" : workspace.isDefault ? "默认" : "已启用"}</Badge> },
+    { key: "updatedAt", header: "更新时间", render: (workspace) => <span className="text-xs text-muted">{new Date(workspace.updatedAt).toLocaleString("zh-CN", { hour12: false })}</span> },
+  ];
+
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 px-3 py-2.5">
@@ -123,9 +133,9 @@ export function WorkspaceScopePanel() {
         </div>
       </CardHeader>
       <CardContent className="space-y-3 p-3">
-        {error ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</div> : null}
+        {error ? <div className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm font-semibold text-danger-ink">{error}</div> : null}
         {incompleteCount ? (
-          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">
+          <div className="rounded-md border border-warning-ink/30 bg-warning-soft px-3 py-2 text-sm font-semibold text-warning-ink">
             有 {incompleteCount} 个工作区缺少账号或站点信息，导入和归属时容易产生混淆。
           </div>
         ) : null}
@@ -140,48 +150,14 @@ export function WorkspaceScopePanel() {
           </Button>
         </div>
 
-        <div className="overflow-hidden rounded-md border border-border bg-white">
-          <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="bg-surface-muted text-xs font-bold text-muted">
-              <tr>
-                <th className="px-3 py-2">Workspace</th>
-                <th className="px-3 py-2">账号</th>
-                <th className="px-3 py-2">站点</th>
-                <th className="px-3 py-2">状态</th>
-                <th className="px-3 py-2">更新时间</th>
-              </tr>
-            </thead>
-            <tbody>
-              {workspaces.map((workspace) => (
-                <tr
-                  key={workspace.id}
-                  className="cursor-pointer border-t border-border hover:bg-surface-muted/50"
-                  onClick={() => editWorkspace(workspace)}
-                >
-                  <td className="px-3 py-2">
-                    <p className="font-bold text-foreground">{workspace.name}</p>
-                    <p className="text-xs font-medium text-muted">{workspace.id}</p>
-                  </td>
-                  <td className="px-3 py-2">{workspace.accountId || "-"}</td>
-                  <td className="px-3 py-2">{workspace.marketplace || "-"}</td>
-                  <td className="px-3 py-2">
-                    <Badge tone={!workspace.accountId || !workspace.marketplace ? "amber" : workspace.isDefault ? "green" : "blue"}>
-                      {!workspace.accountId || !workspace.marketplace ? "待补齐" : workspace.isDefault ? "默认" : "已启用"}
-                    </Badge>
-                  </td>
-                  <td className="px-3 py-2 text-xs text-muted">{new Date(workspace.updatedAt).toLocaleString("zh-CN", { hour12: false })}</td>
-                </tr>
-              ))}
-              {!workspaces.length ? (
-                <tr>
-                  <td colSpan={5} className="px-3 py-8 text-center text-sm font-medium text-muted">
-                    {loading ? "正在读取工作区..." : "暂无工作区，先建立一个默认 Workspace 作为组织边界。"}
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
+        <StandardDataTable
+          ariaLabel="Workspace 列表"
+          rows={workspaces}
+          getRowKey={(workspace) => workspace.id}
+          columns={workspaceColumns}
+          onRowClick={(workspace) => editWorkspace(workspace)}
+          empty={loading ? "正在读取工作区..." : "暂无工作区，先建立一个默认 Workspace 作为组织边界。"}
+        />
       </CardContent>
     </Card>
   );

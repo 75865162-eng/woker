@@ -36,21 +36,36 @@ export async function requireApiPermission(moduleId: string, action: PermissionA
 
   // Workspace selectors are untrusted input. Cookies never grant authorization.
   if (request) {
-    let bodyWorkspaceId: unknown;
+    const workspaceIds: unknown[] = [];
     if (request.headers.get("content-type")?.includes("application/json")) {
       try {
         const body = await request.clone().json() as Record<string, unknown>;
         const context = body?.context && typeof body.context === "object" ? body.context as Record<string, unknown> : undefined;
-        bodyWorkspaceId = body?.workspaceId ?? context?.workspaceId;
+        if (body && Object.hasOwn(body, "workspaceId")) workspaceIds.push(body.workspaceId);
+        if (context && Object.hasOwn(context, "workspaceId")) workspaceIds.push(context.workspaceId);
       } catch {
         // The route owns malformed body handling.
       }
     }
-    const requestedWorkspaceId = typeof bodyWorkspaceId === "string"
-      ? bodyWorkspaceId
-      : new URL(request.url).searchParams.get("workspaceId") || request.headers.get("x-workspace-id");
-    if (requestedWorkspaceId && !(await assertWorkspaceAccess(user.organizationId, requestedWorkspaceId))) {
-      return { ok: false, response: NextResponse.json({ error: "Forbidden." }, { status: 403 }) };
+    workspaceIds.push(...new URL(request.url).searchParams.getAll("workspaceId"));
+    const headerWorkspaceId = request.headers.get("x-workspace-id");
+    if (headerWorkspaceId !== null) workspaceIds.push(headerWorkspaceId);
+
+    const checked = new Set<string>();
+    for (const value of workspaceIds) {
+      if (typeof value !== "string") {
+        return { ok: false, response: NextResponse.json({ error: "Forbidden." }, { status: 403 }) };
+      }
+      const workspaceId = value.trim();
+      if (checked.has(workspaceId)) continue;
+      checked.add(workspaceId);
+      // 四个选择器位置已足够；拒绝重复 query 参数放大数据库查询。
+      if (checked.size > 4) {
+        return { ok: false, response: NextResponse.json({ error: "Forbidden." }, { status: 403 }) };
+      }
+      if (!(await assertWorkspaceAccess(user.organizationId, workspaceId))) {
+        return { ok: false, response: NextResponse.json({ error: "Forbidden." }, { status: 403 }) };
+      }
     }
   }
 

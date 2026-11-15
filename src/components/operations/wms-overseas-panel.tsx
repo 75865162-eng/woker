@@ -6,7 +6,7 @@ import {useWmsOptions} from './use-wms-options';
 import {WmsOptionsStatus} from './wms-options-status';
 type Item=Record<string,unknown>;
 type Box={number:string;lengthCm:string;widthCm:string;heightCm:string;grossWeightKg:string;netWeightKg:string;quantities:Record<string,string>};
-const emptyBox=():Box=>({number:'',lengthCm:'',widthCm:'',heightCm:'',grossWeightKg:'',netWeightKg:'',quantities:{}}),cls='h-9 rounded border border-input bg-background px-2';
+const emptyBox=():Box=>({number:'',lengthCm:'',widthCm:'',heightCm:'',grossWeightKg:'',netWeightKg:'',quantities:{}}),cls='h-9 rounded border border-border bg-background px-2';
 export function WmsOverseasPanel({workspaceId,items,onSaved}:{workspaceId:string;items:Item[];onSaved:()=>void}){
  const orders=useWmsOptions('transfer-orders',workspaceId,true),[orderId,setOrderId]=useState(''),order=orders.items.find(item=>item.id===orderId),lines=(order?.lines??[]) as Item[];
  const targetWarehouseId=String(lines[0]?.targetWarehouseId??''),addresses=useWmsOptions('warehouse-addresses',workspaceId,!!targetWarehouseId,new URLSearchParams({warehouseId:targetWarehouseId}).toString());

@@ -67,7 +67,7 @@ export function McpIsolationPanel() {
     <h2 className="font-semibold">MCP 权限与数据隔离</h2>
     <p className="my-2 text-xs text-muted">Amazon 与赛狐是两个物理隔离的 MCP 服务：凭证表不同、令牌前缀不同、端点互不通用、数据表前缀不同、审计命名空间不同。任一凭证出现在另一提供方端点时，在查询数据库前即拒绝并记审计。</p>
     {loading && <p role="status">加载中…</p>}
-    {error && <p role="alert" className="text-red-700">{error}</p>}
+    {error && <p role="alert" className="text-danger-ink">{error}</p>}
     {!loading && data && <>
       <div className="my-3 overflow-x-auto">
         <table className="w-full min-w-[900px] border-collapse text-left text-xs">
@@ -88,13 +88,13 @@ export function McpIsolationPanel() {
         <p>Amazon：{data.endpoints.amazon.isolation} · 当前用户凭证 {data.endpoints.amazon.credentialCount} 个</p>
         <p>赛狐：{data.endpoints.sellfox.isolation} · 当前用户凭证 {data.endpoints.sellfox.credentialCount} 个（兼容旧路径 {data.endpoints.sellfox.legacyPath}）</p>
       </div>
-      {(!data.sellfox.readonlyRoleConfigured || data.sellfox.sharedTokenEnabled) && <ul className="my-2 space-y-1 text-xs text-amber-700">
+      {(!data.sellfox.readonlyRoleConfigured || data.sellfox.sharedTokenEnabled) && <ul className="my-2 space-y-1 text-xs text-warning-ink">
         {!data.sellfox.readonlyRoleConfigured && <li>赛狐 MCP 未配置独立只读连接（MCP_PG_READONLY_URL）。当前无法执行查询，也不会回退到可写连接。</li>}
         {data.sellfox.sharedTokenEnabled && <li>检测到兼容共享令牌 MCP_HTTP_TOKEN 仍启用。它只能在赛狐端点的单一组织内只读；建议迁移到个人凭证后设置 MCP_DISABLE_SHARED_TOKEN=true。</li>}
       </ul>}
       <h3 className="mt-4 text-sm font-semibold">赛狐 MCP 凭证</h3>
       <p className="mt-1 text-xs text-muted">凭证店铺范围决定可读数据；留空表示该组织/工作区全部店铺。工具名统一带 sellfox. 前缀，与 Amazon 工具无交集。</p>
-      {token && <div className="my-3 rounded border border-amber-400 p-3"><p>新密钥仅显示一次，请立即保存。</p><input aria-label="新赛狐 MCP 密钥" readOnly className={`${input} mt-2 w-full font-mono`} value={token} /><Button variant="secondary" size="sm" onClick={() => setToken("")}>已保存，关闭展示</Button></div>}
+      {token && <div className="my-3 rounded border border-accent/40 p-3"><p>新密钥仅显示一次，请立即保存。</p><input aria-label="新赛狐 MCP 密钥" readOnly className={`${input} mt-2 w-full font-mono`} value={token} /><Button variant="secondary" size="sm" onClick={() => setToken("")}>已保存，关闭展示</Button></div>}
       <div className="my-3 space-y-2">
         <label className="flex gap-2">凭证名称<input className={input} maxLength={100} value={name} onChange={event => setName(event.target.value)} /></label>
         <fieldset><legend className="text-xs">店铺范围（{data.sellfox.stores.length} 个可选）</legend>

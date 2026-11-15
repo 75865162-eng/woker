@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { WorkbenchPageTemplate } from "@/components/templates/page-templates";
 import { Button } from "@/components/ui/button";
 import { Field, Kpis, Notice, Section, SelectField, Table, Tabs, bp, extPost, money, today, useExt } from "./kit";
 
@@ -76,8 +77,7 @@ export function CalculatorsWorkbench() {
     setResult(row.result as unknown as ProfitResult); setNotice(`已载入方案「${row.name}」的入参快照。`);
   }
 
-  return <div className="space-y-6">
-    <Notice error={error} notice={notice} />
+  return <WorkbenchPageTemplate context={<Notice error={error} notice={notice} />} main={<div className="space-y-6">
     <Tabs value={tab} onChange={value => setTab(value as "PROFIT" | "FBA_FEE")} tabs={[{ id: "PROFIT", label: "利润测算" }, { id: "FBA_FEE", label: "FBA 费用测算" }]} />
 
     <Section title="入参" description="费率卡默认取美国站标准尺寸公开费率，只作基线；实际费率以卖家后台为准，可在佣金比例与仓储天数上覆盖。">
@@ -152,6 +152,6 @@ export function CalculatorsWorkbench() {
         ]}
       />
     </Section>
-    <p className="text-[11px] text-muted">测算日期基准 {today()}。费率与阈值是测算基线，不代替 Amazon 后台的实际计费。</p>
-  </div>;
+    <p className="text-label text-muted">测算日期基准 {today()}。费率与阈值是测算基线，不代替 Amazon 后台的实际计费。</p>
+  </div>} />;
 }

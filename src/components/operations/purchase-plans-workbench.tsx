@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { getJson } from "@/lib/workspace/get-json";
+import { useDraftState } from "@/lib/workspace/use-draft-state";
+import { StandardDataTable } from "@/components/ui/table-variants";
+import { type DataTableColumn } from "@/components/ui/data-table";
+import { extHeaders as headers } from "@/lib/workspace/ext-headers";
+import { ListPageTemplate } from "@/components/templates/page-templates";
 
-const scopeKey = "tiaotiao.workspace.scope";
-function workspaceId() { try { return (JSON.parse(localStorage.getItem(scopeKey) ?? "{}") as { workspaceId?: string }).workspaceId || "default"; } catch { return "default"; } }
-function headers(json = false) { const result = new Headers({ "x-workspace-id": workspaceId() }); if (json) result.set("content-type", "application/json"); return result; }
 
 type Suggestion = { productRecordId: string; sku: string; name: string; availableQty: number; inboundQty: number; salesQty: number; suggestedQty: number; lastUnitPrice: string | null };
 type PlanLine = { id: string; productRecordId: string; onHandQty: number; inboundQty: number; salesQty: number; suggestedQty: number; plannedQty: number; unitPrice: string; product?: { sku: string; chineseName: string; englishName: string } };
@@ -14,6 +17,16 @@ type Plan = { id: string; number: string; status: string; periodStart: string; p
 const statusLabels: Record<string, string> = { DRAFT: "草稿", PENDING_APPROVAL: "待审批", APPROVED: "已批准·待转采购单", CONVERTED: "已转采购单", CANCELLED: "已作废", REJECTED: "已拒绝" };
 const inputCls = "h-9 min-w-0 rounded border border-border bg-background px-2 text-sm";
 
+const planLineColumns: DataTableColumn<PlanLine>[] = [
+  { key: "sku", header: "SKU", width: 120, render: (line) => line.product?.sku ?? line.productRecordId },
+  { key: "onHandQty", header: "可用", width: 70, numeric: true, render: (line) => line.onHandQty },
+  { key: "inboundQty", header: "在途", width: 70, numeric: true, render: (line) => line.inboundQty },
+  { key: "salesQty", header: "窗口销量", width: 80, numeric: true, render: (line) => line.salesQty },
+  { key: "suggestedQty", header: "建议", width: 70, numeric: true, render: (line) => line.suggestedQty },
+  { key: "plannedQty", header: "计划", width: 70, numeric: true, render: (line) => line.plannedQty },
+  { key: "unitPrice", header: "单价", width: 90, numeric: true, render: (line) => line.unitPrice },
+];
+
 function today(offsetDays = 0) { const date = new Date(Date.now() + offsetDays * 86_400_000); return date.toISOString().slice(0, 10); }
 
 export function PurchasePlansWorkbench() {
@@ -21,15 +34,17 @@ export function PurchasePlansWorkbench() {
   const [suppliers, setSuppliers] = useState<Array<{ id: string; name: string }>>([]);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [picked, setPicked] = useState<Record<string, { quantity: string; unitPrice: string }>>({});
-  const [form, setForm] = useState({ number: "", supplierId: "", periodStart: today(), periodEnd: today(30), salesWindowDays: "90", coverageDays: "60", safetyDays: "15" });
+  const [form, setForm, clearFormDraft] = useDraftState("purchase-plans:form", { number: "", supplierId: "", periodStart: today(), periodEnd: today(30), salesWindowDays: "90", coverageDays: "60", safetyDays: "15" });
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
-    const response = await fetch("/api/operations/procurement/plans", { headers: headers(), cache: "no-store" });
-    const data = await response.json();
-    if (!response.ok) { setError(data.error ?? "采购计划读取失败。"); return; }
+    const { ok, data } = await getJson<{ plans?: Plan[]; suppliers?: Array<{ id: string; name: string }>; error?: string }>(
+      "/api/operations/procurement/plans",
+      { headers: headers() },
+    );
+    if (!ok) { setError(data.error ?? "采购计划读取失败。"); return; }
     setPlans(data.plans ?? []); setSuppliers(data.suppliers ?? []);
   }, []);
 
@@ -80,7 +95,7 @@ export function PurchasePlansWorkbench() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "计划创建失败。");
       setNotice(`计划 ${data.plan.number} 已保存为草稿，请在下方提交审批。`);
-      setPicked({}); setForm({ ...form, number: "" });
+      setPicked({}); clearFormDraft();
       await load();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "计划创建失败。"); }
     finally { setBusy(false); }
@@ -98,9 +113,9 @@ export function PurchasePlansWorkbench() {
   }
 
   return (
-    <div className="space-y-6">
-      <section className="rounded border border-border p-4">
-        <h3 className="text-sm font-semibold">需求推算口径</h3>
+    <ListPageTemplate
+      filters={<><section className="space-y-[var(--gap-section)] rounded border border-border p-[var(--pad-card)]">
+        <h3 className="text-section">需求推算口径</h3>
         <p className="mt-1 text-xs text-muted">建议量 = 日均销量 ×（覆盖天数 + 安全天数）− 公司仓可用 − 在途。销量取 Amazon 订单明细窗口内下单量，不含取消单。</p>
         <form onSubmit={createPlan} className="mt-3 space-y-3">
           <div className="flex flex-wrap items-end gap-3">
@@ -140,12 +155,11 @@ export function PurchasePlansWorkbench() {
           </div>
         </form>
       </section>
-
       {notice && <p role="status" className="rounded border border-border p-3 text-xs">{notice}</p>}
-      {error && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-xs text-red-800">{error}</p>}
-
-      <section className="rounded border border-border p-4">
-        <h3 className="text-sm font-semibold">采购计划单</h3>
+      {error && <p role="alert" className="rounded border border-danger/30 bg-danger-soft p-3 text-xs text-danger-ink">{error}</p>}
+      </>}
+      table={<section className="rounded border border-border p-[var(--pad-card)]">
+        <h3 className="text-section">采购计划单</h3>
         {!plans.length && <p className="mt-2 text-sm text-muted">还没有计划单。先按上面的口径推算，再勾选 SKU 建计划。</p>}
         <div className="mt-3 space-y-2">
           {plans.map(plan => {
@@ -167,16 +181,19 @@ export function PurchasePlansWorkbench() {
                   </span>
                 </div>
                 <details className="mt-2 text-xs"><summary className="cursor-pointer text-brand">查看明细</summary>
-                  <table className="mt-2 w-full min-w-[620px] text-left">
-                    <thead><tr className="text-muted">{["SKU", "可用", "在途", "窗口销量", "建议", "计划", "单价"].map(head => <th key={head} className="pb-1 font-medium">{head}</th>)}</tr></thead>
-                    <tbody>{plan.lines.map(line => <tr key={line.id} className="border-t border-border"><td className="py-1">{line.product?.sku ?? line.productRecordId}</td><td>{line.onHandQty}</td><td>{line.inboundQty}</td><td>{line.salesQty}</td><td>{line.suggestedQty}</td><td>{line.plannedQty}</td><td>{line.unitPrice}</td></tr>)}</tbody>
-                  </table>
+                  <StandardDataTable
+                    ariaLabel={`计划 ${plan.number} 的明细`}
+                    rows={plan.lines}
+                    getRowKey={(line) => line.id}
+                    columns={planLineColumns}
+                    empty="该计划无明细行。"
+                  />
                 </details>
               </article>
             );
           })}
         </div>
-      </section>
-    </div>
+      </section>}
+    />
   );
 }

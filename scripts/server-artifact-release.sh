@@ -51,6 +51,7 @@ restart_worker=false
 restart_image_worker=false
 restart_amazon_sync_worker=false
 restart_sellfox_sync_worker=false
+restart_forecast_worker=false
 runtime_config=false
 caddy_reload=false
 infra_update=false
@@ -192,13 +193,8 @@ install_runtime_from_release() {
       rm -f /etc/systemd/system/amazon-sync-worker.service
       restart_amazon_sync_worker=false
     fi
-    if [ -f "$runtime_release/deploy/systemd/amazon-sellfox-sync-worker.service" ]; then
-      install -m 0644 "$runtime_release/deploy/systemd/amazon-sellfox-sync-worker.service" /etc/systemd/system/amazon-sellfox-sync-worker.service
-    else
-      systemctl disable --now amazon-sellfox-sync-worker 2>/dev/null || true
-      rm -f /etc/systemd/system/amazon-sellfox-sync-worker.service
-      restart_sellfox_sync_worker=false
-    fi
+    install -m 0644 "$runtime_release/deploy/systemd/amazon-sellfox-sync-worker.service" /etc/systemd/system/amazon-sellfox-sync-worker.service || return 1
+    install -m 0644 "$runtime_release/deploy/systemd/amazon-forecast-worker.service" /etc/systemd/system/amazon-forecast-worker.service || return 1
     systemctl daemon-reload
   fi
   if [ "$restart_web" = "true" ]; then restart_runtime_service amazon-web "$runtime_release" || return 1; fi
@@ -211,6 +207,10 @@ install_runtime_from_release() {
   if [ "$restart_sellfox_sync_worker" = "true" ]; then
     systemctl enable amazon-sellfox-sync-worker || return 1
     restart_runtime_service amazon-sellfox-sync-worker "$runtime_release" || return 1
+  fi
+  if [ "$restart_forecast_worker" = "true" ]; then
+    systemctl enable amazon-forecast-worker || return 1
+    restart_runtime_service amazon-forecast-worker "$runtime_release" || return 1
   fi
   if [ "$caddy_reload" = "true" ] || [ "$INITIAL_DEPLOYMENT" = "true" ]; then sh "$runtime_release/deploy/caddy/run-caddy.sh"; fi
 }
@@ -237,7 +237,7 @@ rollback_application_release() {
 
   if [ -z "$previous_release_dir" ] || [ ! -d "$previous_release_dir" ]; then
     if [ "$INITIAL_DEPLOYMENT" = "true" ]; then
-      for service in amazon-web amazon-worker amazon-image-upscale-worker amazon-sync-worker amazon-sellfox-sync-worker; do
+      for service in amazon-web amazon-worker amazon-image-upscale-worker amazon-sync-worker amazon-sellfox-sync-worker amazon-forecast-worker; do
         systemctl stop "$service" 2>/dev/null || true
       done
       docker rm -f amazon-caddy >/dev/null 2>&1 || true
@@ -334,12 +334,12 @@ if (previousPath && fs.existsSync(previousPath)) {
 } else if (initialDeployment !== 'true') {
   throw new Error('No previous release; explicit INITIAL_DEPLOYMENT=true is required');
 }
-const keys = ['requiresMigration', 'requiresPrismaGenerate', 'requiresWebRestart', 'requiresWorkerRestart', 'requiresImageWorkerRestart', 'requiresAmazonSyncWorkerRestart', 'requiresSellfoxSyncWorkerRestart', 'requiresRuntimeConfig', 'requiresCaddyReload', 'requiresInfraUpdate'];
+const keys = ['requiresMigration', 'requiresPrismaGenerate', 'requiresWebRestart', 'requiresWorkerRestart', 'requiresImageWorkerRestart', 'requiresAmazonSyncWorkerRestart', 'requiresSellfoxSyncWorkerRestart', 'requiresForecastWorkerRestart', 'requiresRuntimeConfig', 'requiresCaddyReload', 'requiresInfraUpdate'];
 for (const key of keys) if (typeof plan[key] !== 'boolean') throw new Error(`Missing plan flag: ${key}`);
 console.log(keys.map(key => String(plan[key])).join(' '));
 NODE
 )"
-read -r requires_migration requires_generate restart_web restart_worker restart_image_worker restart_amazon_sync_worker restart_sellfox_sync_worker runtime_config caddy_reload infra_update <<< "$plan_flags"
+read -r requires_migration requires_generate restart_web restart_worker restart_image_worker restart_amazon_sync_worker restart_sellfox_sync_worker restart_forecast_worker runtime_config caddy_reload infra_update <<< "$plan_flags"
 
 package_lock_checksum="$(sha256sum "$extract_dir/package-lock.json" | awk '{print $1}')"
 cached_package_lock_checksum="$(cat "$APP_DIR/node_modules/.package-lock.sha256" 2>/dev/null || true)"
@@ -420,7 +420,7 @@ release_switched="true"
 install_runtime_from_release "$release_dir"
 
 if [ "$INITIAL_DEPLOYMENT" = "true" ]; then
-  systemctl enable --now amazon-web amazon-worker amazon-image-upscale-worker amazon-sync-worker amazon-sellfox-sync-worker
+  systemctl enable --now amazon-web amazon-worker amazon-image-upscale-worker amazon-sync-worker amazon-sellfox-sync-worker amazon-forecast-worker
 fi
 
 if ! wait_for_health; then
@@ -436,6 +436,7 @@ worker_status="$(systemctl is-active amazon-worker 2>/dev/null || true)"
 image_worker_status="$(systemctl is-active amazon-image-upscale-worker 2>/dev/null || true)"
 amazon_sync_worker_status="$(systemctl is-active amazon-sync-worker 2>/dev/null || true)"
 sellfox_sync_worker_status="$(systemctl is-active amazon-sellfox-sync-worker 2>/dev/null || true)"
+forecast_worker_status="$(systemctl is-active amazon-forecast-worker 2>/dev/null || true)"
 postgres_container="$(docker compose ps -q postgres)"
 redis_container="$(docker compose ps -q redis)"
 if [ -n "$postgres_container" ]; then
@@ -450,7 +451,7 @@ else
 fi
 disk_available_kb="$(df -Pk / | awk 'NR == 2 {print $4}')"
 runtime_status="passed"
-if [ "$web_status" != "active" ] || [ "$worker_status" != "active" ] || { [ "$restart_image_worker" = "true" ] && [ "$image_worker_status" != "active" ]; } || { [ "$restart_amazon_sync_worker" = "true" ] && [ "$amazon_sync_worker_status" != "active" ]; } || { [ "$restart_sellfox_sync_worker" = "true" ] && [ "$sellfox_sync_worker_status" != "active" ]; } || [ "$postgres_status" != "running" ] || [ "$redis_status" != "running" ]; then
+if [ "$web_status" != "active" ] || [ "$worker_status" != "active" ] || { [ "$restart_image_worker" = "true" ] && [ "$image_worker_status" != "active" ]; } || { [ "$restart_amazon_sync_worker" = "true" ] && [ "$amazon_sync_worker_status" != "active" ]; } || { [ "$restart_sellfox_sync_worker" = "true" ] && [ "$sellfox_sync_worker_status" != "active" ]; } || { [ "$restart_forecast_worker" = "true" ] && [ "$forecast_worker_status" != "active" ]; } || [ "$postgres_status" != "running" ] || [ "$redis_status" != "running" ]; then
   runtime_status="failed"
 fi
 if [ "$runtime_status" != "passed" ]; then
@@ -469,7 +470,8 @@ cat > "$result_path" <<JSON
   "health": "passed",
   "migration": "$migration_status",
   "runtimeReleaseVerified": true,
-    "restarted": { "web": $restart_web, "worker": $restart_worker, "imageWorker": $restart_image_worker, "amazonSyncWorker": $restart_amazon_sync_worker, "sellfoxSyncWorker": $restart_sellfox_sync_worker },
+    "restarted": { "web": $restart_web, "worker": $restart_worker, "imageWorker": $restart_image_worker, "amazonSyncWorker": $restart_amazon_sync_worker, "sellfoxSyncWorker": $restart_sellfox_sync_worker, "forecastWorker": $restart_forecast_worker },
+
   "rollback": {
     "status": "not_needed",
     "database": "not_rolled_back"
@@ -480,6 +482,7 @@ cat > "$result_path" <<JSON
     "amazon-image-upscale-worker": "$(json_escape "$image_worker_status")",
     "amazon-sync-worker": "$(json_escape "$amazon_sync_worker_status")",
     "amazon-sellfox-sync-worker": "$(json_escape "$sellfox_sync_worker_status")",
+    "amazon-forecast-worker": "$(json_escape "$forecast_worker_status")",
     "postgres": "$(json_escape "$postgres_status")",
     "redis": "$(json_escape "$redis_status")"
   },
@@ -497,7 +500,7 @@ fi
 find "$RELEASES_DIR" -mindepth 1 -maxdepth 1 -type d | sort -r | awk "NR>${KEEP_RELEASES}" | while read -r old_release; do
   # A worker intentionally not restarted may still be executing an older release.
   in_use=false
-  for service in amazon-web amazon-worker amazon-image-upscale-worker amazon-sync-worker amazon-sellfox-sync-worker; do
+  for service in amazon-web amazon-worker amazon-image-upscale-worker amazon-sync-worker amazon-sellfox-sync-worker amazon-forecast-worker; do
     runtime_pid="$(systemctl show "$service" --property=MainPID --value)"
     runtime_cwd="$(readlink -f "/proc/${runtime_pid}/cwd" 2>/dev/null || true)"
     case "$runtime_cwd" in "$old_release"|"$old_release"/*) in_use=true ;; esac

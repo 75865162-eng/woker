@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { WorkbenchPageTemplate } from "@/components/templates/page-templates";
 import type { Run } from "@/lib/selection-research/types";
 import type { ResearchReadiness } from "@/lib/selection-research/preflight";
 import type { ResearchAiSource } from "@/lib/selection-research/ai-settings";
@@ -126,18 +127,18 @@ export function ResearchWorkbench() {
       }
     } finally { if (generation === scopeGeneration.current) setAdvancing(false); }
   }
-  const control = "rounded border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-50";
-  return <div className="space-y-5">
+  const control = "rounded border border-border bg-surface px-3 py-2 text-sm disabled:opacity-50";
+  return <WorkbenchPageTemplate context={<div className="space-y-5">
     <button className={control} disabled={busy} onClick={() => void perform(async () => { const generation = scopeGeneration.current; const result = await request("/api/selection-research/discover", { erpCredentialId, asin, requirement, marketplace, maxMarketCalls, budgetMode, aiConfigSource }); if (generation === scopeGeneration.current) setDiscovery(result); })}>检查工具与启动条件（不创建任务、不取市场数据）</button>
     {discovery?.providers && <div className="rounded border p-3 text-sm" role="status">{discovery.providers.map(provider => <p key={provider.provider}>{provider.provider}：{provider.status} · {provider.toolCount} 个真实工具 {provider.reason ? `· ${provider.reason}` : ""}</p>)}</div>}
     {discovery?.readiness && <section className="space-y-2 rounded border p-3 text-sm" aria-label="真实研究启动检查">
       <h2 className="font-semibold">{discovery.readiness.ready ? "连接配置与输入检查通过" : "真实研究尚有阻塞项"}</h2>
       <p>这是本次检查结果，修改输入后请重新检查。配置存在不代表模型调用已成功；检查不会创建任务、请求模型或调用市场业务数据。</p>
-      <ul>{discovery.readiness.checks.map(check => <li key={check.id} className={check.status === "blocked" ? "text-red-700" : "text-slate-700"}>{check.id} · {check.status === "ready" ? "通过" : "未就绪"}：{check.message}</li>)}</ul>
+      <ul>{discovery.readiness.checks.map(check => <li key={check.id} className={check.status === "blocked" ? "text-danger-ink" : "text-muted"}>{check.id} · {check.status === "ready" ? "通过" : "未就绪"}：{check.message}</li>)}</ul>
       {discovery.aiModel && <p>所选模型：{discovery.aiModel.provider} / {discovery.aiModel.model}</p>}
     </section>}
     {discovery !== undefined && <details><summary>在线目录发现结果</summary><pre className="max-h-96 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(discovery, null, 2)}</pre></details>}
-    <div className="rounded border border-slate-300 bg-slate-50 p-4 text-sm">Lili 已并入本系统，沿用当前 ERP 账号，无需单独注册或登录。ERP：{availability?.erp ?? "请发现在线目录"}；SellerSprite：{availability?.sellerSprite ?? "读取中"}；AI：{run?.executionMode === "codex" ? "当前 Codex 会话" : availability?.ai ?? "读取中"}；西柚：{availability?.xiyou ?? "读取中"}。真实任务首次批准后，后续付费市场查询在本任务调用上限内自动执行，并逐笔保存请求与费用状态；供应商费用未知，不表示免费。选品、最终结论等业务确认仍会暂停。</div>
+    <div className="rounded border border-border bg-surface-muted p-4 text-sm">Lili 已并入本系统，沿用当前 ERP 账号，无需单独注册或登录。ERP：{availability?.erp ?? "请发现在线目录"}；SellerSprite：{availability?.sellerSprite ?? "读取中"}；AI：{run?.executionMode === "codex" ? "当前 Codex 会话" : availability?.ai ?? "读取中"}；西柚：{availability?.xiyou ?? "读取中"}。真实任务首次批准后，后续付费市场查询在本任务调用上限内自动执行，并逐笔保存请求与费用状态；供应商费用未知，不表示免费。选品、最终结论等业务确认仍会暂停。</div>
     <p className="text-sm">单站点、一个细分市场规划约18–30次：筛选8–10次、深研6–10次、评论4–8次、关税通常0次、决策0–2次。规划不是硬上限或供应商报价；研究积分1积分=¥0.01。</p>
     <form className="space-y-3 rounded border p-4" onSubmit={(event) => { event.preventDefault(); void perform(async () => {
       const generation = scopeGeneration.current;
@@ -154,7 +155,8 @@ export function ResearchWorkbench() {
       {mode === "live" && <label className="mr-3">每个外部来源最大调用次数（留空不限额） <input aria-label="最大市场调用次数" className={control} type="number" min={1} value={maxMarketCalls ?? ""} placeholder="不限额" onChange={(event) => { setMaxMarketCalls(event.target.value === "" ? undefined : Number(event.target.value)); setDiscovery(undefined); }} /></label>}
       <button className={control} disabled={busy || !requirement.trim()} type="submit">{mode === "live" ? "读取在线工具目录并创建真实任务" : "创建隔离样本任务"}</button>
     </form>
-    {error && <p role="alert" className="rounded border border-red-300 p-3 text-red-700">{error}</p>}
+  </div>} main={<div className="space-y-5">
+    {error && <p role="alert" className="rounded border border-danger/30 p-3 text-danger-ink">{error}</p>}
     <section className="rounded border p-4"><h2 className="mb-2 font-semibold">我的研究任务（当前工作区，最近30条）</h2><div className="flex flex-wrap gap-2">{runs.map((item) => <button className={control} disabled={busy} key={item.id} onClick={() => void perform(async () => {
       const generation = scopeGeneration.current;
       const data = await request(`/api/selection-research/${encodeURIComponent(item.id)}`);
@@ -164,7 +166,7 @@ export function ResearchWorkbench() {
       <h2 className="font-semibold">第 {run.stage} / 5 阶段 · {run.status}</h2><p className="break-all text-sm">任务：{run.id} · 模式：{run.mode} · 调用记录：{run.calls.length} · 修订：{run.revision}</p>
       {run.brief && <details><summary>任务解析与待确认约束</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(run.brief, null, 2)}</pre></details>}
       {run.aiModel && <p className="text-sm">任务保存的模型：{run.aiModel.provider} / {run.aiModel.model} · 来源：{run.executionMode === "codex" ? "当前 Codex 会话（不调用网站模型）" : run.aiConfigSource === "server_runtime" ? "已有服务端模型" : "当前工作区配置"}</p>}
-      {run.status === "FAILED" && <p role="alert" className="rounded border border-red-300 p-3 text-red-700">{researchValidationMessages[run.failure ?? ""] ?? failureMessages[run.failure ?? ""] ?? "本步骤失败，已保留现有证据。请检查执行记录后手动恢复。"}{run.validationFeedback && run.validationFeedback.code === run.failure && run.validationFeedback.path && <> 字段：<code>{run.validationFeedback.path}</code></>}</p>}
+      {run.status === "FAILED" && <p role="alert" className="rounded border border-danger/30 p-3 text-danger-ink">{researchValidationMessages[run.failure ?? ""] ?? failureMessages[run.failure ?? ""] ?? "本步骤失败，已保留现有证据。请检查执行记录后手动恢复。"}{run.validationFeedback && run.validationFeedback.code === run.failure && run.validationFeedback.path && <> 字段：<code>{run.validationFeedback.path}</code></>}</p>}
       {run.planningPause && run.pausedAt && <p role="status">{run.planningPause.reason} 阶段 {run.planningPause.stage} 已调用 {run.planningPause.calls} 次。</p>}
       {run.calls.some((call) => call.dispatch === "NOT_SENT") && <p className="text-sm">已保留发送前拦截记录：{run.calls.filter((call) => call.dispatch === "NOT_SENT").length} 条；这些业务请求未发送，不占用调用预算。修复原因并恢复时，失效的授权需重新确认。</p>}
       {run.paidCallAuthorization && <p className="text-sm">首次付费授权：{run.paidCallAuthorization.approvedAt} · 操作者 ID：{run.paidCallAuthorization.approvedByUserId}。后续付费市场请求引用此授权；每次请求仍单独记录。授权只属于此任务，不跨任务或工作区。</p>}
@@ -178,10 +180,10 @@ export function ResearchWorkbench() {
         {!["COMPLETED", "CANCELLED"].includes(run.status) && <button className={control} disabled={busy} onClick={() => void perform(() => command({ operation: "cancel" }))}>取消任务</button>}
       </div>
       <ResearchResults key={`results-${run.id}`} run={run} />
-      {run.gate && <div className="space-y-2 rounded border border-blue-300 bg-blue-50 p-3"><h3 className="font-semibold">{run.gate.kind === "BUDGET" && run.paidCallAuthorization ? "任务调用上限已达" : run.gate.kind === "BILLING" ? "旧版费用暂停（可直接解除）" : `需要人工确认：${run.gate.kind}`}</h3><p>{run.gate.reason}</p>
+      {run.gate && <div className="space-y-2 rounded border border-info/30 bg-info-soft p-3"><h3 className="font-semibold">{run.gate.kind === "BUDGET" && run.paidCallAuthorization ? "任务调用上限已达" : run.gate.kind === "BILLING" ? "旧版费用暂停（可直接解除）" : `需要人工确认：${run.gate.kind}`}</h3><p>{run.gate.reason}</p>
         {run.gate.kind === "NICHE" && run.results[0]?.candidates?.map((candidate) => <button key={candidate.id} className={`${control} mr-2`} disabled={busy} onClick={() => void perform(() => command({ operation: "decide", decision: { gateId: run.gate!.id, kind: "SELECT", candidateId: candidate.id } }))}>选择：{candidate.name}</button>)}
         {run.gate.kind === "FINAL" && <button className={control} disabled={busy} onClick={() => void perform(() => command({ operation: "decide", decision: { gateId: run.gate!.id, kind: "CONFIRM" } }))}>确认研究结果，允许生成报告</button>}
-        {run.gate.kind === "MCP_CALL" && run.pendingAction && <div className="w-full space-y-2"><p className="font-medium">待执行工具：{run.pendingAction.tool}。预计调用 1 次；研究积分待核实。首次批准后，本研究任务后续付费市场请求会按以下授权自动运行；每次请求仍会单独记录。业务确认仍需人工处理。</p><p>本任务授权范围：{run.budgetMode === "uncapped" ? "当前站点及五阶段只读研究，任务次数不限额" : Object.entries(run.limits).map(([provider, limit]) => `${provider} ${limit} 次`).join(" · ") || "无其他付费来源"}。单工具上限：{run.budgetMode === "uncapped" ? "不限额（仍校验已授权工具与参数）" : Object.entries(run.policies).filter(([, policy]) => policy.paid).map(([tool, policy]) => `${tool} ${policy.maxCalls} 次`).join(" · ") || "按当前已发现目录"}</p><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded bg-white p-2 text-xs">{JSON.stringify({ arguments: run.pendingAction.arguments, schema: run.registry.find((tool) => tool.name === run.pendingAction!.tool)?.inputSchema }, null, 2)}</pre><button className={control} disabled={busy} onClick={() => void perform(() => command({ operation: "decide", decision: { gateId: run.gate!.id, kind: "AUTHORIZE_TOOL", callId: run.pendingActionId } }))}>批准本任务的付费查询并执行首笔</button></div>}
+        {run.gate.kind === "MCP_CALL" && run.pendingAction && <div className="w-full space-y-2"><p className="font-medium">待执行工具：{run.pendingAction.tool}。预计调用 1 次；研究积分待核实。首次批准后，本研究任务后续付费市场请求会按以下授权自动运行；每次请求仍会单独记录。业务确认仍需人工处理。</p><p>本任务授权范围：{run.budgetMode === "uncapped" ? "当前站点及五阶段只读研究，任务次数不限额" : Object.entries(run.limits).map(([provider, limit]) => `${provider} ${limit} 次`).join(" · ") || "无其他付费来源"}。单工具上限：{run.budgetMode === "uncapped" ? "不限额（仍校验已授权工具与参数）" : Object.entries(run.policies).filter(([, policy]) => policy.paid).map(([tool, policy]) => `${tool} ${policy.maxCalls} 次`).join(" · ") || "按当前已发现目录"}</p><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded bg-surface p-2 text-xs">{JSON.stringify({ arguments: run.pendingAction.arguments, schema: run.registry.find((tool) => tool.name === run.pendingAction!.tool)?.inputSchema }, null, 2)}</pre><button className={control} disabled={busy} onClick={() => void perform(() => command({ operation: "decide", decision: { gateId: run.gate!.id, kind: "AUTHORIZE_TOOL", callId: run.pendingActionId } }))}>批准本任务的付费查询并执行首笔</button></div>}
         {run.gate.kind === "BILLING" && <div className="space-y-2">
           <p>这是旧版费用暂停。无需确认金额或填写回执；恢复后保留未知费用记录，不重试原请求。</p>
           <button className={control} disabled={busy} onClick={() => void perform(() => command({ operation: "resume" }))}>解除旧费用暂停</button>
@@ -195,5 +197,5 @@ export function ResearchWorkbench() {
       {(run.report?.fileId || savedFileId) && <p role="status">已保存文件：<a className="underline" href={`/api/selection-research/${encodeURIComponent(run.id)}/report/${encodeURIComponent(run.report?.fileId || savedFileId)}?workspaceId=${encodeURIComponent(run.scope.workspaceId)}`}>下载保存的 HTML 报告</a>（FileObject {run.report?.fileId || savedFileId}）</p>}
       <details><summary>Skill 快照、调用证据及审批记录</summary><pre className="max-h-96 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(run, null, 2)}</pre></details>
     </section>}
-  </div>;
+  </div>} />;
 }

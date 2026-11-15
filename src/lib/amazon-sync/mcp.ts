@@ -30,6 +30,7 @@ import { analyzeReimbursementRecovery } from "./reimbursement-analysis";
 import { assertSkillSyncSourcePublishable, skillSyncRetryCommand } from "./skill-sync-retry";
 import { requestChange } from "./change-approval";
 import { assertAmazonMcpScope } from "./mcp-scope";
+import { listAmazonLocalRawTables, readAmazonLocalRawRows } from "./local-raw-read";
 
 export { amazonMcpTools, amazonMcpToolCatalog } from "./mcp-tool-registry";
 const canonicalMcpTool = (tool: string) => registeredAmazonMcpTools.find(item => item.name === tool)?.canonicalName ?? tool;
@@ -343,7 +344,7 @@ async function invokeRegisteredAmazonMcp(identity: McpIdentity, tool: AmazonMcpT
       if (signal?.aborted) throw new GatewayInvocationError("CANCELLED", "Tool execution was cancelled.");
       const adsRead = tool.startsWith("amazon.ads.") || tool.startsWith("ads_")
         || ["data_query", "data_describe_table"].includes(tool) && resolveMcpDataset(args).module === "amazon_ads";
-      const catalogRead = tool === "data_list_tables";
+      const catalogRead = tool === "data_list_tables" || tool === "amazon.data.local.tables" || tool === "amazon.data.local.read";
       const financeRead = tool === "finance_get_transactions" || ["data_query", "data_describe_table"].includes(tool) && resolveMcpDataset(args).resource === "finance";
       const resolve = async () => {
         const access = args.sellerAccountId && definition.operationMode === "READ_ONLY" && !catalogRead
@@ -477,6 +478,26 @@ async function invokeRegisteredAmazonMcp(identity: McpIdentity, tool: AmazonMcpT
           skillReadiness: skillReadiness(availability, executableTools),
           skillReadinessBasis: "CATALOG_DIAGNOSTIC_ONLY; FIELD_VALUES_AND_DATE_COVERAGE_NOT_CHECKED" },
           meta: dataMeta(tableSources, "AmazonSyncDataSource", ["sellerAccountId", "marketplaceId", "resource"]) };
+      } else if (tool === "amazon.data.local.tables" || tool === "amazon.data.local.read") {
+        // 本地原始行读取不要求数据源处于「已发布」状态，但仍须验证账号分配与站点归属。
+        const localAccess = await amazonDataAccess(scope, actor);
+        // 租户级表（同步日志/调度/审计）只有 organizationId+workspaceId，
+        // 仅全店铺授权可见；单 Seller Account 凭证保持拒绝，不扩大数据边界。
+        const localFence = { sellerAccountId: String(args.sellerAccountId), marketplaceId: String(args.marketplaceId), tenantWide: localAccess.allSellers };
+        if (!localAccess.allSellers && !localAccess.sellerIds.includes(localFence.sellerAccountId)) throw new SyncInputError("数据范围不可访问。", 403);
+        const localSource = await prisma.amazonSyncDataSource.findFirst({
+          where: { ...scope, sellerAccountId: localFence.sellerAccountId, marketplaceId: localFence.marketplaceId },
+          select: { id: true },
+        });
+        if (!localSource) throw new SyncInputError("数据范围不可访问：站点不在当前账号授权范围内。", 403);
+        result = tool === "amazon.data.local.tables"
+          ? await listAmazonLocalRawTables(scope, localFence)
+          : await readAmazonLocalRawRows(scope, localFence, {
+              table: String(args.table ?? ""), page,
+              pageSize: args.pageSize === undefined ? undefined : Number(args.pageSize),
+              fromDate: args.fromDate, toDate: args.toDate, sortDirection: args.sortDirection,
+              filterColumn: args.filterColumn, filterValue: args.filterValue,
+            });
       } else if (tool === "reimbursement_analyze") {
         const from = requiredText(args.from, "开始日期", 10), to = requiredText(args.to, "结束日期", 10);
         const readPathTools = ["reimbursement_get_events", "reimbursement_get_payments", "finance_get_transactions", "data_query"] as const;
@@ -730,6 +751,8 @@ const registeredAmazonMcpTools = bindAmazonMcpHandlers<McpInvocationContext, unk
   "get_order_items": invokeNamedTool("get_order_items"),
   "data_sync_status": invokeNamedTool("data_sync_status"),
   "data_sync_start": invokeNamedTool("data_sync_start"),
+  "amazon.data.local.tables": invokeNamedTool("amazon.data.local.tables"),
+  "amazon.data.local.read": invokeNamedTool("amazon.data.local.read"),
 });
 
 /** Refresh on every discovery. At most three action groups, never one DB traversal per tool. */

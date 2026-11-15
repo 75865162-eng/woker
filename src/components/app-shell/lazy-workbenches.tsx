@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 
 function WorkbenchLoading() {
   return (
-    <div className="space-y-3 rounded-lg border border-border bg-white p-5 shadow-sm">
+    <div className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm">
       <div className="h-4 w-36 animate-pulse rounded bg-surface-muted" />
       <div className="grid gap-3 md:grid-cols-3">
         <div className="h-24 animate-pulse rounded-md bg-surface-muted" />

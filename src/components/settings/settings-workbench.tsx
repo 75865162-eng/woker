@@ -43,7 +43,7 @@ import {
 } from "@/lib/integrations/sellersprite";
 
 const fieldClass =
-  "h-9 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
+  "h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
 const labelClass = "text-xs font-bold uppercase tracking-normal text-muted";
 const imageGenerationModelPattern = /(image|seedream|dall|imagen|flux)/i;
 type SellerSpriteMcpState = SellerSpriteMcpSettings & Pick<SellerSpriteMcpPublicSettings, "hasApiKey" | "configured">;
@@ -640,19 +640,19 @@ export function SettingsWorkbench() {
                       <button
                         key={provider.id}
                         className={`relative flex min-h-12 items-center gap-2 rounded-md border px-3 py-2 text-left transition ${
-                          active ? "border-brand bg-brand text-white shadow-sm" : "border-border bg-surface-muted hover:border-brand hover:bg-white"
+                          active ? "border-brand bg-brand text-white shadow-sm" : "border-border bg-surface-muted hover:border-brand hover:bg-surface"
                         }`}
                         onClick={() => applyProviderPreset(provider.id)}
                         type="button"
                       >
-                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[11px] font-black ${active ? "bg-white text-brand" : provider.accentClass}`}>
+                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-label font-black ${active ? "bg-surface text-brand" : provider.accentClass}`}>
                           {provider.shortLabel}
                         </span>
                         <span className="min-w-0">
                           <span className={`block truncate text-sm font-bold ${active ? "text-white" : "text-foreground"}`}>{provider.label}</span>
                           <span className={`mt-0.5 block truncate text-xs ${active ? "text-white/80" : "text-muted"}`}>{provider.model}</span>
                         </span>
-                        {provider.recommended ? <span className="absolute right-2 top-2 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-black text-white">荐</span> : null}
+                        {provider.recommended ? <span className="absolute right-2 top-2 rounded-full bg-accent px-1.5 py-0.5 text-label font-black text-white">荐</span> : null}
                       </button>
                     );
                   })}
@@ -739,7 +739,7 @@ export function SettingsWorkbench() {
 
               <div className="flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm text-muted">
-                  {settingsError ? <span className="text-red-600">{settingsError}</span> : savedAt ? <span>已保存：{savedAt}</span> : null}
+                  {settingsError ? <span className="text-danger-ink">{settingsError}</span> : savedAt ? <span>已保存：{savedAt}</span> : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="secondary" onClick={() => void resetSettings()}>
@@ -855,7 +855,7 @@ export function SettingsWorkbench() {
 
                 <div className="flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="text-sm text-muted">
-                    {imageSettingsError ? <span className="text-red-600">{imageSettingsError}</span> : imageSavedAt ? <span>已保存：{imageSavedAt}</span> : null}
+                    {imageSettingsError ? <span className="text-danger-ink">{imageSettingsError}</span> : imageSavedAt ? <span>已保存：{imageSavedAt}</span> : null}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button variant="secondary" onClick={() => void resetImageSettings()}>
@@ -890,7 +890,7 @@ export function SettingsWorkbench() {
             <CardContent className="space-y-3 p-3">
               <div className="grid grid-cols-1 gap-3 xl:grid-cols-[0.7fr_1.4fr_0.9fr]">
                 <Field label="启用">
-                  <label className="flex h-9 items-center gap-2 rounded-md border border-border bg-white px-3 text-sm font-semibold text-foreground">
+                  <label className="flex h-9 items-center gap-2 rounded-md border border-border bg-surface px-3 text-sm font-semibold text-foreground">
                     <input
                       checked={sellerSpriteSettings.enabled}
                       onChange={(event) => updateSellerSprite("enabled", event.target.checked)}
@@ -966,8 +966,8 @@ export function SettingsWorkbench() {
               </div>
               </details>
 
-              {sellerSpriteError ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{sellerSpriteError}</div> : null}
-              {sellerSpriteTestMessage ? <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700">{sellerSpriteTestMessage}</div> : null}
+              {sellerSpriteError ? <div className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm font-medium text-danger-ink">{sellerSpriteError}</div> : null}
+              {sellerSpriteTestMessage ? <div className="rounded-md border border-warning-ink/30 bg-warning-soft px-3 py-2 text-sm font-medium text-warning-ink">{sellerSpriteTestMessage}</div> : null}
 
               <div className="flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm text-muted">
@@ -1005,7 +1005,7 @@ export function SettingsWorkbench() {
                   const active = profile.id === activeProfileId;
 
                 return (
-                  <div key={profile.id} className={`rounded-md border p-2.5 ${active ? "border-brand bg-brand/5" : "border-border bg-white"}`}>
+                  <div key={profile.id} className={`rounded-md border p-2.5 ${active ? "border-brand bg-brand/5" : "border-border bg-surface"}`}>
                     <button className="w-full text-left" onClick={() => void loadProfile(profile)} type="button">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex min-w-0 items-center gap-2">
@@ -1051,7 +1051,7 @@ export function SettingsWorkbench() {
                   <div key={`${message.role}-${index}`} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                     <div
                       className={`max-w-[78%] whitespace-pre-wrap rounded-md px-3 py-2 text-sm leading-5 ${
-                        message.role === "user" ? "bg-brand text-white" : "border border-border bg-white text-foreground"
+                        message.role === "user" ? "bg-brand text-white" : "border border-border bg-surface text-foreground"
                       }`}
                     >
                       {message.content}
@@ -1060,7 +1060,7 @@ export function SettingsWorkbench() {
                 ))}
               </div>
 
-              {chatError ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{chatError}</div> : null}
+              {chatError ? <div className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm font-medium text-danger-ink">{chatError}</div> : null}
 
               <div className="grid grid-cols-1 gap-2 lg:grid-cols-[minmax(0,1fr)_130px]">
                 <textarea

@@ -12,7 +12,6 @@ import type {
   AgentToolDefinition,
   JsonObject,
   JsonValue,
-  ToolExecutionInput,
   ToolExecutionResult,
 } from "./types";
 import { selectionTool } from "./selection";
@@ -695,7 +694,7 @@ export function createSellerSpriteMcpAdapter(
 
   return {
     adapterId: sellerSpriteToolAdapterId,
-    async execute(_input: ToolExecutionInput): Promise<ToolExecutionResult> {
+    async execute(): Promise<ToolExecutionResult> {
       if (!settings?.enabled) {
         throw {
           code: "SELLERSPRITE_MCP_NOT_CONFIGURED",

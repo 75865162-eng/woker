@@ -1,6 +1,6 @@
 export type ReplicaId = "sales" | "performance" | "listings" | "orders" | "shipments" | "restock";
 export type ReplicaColumnKind = "text" | "image" | "qty" | "decimal" | "money" | "rate" | "store" | "mskuPrice" | "skuName" | "titleAsin" | "asinMsku" | "salesWindow" | "tags" | "people" | "metric" | "missing" | "icon";
-export type ReplicaColumn = { key: string; label: string; kind?: ReplicaColumnKind; defaultVisible?: boolean };
+export type ReplicaColumn = { key: string; label: string; kind?: ReplicaColumnKind; defaultVisible?: boolean; sortable?: boolean; hint?: string };
 export type ReplicaAction = { id: string; label: string; disabled?: boolean; reason?: string };
 export type ReplicaDimension = { id: string; label: string; disabled?: boolean; reason?: string };
 export type ReplicaCheck = { id: string; label: string; disabled?: boolean; reason?: string };
@@ -16,6 +16,8 @@ export type ReplicaPage = {
   stub: boolean;
   query: ReplicaQuery;
   dimensions: ReplicaDimension[];
+  /** 首屏默认维度；缺省取第一个可用维度。 */
+  defaultDimension?: string;
   metrics: { id: string; label: string }[];
   searchTypes: { id: string; label: string }[];
   showDate: boolean;
@@ -64,6 +66,7 @@ export const replicaPages: ReplicaPage[] = [
     stub: false,
     query: "workbench",
     dimensions: salesDims,
+    defaultDimension: "msku",
     metrics: [
       { id: "quantity", label: "销量" },
       { id: "orders", label: "订单量" },
@@ -78,24 +81,28 @@ export const replicaPages: ReplicaPage[] = [
     tagFilter: true,
     salespersonFilter: false,
     columns: [
+      { key: "sku", label: "品名/品SKU", kind: "skuName" },
       { key: "mainImage", label: "图片", kind: "image" },
-      { key: "asin", label: "ASIN" },
       { key: "store", label: "店铺/站点", kind: "store" },
-      { key: "analysis", label: "分析", kind: "icon" },
-      { key: "operations", label: "运营", kind: "icon" },
-      { key: "insight", label: "销量洞察", kind: "icon" },
-      { key: "parentAsin", label: "父ASIN" },
-      { key: "msku", label: "MSKU/售价", kind: "mskuPrice" },
-      { key: "sku", label: "品名/SKU", kind: "skuName" },
-      { key: "spu", label: "款名/SPU", kind: "missing" },
-      { key: "productTags", label: "产品标签", kind: "tags" },
-      { key: "title", label: "标题" },
-      { key: "salesperson", label: "业务员", kind: "people" },
-      { key: "owner", label: "业绩归属人", kind: "missing" },
-      { key: "category", label: "分类", kind: "missing" },
-      { key: "brand", label: "商品品牌" },
-      { key: "fulfillable", label: "FBA可售", kind: "qty" },
-      { key: "subtotal", label: "小计", kind: "metric" },
+      { key: "quantity", label: "销量", kind: "qty", sortable: true, hint: "所选日期区间的销量合计，与小计（指标=销量）口径一致。" },
+      { key: "totalInventory", label: "FBA总库存", kind: "qty", hint: "取最近一次 FBA 库存快照的可售 + 在途合计；任一行缺快照则该行留空，不补 0。" },
+      { key: "awdInventory", label: "AWD库存", kind: "missing", hint: "快照未包含 AWD 库存字段，显示 - 表示无数据，不补 0。" },
+      { key: "awdInTransit", label: "AWD在途", kind: "missing", hint: "快照未包含 AWD 在途字段，显示 - 表示无数据，不补 0。" },
+      { key: "subtotal", label: "小计", kind: "metric", sortable: true, hint: "当前指标在所选区间内的合计；金额按币种分列，不跨币种相加。" },
+      { key: "asin", label: "ASIN", defaultVisible: false },
+      { key: "parentAsin", label: "父ASIN", defaultVisible: false },
+      { key: "msku", label: "MSKU/售价", kind: "mskuPrice", defaultVisible: false },
+      { key: "analysis", label: "分析", kind: "icon", defaultVisible: false },
+      { key: "operations", label: "运营", kind: "icon", defaultVisible: false },
+      { key: "insight", label: "销量洞察", kind: "icon", defaultVisible: false },
+      { key: "spu", label: "款名/SPU", kind: "missing", defaultVisible: false },
+      { key: "productTags", label: "产品标签", kind: "tags", defaultVisible: false },
+      { key: "title", label: "标题", defaultVisible: false },
+      { key: "salesperson", label: "业务员", kind: "people", defaultVisible: false },
+      { key: "owner", label: "业绩归属人", kind: "missing", defaultVisible: false },
+      { key: "category", label: "分类", kind: "missing", defaultVisible: false },
+      { key: "brand", label: "商品品牌", defaultVisible: false },
+      { key: "fulfillable", label: "FBA可售", kind: "qty", defaultVisible: false },
     ],
     actions: [
       { id: "sync", label: "同步", disabled: true, reason: noWrite },
@@ -105,7 +112,7 @@ export const replicaPages: ReplicaPage[] = [
       { id: "help", label: "帮助" },
     ],
     checks: [
-      { id: "aggregate", label: "按维度汇总", disabled: true, reason: "本地查询始终按当前维度汇总，没有未汇总明细表。" },
+      { id: "parentAsin", label: "按父ASIN汇总" },
       { id: "realtime", label: "实时统计", disabled: true, reason: "页面只读已同步快照，不在浏览器里拉赛狐。" },
       { id: "hideZero", label: "隐藏销量为0的产品" },
       { id: "evaluation", label: "测评产品", disabled: true, reason: locked },

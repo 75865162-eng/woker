@@ -163,8 +163,7 @@ export function shortageMessage(shortages: Array<{ componentProductRecordId: str
   return `组件库存不足：${shortages.map(row => `${row.componentProductRecordId} 需 ${row.required} 可用 ${row.available}`).join('；')}`;
 }
 
-// tsconfig target 为 ES2017，BigInt 字面量需要 ES2020；用 BigInt() 保持向下兼容。
-export const ASSEMBLY_SCALE = BigInt(1_000_000);
+export const ASSEMBLY_SCALE = 1_000_000n;
 
 export function scaleCost(value: string | number): bigint {
   const text = typeof value === 'number' ? value.toFixed(6) : value.trim();
@@ -176,7 +175,7 @@ export function scaleCost(value: string | number): bigint {
 }
 
 export function formatCost(units: bigint): string {
-  const negative = units < BigInt(0);
+  const negative = units < 0n;
   const abs = negative ? -units : units;
   const whole = abs / ASSEMBLY_SCALE;
   const fraction = (abs % ASSEMBLY_SCALE).toString().padStart(6, '0');
@@ -192,11 +191,11 @@ export function lineAmount(quantity: number, unitCost: string): string {
 export function rolledUnitCost(totalCost: string, outputQty: number): string {
   if (!Number.isSafeInteger(outputQty) || outputQty <= 0) throw new WmsError('产出数量须为正整数。', 422);
   const total = scaleCost(totalCost);
-  return formatCost((total + BigInt(outputQty) / BigInt(2)) / BigInt(outputQty));
+  return formatCost((total + BigInt(outputQty) / 2n) / BigInt(outputQty));
 }
 
 export function totalComponentCost(lines: Array<{ consumedQty: number; unitCost: string | { toString(): string } }>) {
-  const total = lines.reduce((sum, line) => sum + scaleCost(String(line.unitCost)) * BigInt(line.consumedQty), BigInt(0));
+  const total = lines.reduce((sum, line) => sum + scaleCost(String(line.unitCost)) * BigInt(line.consumedQty), 0n);
   return formatCost(total);
 }
 

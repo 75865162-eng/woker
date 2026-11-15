@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAppShellUser } from '@/components/app-shell/app-shell-context';
+import { ListPageTemplate } from '@/components/templates/page-templates';
 import { Button } from '@/components/ui/button';
 import { roleCanPerformAction } from '@/lib/accounts/permissions';
 import { workspaceScopeChangedEventName } from '@/lib/workspace/workspace-scope-events';
@@ -58,11 +59,12 @@ export function FinanceExpensesWorkbench() {
     } catch (cause) { setError(cause instanceof Error ? cause.message : '费用操作失败。'); }
     finally { setBusy(false); }
   }
-  return <div className="space-y-5" data-testid="finance-expenses-workbench">
+  return <div data-testid="finance-expenses-workbench"><ListPageTemplate className="space-y-5" header={<div>
     <p className="text-xs text-muted">批准费用只会创建待审核的总账凭证草稿，不代表资金已支付或凭证已过账。币种必须与账套本位币一致，跨币种费用请先取得并登记汇率依据。</p>
-    {error && <p role="alert" className="text-sm text-red-700">{error}</p>}{notice && <p role="status" className="text-sm text-emerald-700">{notice}</p>}
+    {error && <p role="alert" className="text-sm text-danger-ink">{error}</p>}{notice && <p role="status" className="text-sm text-success-ink">{notice}</p>}
+  </div>} filters={<div>
     {canCreate && <form className="space-y-3 border-b border-border pb-5" onSubmit={event => { event.preventDefault(); void command({ action: editingExpense ? 'edit' : 'create', ...(editingExpense ? { expenseId: editingExpense.id, revision: editingExpense.revision } : {}), ...form, currency: book?.currency ?? '' }); }}>
-      <h2 className="text-sm font-semibold">{editingExpense ? `编辑费用草稿 · ${editingExpense.number}` : '新建费用单'}</h2>
+      <h2 className="text-section">{editingExpense ? `编辑费用草稿 · ${editingExpense.number}` : '新建费用单'}</h2>
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <label className="grid gap-1 text-xs text-muted">费用单号<input className={input} required maxLength={80} value={form.number} onChange={event => setForm({ ...form, number: event.target.value })} /></label>
         <label className="grid gap-1 text-xs text-muted">费用类别<input className={input} required maxLength={80} value={form.category} onChange={event => setForm({ ...form, category: event.target.value })} /></label>
@@ -77,6 +79,7 @@ export function FinanceExpensesWorkbench() {
       </div>
       <div className="flex gap-2"><Button disabled={busy || !period || period.status !== 'OPEN'}>{editingExpense ? '更新费用草稿' : '保存费用草稿'}</Button>{editingExpense && <Button type="button" variant="secondary" disabled={busy} onClick={() => { setEditingExpense(null); setForm(current => ({ ...current, number: '', category: '', payee: '', description: '', amount: '' })); }}>取消编辑</Button>}</div>
     </form>}
+  </div>} table={<div>
     <section className="space-y-2"><h2 className="text-sm font-semibold">费用记录 · 最近 {data.expenses.length} 条</h2><div className="overflow-auto"><table className="w-full min-w-[900px] text-left text-xs"><thead><tr>{['费用单', '日期 / 类别', '收款对象 / 说明', '金额', '状态', '总账凭证', '操作'].map(label => <th key={label} className="border-b border-border p-2">{label}</th>)}</tr></thead><tbody>{data.expenses.map(expense => <tr key={expense.id} className="border-b border-border"><td className="p-2">{expense.number}</td><td className="p-2">{expense.expenseDate.slice(0, 10)}<span className="block text-muted">{expense.category}</span></td><td className="p-2">{expense.payee}<span className="block text-muted">{expense.description}</span></td><td className="p-2">{expense.amount} {expense.currency}</td><td className="p-2">{{ DRAFT: '草稿', SUBMITTED: '待复核', APPROVED: '已批准', REJECTED: '已驳回' }[expense.status] ?? expense.status}{expense.decisionMemo && <span className="block text-muted">{expense.decisionMemo}</span>}</td><td className="p-2">{expense.voucher ? <a className="text-brand-dark underline" href="/operations/finance-ledger">凭证 {expense.voucher.status === 'DRAFT' ? '草稿' : expense.voucher.status}</a> : '—'}</td><td className="p-2"><div className="flex gap-1">{expense.status === 'DRAFT' && expense.createdBy === user?.userId && canCreate && <><Button size="sm" variant="secondary" disabled={busy} onClick={() => { setEditingExpense(expense); setForm({ number: expense.number, category: expense.category, payee: expense.payee, description: expense.description, expenseDate: expense.expenseDate.slice(0, 10), amount: expense.amount.replace(/0+$/, '').replace(/\.$/, ''), bookId: expense.bookId, periodId: expense.periodId, debitSubjectId: expense.debitSubjectId, creditSubjectId: expense.creditSubjectId }); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>修改</Button><Button size="sm" disabled={busy} onClick={() => void command({ action: 'submit', expenseId: expense.id, revision: expense.revision })}>提交复核</Button></>}{expense.status === 'SUBMITTED' && expense.createdBy !== user?.userId && canApprove && <><Button size="sm" variant="secondary" disabled={busy} onClick={() => void command({ action: 'approve', expenseId: expense.id, revision: expense.revision })}>批准并生成凭证</Button><Button size="sm" variant="ghost" disabled={busy} onClick={() => { const decisionMemo = window.prompt('驳回原因'); if (decisionMemo) void command({ action: 'reject', expenseId: expense.id, revision: expense.revision, decisionMemo }); }}>驳回</Button></>}</div></td></tr>)}</tbody></table>{!data.expenses.length && <p className="py-6 text-center text-sm text-muted">当前工作区暂无费用记录。</p>}</div></section>
-  </div>;
+  </div>} /></div>;
 }

@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
   assertCredentialStores, assertCredentialTool, assertEndpointProvider, assertProviderDataset,
@@ -42,12 +44,31 @@ test("a credential issued by one provider is rejected by the other endpoint", ()
 });
 
 test("sellfox datasets are a closed list of Sellfox* tables", () => {
+  const schema = readFileSync(new URL("../prisma/schema.prisma", import.meta.url), "utf8");
   for (const dataset of Object.values(sellfoxDatasets)) {
     assert.ok(dataset.table.startsWith("Sellfox"), dataset.table);
     assert.ok(sellfoxTableAllowList.includes(dataset.table));
     assertProviderTable("sellfox", dataset.table, sellfoxTableAllowList);
+    const model = schema.match(new RegExp(`model ${dataset.table} \\{([\\s\\S]*?)^\\}`, "m"))?.[1];
+    assert.ok(model, `Missing Prisma model ${dataset.table}`);
+    for (const column of dataset.columns) {
+      const field = column.replaceAll('"', "");
+      assert.match(model!, new RegExp(`^\\s*${field}\\s`, "m"), `${dataset.key}.${field} is not a Prisma field`);
+    }
+    assert.match(model!, new RegExp(`^\\s*${dataset.dateField}\\s`, "m"), `${dataset.key}.${dataset.dateField} is not a Prisma field`);
   }
   assert.deepEqual(sellfoxDatasetKeys.filter(key => key.includes("amazon")), []);
+});
+
+test("sellfox MCP trend and inventory diagnostics preserve current and complete data semantics", () => {
+  const runtime = readFileSync(fileURLToPath(new URL("../src/lib/sellfox/mcp.ts", import.meta.url)), "utf8");
+  assert.match(runtime, /FROM "sellfox_sales_daily" s/);
+  assert.match(runtime, /bool_and\(s\.complete\)/);
+  assert.match(runtime, /FROM "sellfox_inventory_current"/);
+  assert.match(runtime, /st\.on_hand IS NOT NULL/);
+  assert.doesNotMatch(runtime, /COALESCE\(st\.on_hand, 0\)/);
+  assert.doesNotMatch(runtime, /COALESCE\(tg\.in_transit, 0\)/);
+  assert.doesNotMatch(runtime, /s\."orderNum"|s\."salePrice"/);
 });
 
 test("sellfox cannot name Amazon tables or datasets", () => {

@@ -1,3 +1,7 @@
+import * as procurementRoute from '../../src/app/api/operations/procurement/route';
+import { submitPurchaseOrderApproval, decidePurchaseOrderApproval, placeApprovedPurchaseOrder, submitPurchasePaymentApproval, decidePurchasePaymentApproval, confirmPurchasePayment } from '../../src/lib/procurement/order-service';
+import { createPurchaseInvoice, submitPurchaseInvoiceApproval, decidePurchaseInvoiceApproval } from '../../src/lib/procurement/invoice-service';
+import { previewFinanceSource, importFinanceSource } from '../../src/lib/finance/source-service';
 import {financeStructureFixture} from './finance-structure.integration';
 import {financeFxRevaluationFixture} from './finance-fx-revaluation.integration';
 import {remoteActionFixture} from './fba-remote-action.integration';
@@ -53,12 +57,40 @@ async function main() {
     await mutateFinanceLedger(reviewer,{action:'review-voucher',voucherId:voucher.id,revision:1});
     await mutateFinanceLedger(reviewer,{action:'post-voucher',voucherId:voucher.id,revision:2});return voucher;
   }
-  const invoice=await post('SYNTHETIC-INVOICE','100.123456',inventory.id,payable.id),payment=await post('SYNTHETIC-PAYMENT','60.123456',payable.id,cash.id);
-  const invoiceInput={action:'register',bookId:book.id,voucherId:invoice.id,subjectId:payable.id,counterparty:'supplier:fixture',kind:'PAYABLE',dueDate:'2026-11-20',evidence:'Synthetic supplier bill'};
-  const document=entity(await mutateFinanceOpenItems(scope,invoiceInput),'item');
-  assert.equal((await mutateFinanceOpenItems(scope,invoiceInput) as {reused:boolean}).reused,true);
-  await assert.rejects(()=>mutateFinanceOpenItems(scope,{...invoiceInput,counterparty:'other'}));
-  const funding=entity(await mutateFinanceOpenItems(scope,{...invoiceInput,voucherId:payment.id,kind:'PAYMENT',evidence:'Synthetic bank payment'}),'item');
+  const {sessionCookie: purchaseCookie}=await createSession(scope.actorUserId);
+  const purchaseHeaders={cookie:`${purchaseCookie.name}=${purchaseCookie.value}`,'content-type':'application/json','x-workspace-id':'default'};
+  async function purchaseCreate(body:Record<string,unknown>) {
+    const response=await procurementRoute.POST(new Request('http://127.0.0.1/api/operations/procurement',{method:'POST',headers:purchaseHeaders,body:JSON.stringify(body)}));
+    assert.ok(response);
+    assert.equal(response.status,201,JSON.stringify(await response.clone().json()));return response.json();
+  }
+  const supplier=entity<{id:string}>(await purchaseCreate({action:'supplier',name:'PORT supplier'}),'supplier');
+  await prisma.productRecord.create({data:{...identity,id:'port-purchase-product',userId:scope.actorUserId,sku:'PORT-PURCHASE',payload:{}}});
+  const purchase=entity(await purchaseCreate({action:'order',number:'PORT-PURCHASE',supplierId:supplier.id,currency:'USD',lines:[{productRecordId:'port-purchase-product',expectedQty:1,unitPrice:'100.123456'}]}),'order');
+  const submitted=await submitPurchaseOrderApproval(scope,{id:purchase.id,revision:1});
+  await decidePurchaseOrderApproval(reviewer,{id:submitted.approval.id,revision:1,decision:'APPROVE'});
+  const placed=await placeApprovedPurchaseOrder(scope,{id:purchase.id,revision:3});
+  // 本夹具明确覆盖先票后货的差异独立核准；不伪造收货或跳过发票审批。
+  const purchaseInvoice=await createPurchaseInvoice(scope,{number:'PORT-INVOICE',supplierInvoiceNo:'PORT-SUPPLIER-INVOICE',purchaseOrderId:purchase.id,invoiceDate:'2026-11-10',overrideReason:'隔离夹具：先票后货，独立核准未收货差异',lines:[{productRecordId:'port-purchase-product',invoicedQty:1,unitPrice:'100.123456'}]});
+  const invoiceApproval=await submitPurchaseInvoiceApproval(scope,{id:purchaseInvoice.id,revision:1});
+  await decidePurchaseInvoiceApproval(reviewer,{id:invoiceApproval.approval.id,revision:1,decision:'APPROVE'});
+  const paymentApproval=await submitPurchasePaymentApproval(scope,{id:purchase.id,amount:'60.123456',paidAt:'2026-11-10',method:'BANK_TRANSFER',reference:'PORT-PAYMENT'});
+  await decidePurchasePaymentApproval(reviewer,{id:paymentApproval.approval.id,revision:1,decision:'APPROVE'});
+  const paid=await confirmPurchasePayment(scope,{id:paymentApproval.approval.id,revision:2});
+  async function sourcePost(kind:string,id:string,accountMapping:Array<{sourceAccount:string;subjectId:string}>) {
+    const preview=await previewFinanceSource(scope,new URLSearchParams({kind,id}));
+    const imported=await importFinanceSource(scope,{kind,id,fingerprint:preview.fingerprint,periodId:period.id,date:'2026-11-10',accountMapping});
+    await mutateFinanceLedger(reviewer,{action:'review-voucher',voucherId:imported.voucher.id,revision:1});
+    await mutateFinanceLedger(reviewer,{action:'post-voucher',voucherId:imported.voucher.id,revision:2});return imported.voucher;
+  }
+  const invoice=await sourcePost('PURCHASE_INVOICE',purchaseInvoice.id,[{sourceAccount:'PURCHASE_INVOICE_COST',subjectId:inventory.id},{sourceAccount:'PURCHASE_PAYABLE',subjectId:payable.id}]);
+  const payment=await sourcePost('PURCHASE_PAYMENT',paid.payment.id,[{sourceAccount:'PURCHASE_PAYABLE',subjectId:payable.id},{sourceAccount:'PURCHASE_CASH_BANK_TRANSFER',subjectId:cash.id}]);
+  const invoiceInput={action:'confirm-purchase',bookId:book.id,voucherId:invoice.id,subjectId:payable.id,purchaseOrderId:purchase.id,orderRevision:placed.revision,voucherRevision:3,dueDate:'2026-11-20',evidence:'独立确认采购发票来源'};
+  await assert.rejects(()=>mutateFinanceOpenItems(scope,{action:'register',bookId:book.id,voucherId:invoice.id,subjectId:payable.id,counterparty:`supplier:${supplier.id}`,kind:'PAYABLE',dueDate:'2026-11-20',evidence:'禁止手工冒充采购来源'}));
+  const document=entity(await mutateFinanceOpenItems(third,invoiceInput),'item');
+  assert.equal((await mutateFinanceOpenItems(third,invoiceInput) as {reused:boolean}).reused,true);
+  await assert.rejects(()=>mutateFinanceOpenItems(third,{...invoiceInput,orderRevision:placed.revision+1}));
+  const funding=entity(await mutateFinanceOpenItems(third,{...invoiceInput,voucherId:payment.id,evidence:'独立确认采购付款来源'}),'item');
   const match={action:'settle',bookId:book.id,periodId:period.id,date:'2026-11-15',documentId:document.id,paymentId:funding.id,documentRevision:1,paymentRevision:1,amount:'30.000001',idempotencyKey:'SYNTHETIC-MATCH',evidence:'Bank and supplier reconciliation'};
   const matches=await Promise.all(Array.from({length:6},()=>mutateFinanceOpenItems(reviewer,match)));
   const settlement=entity(matches[0],'settlement');matches.forEach(result=>assert.equal(entity(result,'settlement').id,settlement.id));

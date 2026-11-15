@@ -73,12 +73,28 @@ const writeActions: Record<string, { action: 'view' | 'edit' | 'create' | 'appro
 };
 
 export async function GET(request: Request) {
+  const tAuth = performance.now();
   const auth = await scopeFor(request, 'view');
   if ('response' in auth) return auth.response;
+  const authMs = performance.now() - tAuth;
   try {
     const url = new URL(request.url);
     const kind = url.searchParams.get('kind') ?? 'options';
-    return NextResponse.json(await queryExt(auth.scope, kind, url.searchParams));
+    const tQuery = performance.now();
+    const withTiming = (response: NextResponse) => {
+      response.headers.set('Server-Timing', `auth;dur=${authMs.toFixed(0)}, query;dur=${(performance.now() - tQuery).toFixed(0)}`);
+      return response;
+    };
+    // 工作台首屏一次取齐：省掉两轮额外往返和两次权限校验，数据同时到达。
+    if (kind === 'repricing-bundle') {
+      const [rules, offers, queue] = await Promise.all([
+        queryExt(auth.scope, 'repricing-rules', url.searchParams),
+        queryExt(auth.scope, 'offers', url.searchParams),
+        queryExt(auth.scope, 'queue', url.searchParams),
+      ]);
+      return withTiming(NextResponse.json({ rules, offers, queue }));
+    }
+    return withTiming(NextResponse.json(await queryExt(auth.scope, kind, url.searchParams)));
   } catch (error) { return errorResponse(error); }
 }
 

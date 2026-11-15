@@ -9,9 +9,12 @@ import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Clock3, FileText, RefreshCw, ShieldAlert, Sparkles, SquareKanban, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { StandardDataTable } from "@/components/ui/table-variants";
+import { type DataTableColumn } from "@/components/ui/data-table";
 import { useAppShellUser } from "@/components/app-shell/app-shell-context";
 import { roleCanPerformAction } from "@/lib/accounts/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { WorkbenchPageTemplate } from "@/components/templates/page-templates";
 import type {
   AgentApproval,
   AgentCenterItem,
@@ -22,7 +25,7 @@ import type {
   AgentToolDefinition,
   AgentTraceEvent,
 } from "@/lib/agent-platform";
-import { type ProductDevelopmentReport, type ProductExecutionOutput, type ProductHandoffPayload } from "@/lib/agent-platform/product";
+import { type ProductDevelopmentReport, type ProductEvidenceItem, type ProductExecutionOutput, type ProductHandoffPayload, type ProductProjectDraft } from "@/lib/agent-platform/product";
 
 type ProductAgentResponse = {
   agent: AgentCenterItem;
@@ -403,6 +406,25 @@ export function ProductAgentWorkbench() {
   const toolCalls = currentExecution?.toolCalls ?? [];
   const traces = currentExecution?.traces ?? [];
   const memoryItems = data?.memoryItems ?? [];
+  const prdColumns: DataTableColumn<{ mustHave: string[]; shouldHave: string[] }>[] = [
+    { key: "mustHave", header: "必须具备", render: (r) => (<ul className="space-y-1 text-xs text-muted">{r.mustHave.map((item) => <li key={item}>• {item}</li>)}</ul>) },
+    { key: "shouldHave", header: "建议具备", render: (r) => (<ul className="space-y-1 text-xs text-muted">{r.shouldHave.map((item) => <li key={item}>• {item}</li>)}</ul>) },
+  ];
+  const toolCallColumns: DataTableColumn<AgentToolCall>[] = [
+    { key: "tool", header: "Tool", render: (r) => (<><div className="text-xs font-semibold text-foreground">{r.toolName}</div><div className="mt-1 text-label text-muted">{r.toolId}</div></>) },
+    { key: "risk", header: "Risk", render: (r) => <Badge tone={r.riskLevel === "CRITICAL" ? "red" : r.riskLevel === "HIGH" ? "amber" : r.riskLevel === "MEDIUM" ? "blue" : "gray"}>{r.riskLevel}</Badge> },
+    { key: "status", header: "Status", render: (r) => <span className="text-xs font-semibold text-muted">{r.status}</span> },
+  ];
+  const evidenceColumns: DataTableColumn<ProductEvidenceItem & { key: string }>[] = [
+    { key: "metric", header: "Metric", render: (r) => <span className="text-xs font-semibold text-foreground">{r.metric}</span> },
+    { key: "source", header: "Source", render: (r) => <span className="text-xs text-muted">{r.dataSource}</span> },
+    { key: "value", header: "Value", render: (r) => <span className="text-xs text-muted">{JSON.stringify(r.value)}</span> },
+  ];
+  const stageColumns: DataTableColumn<ProductProjectDraft["stages"][number]>[] = [
+    { key: "name", header: "阶段", render: (r) => <span className="text-xs font-semibold text-foreground">{r.name}</span> },
+    { key: "goal", header: "目标", render: (r) => <span className="text-xs text-muted">{r.goal}</span> },
+    { key: "owner", header: "负责人", render: (r) => <span className="text-xs text-muted">{r.owner}</span> },
+  ];
   const metrics = useMemo(() => {
     const readiness = report?.scores.productReadiness ?? 0;
     const differentiation = report?.scores.differentiation ?? 0;
@@ -420,8 +442,8 @@ export function ProductAgentWorkbench() {
   }, [currentExecution?.tokenUsage, currentExecution?.toolCallCount, report]);
 
   return (
-    <div className="space-y-4">
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+    <WorkbenchPageTemplate
+      kpis={<section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
         <Card>
           <CardContent className="flex items-center gap-3 p-4">
             <Sparkles className="h-5 w-5 text-brand" />
@@ -476,17 +498,17 @@ export function ProductAgentWorkbench() {
             </div>
           </CardContent>
         </Card>
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+      </section>}
+      main={<>
+      <section className="grid gap-[var(--gap-section)] xl:grid-cols-[1.05fr_0.95fr]">
         <Card>
           <CardHeader className="flex flex-col gap-2">
-            <CardTitle>产品简报</CardTitle>
+            <CardTitle className="text-section">产品简报</CardTitle>
             <p className="text-xs font-medium text-muted">把市场 Agent 的机会转成 PRD、成本目标和产品项目草案。</p>
           </CardHeader>
           <CardContent className="space-y-3">
             <ChainHandoffNotice payload={chain.payload} error={chain.error} />
-            {error ? <div className="rounded-md border border-danger/30 bg-red-50 px-3 py-2 text-sm font-semibold text-danger">{error}</div> : null}
+            {error ? <div className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm font-semibold text-danger">{error}</div> : null}
             {selectedHandoff ? (
               <div className="rounded-md border border-brand/20 bg-brand/5 p-3">
                 <div className="text-xs font-bold uppercase tracking-wide text-muted">市场交接</div>
@@ -552,7 +574,7 @@ export function ProductAgentWorkbench() {
         <Card>
           <CardHeader className="flex items-center justify-between gap-3">
             <div>
-              <CardTitle>审批</CardTitle>
+              <CardTitle className="text-section">审批</CardTitle>
               <p className="mt-1 text-xs font-medium text-muted">创建产品项目后，这里会出现待审批动作。</p>
             </div>
             {currentApproval ? <Badge tone={currentApproval.status === "APPROVED" ? "green" : currentApproval.status === "REJECTED" ? "red" : "amber"}>{currentApproval.status}</Badge> : null}
@@ -585,10 +607,10 @@ export function ProductAgentWorkbench() {
         </Card>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <section className="grid gap-[var(--gap-section)] xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
           <CardHeader>
-            <CardTitle>PRD</CardTitle>
+            <CardTitle className="text-section">PRD</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {report ? (
@@ -601,30 +623,13 @@ export function ProductAgentWorkbench() {
                   <MetricBox label="产品就绪度" value={report.scores.productReadiness} tone="blue" />
                   <MetricBox label="执行置信度" value={report.scores.executionConfidence} tone="green" />
                 </div>
-                <div className="overflow-x-auto rounded-md border border-border">
-                  <table className="min-w-full divide-y divide-border text-sm">
-                    <thead className="bg-surface-muted text-xs font-bold text-muted">
-                      <tr>
-                        <th className="px-3 py-2 text-left">必须具备</th>
-                        <th className="px-3 py-2 text-left">建议具备</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border bg-white">
-                      <tr>
-                        <td className="px-3 py-3 align-top">
-                          <ul className="space-y-1 text-xs text-muted">
-                            {report.prd.mustHave.map((item) => <li key={item}>• {item}</li>)}
-                          </ul>
-                        </td>
-                        <td className="px-3 py-3 align-top">
-                          <ul className="space-y-1 text-xs text-muted">
-                            {report.prd.shouldHave.map((item) => <li key={item}>• {item}</li>)}
-                          </ul>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                <StandardDataTable
+                  ariaLabel="PRD 必须具备与建议具备"
+                  rows={[{ mustHave: report.prd.mustHave, shouldHave: report.prd.shouldHave }]}
+                  getRowKey={() => "prd"}
+                  columns={prdColumns}
+                  empty="暂无 PRD。"
+                />
               </>
             ) : (
               <div className="rounded-md border border-dashed border-border p-4 text-sm font-semibold text-muted">
@@ -636,7 +641,7 @@ export function ProductAgentWorkbench() {
 
         <Card>
           <CardHeader>
-            <CardTitle>成本目标与项目</CardTitle>
+            <CardTitle className="text-section">成本目标与项目</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {report ? (
@@ -666,10 +671,10 @@ export function ProductAgentWorkbench() {
         </Card>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <section className="grid gap-[var(--gap-section)] xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
           <CardHeader>
-            <CardTitle>竞品痛点</CardTitle>
+            <CardTitle className="text-section">竞品痛点</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {report?.competitorPainPoints.length ? (
@@ -691,7 +696,7 @@ export function ProductAgentWorkbench() {
 
         <Card>
           <CardHeader>
-            <CardTitle>差异化</CardTitle>
+            <CardTitle className="text-section">差异化</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {report?.differentiation.length ? (
@@ -699,7 +704,7 @@ export function ProductAgentWorkbench() {
                 <div key={item.angle} className="rounded-md border border-border p-3">
                   <div className="text-sm font-semibold text-foreground">{item.angle}</div>
                   <div className="mt-1 text-xs text-muted">{item.benefit}</div>
-                  <div className="mt-1 text-[11px] text-muted">{item.rationale}</div>
+                  <div className="mt-1 text-label text-muted">{item.rationale}</div>
                 </div>
               ))
             ) : (
@@ -711,10 +716,10 @@ export function ProductAgentWorkbench() {
         </Card>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <section className="grid gap-[var(--gap-section)] xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
           <CardHeader>
-            <CardTitle>执行时间线</CardTitle>
+            <CardTitle className="text-section">执行时间线</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {traces.length ? traces.map((trace) => <TimelineRow key={trace.id} trace={trace} />) : <EmptyState text="暂无执行轨迹。" />}
@@ -723,35 +728,17 @@ export function ProductAgentWorkbench() {
 
         <Card>
           <CardHeader>
-            <CardTitle>工具调用</CardTitle>
+            <CardTitle className="text-section">工具调用</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {toolCalls.length ? (
-              <div className="overflow-x-auto rounded-md border border-border">
-                <table className="min-w-full divide-y divide-border text-sm">
-                  <thead className="bg-surface-muted text-xs font-bold text-muted">
-                    <tr>
-                      <th className="px-3 py-2 text-left">Tool</th>
-                      <th className="px-3 py-2 text-left">Risk</th>
-                      <th className="px-3 py-2 text-left">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border bg-white">
-                    {toolCalls.map((toolCall) => (
-                      <tr key={toolCall.id}>
-                        <td className="px-3 py-2">
-                          <div className="text-xs font-semibold text-foreground">{toolCall.toolName}</div>
-                          <div className="mt-1 text-[11px] text-muted">{toolCall.toolId}</div>
-                        </td>
-                        <td className="px-3 py-2">
-                          <Badge tone={toolCall.riskLevel === "CRITICAL" ? "red" : toolCall.riskLevel === "HIGH" ? "amber" : toolCall.riskLevel === "MEDIUM" ? "blue" : "gray"}>{toolCall.riskLevel}</Badge>
-                        </td>
-                        <td className="px-3 py-2 text-xs font-semibold text-muted">{toolCall.status}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <StandardDataTable
+                ariaLabel="产品 Agent 工具调用"
+                rows={toolCalls}
+                getRowKey={(toolCall) => toolCall.id}
+                columns={toolCallColumns}
+                empty="当前执行暂无工具调用。"
+              />
             ) : (
               <EmptyState text="当前执行暂无工具调用。" />
             )}
@@ -759,33 +746,20 @@ export function ProductAgentWorkbench() {
         </Card>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <section className="grid gap-[var(--gap-section)] xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
           <CardHeader>
-            <CardTitle>证据</CardTitle>
+            <CardTitle className="text-section">证据</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {report?.evidence.length ? (
-              <div className="overflow-x-auto rounded-md border border-border">
-                <table className="min-w-full divide-y divide-border text-sm">
-                  <thead className="bg-surface-muted text-xs font-bold text-muted">
-                    <tr>
-                      <th className="px-3 py-2 text-left">Metric</th>
-                      <th className="px-3 py-2 text-left">Source</th>
-                      <th className="px-3 py-2 text-left">Value</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border bg-white">
-                    {report.evidence.map((item, index) => (
-                      <tr key={`${item.metric}-${index}`}>
-                        <td className="px-3 py-2 text-xs font-semibold text-foreground">{item.metric}</td>
-                        <td className="px-3 py-2 text-xs text-muted">{item.dataSource}</td>
-                        <td className="px-3 py-2 text-xs text-muted">{JSON.stringify(item.value)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <StandardDataTable
+                ariaLabel="产品 Agent 证据"
+                rows={report.evidence.map((item, index) => ({ ...item, key: `${item.metric}-${index}` }))}
+                getRowKey={(item) => item.key}
+                columns={evidenceColumns}
+                empty="暂无可用证据。"
+              />
             ) : (
               <EmptyState text="暂无可用证据。" />
             )}
@@ -794,7 +768,7 @@ export function ProductAgentWorkbench() {
 
         <Card>
           <CardHeader>
-            <CardTitle>市场交接</CardTitle>
+            <CardTitle className="text-section">市场交接</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {selectedOpportunity ? (
@@ -820,10 +794,10 @@ export function ProductAgentWorkbench() {
         </Card>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <section className="grid gap-[var(--gap-section)] xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
           <CardHeader>
-            <CardTitle>项目草案</CardTitle>
+            <CardTitle className="text-section">项目草案</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {report ? (
@@ -832,26 +806,13 @@ export function ProductAgentWorkbench() {
                   <div className="text-xs font-bold uppercase tracking-wide text-muted">Project Name</div>
                   <div className="mt-1 text-sm font-semibold text-foreground">{report.projectDraft.projectName}</div>
                 </div>
-                <div className="overflow-x-auto rounded-md border border-border">
-                  <table className="min-w-full divide-y divide-border text-sm">
-                    <thead className="bg-surface-muted text-xs font-bold text-muted">
-                      <tr>
-                        <th className="px-3 py-2 text-left">阶段</th>
-                        <th className="px-3 py-2 text-left">目标</th>
-                        <th className="px-3 py-2 text-left">负责人</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border bg-white">
-                      {report.projectDraft.stages.map((stage) => (
-                        <tr key={stage.name}>
-                          <td className="px-3 py-2 text-xs font-semibold text-foreground">{stage.name}</td>
-                          <td className="px-3 py-2 text-xs text-muted">{stage.goal}</td>
-                          <td className="px-3 py-2 text-xs text-muted">{stage.owner}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <StandardDataTable
+                  ariaLabel="项目草案阶段"
+                  rows={report.projectDraft.stages}
+                  getRowKey={(stage) => stage.name}
+                  columns={stageColumns}
+                  empty="暂无阶段信息。"
+                />
               </>
             ) : (
               <EmptyState text="暂无项目草案。" />
@@ -861,14 +822,14 @@ export function ProductAgentWorkbench() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Memory</CardTitle>
+            <CardTitle className="text-section">Memory</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {memoryItems.length ? (
               memoryItems.map((memory) => (
                 <div key={memory.id} className="rounded-md border border-border p-3">
                   <div className="text-sm font-semibold text-foreground">{memory.summary}</div>
-                  <div className="mt-1 text-[11px] text-muted">{memory.scope} / {memory.scopeKey}</div>
+                  <div className="mt-1 text-label text-muted">{memory.scope} / {memory.scopeKey}</div>
                 </div>
               ))
             ) : (
@@ -877,23 +838,24 @@ export function ProductAgentWorkbench() {
           </CardContent>
         </Card>
       </section>
-    </div>
+      </>}
+    />
   );
 }
 
 function MetricBox({ label, value, tone }: { label: string; value: string | number; tone: "blue" | "amber" | "green" | "red" }) {
   const toneClass =
     tone === "blue"
-      ? "text-blue-700"
+      ? "text-info-ink"
       : tone === "amber"
-        ? "text-amber-700"
+        ? "text-warning-ink"
         : tone === "green"
-          ? "text-emerald-700"
-          : "text-red-700";
+          ? "text-success-ink"
+          : "text-danger-ink";
 
   return (
     <div className="rounded-md border border-border bg-surface-muted px-3 py-2">
-      <div className="text-[11px] font-bold uppercase tracking-wide text-muted">{label}</div>
+      <div className="text-label font-bold uppercase tracking-wide text-muted">{label}</div>
       <div className={`mt-1 text-sm font-semibold ${toneClass}`}>{value}</div>
     </div>
   );
@@ -901,10 +863,10 @@ function MetricBox({ label, value, tone }: { label: string; value: string | numb
 
 function TimelineRow({ trace }: { trace: AgentTraceEvent }) {
   return (
-    <div className="rounded-md border border-border bg-white px-3 py-2">
+    <div className="rounded-md border border-border bg-surface px-3 py-2">
       <div className="flex items-center justify-between gap-3">
         <div className="text-sm font-semibold text-foreground">{trace.type}</div>
-        <div className="text-[11px] text-muted">{formatDate(trace.createdAt)}</div>
+        <div className="text-label text-muted">{formatDate(trace.createdAt)}</div>
       </div>
       {trace.message ? <div className="mt-1 text-xs text-muted">{trace.message}</div> : null}
     </div>

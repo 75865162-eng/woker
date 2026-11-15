@@ -7,6 +7,8 @@ import { ChainHandoffNotice, chainFetch, chainHeaders, sendChainHandoff, useChai
 
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Clock3, FileText, RefreshCw, Sparkles, SquareKanban, TriangleAlert } from "lucide-react";
+import { WorkbenchPageTemplate } from "@/components/templates/page-templates";
+import { StandardDataTable } from "@/components/ui/table-variants";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAppShellUser } from "@/components/app-shell/app-shell-context";
@@ -304,23 +306,22 @@ export function SupplierAgentWorkbench() {
   const reportSummary = report?.summary ?? "-";
 
   return (
-    <div className="space-y-4">
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+    <WorkbenchPageTemplate kpis={<section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="供应商" value={report?.supplierRecommendations.length ?? 0} icon={<Sparkles className="h-5 w-5 text-brand" />} />
         <MetricCard label="报价" value={report?.quotationAnalysis.length ?? 0} icon={<FileText className="h-5 w-5 text-brand" />} />
         <MetricCard label="工具调用" value={currentExecution?.toolCallCount ?? 0} icon={<Clock3 className="h-5 w-5 text-brand" />} />
         <MetricCard label="记忆条目" value={memoryItems.length} icon={<SquareKanban className="h-5 w-5 text-brand" />} />
-      </section>
+      </section>} main={<div className="space-y-[var(--gap-section)]">
 
-      <section className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+      <section className="grid gap-[var(--gap-section)] xl:grid-cols-[1.05fr_0.95fr]">
         <Card>
           <CardHeader className="flex flex-col gap-2">
-            <CardTitle>供应简报</CardTitle>
+            <CardTitle className="text-section">供应简报</CardTitle>
             <p className="text-xs font-medium text-muted">把产品 Agent 的计划转成供应商推荐、报价分析和 RFQ 草稿。</p>
           </CardHeader>
           <CardContent className="space-y-3">
             <ChainHandoffNotice payload={chain.payload} error={chain.error} />
-            {error ? <div className="rounded-md border border-danger/30 bg-red-50 px-3 py-2 text-sm font-semibold text-danger">{error}</div> : null}
+            {error ? <div className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm font-semibold text-danger">{error}</div> : null}
             {selectedHandoff ? (
               <div className="rounded-md border border-brand/20 bg-brand/5 p-3">
                 <div className="text-xs font-bold uppercase tracking-wide text-muted">产品交接</div>
@@ -358,7 +359,7 @@ export function SupplierAgentWorkbench() {
         <Card>
           <CardHeader className="flex items-center justify-between gap-3">
             <div>
-              <CardTitle>审批</CardTitle>
+              <CardTitle className="text-section">审批</CardTitle>
               <p className="mt-1 text-xs font-medium text-muted">创建供应项目后，这里会出现待审批动作。</p>
             </div>
             {currentApproval ? <Badge tone={currentApproval.status === "APPROVED" ? "green" : currentApproval.status === "REJECTED" ? "red" : "amber"}>{currentApproval.status}</Badge> : null}
@@ -389,10 +390,10 @@ export function SupplierAgentWorkbench() {
         </Card>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <section className="grid gap-[var(--gap-section)] xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
           <CardHeader>
-            <CardTitle>{report?.selectionSource ? "供应商线索（待核实）" : "供应商推荐"}</CardTitle>
+            <CardTitle className="text-section">{report?.selectionSource ? "供应商线索（待核实）" : "供应商推荐"}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {report?.selectionSource && <div className="text-xs text-muted">{report.summary} {report.sourcingStatus === "NEEDS_DATA" ? "请补充供应线索后重新运行。" : report.selectionSource.stale ? "证据已过期，请重新核实。" : "请人工核实后交接。"} 来源：{report.selectionSource.slug}</div>}
@@ -411,7 +412,7 @@ export function SupplierAgentWorkbench() {
 
         <Card>
           <CardHeader>
-            <CardTitle>RFQ 草稿</CardTitle>
+            <CardTitle className="text-section">RFQ 草稿</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {report ? (
@@ -432,10 +433,10 @@ export function SupplierAgentWorkbench() {
         </Card>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <section className="grid gap-[var(--gap-section)] xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
           <CardHeader>
-            <CardTitle>{report?.selectionSource ? "页面价格线索（非正式报价）" : "报价分析"}</CardTitle>
+            <CardTitle className="text-section">{report?.selectionSource ? "页面价格线索（非正式报价）" : "报价分析"}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {report?.quotationAnalysis.length ? report.quotationAnalysis.map((item) => (
@@ -452,7 +453,7 @@ export function SupplierAgentWorkbench() {
 
         <Card>
           <CardHeader>
-            <CardTitle>项目草案</CardTitle>
+            <CardTitle className="text-section">项目草案</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {report ? (
@@ -461,26 +462,17 @@ export function SupplierAgentWorkbench() {
                   <div className="text-xs font-bold uppercase tracking-wide text-muted">项目</div>
                   <div className="mt-1 text-sm font-semibold text-foreground">{report.supplierProjectDraft.projectName}</div>
                 </div>
-                <div className="overflow-x-auto rounded-md border border-border">
-                  <table className="min-w-full divide-y divide-border text-sm">
-                    <thead className="bg-surface-muted text-xs font-bold text-muted">
-                      <tr>
-                        <th className="px-3 py-2 text-left">阶段</th>
-                        <th className="px-3 py-2 text-left">目标</th>
-                        <th className="px-3 py-2 text-left">负责人</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border bg-white">
-                      {report.supplierProjectDraft.stages.map((stage) => (
-                        <tr key={stage.name}>
-                          <td className="px-3 py-2 text-xs font-semibold text-foreground">{stage.name}</td>
-                          <td className="px-3 py-2 text-xs text-muted">{stage.goal}</td>
-                          <td className="px-3 py-2 text-xs text-muted">{stage.owner}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <StandardDataTable
+                  ariaLabel="供应商项目草案阶段"
+                  rows={report.supplierProjectDraft.stages}
+                  getRowKey={stage => stage.name}
+                  columns={[
+                    { key: "name", header: "阶段", className: "font-semibold text-foreground", render: stage => stage.name },
+                    { key: "goal", header: "目标", className: "text-muted", render: stage => stage.goal },
+                    { key: "owner", header: "负责人", className: "text-muted", render: stage => stage.owner },
+                  ]}
+                  empty="暂无项目阶段。"
+                />
                 <div className="rounded-md border border-border bg-surface-muted p-3">
                   <div className="text-xs font-bold uppercase tracking-wide text-muted">摘要</div>
                   <div className="mt-1 text-sm text-foreground">{reportSummary}</div>
@@ -491,17 +483,17 @@ export function SupplierAgentWorkbench() {
         </Card>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <section className="grid gap-[var(--gap-section)] xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
           <CardHeader>
-            <CardTitle>执行时间线</CardTitle>
+            <CardTitle className="text-section">执行时间线</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {traces.length ? traces.map((trace) => (
-              <div key={trace.id} className="rounded-md border border-border bg-white px-3 py-2">
+              <div key={trace.id} className="rounded-md border border-border bg-surface px-3 py-2">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm font-semibold text-foreground">{trace.type}</div>
-                  <div className="text-[11px] text-muted">{formatDate(trace.createdAt)}</div>
+                  <div className="text-label text-muted">{formatDate(trace.createdAt)}</div>
                 </div>
                 {trace.message ? <div className="mt-1 text-xs text-muted">{trace.message}</div> : null}
               </div>
@@ -511,7 +503,7 @@ export function SupplierAgentWorkbench() {
 
         <Card>
           <CardHeader>
-            <CardTitle>工具调用</CardTitle>
+            <CardTitle className="text-section">工具调用</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {toolCalls.length ? toolCalls.map((toolCall) => (
@@ -520,17 +512,17 @@ export function SupplierAgentWorkbench() {
                   <div className="text-sm font-semibold text-foreground">{toolCall.toolName}</div>
                   <Badge tone={toolCall.riskLevel === "CRITICAL" ? "red" : toolCall.riskLevel === "HIGH" ? "amber" : toolCall.riskLevel === "MEDIUM" ? "blue" : "gray"}>{toolCall.riskLevel}</Badge>
                 </div>
-                <div className="mt-1 text-[11px] text-muted">{toolCall.toolId}</div>
+                <div className="mt-1 text-label text-muted">{toolCall.toolId}</div>
               </div>
             )) : <EmptyState text="当前执行暂无工具调用。" />}
           </CardContent>
         </Card>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <section className="grid gap-[var(--gap-section)] xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
           <CardHeader>
-            <CardTitle>证据</CardTitle>
+            <CardTitle className="text-section">证据</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {report?.evidence.length ? report.evidence.map((item, index) => (
@@ -544,20 +536,20 @@ export function SupplierAgentWorkbench() {
 
         <Card>
           <CardHeader>
-            <CardTitle>记忆</CardTitle>
+            <CardTitle className="text-section">记忆</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {memoryItems.length ? memoryItems.map((memory) => (
               <div key={memory.id} className="rounded-md border border-border p-3">
                 <div className="text-sm font-semibold text-foreground">{memory.summary}</div>
-                <div className="mt-1 text-[11px] text-muted">{memory.scope} / {memory.scopeKey}</div>
+                <div className="mt-1 text-label text-muted">{memory.scope} / {memory.scopeKey}</div>
               </div>
             )) : <EmptyState text="暂无记忆条目。" />}
           </CardContent>
         </Card>
-      </section>
-    </div>
-  );
+       </section>
+     </div>} />
+   );
 }
 
 function MetricCard({ label, value, icon }: { label: string; value: string | number; icon: React.ReactNode }) {

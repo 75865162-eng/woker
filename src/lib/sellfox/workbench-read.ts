@@ -1,5 +1,6 @@
 import { listingsReadSql } from "./listings-read";
 import { sellfoxSortKey, sellfoxSqlOrder } from "./browse-sort";
+import { sellfoxDaySortDate } from "./sort-columns";
 import { sellfoxAgentColumns } from "./agent-read";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -9,6 +10,12 @@ import { resolveEffectiveReportDate } from "./browse-report-date";
 
 type Scope = { organizationId: string; workspaceId: string };
 type Row = Record<string, unknown>;
+export type SalesSummary = {
+  quantity: number | null;
+  fulfillable: number | null;
+  totalInventory: number | null;
+  daily: Record<string, { value: number | null; entities: number }>;
+};
 export type WorkbenchDomain = "sales" | "performance" | "listings" | "ads_report" | "ads_targeting" | "ads_search_term" | "ads_campaign" | "ads_ad_group" | "ads_placement";
 const sources = { sales: "sellfox_sales_daily", performance: '"SellfoxProductDailySnapshot"', listings: "sellfox_listing_current", ads_report: "sellfox_ads_product_daily", ads_targeting: "sellfox_ads_targeting_daily", ads_search_term: "sellfox_ads_search_term_daily", ads_campaign: "sellfox_ads_campaign_daily", ads_ad_group: "sellfox_ads_ad_group_daily", ads_placement: "sellfox_ads_placement_daily" };
 function scoped(alias: string, scope: Scope) {
@@ -18,6 +25,12 @@ function scoped(alias: string, scope: Scope) {
 function dateSpan(from: string, to: string) {
   const count = (Date.parse(to) - Date.parse(from)) / 86400000 + 1;
   return Array.from({ length: count }, (_, i) => new Date(Date.parse(from) + i * 86400000).toISOString().slice(0, 10));
+}
+/** 销量域按商品维度跨店铺合并（与赛狐「品名」口径一致，避免同一品名按店铺重复成多行）；
+    利润域保持店铺粒度不变。库存与销量都按 (storeId, msku) 成员精确配对，不做跨店摊薄。 */
+export function sellfoxCrossStoreGrain(domain: string, dimension: string) {
+  if (domain === "sales") return ["asin", "msku", "sku", "parentAsin", "developer", "spu"].includes(dimension);
+  return domain === "performance" && ["developer", "spu"].includes(dimension);
 }
 export function workbenchDateRange(query: SellfoxBrowseQuery) {
   const yesterday = sellfoxDateAt(new Date(), -1);
@@ -34,7 +47,8 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   if (domain === "listings") return listingsReadSql(query, scope, exporting);
   const dimension = domain === "performance" && query.dimension === "spu" ? "asin" : query.dimension;
   const sortKey = sellfoxSortKey(domain, query);
-  let sortExpression = sortKey ? Prisma.raw(`"${sortKey}"`) : Prisma.sql`id`;
+  const sortDay = sortKey ? sellfoxDaySortDate(domain, sortKey) : null;
+  let sortExpression = sortDay ? Prisma.sql`NULLIF(daily->>${sortDay},'')::float` : sortKey ? Prisma.raw(`"${sortKey}"`) : Prisma.sql`id`;
   if (sortKey === "identity" && ["store", "developer", "spu"].includes(dimension)) sortExpression = Prisma.sql`name`;
   if (domain === "performance" && sortKey === "grossProfitRate") sortExpression = Prisma.sql`CASE WHEN "saleRevenue">0 THEN "grossProfit"/"saleRevenue" END`;
   if (domain === "performance" && sortKey === "netProfitRate") sortExpression = Prisma.sql`CASE WHEN "netRevenue">0 THEN "grossProfit"/"netRevenue" END`;
@@ -119,7 +133,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   }
   const salesMetric = query.metric === "orders" ? "orders" : query.metric === "revenue" ? "revenue" : "quantity";
   const source = Prisma.raw(sources[domain]);
-  const crossStore = (domain === "sales" || domain === "performance") && ["developer", "spu"].includes(dimension);
+  const crossStore = sellfoxCrossStoreGrain(domain, dimension);
   const storeColumn = crossStore ? Prisma.sql`CASE WHEN count("storeId")=count(*) AND count(DISTINCT "storeId")=1 THEN min("storeId") END AS "storeId"` : Prisma.sql`"storeId"`;
   const storeGrain = crossStore ? Prisma.empty : Prisma.sql`"storeId",`;
   const marketplace = crossStore ? Prisma.sql`CASE WHEN count("storeId")=count(*) AND count(DISTINCT "storeId")=1 THEN min("storeSite") END` : Prisma.sql`min("storeSite")`;
@@ -169,6 +183,23 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
     return Prisma.sql`CASE WHEN count(${col})=count(*) THEN sum(${col})::float END`;
   };
   const aggregateColumns = domain === "performance" ? ["saleQuantity", "saleRevenue", "grossProfit", "adCost", "promotionDiscount", "giftWrapFee", "refundPrice", "refundNum", "commodityCost", "shippingPrice", "taxPrice", "headTripPrice", "avgPurchaseCost", "amazonCommissionPrice", "evaluationSaleNum", "channelSaleNum", "adSpCost", "adSdCost", "adSbCost", "adSbvCost", "adSbsCost", "fbaStorageFeeAmount", "fbaLongTermStorageFeeAmount", "fbaRemovalFeeAmount", "fbaDisposalFeeAmount", "customAsinFee", "customShopFee", "serviceFeeAmount", "storageFeeAmount", "compensationAmount", "evaluationFee", "promotionTotalAmount", "fbaOverageFeeAmount", "chargebackAmount", "guaranteeClaimAmount", "digitalServicesFeeAmount", "otherPriceAmount", "shippingChargeAmount", "regulatoryFeeAmount", "couponPaymentAmount", "sellerDealPaymentAmount", "vineFeeAmount", "starStorageFeeAmount", "subscriptionAmount", "fbaCustomerReturnAmount", "fbaInboundConvenienceFeeAmount", "inboundTransportationFeeAmount", "shippingChargebackAmount", "giftwrapChargebackAmount", "costOfPointsGrantedAmount", "orderOtherPriceAmount", "fbaInboundTransportationProgramFee", "aglFeeAmount", "paidServicesFeeAmount", "customerReturnHrrUnitFeeAmount", "amazonUpstreamStorageTransportationFeeAmount", "amazonUpstreamProcessingFeeAmount", "mfnPostageFeeAmount", "adjustmentFeeAmount", "otherServiceFeeAmount", "avgHeadTripPrice", "purchaseRefundPrice", "revenueAmount", "fbaPerUnitFulfillmentFeeRefundAmount", "fbaWeightBasedFeeRefundAmount", "deferredAmount", "withheldTaxAmount", "otherPriceIncomeAmount", "paymentMethodFeeAmount", "fixedClosingFeeAmount", "variableClosingFeeAmount", "imagingServicesFeeAmount", "netCoAmount", "comminglingVatAmount", "codFeeAmount", "evaluationCapital", "evaluationCommission", "dealPerformanceFeeAmount", "couponParticipationFeeAmount", "safetReimbursedAmount", "affordabilityExpenseAmount", "withheldFeeAmount", "chargebackIncomeAmount", "guaranteeClaimIncomeAmount", "promotionSalesAmount", "promotionShippingAmount", "promotionTaxAmount", "orderNum", "netRevenue", "fbaQuantity", "fbmQuantity"] : ["impressions", "clicks", "cost", "adOrders", "adSales"];
+  // members/stockMembers 由独立 rollup 一次算完再左连接。原相关子查询会对每个
+  // 实体重复扫描 base（1399 × 13281 行），30 天矩阵单页约 12 秒。
+  const memberJoin = crossStore
+    ? Prisma.sql`roll.identity=days.identity AND roll.currency IS NOT DISTINCT FROM days.currency`
+    : Prisma.sql`roll."storeId"=days."storeId" AND roll.identity=days.identity AND roll.currency IS NOT DISTINCT FROM days.currency`;
+  // 先拼成单表再聚合，避免 days 与 rollup 同名列在 grouped 里歧义。
+  const memberRollup = Prisma.sql`members_rollup AS (
+    SELECT ${storeGrain}identity,currency,array_agg(DISTINCT m) AS members
+    FROM days CROSS JOIN LATERAL unnest(days.members) AS m
+    GROUP BY ${storeGrain}identity,currency
+  )${crossStore ? Prisma.sql`,stock_rollup AS (
+    SELECT identity,currency,jsonb_agg(DISTINCT jsonb_build_array("storeId",msku)) AS "stockMembers"
+    FROM base GROUP BY identity,currency
+  )` : Prisma.empty},member_join AS (
+    SELECT days.*,roll.members AS "memberList"${crossStore ? Prisma.sql`,stock_rollup."stockMembers" AS "stockList"` : Prisma.empty}
+    FROM days LEFT JOIN members_rollup roll ON ${memberJoin}${crossStore ? Prisma.sql` LEFT JOIN stock_rollup ON stock_rollup.identity=days.identity AND stock_rollup.currency IS NOT DISTINCT FROM days.currency` : Prisma.empty}
+  )`;
   const groups = domain === "sales" ? Prisma.sql`days AS (
     SELECT ${storeColumn},identity,currency,"reportDate",min(id) AS id,CASE WHEN count(DISTINCT asin)=1 THEN min(asin) END AS asin,CASE WHEN count(DISTINCT msku)=1 THEN min(msku) END AS msku,CASE WHEN count(DISTINCT sku)=1 THEN min(sku) END AS sku,
       ${["developer", "spu"].includes(dimension) ? Prisma.sql`min(identity) AS name` : Prisma.sql`min("storeName") AS name`},${marketplace} AS marketplace,CASE WHEN count("listingTitle")=count(*) AND count(DISTINCT "listingTitle")=1 THEN min("listingTitle") END AS title,CASE WHEN count("listingPrice")=count(*) AND count(DISTINCT "listingPrice")=1 THEN min("listingPrice") END AS price,CASE WHEN count("listingParentAsin")=count(*) AND count(DISTINCT "listingParentAsin")=1 THEN min("listingParentAsin") END AS "parentAsin",
@@ -180,16 +211,17 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
       CASE WHEN bool_and(complete AND revenue IS NOT NULL) THEN sum(revenue)::float END AS revenue,
       array_agg(DISTINCT msku) AS members
     FROM base GROUP BY ${storeGrain}identity,currency,"reportDate"
-  ), grouped AS (
-    SELECT ${storeColumn},identity,currency,min(id) AS id,CASE WHEN count(DISTINCT asin)=1 THEN min(asin) END AS asin,CASE WHEN count(DISTINCT msku)=1 THEN min(msku) END AS msku,CASE WHEN count(DISTINCT sku)=1 THEN min(sku) END AS sku,min(name) AS name,${crossStore ? Prisma.sql`CASE WHEN count("storeId")=count(*) AND count(DISTINCT "storeId")=1 THEN min(marketplace) END` : Prisma.sql`min(marketplace)`} AS marketplace,CASE WHEN count(title)=count(*) AND count(DISTINCT title)=1 THEN min(title) END AS title,
+  ),${memberRollup},grouped AS (
+    SELECT ${storeColumn},identity,currency,min(id) AS id,CASE WHEN count(DISTINCT asin)=1 THEN min(asin) END AS asin,CASE WHEN count(DISTINCT msku)=1 THEN min(msku) END AS msku,CASE WHEN count(DISTINCT sku)=1 THEN min(sku) END AS sku,${crossStore ? Prisma.sql`CASE WHEN count(DISTINCT name)=1 THEN min(name) ELSE '多店铺' END` : Prisma.sql`min(name)`} AS name,${crossStore ? Prisma.sql`CASE WHEN count("storeId")=count(*) AND count(DISTINCT "storeId")=1 THEN min(marketplace) END` : Prisma.sql`min(marketplace)`} AS marketplace,CASE WHEN count(title)=count(*) AND count(DISTINCT title)=1 THEN min(title) END AS title,
       CASE WHEN count(price)=count(*) AND count(DISTINCT price)=1 THEN min(price) END AS price,CASE WHEN count("parentAsin")=count(*) AND count(DISTINCT "parentAsin")=1 THEN min("parentAsin") END AS "parentAsin",
       CASE WHEN count(brand)=count(*) AND count(DISTINCT brand)=1 THEN min(brand) END AS brand,
       CASE WHEN count("productTags")=count(*) AND count(DISTINCT "productTags")=1 THEN min("productTags") END AS "productTags",
       min(NULLIF("mainImage",'')) AS "mainImage",
       jsonb_object_agg("reportDate",quantity) AS "dailyQuantity",jsonb_object_agg("reportDate",${Prisma.raw(salesMetric)}) AS daily,
       ${query.metric === "orders" ? Prisma.sql`CASE WHEN count(*)=${workbenchDateRange(query).length} THEN ${safeSum(salesMetric)} END` : safeSum(salesMetric)} AS subtotal,${safeSum("quantity")} AS quantity,
-      count(*)::int AS "observedDays",(SELECT array_agg(DISTINCT b.msku) FROM base b WHERE ${crossStore ? Prisma.empty : Prisma.sql`b."storeId"=days."storeId" AND `}b.identity=days.identity AND b.currency IS NOT DISTINCT FROM days.currency) AS members${crossStore ? Prisma.sql`,(SELECT jsonb_agg(DISTINCT jsonb_build_array(b."storeId",b.msku)) FROM base b WHERE b.identity=days.identity AND b.currency IS NOT DISTINCT FROM days.currency) AS "stockMembers"` : Prisma.empty}
-    FROM days GROUP BY ${storeGrain}identity,currency
+      count(*)::int AS "observedDays","memberList" AS members${crossStore ? Prisma.sql`,"stockList" AS "stockMembers"` : Prisma.empty}
+    FROM member_join
+    GROUP BY ${storeGrain}identity,currency,"memberList"${crossStore ? Prisma.sql`,"stockList"` : Prisma.empty}
   )` : Prisma.sql`grouped AS (
     SELECT ${storeColumn},currency,${domain === "performance" ? Prisma.sql`identity` : adIdentity},
       ${domain === "ads_campaign" ? Prisma.sql`CASE WHEN count(DISTINCT "campaignName")=1 THEN min("campaignName") END AS "campaignName",` : domain === "ads_ad_group" ? Prisma.sql`CASE WHEN count(DISTINCT "adGroupName")=1 THEN min("adGroupName") END AS "adGroupName",` : domain === "ads_placement" ? Prisma.sql`CASE WHEN count("adGroupId")=count(*) AND count(DISTINCT "adGroupId")=1 THEN min("adGroupId") END AS "adGroupId",` : Prisma.empty}
@@ -224,6 +256,27 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   const dailyTotals = domain === "sales" ? Prisma.sql`,(SELECT jsonb_object_agg(d.date,d.value) FROM (SELECT day.date,CASE WHEN count(day.value)=count(*) AND count(*)=(SELECT count(*) FROM filtered f WHERE f.currency IS NOT DISTINCT FROM filtered.currency) THEN sum(day.value::float) END AS value FROM filtered fday CROSS JOIN LATERAL jsonb_each_text(fday.daily) day(date,value) WHERE fday.currency IS NOT DISTINCT FROM filtered.currency GROUP BY day.date) d) AS daily` : Prisma.empty;
   const totalKeys = domain === "sales" ? ["subtotal"] : aggregateColumns;
   const totals = Prisma.sql`(SELECT COALESCE(jsonb_agg(t),'[]'::jsonb) FROM (SELECT currency,${totalKeys.length ? Prisma.join(totalKeys.map(key => Prisma.sql`${safeSum(key)} AS ${Prisma.raw(`"${key}"`)}`)) : Prisma.sql`count(*)::int AS count`}  ${dailyTotals} FROM filtered GROUP BY currency) t)`;
+  // 销量页汇总行：数量与库存不含币种，跨币种可直接相加；金额仍由上面的按币种 totals 承担。
+  // 库存按 DISTINCT (storeId,msku) 关联最新完整库存，任一成员缺库存则合计为空，不补 0。
+  const stockTotal = (column: "quantity" | "totalInventory") => {
+    const col = Prisma.raw(`"${column}"`);
+    // 跨店维度（开发员/SPU）没有单值 storeId，改用 stockMembers 的 (storeId,msku) 对。
+    const pairs = crossStore
+      ? Prisma.sql`SELECT DISTINCT pair->>0 AS "storeId",pair->>1 AS m FROM filtered f2 CROSS JOIN LATERAL jsonb_array_elements(f2."stockMembers") pair`
+      : Prisma.sql`SELECT DISTINCT f2."storeId",pair.m FROM filtered f2 CROSS JOIN LATERAL unnest(f2.members) AS pair(m)`;
+    return Prisma.sql`(SELECT CASE WHEN count(i.${col})=count(*) THEN sum(i.${col})::float END
+      FROM (${pairs}) p
+      LEFT JOIN sellfox_inventory_current i ON i."storeId"=p."storeId" AND i.msku=p.m AND ${scoped("i", scope)})`;
+  };
+  // 日合计只累加当天存在的快照，同时回传当天有快照的实体数，前端据此标注不完整日，绝不补 0。
+  const salesSummary = domain === "sales" ? Prisma.sql`,(SELECT jsonb_build_object(
+      'quantity',(SELECT CASE WHEN count(quantity)=count(*) THEN sum(quantity)::float END FROM filtered),
+      'fulfillable',${stockTotal("quantity")},
+      'totalInventory',${stockTotal("totalInventory")},
+      'daily',COALESCE((SELECT jsonb_object_agg(day.date,jsonb_build_object('value',day.value,'entities',day.entities)) FROM (
+        SELECT d.date,sum(d.value::float) AS value,count(*) FILTER (WHERE d.value IS NOT NULL) AS entities
+        FROM filtered fday CROSS JOIN LATERAL jsonb_each_text(fday.daily) d(date,value) GROUP BY d.date) day),'{}'::jsonb)
+    )) AS summary` : Prisma.empty;
   // Facets ignore brand/tag/search/status so selections never remove other options.
   // Read typed current columns independently so facets neither materialize the main Listing CTE
   // nor force per-Listing label arrays onto every report member. Sales uses the typed
@@ -246,19 +299,19 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
       CROSS JOIN LATERAL unnest(s."userNameList") person(name)
       WHERE ${Prisma.join(salespersonFacetFilters, " AND ")} ORDER BY person.name)` : Prisma.empty}) AS facets` : Prisma.empty;
   return Prisma.sql`WITH ${listing},${base},${groups}${names}, filtered AS (SELECT * FROM ${domain === "performance" ? Prisma.sql`enriched` : Prisma.sql`grouped`} WHERE ${Prisma.join(finalFilters, " AND ")})
-    SELECT (SELECT count(*)::int FROM filtered) AS total,${totals} AS totals,
+    SELECT (SELECT count(*)::int FROM filtered) AS total,${totals} AS totals${salesSummary},
       COALESCE((SELECT jsonb_agg(p) FROM (SELECT * FROM filtered ORDER BY ${order} LIMIT ${exporting ? sellfoxExportLimit + 1 : query.pageSize} OFFSET ${exporting ? 0 : (query.page - 1) * query.pageSize}) p),'[]'::jsonb) AS rows${facets}`;
 }
 export async function readSellfoxWorkbench(domain: WorkbenchDomain, query: SellfoxBrowseQuery, scope: Scope, exporting = false) {
   if (domain === "sales" || domain === "performance") query = await resolveEffectiveReportDate(domain, query, scope);
   const ads = ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(domain);
-  const result = await prisma.$queryRaw<{ total: number; rows: Row[]; totals: Row[]; facets?: { productTags: string[]; brands?: string[]; dxmPublishStates?: string[]; bsrCategories?: string[]; salespersons?: string[] } }[]>(workbenchReadSql(domain, query, scope, exporting));
-  const { rows, total, totals, facets } = result[0];
+  const result = await prisma.$queryRaw<{ total: number; rows: Row[]; totals: Row[]; summary?: SalesSummary; facets?: { productTags: string[]; brands?: string[]; dxmPublishStates?: string[]; bsrCategories?: string[]; salespersons?: string[] } }[]>(workbenchReadSql(domain, query, scope, exporting));
+  const { rows, total, totals, summary, facets } = result[0];
   if (exporting && total > sellfoxExportLimit) throw new SellfoxBrowseError("筛选结果超过10,000条，请缩小范围；未导出部分文件。", 413);
   // Page-bounded supplemental lookup, never one network call per entity or full payload reads.
   // Exact source pairs avoid attributing an MSKU to unrelated stores on the page.
   // DISTINCT in SQL also prevents counting the same stock once per report day.
-  const crossStore = (domain === "sales" || domain === "performance") && ["developer", "spu"].includes(query.dimension);
+  const crossStore = sellfoxCrossStoreGrain(domain, query.dimension);
   const memberPairs = (row: Row): unknown[][] => crossStore && Array.isArray(row.stockMembers)
     ? row.stockMembers
     : (Array.isArray(row.members) ? row.members : [row.msku]).map(msku => [row.storeId, msku]);
@@ -297,5 +350,5 @@ export async function readSellfoxWorkbench(domain: WorkbenchDomain, query: Sellf
       row.roas = row.adSales != null && Number(row.cost) > 0 ? Number(row.adSales) / Number(row.cost) : null;
     }
   }
-  return { rows, dates, totals, ...(facets ? { facets } : {}), pagination: { page: query.page, pageSize: query.pageSize, total } };
+  return { rows, dates, totals, ...(summary ? { summary } : {}), ...(facets ? { facets } : {}), pagination: { page: query.page, pageSize: query.pageSize, total } };
 }

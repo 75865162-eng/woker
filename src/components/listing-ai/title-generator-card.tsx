@@ -121,7 +121,7 @@ export function TitleGeneratorCard({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div
-              className="flex rounded-md border border-border bg-white p-1"
+              className="flex rounded-md border border-border bg-surface p-1"
               aria-label="标题生成模式"
             >
               {titleGeneratorModes.map((mode) => {
@@ -167,7 +167,7 @@ export function TitleGeneratorCard({
       </CardHeader>
       <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="grid gap-2">
-          <div className="rounded-md border border-border bg-white p-2.5">
+          <div className="rounded-md border border-border bg-surface p-2.5">
             <div className="mb-2 flex items-center justify-between gap-3">
               <p className={labelClass}>产品信息</p>
               <Badge tone={hasRequiredIdentity ? "green" : "amber"}>
@@ -196,7 +196,7 @@ export function TitleGeneratorCard({
                 <label className="space-y-1">
                   <span className="flex items-center gap-2 text-xs font-bold text-muted">
                     {asinField.label}
-                    <span className="text-[10px] font-bold uppercase text-muted/70">
+                    <span className="text-label font-bold uppercase text-muted/70">
                       {isOldMode ? "必填" : "选填"}
                     </span>
                   </span>
@@ -217,14 +217,14 @@ export function TitleGeneratorCard({
           {referenceFields.map((field) => (
             <div
               key={field.key}
-              className="rounded-md border border-border bg-white p-2.5"
+              className="rounded-md border border-border bg-surface p-2.5"
             >
               <div className="mb-1.5 flex items-center justify-between gap-3">
                 <p className={labelClass}>{field.label}</p>
                 <div className="flex items-center gap-2">
                   <input
                     aria-label={`${field.label} 权重`}
-                    className="h-7 w-14 rounded-md border border-border bg-white px-2 text-right text-sm font-bold text-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/10"
+                    className="h-7 w-14 rounded-md border border-border bg-surface px-2 text-right text-sm font-bold text-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/10"
                     max={100}
                     min={0}
                     inputMode="decimal"
@@ -268,7 +268,7 @@ export function TitleGeneratorCard({
                 return (
                   <div
                     key={index}
-                    className="min-h-24 rounded-md border border-border bg-white p-3"
+                    className="min-h-24 rounded-md border border-border bg-surface p-3"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs font-black text-brand">
@@ -286,12 +286,12 @@ export function TitleGeneratorCard({
               })}
             </div>
             {error ? (
-              <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+              <div className="mt-3 rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm font-medium text-danger-ink">
                 {error}
               </div>
             ) : null}
           </div>
-          <div className="rounded-md border border-border bg-white p-3">
+          <div className="rounded-md border border-border bg-surface p-3">
             <div className="mb-3 flex items-center justify-between gap-2">
               <p className={labelClass}>生成历史</p>
               <Badge tone={visibleHistory.length ? "blue" : "gray"}>
@@ -408,7 +408,7 @@ function PromptEditorDialog({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-      <div className="w-full max-w-3xl rounded-lg border border-border bg-white shadow-xl">
+      <div className="w-full max-w-3xl rounded-lg border border-border bg-surface shadow-xl">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
             <h2 className="text-lg font-black text-foreground">提示词修改</h2>

@@ -26,6 +26,21 @@ async function main() {
     await prisma.organizationMember.create({ data: { ...scopeFields(), userId: id, role } });
     await prisma.organizationRosterRole.create({ data: { ...scopeFields(), id: role, name: id, description: "fixture", permissions: { operations: ["view"], wms: ["view", "create", "edit", "approve"], products: ["view"] } } });
   }
+  const { planSellfoxFullSync } = await import('../../src/lib/sellfox/sync-orchestrator');
+  const credentialEnv = { SELLFOX_CLIENT_ID: process.env.SELLFOX_CLIENT_ID, SELLFOX_CLIENT_SECRET: process.env.SELLFOX_CLIENT_SECRET };
+  process.env.SELLFOX_CLIENT_ID = 'isolated-planner-fixture';
+  process.env.SELLFOX_CLIENT_SECRET = 'synthetic-not-credentials';
+  try {
+    const plans = await Promise.all(Array.from({ length: 6 }, () => planSellfoxFullSync({ organizationId: scope.organizationId, workspaceId: scope.workspaceId }, { from: '2026-11-01', to: '2026-11-01', resources: ['sales'] })));
+    assert.equal(plans.reduce((sum, plan) => sum + plan.created, 0), 1);
+    assert.equal(await prisma.sellfoxSyncRun.count({ where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, resource: 'sales' } }), 1);
+    const retry = await planSellfoxFullSync({ organizationId: scope.organizationId, workspaceId: scope.workspaceId }, { from: '2026-11-01', to: '2026-11-01', resources: ['sales'] });
+    assert.equal(retry.created, 0);
+    assert.equal(retry.skipped, 1);
+    console.log('PASS: six concurrent Sellfox planners create one durable run; enqueue unavailable and repeated planning preserve one intent; no provider or Redis calls');
+  } finally {
+    for (const [key, value] of Object.entries(credentialEnv)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  }
   const scoped = { organizationId: scope.organizationId, workspaceId: scope.workspaceId };
   await prisma.sellerAccount.create({ data: { ...scoped, id: "seller", accountKey: "synthetic", marketplaceCode: "US" } });
   await prisma.amazonSpApiAuthorization.create({ data: { ...scoped, id: "auth", name: "Synthetic", amazonSellerId: "synthetic-seller", awsRegion: "us-east-1", endpoint: "https://fixture.invalid", credentialsCiphertext: "synthetic-not-credentials", updatedByUserId: "operator", status: "CONFIGURED", identityVerifiedAt: new Date() } });

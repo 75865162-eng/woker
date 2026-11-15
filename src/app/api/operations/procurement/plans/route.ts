@@ -23,21 +23,22 @@ async function scopeFor(request: Request, action: 'view' | 'create' | 'edit' | '
 }
 
 const lineInclude = { product: { select: { sku: true, chineseName: true, englishName: true } } } as const;
-// 提交审批 / 编辑 / 取消 / 转单返回的是不带明细行的计划聚合，GET 才带 lines。
-// 序列化统一兼容两种形态，Decimal 单价一律转字符串，避免 JSON 精度丢失。
-type PlanPayload = {
-  periodStart?: Date | string | null;
-  periodEnd?: Date | string | null;
-  lines?: Array<Record<string, unknown>>;
-} & Record<string, unknown>;
-const serialize = (plan: PlanPayload) => ({
+const serialize = (plan: { lines: Array<{ unitPrice: Prisma.Decimal } & Record<string, unknown>> } & Record<string, unknown>) => ({
   ...plan,
   periodStart: plan.periodStart instanceof Date ? plan.periodStart.toISOString().slice(0, 10) : plan.periodStart,
   periodEnd: plan.periodEnd instanceof Date ? plan.periodEnd.toISOString().slice(0, 10) : plan.periodEnd,
-  ...(Array.isArray(plan.lines) ? {
-    lines: plan.lines.map(line => ({ ...line, unitPrice: String(line.unitPrice ?? '') })),
-  } : {}),
+  lines: plan.lines.map(line => ({ ...line, unitPrice: line.unitPrice.toString() })),
 });
+
+/** 状态变更类服务只返回表头行，序列化前必须按 GET 口径重新载入明细。 */
+const serializePlanById = async (organizationId: string, workspaceId: string, id: string) => {
+  const plan = await prisma.purchasePlan.findFirst({
+    where: { organizationId, workspaceId, id },
+    include: { supplier: { select: { id: true, name: true } }, lines: { include: lineInclude } },
+  });
+  if (!plan) throw new WmsError('采购计划不存在。', 404);
+  return serialize(plan);
+};
 
 export async function GET(request: Request) {
   const auth = await scopeFor(request, 'view');
@@ -104,17 +105,18 @@ export async function PATCH(request: Request) {
     }
     if (body.action === 'submit-approval') {
       const result = await submitPurchasePlanApproval(scope, body);
-      return NextResponse.json({ plan: serialize(result.plan), approval: result.approval }, { headers: { 'Cache-Control': 'no-store' } });
+      return NextResponse.json({ plan: await serializePlanById(scope.organizationId, scope.workspaceId, result.plan.id), approval: result.approval }, { headers: { 'Cache-Control': 'no-store' } });
     }
     if (body.action === 'edit-plan') {
       return NextResponse.json({ plan: serialize(await editPurchasePlanDraft(scope, body)) }, { headers: { 'Cache-Control': 'no-store' } });
     }
     if (body.action === 'cancel-plan') {
-      return NextResponse.json({ plan: serialize(await cancelPurchasePlan(scope, body)) }, { headers: { 'Cache-Control': 'no-store' } });
+      const updated = await cancelPurchasePlan(scope, body);
+      return NextResponse.json({ plan: await serializePlanById(scope.organizationId, scope.workspaceId, updated.id) }, { headers: { 'Cache-Control': 'no-store' } });
     }
     if (body.action === 'convert-plan') {
       const result = await convertPurchasePlanToOrder(scope, body);
-      return NextResponse.json({ plan: serialize(result.plan), orderId: result.order.id, orderNumber: result.order.number }, { headers: { 'Cache-Control': 'no-store' } });
+      return NextResponse.json({ plan: await serializePlanById(scope.organizationId, scope.workspaceId, result.plan.id), orderId: result.order.id, orderNumber: result.order.number }, { headers: { 'Cache-Control': 'no-store' } });
     }
     return NextResponse.json({ error: '未知采购计划操作。' }, { status: 400 });
   } catch (error) { return errorResponse(error); }

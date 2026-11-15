@@ -153,7 +153,7 @@ export function ProductMeetingNotes({ sku, workspaceId, disabled = false }: { sk
         <NotebookPen className={`h-4 w-4${hasContent ? " text-danger" : ""}`} />
       </Button>
       {open ? (
-        <section aria-label="会议记录" className="fixed left-4 top-4 z-[80] flex h-[200px] w-[min(680px,calc(100vw-32px))] flex-col overflow-hidden rounded-md border border-border bg-white shadow-xl">
+        <section aria-label="会议记录" className="fixed left-4 top-4 z-[80] flex h-[200px] w-[min(680px,calc(100vw-32px))] flex-col overflow-hidden rounded-md border border-border bg-surface shadow-xl">
           <header className="flex items-center justify-between border-b border-border px-4 py-3">
             <h2 className="text-base font-bold text-foreground">会议记录</h2>
             <div className="flex items-center gap-1">
@@ -164,7 +164,7 @@ export function ProductMeetingNotes({ sku, workspaceId, disabled = false }: { sk
               <Button type="button" size="icon" variant="ghost" title="关闭" aria-label="关闭" onClick={() => setOpen(false)}><X className="h-4 w-4" /></Button>
             </div>
           </header>
-          {error ? <p role="alert" className="border-b border-danger/30 bg-red-50 px-4 py-2 text-xs text-danger">{error}</p> : null}
+          {error ? <p role="alert" className="border-b border-danger/30 bg-danger-soft px-4 py-2 text-xs text-danger">{error}</p> : null}
           {saveNotice ? <p role="status" className="border-b border-border bg-surface-muted px-4 py-1 text-xs text-muted">{saveNotice}</p> : null}
           <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto">
             {loading ? <div className="flex h-full items-center justify-center text-sm text-muted"><LoaderCircle className="mr-2 h-4 w-4 animate-spin" />加载中</div> : null}

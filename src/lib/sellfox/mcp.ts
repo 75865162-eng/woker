@@ -96,7 +96,7 @@ export async function authenticateSellfoxMcp(authorization: string | null, resou
     const now = new Date();
     const identity: SellfoxMcpIdentity = {
       kind: "shared-env", id: "sellfox-shared-env", organizationId, workspaceId: process.env.MCP_WORKSPACE_ID?.trim() || "default",
-      userId: "sellfox-shared-env", name: "共享兼容令牌", tokenPrefix: token?.slice(0, 8) ?? "", tools: [...sellfoxMcpToolNames],
+      userId: "sellfox-shared-env", name: "共享兼容令牌", tokenPrefix: (token ?? "").slice(0, 8), tools: [...sellfoxMcpToolNames],
       storeIds: stores, scopes: [], status: "ACTIVE", revision: 0, expiresAt: new Date(now.getTime() + 3600_000), lastUsedAt: null,
       storeScope: stores.length ? stores : ["*"],
     };
@@ -236,6 +236,20 @@ class SellfoxScopeSql {
   where(alias: string, column = "storeId") {
     return `${alias}."organizationId" = $1 AND ${alias}."workspaceId" = $2${this.fence(alias, column)}`;
   }
+  storeJoin(alias: string, storeAlias = "scope_store") {
+    const storeScope = this.identity.storeScope.includes("*") ? "" : ` AND ${storeAlias}."id" = ANY(${this.add(this.identity.storeScope)}::text[])`;
+    return `EXISTS (SELECT 1 FROM "SellfoxStore" ${storeAlias} WHERE ${storeAlias}."id" = ${alias}."storeId" AND ${storeAlias}."organizationId" = $1 AND ${storeAlias}."workspaceId" = $2${storeScope})`;
+  }
+  datasetWhere(alias: string, dataset: ReturnType<typeof sellfoxDataset>) {
+    if (dataset.scopeMode === "store_join") return this.storeJoin(alias);
+    if (dataset.scopeMode === "tenant_only") {
+      if (!this.identity.storeScope.includes("*")) throw new McpIsolationError("该数据集仅对全店铺范围凭证开放。", "STORE_NOT_ALLOWED", 403, "sellfox");
+      return `${alias}."organizationId" = $1 AND ${alias}."workspaceId" = $2`;
+    }
+    const tenant = this.where(alias, dataset.storeColumn ?? "storeId");
+    if (dataset.nullableStore && !this.identity.storeScope.includes("*")) return `${tenant} AND ${alias}."${dataset.storeColumn}" IS NOT NULL`;
+    return tenant;
+  }
 }
 
 type ToolArgs = Record<string, unknown>;
@@ -258,6 +272,7 @@ function validateArgs(definition: SellfoxMcpToolDefinition, raw: unknown, storeS
     if (typeof value !== "string" || !value || value.length > 200 || value !== value.trim()) throw new McpIsolationError(`参数「${key}」无效。`, "TOOL_NOT_ALLOWED", 400, "sellfox");
     if (key === "dataset" && !sellfoxDatasetKeys.includes(value)) throw new McpIsolationError(`未知数据集「${value}」。`, "DATASET_NOT_ALLOWED", 403, "sellfox");
     if (typeof spec.format === "string" && spec.format === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new McpIsolationError(`参数「${key}」须为 YYYY-MM-DD。`, "TOOL_NOT_ALLOWED", 400, "sellfox");
+    if (key === "fields" && !["summary", "all"].includes(value)) throw new McpIsolationError("fields 仅支持 summary 或 all。", "TOOL_NOT_ALLOWED", 400, "sellfox");
   }
   if (typeof args.storeId === "string") assertCredentialStores("sellfox", storeScope, [args.storeId]);
   return args;
@@ -283,8 +298,9 @@ async function toolOverview(identity: SellfoxMcpIdentity) {
     const scope = new SellfoxScopeSql(identity);
     const storeCount = dataset.storeColumn ? `, count(DISTINCT t."${dataset.storeColumn}")::int AS stores` : "";
     try {
+      const predicate = dataset.scopeMode === "store_join" ? scope.storeJoin("t") : scope.datasetWhere("t", dataset);
       const [row] = await readOnlyQuery<{ n: number; latest: string | null; stores?: number }>(
-        `SELECT count(*)::int AS n, max(t."${dataset.dateField}")::text AS latest${storeCount} FROM "${dataset.table}" t WHERE ${scope.where("t", dataset.storeColumn ?? "storeId")}`,
+        `SELECT count(*)::int AS n, max(t."${dataset.dateField}")::text AS latest${storeCount} FROM "${dataset.table}" t WHERE ${predicate}`,
         scope.params,
       );
       return { dataset: dataset.key, label: dataset.label, rows: row?.n ?? 0, latest: row?.latest ?? null, stores: dataset.storeColumn ? row?.stores ?? 0 : null };
@@ -298,14 +314,22 @@ async function toolOverview(identity: SellfoxMcpIdentity) {
 async function toolQueryData(identity: SellfoxMcpIdentity, args: ToolArgs) {
   const dataset = sellfoxDataset(String(args.dataset ?? ""));
   const scope = new SellfoxScopeSql(identity);
-  const where = [scope.where("t", dataset.storeColumn ?? "storeId")];
-  if (dataset.storeColumn && typeof args.storeId === "string") where.push(`t."${dataset.storeColumn}" = ${scope.add(args.storeId)}`);
-  if (typeof args.fromDate === "string") where.push(`t."${dataset.dateField}" >= ${scope.add(args.fromDate)}::date`);
-  if (typeof args.toDate === "string") where.push(`t."${dataset.dateField}" <= ${scope.add(args.toDate)}::date`);
+  const where = [scope.datasetWhere("t", dataset)];
+  if (dataset.storeColumn && typeof args.storeId === "string") {
+    if (dataset.scopeMode === "store_join") where.push(`t."${dataset.storeColumn}" = ${scope.add(args.storeId)}`);
+    else where.push(`t."${dataset.storeColumn}" = ${scope.add(args.storeId)}`);
+  }
+  const dateCast = dataset.dateIsText ? "::date" : "";
+  if (typeof args.fromDate === "string") where.push(`t."${dataset.dateField}"${dateCast} >= ${scope.add(args.fromDate)}::date`);
+  if (typeof args.toDate === "string") where.push(`t."${dataset.dateField}"${dateCast} <= ${scope.add(args.toDate)}::date`);
+  if (dataset.headResource && dataset.versionColumn) {
+    where.push(`t."${dataset.versionColumn}" = (SELECT h."capturedAt" FROM "SellfoxSnapshotHead" h WHERE h."storeId" = t."storeId" AND h."resource" = ${scope.add(dataset.headResource)})`);
+  }
+  const selectedColumns = args.fields === "all" ? (dataset.allColumns ?? dataset.columns) : dataset.columns;
   const limit = limitOf(args, dataset.defaultLimit);
   const offset = args.offset === undefined ? 0 : Math.max(0, Number(args.offset));
   const rows = await readOnlyQuery(
-    `SELECT t.${dataset.columns.join(", t.")} FROM "${dataset.table}" t WHERE ${where.join(" AND ")} ORDER BY t."${dataset.dateField}" DESC LIMIT ${limit} OFFSET ${offset}`,
+    `SELECT t.${selectedColumns.join(", t.")} FROM "${dataset.table}" t WHERE ${where.join(" AND ")} ORDER BY t."${dataset.dateField}" DESC LIMIT ${limit} OFFSET ${offset}`,
     scope.params,
   );
   return { dataset: dataset.key, count: rows.length, rows };
@@ -316,41 +340,34 @@ async function toolRestock(identity: SellfoxMcpIdentity, args: ToolArgs) {
   const coverDays = args.maxCoverDays === undefined ? 30 : Number(args.maxCoverDays);
   const sales = scope.where("s", "storeId");
   const stock = scope.where("i", "storeId");
-  const transit = scope.where("i2", "storeId");
   const storeFilter = typeof args.storeId === "string" ? ` AND r."storeId" = ${scope.add(args.storeId)}` : "";
   const sql = `
     WITH rates AS (
       SELECT sd."storeId", sd."msku", max(sd.asin) AS asin,
-        (0.5 * avg(sd.qty_d) FILTER (WHERE sd.d::date >= current_date - 7)
-       + 0.3 * avg(sd.qty_d) FILTER (WHERE sd.d::date BETWEEN current_date - 14 AND current_date - 8)
-       + 0.2 * avg(sd.qty_d) FILTER (WHERE sd.d::date BETWEEN current_date - 30 AND current_date - 15)) AS daily_rate
+        (0.5 * avg(sd.quantity) FILTER (WHERE sd.d::date >= current_date - 7)
+       + 0.3 * avg(sd.quantity) FILTER (WHERE sd.d::date BETWEEN current_date - 14 AND current_date - 8)
+       + 0.2 * avg(sd.quantity) FILTER (WHERE sd.d::date BETWEEN current_date - 30 AND current_date - 15)) AS daily_rate,
+        count(*) FILTER (WHERE sd.complete) AS observed_days
       FROM (
-        SELECT s."storeId", s."msku", max(s.asin) AS asin, s."reportDate" AS d, sum(s.quantity) AS qty_d
-        FROM "SellfoxSalesDailySnapshot" s
-        WHERE ${sales} AND s."reportDate"::date > current_date - 32
+        SELECT s."storeId", s."msku", max(s.asin) AS asin, s."reportDate" AS d,
+          CASE WHEN bool_and(s.complete) AND count(s.quantity)=count(*) THEN sum(s.quantity) END AS quantity,
+          bool_and(s.complete) AS complete
+        FROM "sellfox_sales_daily" s
+        WHERE ${sales} AND s."reportDate"::date > current_date - 30
         GROUP BY 1, 2, 4
-      ) sd WHERE sd.qty_d IS NOT NULL AND sd.qty_d >= 0 GROUP BY 1, 2
+      ) sd WHERE sd.quantity IS NOT NULL AND sd.quantity >= 0 GROUP BY 1, 2
     ), stock AS (
-      SELECT DISTINCT ON (i."storeId", i."msku") i."storeId", i."msku",
-        sum(i.quantity) OVER (PARTITION BY i."storeId", i."msku") AS on_hand
-      FROM "SellfoxFbaInventorySnapshot" i WHERE ${stock}
-      ORDER BY i."storeId", i."msku", i."reportDate" DESC
-    ), transit AS (
-      SELECT i2."storeId", i2."msku" AS sku,
-        (COALESCE(i2."inTransit", 0) + COALESCE(i2."inboundShipped", 0) + COALESCE(i2."inboundWorking", 0))::int AS in_transit
-      FROM (
-        SELECT DISTINCT ON (i2."storeId", i2."msku") i2."storeId", i2."msku", i2."inTransit", i2."inboundShipped", i2."inboundWorking"
-        FROM "SellfoxFbaInventorySnapshot" i2 WHERE ${transit}
-        ORDER BY i2."storeId", i2."msku", i2."reportDate" DESC
-      ) i2
+      SELECT i."storeId", i."msku", sum(i.quantity) AS on_hand, max(i."capturedAt") AS captured_at
+      FROM "sellfox_inventory_current" i WHERE ${stock}
+      GROUP BY i."storeId", i."msku"
     )
     SELECT r."storeId", r."msku", r.asin, round(r.daily_rate::numeric, 2) AS daily_rate,
-      COALESCE(st.on_hand, 0) AS on_hand, COALESCE(tg.in_transit, 0) AS in_transit,
-      CASE WHEN r.daily_rate > 0 THEN round((COALESCE(st.on_hand, 0) / r.daily_rate)::numeric, 1) ELSE NULL END AS cover_days,
-      CASE WHEN r.daily_rate > 0 THEN round((r.daily_rate * ${coverDays} - COALESCE(st.on_hand, 0) - COALESCE(tg.in_transit, 0))::numeric, 0) ELSE NULL END AS suggested_qty
+      st.on_hand, NULL::int AS in_transit,
+      CASE WHEN r.daily_rate > 0 AND r.observed_days = 30 AND st.on_hand IS NOT NULL THEN round((st.on_hand / r.daily_rate)::numeric, 1) ELSE NULL END AS cover_days,
+      CASE WHEN r.daily_rate > 0 AND r.observed_days = 30 AND st.on_hand IS NOT NULL THEN GREATEST(0, round((r.daily_rate * ${coverDays} - st.on_hand)::numeric, 0)) ELSE NULL END AS suggested_qty,
+      r.observed_days, st.captured_at AS inventory_captured_at
     FROM rates r
     LEFT JOIN stock st ON st."storeId" = r."storeId" AND st."msku" = r."msku"
-    LEFT JOIN transit tg ON tg."storeId" = r."storeId" AND tg.sku = r."msku"
     WHERE r.daily_rate > 0${storeFilter}
     ORDER BY cover_days ASC NULLS LAST LIMIT ${limitOf(args, 100)}`;
   const rows = await readOnlyQuery(sql, scope.params);
@@ -372,25 +389,29 @@ async function toolAdsDiagnosis(identity: SellfoxMcpIdentity, args: ToolArgs) {
     ), restock AS (
       SELECT r."storeId", r."msku", r.asin, c.cover_days, r.on_hand, r.daily_rate FROM (
         SELECT day."storeId", day."msku", max(day.asin) AS asin,
-          (0.5 * avg(day.qty) FILTER (WHERE day.d::date >= current_date - 7)
-         + 0.3 * avg(day.qty) FILTER (WHERE day.d::date BETWEEN current_date - 14 AND current_date - 8)
-         + 0.2 * avg(day.qty) FILTER (WHERE day.d::date BETWEEN current_date - 30 AND current_date - 15)) AS daily_rate,
-          (array_agg(oh.on_hand ORDER BY day.d DESC))[1] AS on_hand
+          (0.5 * avg(day.quantity) FILTER (WHERE day.d::date >= current_date - 7)
+         + 0.3 * avg(day.quantity) FILTER (WHERE day.d::date BETWEEN current_date - 14 AND current_date - 8)
+         + 0.2 * avg(day.quantity) FILTER (WHERE day.d::date BETWEEN current_date - 30 AND current_date - 15)) AS daily_rate,
+          (array_agg(oh.on_hand ORDER BY day.d DESC))[1] AS on_hand,
+          count(*) FILTER (WHERE day.complete) AS observed_days
         FROM (
-          SELECT s."storeId", s."msku", max(s.asin) AS asin, s."reportDate" AS d, sum(s.quantity) AS qty
-          FROM "SellfoxSalesDailySnapshot" s WHERE ${sales} AND s."reportDate"::date > current_date - 32 GROUP BY 1, 2, 4
-        ) day, LATERAL (
-          SELECT sum(i.quantity) AS on_hand FROM "SellfoxFbaInventorySnapshot" i
+          SELECT s."storeId", s."msku", max(s.asin) AS asin, s."reportDate" AS d,
+            CASE WHEN bool_and(s.complete) AND count(s.quantity)=count(*) THEN sum(s.quantity) END AS quantity,
+            bool_and(s.complete) AS complete
+          FROM "sellfox_sales_daily" s WHERE ${sales} AND s."reportDate"::date > current_date - 30 GROUP BY 1, 2, 4
+        ) day
+        LEFT JOIN LATERAL (
+          SELECT sum(i.quantity) AS on_hand FROM "sellfox_inventory_current" i
           WHERE ${stock} AND i."storeId" = day."storeId" AND i."msku" = day."msku"
-        ) oh
-        WHERE day.qty IS NOT NULL GROUP BY 1, 2
+        ) oh ON TRUE
+        WHERE day.quantity IS NOT NULL GROUP BY 1, 2
       ) r
-      CROSS JOIN LATERAL (SELECT CASE WHEN r.daily_rate > 0 THEN round((COALESCE(r.on_hand, 0) / r.daily_rate)::numeric, 1) ELSE NULL END AS cover_days) c
+      CROSS JOIN LATERAL (SELECT CASE WHEN r.daily_rate > 0 AND r.observed_days = 30 AND r.on_hand IS NOT NULL THEN round((r.on_hand / r.daily_rate)::numeric, 1) ELSE NULL END AS cover_days) c
       WHERE r.daily_rate > 0
     )
     SELECT sp."storeId", sp.asin, round(sp.spend::numeric, 2) AS spend, round(sp.sales::numeric, 2) AS sales,
       CASE WHEN sp.spend > 0 THEN round((sp.sales / sp.spend)::numeric, 2) ELSE NULL END AS roas,
-      CASE WHEN sp.sales > 0 THEN round((sp.spend / sp.sales * 100)::numeric, 1) ELSE NULL END AS acos_pct,
+      CASE WHEN sp.sales > 0 THEN round((sp.spend / sp.sales)::numeric, 4) ELSE NULL END AS acos,
       sp.clicks, sp.impr, sp.orders, rs.cover_days, rs.on_hand, round(rs.daily_rate::numeric, 2) AS daily_rate
     FROM spend sp LEFT JOIN restock rs ON rs."storeId" = sp."storeId" AND rs.asin = sp.asin
     WHERE true${storeFilter} ORDER BY sp.spend DESC LIMIT ${limitOf(args, 100)}`;
@@ -405,8 +426,11 @@ async function toolSalesTrend(identity: SellfoxMcpIdentity, args: ToolArgs) {
   const where = scope.where("s", "storeId");
   const storeFilter = typeof args.storeId === "string" ? ` AND s."storeId" = ${scope.add(args.storeId)}` : "";
   const rows = await readOnlyQuery(
-    `SELECT s."reportDate", sum(s."orderNum") AS orders, round(sum(s."salePrice")::numeric, 2) AS gmv, count(DISTINCT s."storeId")::int AS stores
-     FROM "SellfoxSalesDailySnapshot" s WHERE ${where} AND s."reportDate"::date > current_date - ${daysParam}::int${storeFilter}
+    `SELECT s."reportDate",
+       CASE WHEN bool_and(s.complete) AND count(s.orders)=count(*) THEN sum(s.orders) END AS orders,
+       CASE WHEN bool_and(s.complete) AND count(s.revenue)=count(*) THEN round(sum(s.revenue)::numeric, 2) END AS gmv,
+       count(DISTINCT s."storeId")::int AS stores
+     FROM "sellfox_sales_daily" s WHERE ${where} AND s."reportDate"::date > current_date - ${daysParam}::int${storeFilter}
      GROUP BY s."reportDate" ORDER BY s."reportDate" DESC`,
     scope.params,
   );

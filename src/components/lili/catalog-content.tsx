@@ -62,9 +62,9 @@ export async function CatalogContent({ kind, slug, locale, quotaScopeKey }: { ki
       <h1 className="text-xl font-bold">{tx(locale, workflow.titleZh, workflow.titleEn)}</h1>
       <p>{tx(locale, workflow.summaryZh, workflow.summaryEn)}</p>
       <CopyButton locale={locale} text={tx(locale, workflow.promptZh, workflow.promptEn)} />
-      <ol className="space-y-3">{workflow.steps.map((step) => <li key={step.n} className="lili-card p-4"><p>{step.n}. {tx(locale, step.zh, step.en)}</p>{step.skill && (findSkill(step.skill) ? <Link className="text-sm underline" href={`/lili/v2/skills/${step.skill}`}>{step.skill}</Link> : <p className="text-sm text-amber-800">{step.skill}：原始源码包未附此技能定义。</p>)}</li>)}</ol>
+      <ol className="space-y-3">{workflow.steps.map((step) => <li key={step.n} className="lili-card p-4"><p>{step.n}. {tx(locale, step.zh, step.en)}</p>{step.skill && (findSkill(step.skill) ? <Link className="text-sm underline" href={`/lili/v2/skills/${step.skill}`}>{step.skill}</Link> : <p className="text-sm text-warning-ink">{step.skill}：原始源码包未附此技能定义。</p>)}</li>)}</ol>
       <pre className="lili-card overflow-auto whitespace-pre-wrap p-4 text-sm leading-7">{tx(locale, workflow.promptZh, workflow.promptEn)}</pre>
-      <p className="text-sm text-amber-800">尚未映射自动执行器；下方检查不会创建任务或调用外部服务。</p>
+      <p className="text-sm text-warning-ink">尚未映射自动执行器；下方检查不会创建任务或调用外部服务。</p>
       <RunLiveButton slug={slug} locale={locale} />
     </article>;
   }
@@ -74,7 +74,7 @@ export async function CatalogContent({ kind, slug, locale, quotaScopeKey }: { ki
     const tool = listTools().find((row) => row.name === slug);
     if (!tool) notFound();
     return <div className="space-y-4"><Link href="/lili/v2/tools">← 全部工具</Link><h1 className="text-xl font-bold">{tool.name}</h1>
-      <p className="rounded-lg bg-amber-50 p-3 text-sm">{tool.availability === "catalog" ? "已接入本应用的静态目录查询，不读取店铺业务数据。" : "定义已保留，主系统业务执行器尚未映射。运行会明确返回未实现，不产生业务写入。"}</p>
+      <p className="rounded-lg bg-warning-soft p-3 text-sm">{tool.availability === "catalog" ? "已接入本应用的静态目录查询，不读取店铺业务数据。" : "定义已保留，主系统业务执行器尚未映射。运行会明确返回未实现，不产生业务写入。"}</p>
       <ToolRunner locale={locale} name={tool.name} description={tool.description} docs={tool.docs} schema={tool.inputSchema} readOnly={tool.readOnly} profileId="" />
       <p className="text-sm text-muted">原独立 Lili 调用历史未迁移。现有业务执行轨迹请在 <Link href="/agents" className="underline">Agent 中心</Link>查看。</p>
     </div>;

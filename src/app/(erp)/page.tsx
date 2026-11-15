@@ -11,6 +11,7 @@ import { AppShell } from "@/components/app-shell/app-shell";
 import { PrefetchLink } from "@/components/app-shell/prefetch-link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { DashboardPageTemplate } from "@/components/templates/page-templates";
 import { getModuleIdForPath, roleCanAccessModule } from "@/lib/accounts/permissions";
 import { getOrganizationRolePermissionsSnapshot } from "@/lib/accounts/role-permissions-server";
 import { getCurrentUserFromSignedCookie } from "@/lib/auth/session";
@@ -33,10 +34,10 @@ export default async function Home() {
 
   return (
     <AppShell title="运营工作台" subtitle="Amazon 业务系统总入口">
-      <div className="space-y-5">
-        <section className="flex flex-col gap-4 rounded-lg border border-border bg-white px-6 py-6 shadow-sm md:flex-row md:items-center md:justify-between">
+      <DashboardPageTemplate
+        exceptions={<section className="flex flex-col gap-[var(--gap-field)] rounded-lg border border-border bg-surface p-[var(--pad-card)] shadow-sm md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl font-black text-foreground">今天要处理什么？</h1>
+            <h1 className="text-display text-foreground">今天要处理什么？</h1>
             <p className="mt-2 text-sm text-muted">选择一个模块开始工作，页面会标明当前数据来源和待迁移边界。</p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -47,9 +48,8 @@ export default async function Home() {
               <Button variant="secondary">Listing AI</Button>
             </PrefetchLink> : null}
           </div>
-        </section>
-
-        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        </section>}
+        shortcuts={<section className="grid gap-[var(--gap-field)] md:grid-cols-2 xl:grid-cols-4">
           {visibleModules.map((module) => {
             const Icon = module.icon;
 
@@ -62,7 +62,7 @@ export default async function Home() {
                         <Icon className="h-5 w-5" />
                       </div>
                       <div>
-                        <h2 className="text-sm font-bold text-foreground">{module.title}</h2>
+                        <h2 className="text-section text-foreground">{module.title}</h2>
                         <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted">{module.description}</p>
                       </div>
                     </div>
@@ -72,8 +72,8 @@ export default async function Home() {
               </PrefetchLink>
             );
           })}
-        </section>
-      </div>
+        </section>}
+      />
     </AppShell>
   );
 }

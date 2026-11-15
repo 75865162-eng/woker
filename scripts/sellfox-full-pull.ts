@@ -60,7 +60,7 @@ async function main() {
   const days = Math.min(Math.max(Number(options.get("days") ?? 30) || 30, 1), 90);
   const endDate = sellfoxDateAt(new Date(), -1);
   const startDate = sellfoxDateAt(new Date(), -days);
-  const adTypes = (options.get("ad-types") ?? "sp").split(",").map((value) => value.trim()).filter(Boolean);
+  const adTypes = (options.get("ad-types") ?? "sp,sb,sd").split(",").map((value) => value.trim()).filter(Boolean);
   const scope = { organizationId, workspaceId };
   const credential = await getSellfoxCredentialStatus(scope);
   if (!credential.configured) throw new Error("服务端赛狐凭据未配置，先运行 sellfox-credentials-seed.ts。");

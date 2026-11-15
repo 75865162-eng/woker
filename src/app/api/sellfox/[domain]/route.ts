@@ -6,6 +6,7 @@ import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import { sellfoxBrowseQuery, sellfoxStoreWhere, sellfoxSnapshotWhere, sellfoxHourlyWhere, sellfoxRunWhere, SellfoxBrowseError } from "@/lib/sellfox/browse-query";
 import { sellfoxBrowseStoreIds } from "@/lib/sellfox/browse-store-scope";
+import { sellfoxInventoryHeadWhere } from "@/lib/sellfox/inventory-head";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
@@ -43,7 +44,8 @@ export async function GET(request: Request, context: { params: Promise<{ domain:
 
     const snapshotWhere = sellfoxSnapshotWhere(query, common.organizationId, common.workspaceId, storeIds);
     if (domain === "inventory") {
-      const [total, rows] = await Promise.all([prisma.sellfoxFbaInventorySnapshot.count({ where: snapshotWhere }), prisma.sellfoxFbaInventorySnapshot.findMany({ where: snapshotWhere, select: { id: true, reportDate: true, capturedAt: true, sku: true, msku: true, asin: true, fnsku: true, quantity: true, totalInventory: true, inTransit: true, inboundWorking: true, inboundShipped: true, inboundReceiving: true, reservedTransfer: true, reservedProcessing: true, reservedCustomerorders: true, unfulfillable: true, warehouseName: true, syncedAt: true, SellfoxStore: { select: { name: true, externalId: true, marketplace: true } } }, orderBy: sellfoxPrismaOrder("inventory", query), skip: (page - 1) * pageSize, take: pageSize })]);
+      const inventoryWhere = { AND: [snapshotWhere, await sellfoxInventoryHeadWhere(common, storeIds)] };
+      const [total, rows] = await Promise.all([prisma.sellfoxFbaInventorySnapshot.count({ where: inventoryWhere }), prisma.sellfoxFbaInventorySnapshot.findMany({ where: inventoryWhere, select: { id: true, reportDate: true, capturedAt: true, sku: true, msku: true, asin: true, fnsku: true, quantity: true, totalInventory: true, inTransit: true, inboundWorking: true, inboundShipped: true, inboundReceiving: true, reservedTransfer: true, reservedProcessing: true, reservedCustomerorders: true, unfulfillable: true, warehouseName: true, syncedAt: true, SellfoxStore: { select: { name: true, externalId: true, marketplace: true } } }, orderBy: sellfoxPrismaOrder("inventory", query), skip: (page - 1) * pageSize, take: pageSize })]);
       return NextResponse.json({ rows, pagination: { page, pageSize, total } });
     }
     return NextResponse.json({ error: "数据域不存在。" }, { status: 404 });

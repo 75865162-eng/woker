@@ -104,7 +104,7 @@ export function ProductVersionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-6 backdrop-blur-sm">
-      <div className="flex max-h-[82vh] w-full max-w-3xl flex-col rounded-lg bg-white shadow-2xl">
+      <div className="flex max-h-[82vh] w-full max-w-3xl flex-col rounded-lg bg-surface shadow-2xl">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
             <h3 className="text-lg font-bold text-foreground">版本历史：{product.sku}</h3>
@@ -116,7 +116,7 @@ export function ProductVersionModal({
           </Button>
         </div>
         <div className="thin-scrollbar flex-1 space-y-3 overflow-y-auto p-5">
-          {error ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</div> : null}
+          {error ? <div className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm font-semibold text-danger-ink">{error}</div> : null}
           {loading ? <div className="rounded-md border border-border bg-surface-muted px-3 py-2 text-sm font-semibold text-muted">正在读取版本历史...</div> : null}
           {versions.map((version) => (
             <div key={version.id} className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface-muted px-3 py-3">

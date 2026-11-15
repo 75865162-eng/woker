@@ -115,7 +115,7 @@ export async function SystemDataStatusPanel() {
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 px-3 py-2.5">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-muted text-brand">
-            {healthy ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4 text-amber-600" />}
+            {healthy ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4 text-warning-ink" />}
           </div>
           <div>
             <CardTitle className="text-sm">系统状态</CardTitle>
@@ -129,19 +129,19 @@ export async function SystemDataStatusPanel() {
       </CardHeader>
       <CardContent className="space-y-3 p-3">
         {databaseError ? (
-          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+          <div className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm font-semibold text-danger-ink">
             数据库可配置但当前读取失败：{databaseError}
           </div>
         ) : null}
 
         {!hasDatabaseUrl ? (
-          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">
+          <div className="rounded-md border border-warning-ink/30 bg-warning-soft px-3 py-2 text-sm font-semibold text-warning-ink">
             当前没有配置 DATABASE_URL，系统只能停留在本地兼容模式，无法作为多人共享后端使用。
           </div>
         ) : null}
 
         {productionGaps.length ? (
-          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">
+          <div className="rounded-md border border-warning-ink/30 bg-warning-soft px-3 py-2 text-sm font-semibold text-warning-ink">
             仍需补齐的生产边界：{productionGaps.join("、")}。
           </div>
         ) : null}

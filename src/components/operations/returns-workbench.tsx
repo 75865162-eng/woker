@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { StandardDataTable } from "@/components/ui/table-variants";
+import { type DataTableColumn } from "@/components/ui/data-table";
 
 type ReturnsResult = {
   rows: Array<{ id: string; amazonOrderId: string; asin: string; sellerSku: string; returnAt: string; quantity: number; disposition: string | null; rawStatus: string | null; marketplaceTimeZone: string; reason: { code: string } | null; orderMatched: boolean }>;
@@ -9,6 +11,15 @@ type ReturnsResult = {
   pagination: { total: number; pageCount: number };
 };
 const input = "min-h-9 rounded border border-border bg-background px-2 text-sm";
+type ReturnsRow = ReturnsResult["rows"][number];
+const returnColumns: DataTableColumn<ReturnsRow>[] = [
+  { key: "order", header: "订单 / 关联", render: (r) => (<>{r.amazonOrderId}<span className="block text-muted">{r.orderMatched ? "已匹配订单" : "尚未匹配订单"}</span></>) },
+  { key: "asin", header: "ASIN / SKU", render: (r) => (<>{r.asin}<span className="block text-muted">{r.sellerSku}</span></>) },
+  { key: "returnAt", header: "仓收（UTC）", render: (r) => new Date(r.returnAt).toISOString() },
+  { key: "quantity", header: "件数", numeric: true, render: (r) => String(r.quantity) },
+  { key: "reason", header: "原始原因 / 状态", render: (r) => (<>{r.reason?.code ?? "未返回"}<span className="block text-muted">{r.rawStatus ?? "未返回"}</span></>) },
+  { key: "disposition", header: "处置 / 站点时区", render: (r) => (<>{r.disposition ?? "未返回"}<span className="block text-muted">{r.marketplaceTimeZone}</span></>) },
+];
 export function ReturnsWorkbench({ sellerAccountId = "", marketplaceId = "", getHeaders }: { sellerAccountId?: string; marketplaceId?: string; getHeaders: () => Headers }) {
   const [sourceId, setSourceId] = useState(""), [reportId, setReportId] = useState(""), [orderId, setOrderId] = useState(""), [asin, setAsin] = useState(""), [reason, setReason] = useState(""), [rawStatus, setRawStatus] = useState(""), [from, setFrom] = useState(""), [to, setTo] = useState(""), [page, setPage] = useState(1);
   const [result, setResult] = useState<ReturnsResult | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(""), [refresh, setRefresh] = useState(0);
@@ -39,11 +50,16 @@ export function ReturnsWorkbench({ sellerAccountId = "", marketplaceId = "", get
       <Button size="sm" variant="secondary" disabled={loading} onClick={() => setRefresh(v => v + 1)}>刷新退货</Button>
     </div>
     {loading && <p role="status" className="text-sm text-muted">读取已发布退货报告…</p>}
-    {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+    {error && <p role="alert" className="text-sm text-danger-ink">{error}</p>}
     {result && <>
       <p className="break-all text-xs text-muted">{result.reportId ? `当前报告：${result.reportId} · 单份报告已完整提交` : "尚无可访问的已发布报告"}</p>
-      <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left text-xs"><thead><tr>{["订单 / 关联", "ASIN / SKU", "仓收（UTC）", "件数", "原始原因 / 状态", "处置 / 站点时区"].map(v => <th className="py-2 font-medium" key={v}>{v}</th>)}</tr></thead><tbody>{result.rows.map(r => <tr key={r.id} className="border-t border-border"><td className="py-3">{r.amazonOrderId}<span className="block text-muted">{r.orderMatched ? "已匹配订单" : "尚未匹配订单"}</span></td><td>{r.asin}<span className="block text-muted">{r.sellerSku}</span></td><td>{new Date(r.returnAt).toISOString()}</td><td>{r.quantity}</td><td>{r.reason?.code ?? "未返回"}<span className="block text-muted">{r.rawStatus ?? "未返回"}</span></td><td>{r.disposition ?? "未返回"}<span className="block text-muted">{r.marketplaceTimeZone}</span></td></tr>)}</tbody></table></div>
-      {!result.rows.length && <p className="py-6 text-center text-sm text-muted">{result.reportId ? "本报告当前筛选无退货明细。" : "当前范围没有已发布退货报告。请先配置退货策略并提交执行审批。"}</p>}
+      <StandardDataTable
+        ariaLabel="FBA 仓收退货明细"
+        rows={result.rows}
+        getRowKey={(r) => r.id}
+        columns={returnColumns}
+        empty={result.reportId ? "本报告当前筛选无退货明细。" : "当前范围没有已发布退货报告。请先配置退货策略并提交执行审批。"}
+      />
       <div className="flex justify-end gap-3 text-xs"><span>{result.pagination.total} 条 · 第 {page} / {Math.max(1, result.pagination.pageCount)} 页</span><Button size="sm" variant="secondary" disabled={loading || page <= 1} onClick={() => { setSourceId(result.selectedSourceId ?? ""); setReportId(result.reportId ?? ""); setPage(p => p - 1); }}>退货上一页</Button><Button size="sm" variant="secondary" disabled={loading || page >= result.pagination.pageCount} onClick={() => { setSourceId(result.selectedSourceId ?? ""); setReportId(result.reportId ?? ""); setPage(p => p + 1); }}>退货下一页</Button></div>
     </>}
   </div>;

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from 'react';
+import { AdsScopeBoundary, useAdsScopeCurrent } from './ads-scope-boundary';
+import { workspaceScopeHeaders } from '@/lib/workspace/workspace-scope-store';
 
 type Draft = { id: string; revision: number; status: string; reason: string; before: unknown; patch: unknown; createdAt: string; expiresAt: string; decisionReason: string | null; availableActions: string[] };
 type Observation = { id: string; before: unknown; after: unknown; observedAt: string; sourceTaskId: string };
@@ -16,7 +18,12 @@ function parse(value: unknown): Changes {
 }
 
 /** Mounted lazily per real entity; never changes a local snapshot to simulate execution. */
-export function AdsBusinessChanges({ profileId, entityType, externalId }: { profileId: string; entityType: string; externalId: string }) {
+export function AdsBusinessChanges(props: { profileId: string; entityType: string; externalId: string }) {
+  return <AdsScopeBoundary><AdsBusinessChangesBody {...props} /></AdsScopeBoundary>;
+}
+
+function AdsBusinessChangesBody({ profileId, entityType, externalId }: { profileId: string; entityType: string; externalId: string }) {
+  const isScopeCurrent = useAdsScopeCurrent();
   const [open, setOpen] = useState(false), [page, setPage] = useState(1), [version, setVersion] = useState(0);
   const [result, setResult] = useState<{ key: string; data?: Changes; error?: string } | null>(null);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState('');
@@ -30,7 +37,7 @@ export function AdsBusinessChanges({ profileId, entityType, externalId }: { prof
     if (!open) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => { controller.abort(); setResult({ key, error: '广告变更读取超时，请重试。' }); }, 15000);
-    void fetch(`${endpoint}?${key.split('/')[0]}`, { cache: 'no-store', signal: controller.signal }).then(async response => {
+    void fetch(`${endpoint}?${key.split('/')[0]}`, { cache: 'no-store', signal: controller.signal, headers: workspaceScopeHeaders() }).then(async response => {
       if (!response.ok) throw new Error(`无法读取广告变更（${response.status}）。`);
       const data = parse(await response.json());
       if (!controller.signal.aborted) setResult({ key, data });
@@ -38,12 +45,12 @@ export function AdsBusinessChanges({ profileId, entityType, externalId }: { prof
     return () => { controller.abort(); window.clearTimeout(timer); };
   }, [open, key]);
   async function mutate(body: Record<string, unknown>) {
-    if (busy) return;
+    if (busy || !isScopeCurrent()) return;
     setBusy(true); setMessage('');
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), 15000);
     try {
-      const response = await fetch(endpoint, { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, profileRecordId: profileId }) });
+      const response = await fetch(endpoint, { method: 'POST', signal: controller.signal, headers: workspaceScopeHeaders(true), body: JSON.stringify({ ...body, profileRecordId: profileId }) });
       const result = await response.json();
       if (!response.ok) throw new Error(typeof result?.error === 'string' ? result.error : `保存失败（${response.status}）。`);
       if (!result?.draft?.id || result.executionEnabled !== false) throw new Error('广告变更保存响应格式无效。请刷新核对后重试。');

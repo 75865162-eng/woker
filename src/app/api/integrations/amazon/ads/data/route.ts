@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   } catch (error) {
     if (error instanceof AmazonReadError) return NextResponse.json({ error: error.message, code: error.businessCode }, { status: error.status, headers });
     if (error instanceof AdsQueryError) return NextResponse.json({ error: error.message }, { status: error.status, headers });
-    if (error instanceof SyncInputError) return NextResponse.json({ error: error.message }, { status: error.status, headers });
+    if (error instanceof SyncInputError) return NextResponse.json({ error: error.message, ...(error.code ? { code: error.code } : {}) }, { status: error.status, headers });
     return NextResponse.json({ error: "无法读取 Amazon Ads 数据。" }, { status: 500, headers });
   }
 }

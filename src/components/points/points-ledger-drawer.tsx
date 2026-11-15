@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { StandardDataTable } from "@/components/ui/table-variants";
+import { type DataTableColumn } from "@/components/ui/data-table";
 
 type LedgerRow = {
   id: string;
@@ -64,10 +66,17 @@ export function PointsLedgerDrawer({ userId, userName, onClose }: { userId: stri
     void load();
   }, [load]);
 
+  const ledgerColumns: DataTableColumn<LedgerRow>[] = [
+    { key: "time", header: "时间", render: (row) => <span className="text-xs text-muted">{formatTime(row.createdAt)}</span> },
+    { key: "type", header: "类型", render: (row) => (<><span className="text-xs font-bold text-foreground">{kindLabels[row.kind] ?? row.kind}</span><span className="line-clamp-2 text-xs text-muted">{row.note}</span></>) },
+    { key: "delta", header: "变动", numeric: true, render: (row) => <span className={`font-bold ${row.delta > 0 ? "text-success-ink" : row.delta < 0 ? "text-danger-ink" : "text-muted"}`}>{row.delta > 0 ? `+${row.delta}` : row.delta}</span> },
+    { key: "balance", header: "余额", numeric: true, render: (row) => <span className="text-foreground">{row.balanceAfter}</span> },
+  ];
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/40" onClick={onClose}>
       <div
-        className="flex h-full w-full max-w-lg flex-col bg-white shadow-xl"
+        className="flex h-full w-full max-w-lg flex-col bg-surface shadow-xl"
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-label={`${userName} 的积分流水`}
@@ -89,37 +98,15 @@ export function PointsLedgerDrawer({ userId, userName, onClose }: { userId: stri
               加载中…
             </div>
           ) : error ? (
-            <p className="px-5 py-10 text-sm text-red-600">{error}</p>
-          ) : rows.length === 0 ? (
-            <p className="px-5 py-10 text-center text-sm text-muted">暂无流水。</p>
+            <p className="px-5 py-10 text-sm text-danger-ink">{error}</p>
           ) : (
-            <table className="w-full border-collapse text-sm">
-              <thead className="sticky top-0 bg-surface-muted text-xs font-bold text-muted">
-                <tr>
-                  <th className="px-4 py-2 text-left">时间</th>
-                  <th className="px-4 py-2 text-left">类型</th>
-                  <th className="px-4 py-2 text-right">变动</th>
-                  <th className="px-4 py-2 text-right">余额</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.id} className="border-t border-border">
-                    <td className="px-4 py-2.5 text-xs text-muted">{formatTime(row.createdAt)}</td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex flex-col gap-1">
-                        <span className="text-xs font-bold text-foreground">{kindLabels[row.kind] ?? row.kind}</span>
-                        <span className="line-clamp-2 text-xs text-muted">{row.note}</span>
-                      </div>
-                    </td>
-                    <td className={`px-4 py-2.5 text-right font-bold ${row.delta > 0 ? "text-green-600" : row.delta < 0 ? "text-red-600" : "text-muted"}`}>
-                      {row.delta > 0 ? `+${row.delta}` : row.delta}
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-foreground">{row.balanceAfter}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <StandardDataTable
+              ariaLabel="积分流水"
+              rows={rows}
+              getRowKey={(row) => row.id}
+              columns={ledgerColumns}
+              empty="暂无流水。"
+            />
           )}
         </div>
 

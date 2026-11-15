@@ -71,7 +71,7 @@ export default function LoginPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-6">
-      <form onSubmit={handleSubmit} className="w-full max-w-[400px] rounded-lg border border-border bg-white p-6 shadow-sm">
+      <form onSubmit={handleSubmit} className="w-full max-w-[400px] rounded-lg border border-border bg-surface p-6 shadow-sm">
         <div className="mb-6 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-md bg-brand text-white">
             <LockKeyhole className="h-5 w-5" />
@@ -86,14 +86,14 @@ export default function LoginPage() {
           <button
             type="button"
             onClick={() => switchMode("login")}
-            className={`h-9 rounded text-sm font-bold transition-colors ${!isRegister ? "bg-white text-foreground shadow-sm" : "text-muted hover:text-foreground"}`}
+            className={`h-9 rounded text-sm font-bold transition-colors ${!isRegister ? "bg-surface text-foreground shadow-sm" : "text-muted hover:text-foreground"}`}
           >
             登录
           </button>
           <button
             type="button"
             onClick={() => switchMode("register")}
-            className={`h-9 rounded text-sm font-bold transition-colors ${isRegister ? "bg-white text-foreground shadow-sm" : "text-muted hover:text-foreground"}`}
+            className={`h-9 rounded text-sm font-bold transition-colors ${isRegister ? "bg-surface text-foreground shadow-sm" : "text-muted hover:text-foreground"}`}
           >
             注册
           </button>
@@ -153,7 +153,7 @@ export default function LoginPage() {
           </label>
         ) : null}
 
-        {error ? <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</p> : null}
+        {error ? <p className="mb-4 rounded-md bg-danger-soft px-3 py-2 text-sm font-semibold text-danger-ink">{error}</p> : null}
 
         <Button type="submit" className="w-full" disabled={loading}>
           {isRegister ? <UserPlus className="mr-2 h-4 w-4" /> : <LogIn className="mr-2 h-4 w-4" />}

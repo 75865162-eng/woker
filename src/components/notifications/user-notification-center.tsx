@@ -8,6 +8,7 @@ import { useAppShellUser } from "@/components/app-shell/app-shell-context";
 import { roleCanAccessModule } from "@/lib/accounts/permissions";
 import { getProductWorkflowNotificationLink, mergeWorkspaceScope } from "@/lib/notifications/user-notification-helpers";
 import { emitWorkspaceScopeChanged } from "@/lib/workspace/workspace-scope-events";
+import { getJson } from "@/lib/workspace/get-json";
 
 type UserNotification = {
   id: string;
@@ -49,16 +50,17 @@ export function UserNotificationCenter() {
 
   const loadNotifications = useCallback(async () => {
     const sequence = ++loadSequenceRef.current;
-    const response = await fetch("/api/notifications/user?limit=50", { cache: "no-store" }).catch(() => null);
-    if (!response) return;
-    const data = (await response.json().catch(() => ({}))) as {
+    // 轮询与 StrictMode 双挂载会同时发同一个查询，统一入口只保留一次网络请求。
+    const result = await getJson<{
       notifications?: UserNotification[];
       unreadCount?: number;
       pendingWorkflowNotifications?: UserNotification[];
       notificationSessionKey?: string;
-    };
+    }>("/api/notifications/user?limit=50").catch(() => null);
+    if (!result) return;
+    const data = result.data ?? {};
 
-    if (!response.ok || sequence !== loadSequenceRef.current) {
+    if (!result.ok || sequence !== loadSequenceRef.current) {
       return;
     }
 
@@ -104,6 +106,7 @@ export function UserNotificationCenter() {
   }, [canViewProducts, shellUser?.organizationId, shellUser?.userId]);
 
   useEffect(() => {
+    const loadSequence = loadSequenceRef;
     void loadNotifications();
     const timer = window.setInterval(() => {
       void loadNotifications();
@@ -111,7 +114,7 @@ export function UserNotificationCenter() {
 
     return () => {
       window.clearInterval(timer);
-      ++loadSequenceRef.current;
+      ++loadSequence.current;
     };
   }, [loadNotifications]);
 
@@ -211,7 +214,7 @@ export function UserNotificationCenter() {
         <button
           type="button"
           className={cn(
-            "relative flex h-9 w-9 items-center justify-center rounded-md border border-border bg-white text-muted transition-colors hover:border-brand hover:text-brand",
+            "relative flex h-9 w-9 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-brand hover:text-brand",
             open && "border-brand text-brand",
           )}
           title="通知"
@@ -219,13 +222,13 @@ export function UserNotificationCenter() {
         >
           <Bell className="h-4 w-4" />
           {unreadCount > 0 ? (
-            <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-red-600 px-1 text-center text-[10px] font-bold leading-4 text-white">
+            <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-danger px-1 text-center text-label font-bold leading-4 text-white">
               {unreadCount > 99 ? "99+" : unreadCount}
             </span>
           ) : null}
         </button>
         {open ? (
-          <div className="absolute right-0 top-full z-40 mt-2 flex max-h-[70vh] w-[360px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-border bg-white shadow-xl">
+          <div className="absolute right-0 top-full z-40 mt-2 flex max-h-[70vh] w-[360px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-border bg-surface shadow-xl">
             <div className="flex items-center justify-between border-b border-border px-3 py-2">
               <div>
                 <p className="text-sm font-bold text-foreground">通知</p>
@@ -251,7 +254,7 @@ export function UserNotificationCenter() {
                       {!item.readAt ? <span className="mt-1 h-2 w-2 flex-none rounded-full bg-brand" /> : null}
                     </div>
                     <p className="mt-1 line-clamp-2 text-xs font-medium leading-5 text-muted">{item.message}</p>
-                    <p className="mt-1 text-[11px] font-medium text-muted">{formatNotificationTime(item.createdAt)}</p>
+                    <p className="mt-1 text-label font-medium text-muted">{formatNotificationTime(item.createdAt)}</p>
                   </button>
                   {item.type.startsWith("product_workflow") ? <Button size="sm" variant="secondary" className="mt-2" disabled={!canViewProducts || !getProductWorkflowNotificationLink(item)} title={!canViewProducts ? "没有商品查看权限" : undefined} onClick={() => void openNotificationProduct(item)}>打开商品</Button> : null}
                 </div>
@@ -270,7 +273,7 @@ export function UserNotificationCenter() {
             }
           }}
         >
-          <div ref={popupPanelRef} className="w-full max-w-xl rounded-lg border border-border bg-white shadow-2xl">
+          <div ref={popupPanelRef} className="w-full max-w-xl rounded-lg border border-border bg-surface shadow-2xl">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <div>
                 <p className="text-sm font-bold text-foreground">业务流转提醒</p>
@@ -285,10 +288,10 @@ export function UserNotificationCenter() {
                 <p className="text-lg font-bold text-foreground">{popupItem?.title}</p>
                 <p className="mt-2 text-sm font-medium leading-6 text-muted">{popupItem?.message}</p>
               </div>
-              {popupItem?.type.startsWith("product_workflow") ? <div className={cn("rounded-md border px-3 py-3 text-sm font-medium", overdue ? "border-red-200 bg-red-50 text-red-800" : "border-amber-200 bg-amber-50 text-amber-800")}>
+              {popupItem?.type.startsWith("product_workflow") ? <div className={cn("rounded-md border px-3 py-3 text-sm font-medium", overdue ? "border-danger/30 bg-danger-soft text-danger-ink" : "border-warning-ink/30 bg-warning-soft text-warning-ink")}>
                 处理期限：{popupDueAt ? formatNotificationTime(popupDueAt) : "期限未设置"}{overdue ? "（已超时）" : ""}
               </div> : null}
-              {actionError ? <p role="alert" className="text-sm text-red-700">{actionError} <button className="underline" onClick={() => void markRead([popupItem?.id ?? ""])}>重试</button></p> : null}
+              {actionError ? <p role="alert" className="text-sm text-danger-ink">{actionError} <button className="underline" onClick={() => void markRead([popupItem?.id ?? ""])}>重试</button></p> : null}
               <div className="flex flex-wrap justify-end gap-2">
                 {popupWorkflow.length > 1 ? <Button variant="secondary" onClick={() => setPopupIndex((current) => (Math.min(current, popupWorkflow.length - 1) + 1) % popupWorkflow.length)}>下一条（{displayedPopupIndex + 1}/{popupWorkflow.length}）</Button> : null}
                 <Button variant="secondary" onClick={closePopup}>

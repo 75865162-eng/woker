@@ -4,7 +4,7 @@ import { emptyProductManagement, type ProductManagement } from '@/lib/products/m
 
 type Catalog = { id: string; kind: string; code: string; name: string; color: string; notes: string; enabled: boolean; revision: number };
 type Choices = { listingChoices?: Array<{ sellerAccountId: string; sellerName: string; marketplaceId: string }>; catalogs: Catalog[]; suppliers: Array<{ id: string; name: string }>; products: Array<{ id: string; sku: string; chineseName: string }>; truncated: boolean };
-const inputClass = 'rounded border border-border bg-white px-2 py-1 text-sm';
+const inputClass = 'rounded border border-border bg-surface px-2 py-1 text-sm';
 export function ProductManagementFields({ value, onChange, workspaceId }: { value?: ProductManagement; onChange: (value: ProductManagement) => void; workspaceId: string }) {
   const management = value ?? emptyProductManagement();
   const [loadedChoices, setChoices] = useState<Choices & { workspaceId: string }>({ catalogs: [], suppliers: [], products: [], truncated: false, workspaceId });

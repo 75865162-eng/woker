@@ -62,6 +62,6 @@ export function ReportAttributionRecoveryPanel({ sourceId, sellerName, marketpla
       <Button size="sm" disabled={busy || working || preview.manifest.documents.length === 0} onClick={() => void submit()}>提交归属恢复审批</Button>
     </div>}
     {working && <p role="status" className="text-xs text-muted">正在检查归属恢复条件…</p>}
-    {error && <p role="alert" className="text-xs text-red-700">{error}</p>}
+    {error && <p role="alert" className="text-xs text-danger-ink">{error}</p>}
   </section>;
 }

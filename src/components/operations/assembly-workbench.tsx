@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { WorkbenchPageTemplate } from "@/components/templates/page-templates";
 import { Button } from "@/components/ui/button";
+import { StandardDataTable } from "@/components/ui/table-variants";
+import { type DataTableColumn } from "@/components/ui/data-table";
+import { extHeaders as headers } from "@/lib/workspace/ext-headers";
+import { readWorkspaceScopeId } from "@/lib/workspace/workspace-scope-store";
 
-const scopeKey = "tiaotiao.workspace.scope";
-function workspaceId() { try { return (JSON.parse(localStorage.getItem(scopeKey) ?? "{}") as { workspaceId?: string }).workspaceId || "default"; } catch { return "default"; } }
-function headers(json = false) { const result = new Headers({ "x-workspace-id": workspaceId() }); if (json) result.set("content-type", "application/json"); return result; }
 
 type Product = { id: string; sku: string; chineseName: string };
 type Location = { id: string; code: string; warehouseId: string; warehouse: { name: string } };
@@ -175,7 +177,7 @@ export function AssemblyWorkbench() {
       const response = await fetch("/api/operations/wms/commands", {
         method: "POST", headers: headers(true),
         body: JSON.stringify({
-          workspaceId: workspaceId(),
+          workspaceId: readWorkspaceScopeId(),
           aggregateId: order.id,
           expectedRevision: order.revision,
           idempotencyKey: `asm-complete:${order.id}:${order.revision}:exec`,
@@ -204,38 +206,62 @@ export function AssemblyWorkbench() {
     finally { setBusy(false); }
   }
 
+  const bomColumns: DataTableColumn<Bom>[] = [
+    { key: "product", header: "成品", render: (bom) => `${bom.product.sku} ${bom.product.chineseName}` },
+    { key: "version", header: "版本", render: (bom) => bom.version },
+    { key: "lines", header: "组件", render: (bom) => bom.lines.map(line => `${line.component.sku}×${line.quantityPer}`).join("、") },
+    { key: "enabled", header: "状态", render: (bom) => bom.enabled ? "启用" : "停用" },
+    { key: "action", header: "操作", render: (bom) => <Button variant="ghost" size="sm" onClick={() => void toggleBom(bom)} disabled={busy}>{bom.enabled ? "停用" : "启用"}</Button> },
+  ];
+  const orderColumns: DataTableColumn<AssemblyOrder>[] = [
+    { key: "number", header: "单号", render: (order) => <button type="button" className="text-left underline-offset-2 hover:underline" onClick={() => setExpanded(expanded === order.id ? "" : order.id)}>{order.number}</button> },
+    { key: "product", header: "成品", render: (order) => order.product.sku },
+    { key: "location", header: "库位", render: (order) => order.targetLocation.code },
+    { key: "qty", header: "计划/产出", render: (order) => `${order.plannedQty} / ${order.outputQty}` },
+    { key: "componentCost", header: "组件成本", numeric: true, render: (order) => money(order.componentCost) },
+    { key: "unitCost", header: "单位成本", numeric: true, render: (order) => money(order.unitCost) },
+    { key: "status", header: "状态", render: (order) => statusLabels[order.status] ?? order.status },
+    { key: "action", header: "操作", render: (order) => { const approval = approvals[order.id]; return <div className="space-x-2 whitespace-nowrap">{order.status === "DRAFT" && !approval ? <Button variant="secondary" size="sm" onClick={() => void requestCompletion(order)} disabled={busy}>申请完成</Button> : null}{order.status === "DRAFT" && approval ? <Button size="sm" onClick={() => void executeCompletion(order, approval.id)} disabled={busy}>执行完成</Button> : null}{order.status === "DRAFT" ? <Button variant="ghost" size="sm" onClick={() => void cancelOrder(order)} disabled={busy}>作废</Button> : null}</div>; } },
+  ];
+  const lineColumns: DataTableColumn<OrderLine>[] = [
+    { key: "component", header: "组件", render: (line) => line.component.sku },
+    { key: "plannedQty", header: "用量/计划", render: (line) => String(line.plannedQty) },
+    { key: "consumedQty", header: "耗用", render: (line) => String(line.consumedQty) },
+    { key: "unitCost", header: "单价", numeric: true, render: (line) => money(line.unitCost) },
+    { key: "amount", header: "金额", numeric: true, render: (line) => money(line.amount) },
+    { key: "lotId", header: "批次", render: (line) => <span className="font-mono text-label text-muted">{line.lotId.slice(0, 8)}</span> },
+  ];
   return (
-    <div className="space-y-6">
-      <section className="rounded-lg border border-border bg-card p-4">
+    <WorkbenchPageTemplate context={<section className="rounded-lg border border-border bg-surface p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold">BOM 与组装</h2>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-xs text-muted">
               组装单草稿只做组件分配、不预占库存；完成需他人审批，扣料与产出入库在同一事务内完成。
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => { void load(); void loadApprovals(); }} disabled={busy}>刷新</Button>
+          <Button variant="secondary" size="sm" onClick={() => { void load(); void loadApprovals(); }} disabled={busy}>刷新</Button>
         </div>
-        {notice ? <p className="mt-3 rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">{notice}</p> : null}
-        {error ? <p className="mt-3 rounded border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p> : null}
-      </section>
+        {notice ? <p className="mt-3 rounded border border-success/30 bg-success-soft px-3 py-2 text-xs text-success-ink">{notice}</p> : null}
+        {error ? <p className="mt-3 rounded border border-danger/30 bg-danger-soft px-3 py-2 text-xs text-danger-ink">{error}</p> : null}
+      </section>} main={<div className="space-y-6">
 
-      <section className="rounded-lg border border-border bg-card p-4">
+      <section className="rounded-lg border border-border bg-surface p-4">
         <h3 className="text-sm font-semibold">新增 BOM</h3>
         <form className="mt-3 space-y-3" onSubmit={createBom}>
           <div className="flex flex-wrap items-end gap-3">
-            <label className="text-xs text-muted-foreground">
+            <label className="text-xs text-muted">
               成品
               <select className={`${inputCls} mt-1 block w-64`} value={bomForm.productRecordId} onChange={event => setBomForm({ ...bomForm, productRecordId: event.target.value })}>
                 <option value="">选择成品 SKU</option>
                 {products.map(product => <option key={product.id} value={product.id}>{product.sku} {product.chineseName}</option>)}
               </select>
             </label>
-            <label className="text-xs text-muted-foreground">
+            <label className="text-xs text-muted">
               版本
               <input className={`${inputCls} mt-1 block w-28`} value={bomForm.version} onChange={event => setBomForm({ ...bomForm, version: event.target.value })} />
             </label>
-            <Button type="button" variant="outline" size="sm" onClick={addBomLine}>加组件</Button>
+            <Button type="button" variant="secondary" size="sm" onClick={addBomLine}>加组件</Button>
           </div>
           <div className="space-y-2">
             {bomLines.map((row, index) => (
@@ -251,121 +277,55 @@ export function AssemblyWorkbench() {
           </div>
           <Button type="submit" size="sm" disabled={busy}>保存 BOM</Button>
         </form>
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="text-left text-muted-foreground">
-              <tr><th className="py-2">成品</th><th>版本</th><th>组件</th><th>状态</th><th>操作</th></tr>
-            </thead>
-            <tbody>
-              {boms.length === 0 ? <tr><td className="py-3 text-muted-foreground" colSpan={5}>还没有 BOM。先给组合商品建一套。</td></tr> : null}
-              {boms.map(bom => (
-                <tr key={bom.id} className="border-t border-border/60">
-                  <td className="py-2">{bom.product.sku} {bom.product.chineseName}</td>
-                  <td>{bom.version}</td>
-                  <td>{bom.lines.map(line => `${line.component.sku}×${line.quantityPer}`).join("、")}</td>
-                  <td>{bom.enabled ? "启用" : "停用"}</td>
-                  <td><Button variant="ghost" size="sm" onClick={() => void toggleBom(bom)} disabled={busy}>{bom.enabled ? "停用" : "启用"}</Button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <StandardDataTable className="mt-4" ariaLabel="BOM 列表" rows={boms} getRowKey={(bom) => bom.id} columns={bomColumns} empty="还没有 BOM。先给组合商品建一套。" />
       </section>
 
-      <section className="rounded-lg border border-border bg-card p-4">
+      <section className="rounded-lg border border-border bg-surface p-4">
         <h3 className="text-sm font-semibold">新建组装单</h3>
         <form className="mt-3 flex flex-wrap items-end gap-3" onSubmit={createOrder}>
-          <label className="text-xs text-muted-foreground">
+          <label className="text-xs text-muted">
             成品
             <select className={`${inputCls} mt-1 block w-64`} value={orderForm.productRecordId} onChange={event => setOrderForm({ ...orderForm, productRecordId: event.target.value, bomId: "" })}>
               <option value="">选择成品 SKU</option>
               {products.filter(product => boms.some(bom => bom.productRecordId === product.id && bom.enabled)).map(product => <option key={product.id} value={product.id}>{product.sku} {product.chineseName}</option>)}
             </select>
           </label>
-          <label className="text-xs text-muted-foreground">
+          <label className="text-xs text-muted">
             BOM
             <select className={`${inputCls} mt-1 block w-32`} value={orderForm.bomId} onChange={event => setOrderForm({ ...orderForm, bomId: event.target.value })}>
               <option value="">最新启用</option>
               {bomsForProduct.map(bom => <option key={bom.id} value={bom.id}>{bom.version}</option>)}
             </select>
           </label>
-          <label className="text-xs text-muted-foreground">
+          <label className="text-xs text-muted">
             成品库位
             <select className={`${inputCls} mt-1 block w-64`} value={orderForm.locationId} onChange={event => setOrderForm({ ...orderForm, locationId: event.target.value })}>
               <option value="">选择库位</option>
               {locations.map(location => <option key={location.id} value={location.id}>{location.warehouse.name} / {location.code}</option>)}
             </select>
           </label>
-          <label className="text-xs text-muted-foreground">
+          <label className="text-xs text-muted">
             计划产量
             <input className={`${inputCls} mt-1 block w-24`} value={orderForm.plannedQty} onChange={event => setOrderForm({ ...orderForm, plannedQty: event.target.value })} />
           </label>
           <Button type="submit" size="sm" disabled={busy}>创建并分配组件</Button>
         </form>
-        <p className="mt-2 text-xs text-muted-foreground">组件按入库先后从同仓库可用库存取料；任一组件不足会整单拒绝，不会只扣一半。</p>
+        <p className="mt-2 text-xs text-muted">组件按入库先后从同仓库可用库存取料；任一组件不足会整单拒绝，不会只扣一半。</p>
       </section>
 
-      <section className="rounded-lg border border-border bg-card p-4">
+      <section className="rounded-lg border border-border bg-surface p-4">
         <h3 className="text-sm font-semibold">组装单</h3>
-        <div className="mt-3 overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="text-left text-muted-foreground">
-              <tr>
-                <th className="py-2">单号</th><th>成品</th><th>库位</th><th>计划/产出</th><th>组件成本</th><th>单位成本</th><th>状态</th><th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orders.length === 0 ? <tr><td className="py-3 text-muted-foreground" colSpan={8}>还没有组装单。</td></tr> : null}
-              {orders.map(order => {
-                const approval = approvals[order.id];
-                return (
-                  <tr key={order.id} className="border-t border-border/60 align-top">
-                    <td className="py-2">
-                      <button type="button" className="text-left underline-offset-2 hover:underline" onClick={() => setExpanded(expanded === order.id ? "" : order.id)}>
-                        {order.number}
-                      </button>
-                    </td>
-                    <td>{order.product.sku}</td>
-                    <td>{order.targetLocation.code}</td>
-                    <td>{order.plannedQty} / {order.outputQty}</td>
-                    <td>{money(order.componentCost)}</td>
-                    <td>{money(order.unitCost)}</td>
-                    <td>{statusLabels[order.status] ?? order.status}</td>
-                    <td className="space-x-2 whitespace-nowrap">
-                      {order.status === "DRAFT" && !approval ? <Button variant="outline" size="sm" onClick={() => void requestCompletion(order)} disabled={busy}>申请完成</Button> : null}
-                      {order.status === "DRAFT" && approval ? <Button size="sm" onClick={() => void executeCompletion(order, approval.id)} disabled={busy}>执行完成</Button> : null}
-                      {order.status === "DRAFT" ? <Button variant="ghost" size="sm" onClick={() => void cancelOrder(order)} disabled={busy}>作废</Button> : null}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <StandardDataTable className="mt-3" ariaLabel="组装单列表" rows={orders} getRowKey={(order) => order.id} columns={orderColumns} empty="还没有组装单。" />
         {orders.map(order => expanded !== order.id ? null : (
           <div key={`detail-${order.id}`} className="mt-3 rounded border border-border/60 p-3">
             <p className="text-xs font-medium">组件明细</p>
-            <table className="mt-2 w-full text-xs">
-              <thead className="text-left text-muted-foreground"><tr><th>组件</th><th>用量/计划</th><th>耗用</th><th>单价</th><th>金额</th><th>批次</th></tr></thead>
-              <tbody>
-                {order.lines.map(line => (
-                  <tr key={line.id} className="border-t border-border/40">
-                    <td className="py-1">{line.component.sku}</td>
-                    <td>{line.plannedQty}</td>
-                    <td>{line.consumedQty}</td>
-                    <td>{money(line.unitCost)}</td>
-                    <td>{money(line.amount)}</td>
-                    <td className="font-mono text-[11px] text-muted-foreground">{line.lotId.slice(0, 8)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <StandardDataTable ariaLabel="组件明细" rows={order.lines} getRowKey={(line) => line.id} columns={lineColumns} empty="暂无组件明细。" />
           </div>
         ))}
-        <p className="mt-3 text-xs text-muted-foreground">
+        <p className="mt-3 text-xs text-muted">
           审批中心批准后，回到这里点「执行完成」才会真正扣料产出。申请人不能自批，这是故意的。
         </p>
       </section>
-    </div>
+    </div>} />
   );
 }

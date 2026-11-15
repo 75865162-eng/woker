@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
+    "target": "ES2020",
     "lib": [
       "dom",
       "dom.iterable",
@@ -41,6 +41,8 @@
     ".next-amazon-live/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "integration-evidence",
+    "tmp"
   ]
 }

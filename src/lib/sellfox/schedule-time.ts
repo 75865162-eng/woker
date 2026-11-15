@@ -1,11 +1,17 @@
-/** Persisted enqueue time, rather than completion time, determines the next slot. */
-export const sellfoxScheduleIntervals = { stores: 480, inventory: 180, sales: 1440, performance: 1440, listings: 1440, orders: 720, fba_shipments: 720, ads_report: 1440, ads_targeting: 1440, ads_search_term: 1440, ads_campaign: 1440, ads_ad_group: 1440, ads_placement: 1440 } as const;
+import { builtinSyncRules, sellfoxScheduleIntervals as registryIntervals } from "./sync-rules";
+
+/** 调度间隔来自同步规则注册表，新增数据域自动获得调度节奏。 */
+export const sellfoxScheduleIntervals = registryIntervals;
+/** 每日固定 06:30 时隙的资源：只有 24 小时节奏的日事实/当前状态类；3h 库存、12h 单据按间隔滚动。 */
+const dailySlotResources = new Set(builtinSyncRules
+  .filter((rule) => rule.schedulable && rule.intervalMinutes === 1440 && rule.dateMode !== "none")
+  .map((rule) => rule.id));
 type ScheduleClock = { resource: string; intervalMinutes: number; lastEnqueuedAt: Date | null };
 const DAY = 86_400_000;
 const SHANGHAI_OFFSET = 8 * 3_600_000;
 
 export function nextSellfoxScheduleAt(schedule: ScheduleClock, now = new Date()): Date {
-  if (["sales", "performance", "listings", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(schedule.resource)) {
+  if (dailySlotResources.has(schedule.resource)) {
     const localDay = Math.floor((now.getTime() + SHANGHAI_OFFSET) / DAY);
     const todaySlot = localDay * DAY - SHANGHAI_OFFSET + 390 * 60_000;
     const lastDay = schedule.lastEnqueuedAt ? Math.floor((schedule.lastEnqueuedAt.getTime() + SHANGHAI_OFFSET) / DAY) : -Infinity;

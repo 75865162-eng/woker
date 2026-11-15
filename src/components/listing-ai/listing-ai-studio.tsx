@@ -11,6 +11,7 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react";
+import { WorkbenchPageTemplate } from "@/components/templates/page-templates";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -545,8 +546,8 @@ export function ListingAiStudio() {
   }, [history, historyQuery]);
 
   return (
-    <div className="space-y-4">
-      <Card>
+    <WorkbenchPageTemplate
+      context={<Card>
         <CardContent className="flex flex-wrap items-start justify-between gap-3 py-3">
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge tone={textReady ? "green" : "red"}>
@@ -559,7 +560,7 @@ export function ListingAiStudio() {
             {config?.error ? (
               <button
                 type="button"
-                className="text-[11px] font-bold text-danger hover:underline"
+                className="text-label font-bold text-danger hover:underline"
                 onClick={() => void loadConfig()}
               >
                 {config.error} · 重试
@@ -585,7 +586,7 @@ export function ListingAiStudio() {
                     aria-label="关闭历史面板"
                     onClick={() => setHistoryOpen(false)}
                   />
-                  <div className="absolute right-0 top-full z-30 mt-2 w-[320px] rounded-lg border border-border bg-white p-3 shadow-xl">
+                  <div className="absolute right-0 top-full z-30 mt-2 w-[320px] rounded-lg border border-border bg-surface p-3 shadow-xl">
                     <div className="mb-2 flex items-center gap-2">
                       <div className="flex flex-1 items-center gap-1.5 rounded-md border border-border px-2">
                         <Search className="h-3.5 w-3.5 text-muted" />
@@ -617,7 +618,7 @@ export function ListingAiStudio() {
                               <p className="truncate text-xs font-bold text-foreground">
                                 {entry.label}
                               </p>
-                              <p className="truncate text-[10px] text-muted">
+                              <p className="truncate text-label text-muted">
                                 {entry.marketplace} · {formatHistoryTime(entry.createdAt)}
                                 {entry.model ? ` · ${entry.model}` : ""}
                               </p>
@@ -638,7 +639,7 @@ export function ListingAiStudio() {
                         </p>
                       )}
                     </div>
-                    <p className="mt-2 border-t border-border pt-2 text-[10px] leading-relaxed text-muted">
+                    <p className="mt-2 border-t border-border pt-2 text-label leading-relaxed text-muted">
                       最近 {history.length} / 20 条，存在本机浏览器；清空表单不会删除历史。
                     </p>
                   </div>
@@ -651,8 +652,9 @@ export function ListingAiStudio() {
             </Button>
           </div>
         </CardContent>
-      </Card>
+      </Card>}
 
+      main={<div className="flex flex-col gap-[var(--gap-section)]">
       {error ? (
         <div className="flex gap-2 rounded-md border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -690,7 +692,7 @@ export function ListingAiStudio() {
                         ? "已生成，可继续调整后重新生成"
                         : "填完即可生成整套 Listing"}
                   </p>
-                  <p className="truncate text-[11px] text-muted">
+                  <p className="truncate text-label text-muted">
                     {textReady
                       ? `调用 ${textModelLabel}`
                       : "系统设置里还没有可用的文本模型 Key"}
@@ -739,10 +741,11 @@ export function ListingAiStudio() {
         />
       </div>
 
-      <p className="text-[11px] leading-relaxed text-muted">
+      <p className="text-label leading-relaxed text-muted">
         输入内容保存在本机浏览器草稿，生成结果保存在本机历史（最近 20 条）；图片上传后存到系统文件库。AI 只允许引用你填写的资料，缺数据会标
         NEEDS_DATA，不会补零或编造。
       </p>
-    </div>
+      </div>}
+    />
   );
 }

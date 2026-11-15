@@ -46,9 +46,9 @@ export function WmsCommandPanel({ workspaceId }: { workspaceId: string }) {
  const inputClass="rounded border border-border bg-background px-2 py-1.5 text-sm";
  return <section className="space-y-3 rounded-lg border border-border bg-surface p-4">
   <h2 className="font-semibold">库存作业与审批</h2>
-  <p className="text-sm text-muted-foreground">按当前单据/余额版本提交。收货、质检、上架、预占、调拨、释放和出库均需独立审批；批准后由申请人执行。</p>
+  <p className="text-sm text-muted">按当前单据/余额版本提交。收货、质检、上架、预占、调拨、释放和出库均需独立审批；批准后由申请人执行。</p>
   <form aria-label="按编号库存作业" onSubmit={submit} onChange={()=>{pending.current=null;}}><fieldset disabled={busy} className="flex flex-wrap items-end gap-2">
-   <span className="text-xs text-muted-foreground">当前工作区：{workspaceId}</span>
+   <span className="text-xs text-muted">当前工作区：{workspaceId}</span>
    <label className="grid gap-1 text-xs">动作<select aria-label="动作" className={inputClass} value={action} onChange={e=>setAction(e.target.value as typeof action)}>{actions.map((value,i)=><option key={value} value={value}>{labels[i]}</option>)}</select></label>
    <label className="grid gap-1 text-xs">{["RESERVE","TRANSFER"].includes(action)?"余额 ID":"单据 ID"}<input className={inputClass} value={aggregateId} onChange={e=>setAggregateId(e.target.value)} required/></label>
    <label className="grid gap-1 text-xs">当前版本<input className={inputClass} type="number" min={1} value={revision} onChange={e=>setRevision(e.target.value)} required/></label>
@@ -60,7 +60,7 @@ export function WmsCommandPanel({ workspaceId }: { workspaceId: string }) {
    <Button type="submit" disabled={busy}>提交作业</Button>
    <Button type="button" variant="secondary" disabled={busy} onClick={()=>void perform(refresh)}>读取审批</Button>
   </fieldset></form>
-  {error&&<p role="alert" className="text-sm text-red-600">{error}</p>}{notice&&<p role="status" className="text-sm">{notice}</p>}
+  {error&&<p role="alert" className="text-sm text-danger-ink">{error}</p>}{notice&&<p role="status" className="text-sm">{notice}</p>}
   <div className="space-y-2">{approvals.map(row=><div className="rounded border border-border p-3 text-sm" key={row.id}>
    <p>{row.action} · {row.status} · 申请人 {row.requestedBy}</p>
    <WmsApprovalDetails conversionReversal={row.conversionReversal} consumable={row.consumable} conversionTarget={row.conversionTarget} transferOrder={row.transferOrder} command={row.command} stock={row.stock} targetLocation={row.targetLocation} />

@@ -8,8 +8,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { CheckCircle2, Clock3, FileText, RefreshCw, ShieldAlert, SlidersHorizontal, Target, TriangleAlert } from "lucide-react";
 import { PrefetchLink } from "@/components/app-shell/prefetch-link";
+import { WorkbenchPageTemplate } from "@/components/templates/page-templates";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { StandardDataTable } from "@/components/ui/table-variants";
+import { type DataTableColumn } from "@/components/ui/data-table";
 import { useAppShellUser } from "@/components/app-shell/app-shell-context";
 import { roleCanPerformAction } from "@/lib/accounts/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,7 +26,7 @@ import type {
   AgentToolDefinition,
   AgentTraceEvent,
 } from "@/lib/agent-platform";
-import type { PpcAnalysisReport, PpcExecutionOutput, PpcExecutionRequest } from "@/lib/agent-platform/ppc";
+import type { PpcAnalysisReport, PpcBidRecommendationItem, PpcExecutionOutput, PpcExecutionRequest } from "@/lib/agent-platform/ppc";
 import { createBrowserId } from "@/lib/browser/random-id";
 import { AmazonActionAudits, amazonActionHeaders } from "./amazon-action-audits";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
@@ -230,6 +233,19 @@ export function PpcAgentWorkbench() {
   const toolCalls = currentExecution?.toolCalls ?? [];
   const traces = currentExecution?.traces ?? [];
   const memoryItems = data?.memoryItems ?? [];
+  const bidColumns: DataTableColumn<PpcBidRecommendationItem>[] = [
+    { key: "keyword", header: "关键词", render: (r) => <span className="font-semibold text-foreground">{r.keyword || r.target}</span> },
+    { key: "currentBid", header: "当前", numeric: true, render: (r) => <span className="font-semibold text-muted">${r.currentBid.toFixed(2)}</span> },
+    { key: "suggestedBid", header: "建议", numeric: true, render: (r) => <span className="font-black text-brand">${r.suggestedBid.toFixed(2)}</span> },
+    { key: "deltaPercent", header: "变化", numeric: true, render: (r) => <span className="font-semibold text-muted">{r.deltaPercent}%</span> },
+    { key: "recommendation", header: "原因", render: (r) => <span className="text-muted">{r.recommendation}</span> },
+  ];
+  const blockedBidColumns: DataTableColumn<NonNullable<PpcExecutionOutput["blockedBidIncreases"]>[number]>[] = [
+    { key: "keyword", header: "被拦关键词", render: (r) => <span className="font-semibold text-foreground">{r.keyword || r.target}</span> },
+    { key: "currentBid", header: "当前", numeric: true, render: (r) => <span className="font-semibold text-muted">${r.currentBid.toFixed(2)}</span> },
+    { key: "suggestedBid", header: "原建议", numeric: true, render: (r) => <span className="font-semibold text-muted line-through">${r.suggestedBid.toFixed(2)}</span> },
+    { key: "reason", header: "拦截原因", render: (r) => <span className="text-muted">{r.reason}</span> },
+  ];
 
   const scopedCampaignGroups = useMemo(() => {
     if (workspaceMode === "workspace-unit" && activeWorkspaceUnitId) {
@@ -471,8 +487,7 @@ export function PpcAgentWorkbench() {
   }
 
   return (
-    <div className="space-y-4">
-      <AmazonActionAudits refreshToken={refreshToken} onChanged={refresh} />
+    <WorkbenchPageTemplate context={<AmazonActionAudits refreshToken={refreshToken} onChanged={refresh} />} main={<div className="space-y-4">
       <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
         <Card>
           <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -487,9 +502,9 @@ export function PpcAgentWorkbench() {
           </CardHeader>
           <CardContent className="space-y-4">
             <ChainHandoffNotice payload={chain.payload} error={chain.error} />
-            {error ? <div className="rounded-md border border-danger/30 bg-red-50 px-3 py-2 text-sm font-semibold text-danger">{error}</div> : null}
+            {error ? <div className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm font-semibold text-danger">{error}</div> : null}
             {handoffMessage ? (
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-success/30 bg-success-soft px-3 py-2 text-sm font-semibold text-success-ink">
                 <span>{handoffMessage}</span>
                 <PrefetchLink href="/workspace" className="text-brand underline">
                   去 PPC 工作台导出
@@ -560,7 +575,7 @@ export function PpcAgentWorkbench() {
               </Button>
             </div>
             {parseStatus !== "completed" && (
-              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
+              <div className="rounded-md border border-warning-ink/30 bg-warning-soft px-3 py-2 text-xs font-semibold text-warning-ink">
                 当前 PPC 工作区还没有完成 Bulk 导入，建议先到 PPC 优化工作台导入数据。
               </div>
             )}
@@ -588,7 +603,7 @@ export function PpcAgentWorkbench() {
                   <p className="mt-1 text-xs font-medium text-muted">{formatDate(currentApproval.requestedAt)}</p>
                 </div>
                 {amazonAdsPlan ? (
-                  <div className="rounded-md border border-border bg-white px-3 py-2 text-xs font-semibold text-muted">
+                  <div className="rounded-md border border-border bg-surface px-3 py-2 text-xs font-semibold text-muted">
                     <div className="font-black text-foreground">Amazon Ads 方案</div>
                     <div className="mt-1">模式：{String(amazonAdsPlan.mode ?? "-")}</div>
                     <div>操作数：{Array.isArray(amazonAdsPlan.operations) ? amazonAdsPlan.operations.length : 0}</div>
@@ -627,7 +642,7 @@ export function PpcAgentWorkbench() {
               </div>
               <div className="grid gap-3 md:grid-cols-2">
                 {report.opportunities.map((item) => (
-                  <div key={item.opportunityId} className="rounded-md border border-border bg-white p-3">
+                  <div key={item.opportunityId} className="rounded-md border border-border bg-surface p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="text-sm font-black text-foreground">{item.title}</p>
@@ -652,30 +667,13 @@ export function PpcAgentWorkbench() {
                 ))}
               </div>
               <SectionTitle title="竞价建议" />
-              <div className="overflow-x-auto rounded-md border border-border">
-                <table className="min-w-full divide-y divide-border text-sm">
-                  <thead className="bg-surface-muted text-xs font-bold text-muted">
-                    <tr>
-                      <th className="px-3 py-2 text-left">关键词</th>
-                      <th className="px-3 py-2 text-right">当前</th>
-                      <th className="px-3 py-2 text-right">建议</th>
-                      <th className="px-3 py-2 text-right">变化</th>
-                      <th className="px-3 py-2 text-left">原因</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border bg-white">
-                    {report.bidRecommendations.map((item) => (
-                      <tr key={item.rowId}>
-                        <td className="px-3 py-2 font-semibold text-foreground">{item.keyword || item.target}</td>
-                        <td className="px-3 py-2 text-right font-semibold text-muted">${item.currentBid.toFixed(2)}</td>
-                        <td className="px-3 py-2 text-right font-black text-brand">${item.suggestedBid.toFixed(2)}</td>
-                        <td className="px-3 py-2 text-right font-semibold text-muted">{item.deltaPercent}%</td>
-                        <td className="px-3 py-2 text-muted">{item.recommendation}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <StandardDataTable
+                ariaLabel="竞价建议"
+                rows={report.bidRecommendations}
+                getRowKey={(item) => item.rowId}
+                columns={bidColumns}
+                empty="暂无竞价建议。"
+              />
             </CardContent>
           </Card>
 
@@ -705,31 +703,16 @@ export function PpcAgentWorkbench() {
                   </ul>
                 ) : null}
                 {inventoryGate.missingInputs.length ? (
-                  <p className="text-xs font-semibold text-amber-700">缺数据：{inventoryGate.missingInputs.join("；")}</p>
+                  <p className="text-xs font-semibold text-warning-ink">缺数据：{inventoryGate.missingInputs.join("；")}</p>
                 ) : null}
                 {blockedBidIncreases.length ? (
-                  <div className="overflow-x-auto rounded-md border border-border">
-                    <table className="min-w-full divide-y divide-border text-sm">
-                      <thead className="bg-surface-muted text-xs font-bold text-muted">
-                        <tr>
-                          <th className="px-3 py-2 text-left">被拦关键词</th>
-                          <th className="px-3 py-2 text-right">当前</th>
-                          <th className="px-3 py-2 text-right">原建议</th>
-                          <th className="px-3 py-2 text-left">拦截原因</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border bg-white">
-                        {blockedBidIncreases.map((item) => (
-                          <tr key={item.rowId}>
-                            <td className="px-3 py-2 font-semibold text-foreground">{item.keyword || item.target}</td>
-                            <td className="px-3 py-2 text-right font-semibold text-muted">${item.currentBid.toFixed(2)}</td>
-                            <td className="px-3 py-2 text-right font-semibold text-muted line-through">${item.suggestedBid.toFixed(2)}</td>
-                            <td className="px-3 py-2 text-muted">{item.reason}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <StandardDataTable
+                    ariaLabel="被拦截的加价建议"
+                    rows={blockedBidIncreases}
+                    getRowKey={(item) => item.rowId}
+                    columns={blockedBidColumns}
+                    empty="暂无被拦截的加价建议。"
+                  />
                 ) : null}
                 <p className="text-xs font-medium text-muted">
                   证据：{inventoryGate.evidence.snapshotId || "-"} · 快照 {inventoryGate.evidence.snapshotAgeHours === null ? "-" : `${inventoryGate.evidence.snapshotAgeHours}h`} · 需求来源 {inventoryGate.evidence.demandSource || "-"}
@@ -777,7 +760,7 @@ export function PpcAgentWorkbench() {
         <TracePanel title="执行时间线" items={traces.map((item) => `${item.sequence}. ${item.type} · ${item.message ?? ""}`)} />
         <TracePanel title="记忆" items={memoryItems.map((item) => `${formatDate(item.createdAt)} · ${item.summary}`)} />
       </section>
-    </div>
+    </div>} />
   );
 }
 

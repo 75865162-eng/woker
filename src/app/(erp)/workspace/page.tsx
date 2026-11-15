@@ -1,19 +1,22 @@
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell/app-shell";
+import { WorkbenchPageTemplate } from "@/components/templates/page-templates";
 import { IdleMount } from "@/components/app-shell/idle-mount";
 import { CampaignGridHome, WorkspacePanel } from "@/components/app-shell/lazy-workbenches";
 
 export default function WorkspacePage() {
   return (
     <AppShell title="PPC 优化工作台" subtitle="Campaign 分组、生命周期规则、Overall 匹配和草稿优先执行">
-      <div className="space-y-5">
-        <div className="flex items-center justify-between rounded-lg border border-border bg-white px-4 py-3 text-sm"><span>Amazon Ads 广告管理中心 <span className="text-xs text-muted">· 演示数据交互原型</span></span><Link href="/amazon-ads/campaigns" className="text-brand hover:underline" prefetch={false}>进入广告管理中心 →</Link></div>
+      <WorkbenchPageTemplate
+        context={<div className="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-3 text-sm"><span>Amazon Ads 广告管理中心 <span className="text-xs text-muted">· 演示数据交互原型</span></span><Link href="/amazon-ads/campaigns" className="text-brand hover:underline">进入广告管理中心 →</Link></div>}
+        main={<>
+        <div className="flex min-w-0 flex-col gap-[var(--gap-section)]">
         <div className="min-w-0">
           <CampaignGridHome />
         </div>
         <IdleMount
           fallback={
-            <section className="rounded-lg border border-border bg-white">
+            <section className="rounded-lg border border-border bg-surface">
               <div className="border-b border-border px-5 py-4">
                 <div className="h-4 w-32 animate-pulse rounded bg-surface-muted" />
                 <div className="mt-2 h-3 w-80 max-w-full animate-pulse rounded bg-surface-muted" />
@@ -30,7 +33,9 @@ export default function WorkspacePage() {
             <WorkspacePanel />
           </div>
         </IdleMount>
-      </div>
+        </div>
+        </>}
+      />
     </AppShell>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { WorkbenchPageTemplate } from "@/components/templates/page-templates";
 import { Button } from "@/components/ui/button";
 import { Badge, Field, Kpis, Notice, Section, SelectField, Table, Tabs, bp, extPost, money, statusLabel, today, useExt } from "./kit";
 
@@ -37,8 +38,7 @@ export function TaxWorkbench() {
   }
 
   const summary = invoices.data?.summary;
-  return <div className="space-y-6">
-    <Notice error={error || invoices.error || periods.error || ""} notice={notice} />
+  return <WorkbenchPageTemplate context={<Notice error={error || invoices.error || periods.error || ""} notice={notice} />} main={<div className="space-y-6">
     <Tabs value={tab} onChange={value => setTab(value as "INVOICE" | "PERIOD")} tabs={[{ id: "INVOICE", label: "发票台账", count: invoices.data?.items.length }, { id: "PERIOD", label: "申报期", count: periods.data?.items.length }]} />
 
     {tab === "INVOICE" && <>
@@ -124,5 +124,5 @@ export function TaxWorkbench() {
         />
       </Section>
     </>}
-  </div>;
+  </div>} />;
 }

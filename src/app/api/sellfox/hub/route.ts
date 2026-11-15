@@ -17,11 +17,13 @@ export async function GET(request: Request) {
     const workspaceId = workspaceScopeFromRequest(request).workspaceId;
     const where = { organizationId, workspaceId };
 
-    const [credential, stores, runs, heartbeat] = await Promise.all([
+    const [credential, stores, runs, heartbeat, shards, coverage] = await Promise.all([
       getSellfoxCredentialStatus(where),
       prisma.sellfoxStore.findMany({ where, select: { externalId: true, name: true, marketplace: true, country: true, status: true, lastSyncedAt: true }, orderBy: { name: "asc" } }),
       prisma.sellfoxSyncRun.findMany({ where, orderBy: { startedAt: "desc" }, take: 40, select: { id: true, resource: true, status: true, error: true, summary: true, startedAt: true, finishedAt: true } }),
       prisma.workerHeartbeat.findFirst({ where: { queueName: "sellfox-sync-jobs", status: "online", lastSeenAt: { gte: new Date(Date.now() - 90_000) } }, orderBy: { lastSeenAt: "desc" }, select: { lastSeenAt: true } }),
+      prisma.sellfoxSyncShard.findMany({ where, orderBy: { updatedAt: "desc" }, take: 30 }),
+      prisma.sellfoxCoverage.groupBy({ by: ["resource"], where, _sum: { rowCount: true }, _count: { _all: true }, _max: { lastDate: true, firstDate: true, lastStatus: true } }),
     ]);
 
     const datasets = await Promise.all(sellfoxLiveDatasets.map(async (dataset) => {
@@ -56,6 +58,18 @@ export async function GET(request: Request) {
       storeCount: stores.length,
       datasets,
       hourlyRows: hourly,
+      coverage: coverage.map((row) => ({
+        resource: row.resource,
+        stores: row._count._all,
+        rows: Number(row._sum.rowCount ?? 0),
+        firstDate: row._max.firstDate ?? null,
+        lastDate: row._max.lastDate ?? null,
+        lastStatus: row._max.lastStatus ?? null,
+      })),
+      shards: shards.map((shard) => ({
+        resource: shard.resource, scopeKey: shard.scopeKey, period: shard.period, status: shard.status,
+        rows: shard.rows, cursor: shard.cursor, runId: shard.runId, updatedAt: shard.updatedAt, finishedAt: shard.finishedAt,
+      })),
       plan: sellfoxPlanSummary(),
       lastSuccess: Object.fromEntries(lastSuccess),
       runs: runs.slice(0, 20).map((run) => ({

@@ -62,7 +62,7 @@ export function ProductEditorImagePanel({
       {primaryImageAsset ? (
         <button
           type="button"
-          className="mt-4 flex aspect-square w-full overflow-hidden rounded-lg border border-border bg-surface-muted transition-colors hover:border-brand hover:bg-white"
+          className="mt-4 flex aspect-square w-full overflow-hidden rounded-lg border border-border bg-surface-muted transition-colors hover:border-brand hover:bg-surface"
           onClick={() => onPreview(primaryImageAsset)}
           title="点击查看大图"
         >
@@ -78,7 +78,7 @@ export function ProductEditorImagePanel({
           />
         </button>
       ) : (
-        <label className="mt-4 flex aspect-square w-full cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface-muted text-center transition-colors hover:border-brand hover:bg-white">
+        <label className="mt-4 flex aspect-square w-full cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface-muted text-center transition-colors hover:border-brand hover:bg-surface">
           <ImagePlus className="h-8 w-8 text-brand" />
           <span className="mt-2 text-sm font-semibold text-foreground">上传图片</span>
           <span className="mt-1 text-xs text-muted">可上传 5-10 张，第一张会显示为主图。</span>
@@ -96,10 +96,10 @@ export function ProductEditorImagePanel({
         </label>
       )}
       <div className="mt-3 flex items-start gap-2 overflow-x-auto pb-1">
-        <label className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-surface-muted text-center transition-colors hover:border-brand hover:bg-white ${uploadingFiles.length ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
+        <label className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-surface-muted text-center transition-colors hover:border-brand hover:bg-surface ${uploadingFiles.length ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
           <div className="flex flex-col items-center justify-center">
             <ImagePlus className="h-4 w-4 text-brand" />
-            <span className="mt-1 text-[10px] font-semibold text-foreground">上传</span>
+            <span className="mt-1 text-label font-semibold text-foreground">上传</span>
           </div>
           <input
             type="file"
@@ -155,21 +155,21 @@ export function ProductImageUploadProgressCard({ upload, onCancel, onRetry }: { 
   const statusLabel = upload.status === "failed" ? "上传失败" : upload.status === "queued" ? "等待上传…" : progress >= 100 ? "处理中…" : "上传中";
 
   return (
-    <div className={`flex min-h-16 w-[180px] shrink-0 min-w-0 items-center gap-2 rounded-md border px-2 py-1.5 ${upload.status === "failed" ? "border-red-400 bg-red-50" : "border-brand/30 bg-brand/5"}`}>
+    <div className={`flex min-h-16 w-[180px] shrink-0 min-w-0 items-center gap-2 rounded-md border px-2 py-1.5 ${upload.status === "failed" ? "border-danger/30 bg-danger-soft" : "border-brand/30 bg-brand/5"}`}>
       {upload.previewUrl ? <>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={upload.previewUrl} alt={`${upload.name} 本地预览`} className="h-12 w-12 shrink-0 rounded object-cover" />
       </> : null}
-      {upload.status === "failed" ? <X className="h-4 w-4 shrink-0 text-red-600" /> : <LoaderCircle className="h-4 w-4 shrink-0 animate-spin text-brand" />}
+      {upload.status === "failed" ? <X className="h-4 w-4 shrink-0 text-danger-ink" /> : <LoaderCircle className="h-4 w-4 shrink-0 animate-spin text-brand" />}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[11px] font-semibold text-foreground" title={upload.name}>{upload.name}</p>
-        <p className={`text-[10px] font-medium ${upload.status === "failed" ? "text-red-700" : "text-muted"}`} title={upload.error}>{statusLabel}{upload.error ? `：${upload.error}` : ""}</p>
+        <p className="truncate text-label font-semibold text-foreground" title={upload.name}>{upload.name}</p>
+        <p className={`text-label font-medium ${upload.status === "failed" ? "text-danger-ink" : "text-muted"}`} title={upload.error}>{statusLabel}{upload.error ? `：${upload.error}` : ""}</p>
         {upload.status !== "failed" ? <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-border" role="progressbar" aria-label={`${upload.name} 上传进度`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
           <div className="h-full rounded-full bg-brand transition-[width] duration-150" style={{ width: `${progress}%` }} />
         </div> : null}
-        {upload.status === "failed" ? <button type="button" className="mt-1 text-[10px] font-semibold text-red-700 underline" onClick={onRetry}>重试</button> : <p className="mt-1 text-[10px] font-semibold tabular-nums text-muted">{progress}%</p>}
+        {upload.status === "failed" ? <button type="button" className="mt-1 text-label font-semibold text-danger-ink underline" onClick={onRetry}>重试</button> : <p className="mt-1 text-label font-semibold tabular-nums text-muted">{progress}%</p>}
       </div>
-      {upload.status !== "failed" && onCancel ? <button type="button" className="rounded p-1 text-muted hover:bg-white" onClick={onCancel} aria-label={`取消上传 ${upload.name}`} title="取消上传"><X className="h-3.5 w-3.5" /></button> : null}
+      {upload.status !== "failed" && onCancel ? <button type="button" className="rounded p-1 text-muted hover:bg-surface" onClick={onCancel} aria-label={`取消上传 ${upload.name}`} title="取消上传"><X className="h-3.5 w-3.5" /></button> : null}
     </div>
   );
 }
@@ -187,7 +187,7 @@ export function ProductImagePreviewModal({
 }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/40 p-6 backdrop-blur-sm" onClick={onClose}>
-      <div className="flex max-h-[88vh] w-full max-w-5xl flex-col rounded-lg bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+      <div className="flex max-h-[88vh] w-full max-w-5xl flex-col rounded-lg bg-surface shadow-2xl" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
             <h3 className="text-lg font-bold text-foreground">图片预览</h3>

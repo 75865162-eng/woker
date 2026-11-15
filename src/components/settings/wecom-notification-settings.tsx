@@ -21,7 +21,7 @@ import {
 import { useWorkspaceStore } from "@/lib/stores/workspace-store";
 
 const fieldClass =
-  "h-9 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
+  "h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
 const labelClass = "text-xs font-bold uppercase tracking-normal text-muted";
 const wecomSettingsApiPath = "/api/notifications/wecom/settings";
 
@@ -215,7 +215,7 @@ export function WeComNotificationSettingsPanel() {
             />
           </Field>
           <div className="flex items-end">
-            <label className="flex h-9 w-full items-center gap-2 rounded-md border border-border bg-white px-3 text-sm font-semibold text-foreground">
+            <label className="flex h-9 w-full items-center gap-2 rounded-md border border-border bg-surface px-3 text-sm font-semibold text-foreground">
               <input
                 checked={settings.enabled}
                 onChange={(event) => update("enabled", event.target.checked)}
@@ -242,12 +242,12 @@ export function WeComNotificationSettingsPanel() {
         </div>
 
         {status ? (
-          <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-medium text-green-700">
+          <div className="flex items-center gap-2 rounded-md border border-success/30 bg-success-soft px-3 py-2 text-sm font-medium text-success-ink">
             <Check className="h-4 w-4" />
             {status}
           </div>
         ) : null}
-        {error ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</div> : null}
+        {error ? <div className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm font-medium text-danger-ink">{error}</div> : null}
 
         <div className="flex flex-col gap-2 border-t border-border pt-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-2 text-sm text-muted">

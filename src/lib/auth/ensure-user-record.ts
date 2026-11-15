@@ -30,7 +30,6 @@ export async function ensureCurrentUserRecord(user: CurrentUser) {
     update: {
       email: user.email,
       name: user.name,
-      status: "active",
     },
     create: {
       id: user.id,

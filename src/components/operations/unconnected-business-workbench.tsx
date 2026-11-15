@@ -15,7 +15,7 @@ export function UnconnectedBusinessWorkbench({ view }: { view: string }) {
   const entry = operationsEntries.find(item => item.view === view);
   if (!layout) return <OperationsSectionGuide view={view} />;
   return <section className="space-y-4 rounded-lg border border-border bg-surface p-4" aria-label={entry?.label}>
-    <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-sm font-semibold">{entry?.label}</h2><span role="status" className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">后端未接入 · 布局预览</span></div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-sm font-semibold">{entry?.label}</h2><span role="status" className="rounded border border-warning-ink/30 bg-warning-soft px-2 py-1 text-xs text-warning-ink">后端未接入 · 布局预览</span></div>
     <div role="tablist" aria-label="业务视图" className="flex flex-wrap gap-2 border-b border-border">{layout.tabs.map((label, index) => <button type="button" role="tab" key={label} aria-selected={tab === index} onClick={() => setTab(index)} className={"min-h-9 border-b-2 px-3 text-sm " + (tab === index ? "border-brand font-semibold" : "border-transparent text-muted")}>{label}</button>)}</div>
     <p className="text-xs text-muted">{layout.tabs[tab]}：尚无可查询的业务接口，筛选、创建、导入和提交暂不可用。</p>
     <fieldset disabled aria-label="请款筛选（未接入）" className="flex flex-wrap gap-3 rounded border border-border bg-surface-muted/40 p-3 opacity-70">

@@ -9,17 +9,17 @@ import { normalizeWorkspaceScope } from "@/lib/workspace/scope";
 type Proposal = {
   id: string; storeId: string; asin: string; msku: string | null; kind: string; action: string;
   entityType: string; externalId: string; label: string | null; proposed: { bidMultiplier?: number; state?: string };
-  basis: { clicks?: number; cost?: number; adOrders?: number; acosPct?: number | null; spend7d?: number; coverDays?: number | null; onHand?: number | null };
-  expectedImpact: string | null; status: string; decisionReason: string | null; createdAt: string;
+  basis: { clicks?: number; cost?: number; currency?: string | null; adOrders?: number; acosPct?: number | null; spend7d?: number | null; coverDays?: number | null; onHand?: number | null };
+  expectedImpact: string | null; status: string; decisionReason: string | null; executionNote?: string | null; createdAt: string;
   store: { name: string; marketplace: string; country: string } | null;
 };
 type Response = { proposals: Proposal[]; counts: Record<string, number>; writeExecution: { enabled: boolean; note: string } };
 
 const kindMeta: Record<string, { label: string; className: string }> = {
-  STOCKOUT_RISK: { label: "断货风险", className: "border-red-200 bg-red-50 text-red-700" },
-  NO_CONVERSION: { label: "0转化止血", className: "border-amber-200 bg-amber-50 text-amber-700" },
-  HIGH_ACOS: { label: "高ACOS", className: "border-orange-200 bg-orange-50 text-orange-700" },
-  HIGH_POTENTIAL: { label: "高潜力加码", className: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+  STOCKOUT_RISK: { label: "断货风险", className: "border-danger/30 bg-danger-soft text-danger-ink" },
+  NO_CONVERSION: { label: "0转化止血", className: "border-warning-ink/30 bg-warning-soft text-warning-ink" },
+  HIGH_ACOS: { label: "高ACOS", className: "border-warning-ink/30 bg-warning-soft text-warning-ink" },
+  HIGH_POTENTIAL: { label: "高潜力加码", className: "border-success/30 bg-success-soft text-success-ink" },
 };
 const actionText: Record<string, string> = { LOWER_BID: "降价", RAISE_BID: "加价", PAUSE: "暂停" };
 const statusText: Record<string, string> = { PENDING: "待审批", APPROVED: "已批准", REJECTED: "已驳回", EXECUTED: "已执行", FAILED: "执行失败" };
@@ -59,7 +59,7 @@ export function SellfoxAdsProposals() {
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || "操作失败");
       if (action === "generate") setNotice(`已生成方案：新 ${body.created} 条、更新 ${body.updated} 条（候选 ${body.generated}）`);
-      if (action === "decide") { setNotice(`已批准 ${body.approved} 条，待双人复核后执行`); setSelected(new Set()); }
+      if (action === "decide") { setNotice(`已完成业务审批 ${body.approved} 条；审批不会写回 Amazon Ads，当前尚未创建 Ads 变更草稿。`); setSelected(new Set()); }
       if (action === "reject") { setNotice(`已驳回 ${body.rejected} 条`); setSelected(new Set()); }
       await load();
     } catch (e) { setError(e instanceof Error ? e.message : "操作失败"); }
@@ -70,12 +70,12 @@ export function SellfoxAdsProposals() {
   const toggle = (id: string) => setSelected(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
 
   return (
-    <section className="border border-[var(--sf-line)] bg-white">
+    <section className="border border-[var(--sf-line)] bg-surface">
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--sf-line)] px-3 py-2">
         <div className="flex items-center gap-2">
           <Sparkles size={14} className="text-[var(--sf-blue)]" />
           <h2 className="text-sm font-medium">库存 × 广告优化方案</h2>
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-muted">
             {data ? `待审批 ${data.counts.PENDING ?? 0} · 已批准 ${data.counts.APPROVED ?? 0} · 已执行 ${data.counts.EXECUTED ?? 0}` : "加载中…"}
           </span>
         </div>
@@ -88,16 +88,14 @@ export function SellfoxAdsProposals() {
           ) : null}
         </div>
       </header>
-      {notice ? <div className="border-b border-emerald-100 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-700">{notice}</div> : null}
-      {error ? <div role="alert" className="border-b border-red-100 bg-red-50 px-3 py-1.5 text-xs text-red-700">{error}</div> : null}
-      {data?.writeExecution.enabled === false ? (
-        <div className="border-b border-amber-100 bg-amber-50 px-3 py-1.5 text-xs text-amber-700">
-          {data.writeExecution.note}
-        </div>
-      ) : null}
+      {notice ? <div className="border-b border-success/30 bg-success-soft px-3 py-1.5 text-xs text-success-ink">{notice}</div> : null}
+      {error ? <div role="alert" className="border-b border-danger/30 bg-danger-soft px-3 py-1.5 text-xs text-danger-ink">{error}</div> : null}
+      <div className="border-b border-warning-ink/30 bg-warning-soft px-3 py-1.5 text-xs text-warning-ink">
+        {data?.writeExecution.enabled ? "环境开关已打开，但不代表写回链路已验证或可用；本页批准不会触发 Ads 写入。" : data?.writeExecution.note ?? "Sellfox 方案仅供业务审核，不会直接写入 Amazon Ads。"}
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
-          <thead className="bg-slate-50 text-left text-slate-500">
+          <thead className="bg-surface-muted text-left text-muted">
             <tr>
               <th className="w-8 px-2 py-1.5"><input type="checkbox" aria-label="全选待审批" checked={pending.length > 0 && pending.every(p => selected.has(p.id))} onChange={e => setSelected(e.target.checked ? new Set(pending.map(p => p.id)) : new Set())} /></th>
               <th className="px-2 py-1.5">类型</th>
@@ -111,39 +109,39 @@ export function SellfoxAdsProposals() {
           </thead>
           <tbody>
             {(data?.proposals ?? []).map(p => {
-              const kind = kindMeta[p.kind] ?? { label: p.kind, className: "border-slate-200 bg-slate-50 text-slate-600" };
+              const kind = kindMeta[p.kind] ?? { label: p.kind, className: "border-border bg-surface-muted text-muted" };
               const proposed = p.proposed.state ? "暂停投放" : `bid × ${p.proposed.bidMultiplier}`;
               return (
                 <tr key={p.id} className="border-t border-[var(--sf-line)] align-top">
                   <td className="px-2 py-1.5">{p.status === "PENDING" ? <input type="checkbox" aria-label={`选择方案 ${p.id}`} checked={selected.has(p.id)} onChange={() => toggle(p.id)} /> : null}</td>
                   <td className="px-2 py-1.5"><span className={`inline-block border px-1.5 py-0.5 ${kind.className}`}>{kind.label}</span></td>
-                  <td className="px-2 py-1.5 font-medium">{actionText[p.action] ?? p.action}<div className="text-slate-400">{proposed}</div></td>
+                  <td className="px-2 py-1.5 font-medium">{actionText[p.action] ?? p.action}<div className="text-muted">{proposed}</div></td>
                   <td className="px-2 py-1.5">{p.store?.name || p.storeId}</td>
                   <td className="px-2 py-1.5">
                     <div className="font-medium">{p.asin}</div>
-                    <div className="text-slate-400">{p.label ?? p.externalId.slice(0, 18)}</div>
+                    <div className="text-muted">{p.label ?? p.externalId.slice(0, 18)}</div>
                   </td>
-                  <td className="px-2 py-1.5 text-slate-600">
-                    花费 ${p.basis.cost?.toFixed(2) ?? "—"} · 点击 {p.basis.clicks ?? 0} · 单 {p.basis.adOrders ?? 0}
+                  <td className="px-2 py-1.5 text-muted">
+                    花费 {p.basis.currency ? `${p.basis.currency} ` : ""}{p.basis.cost?.toFixed(2) ?? "—"} · 点击 {p.basis.clicks ?? 0} · 单 {p.basis.adOrders ?? 0}
                     {p.basis.acosPct != null ? <div>ACOS {p.basis.acosPct}%</div> : null}
                     {p.basis.coverDays != null ? <div>可售 {p.basis.coverDays} 天（在手 {p.basis.onHand ?? 0}）</div> : null}
                   </td>
-                  <td className="max-w-[280px] px-2 py-1.5 text-slate-600">{p.expectedImpact}</td>
-                  <td className="px-2 py-1.5">{statusText[p.status] ?? p.status}{p.decisionReason ? <div className="text-slate-400">{p.decisionReason}</div> : null}</td>
+                  <td className="max-w-[280px] px-2 py-1.5 text-muted">{p.expectedImpact}</td>
+                  <td className="px-2 py-1.5">{statusText[p.status] ?? p.status}{p.decisionReason ? <div className="text-muted">{p.decisionReason}</div> : null}{p.executionNote ? <div className="text-muted">{p.executionNote}</div> : null}</td>
                 </tr>
               );
             })}
-            {!data?.proposals.length ? <tr><td colSpan={8} className="px-2 py-6 text-center text-slate-400">暂无方案，点击「重新生成方案」分析最近 14 天数据</td></tr> : null}
+            {!data?.proposals.length ? <tr><td colSpan={8} className="px-2 py-6 text-center text-muted">暂无方案，点击「重新生成方案」分析最近 14 天数据</td></tr> : null}
           </tbody>
         </table>
       </div>
       {canEdit && selected.size ? (
-        <footer className="flex items-center gap-2 border-t border-[var(--sf-line)] bg-slate-50 px-3 py-2">
-          <span className="text-xs text-slate-500">已选 {selected.size} 条</span>
+        <footer className="flex items-center gap-2 border-t border-[var(--sf-line)] bg-surface-muted px-3 py-2">
+          <span className="text-xs text-muted">已选 {selected.size} 条</span>
           <button type="button" onClick={() => void act("decide", [...selected])} disabled={busy !== ""}
-            className="h-7 border border-emerald-300 bg-emerald-50 px-2 text-xs text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">批准所选</button>
+            className="h-7 border border-success/30 bg-success-soft px-2 text-xs text-success-ink hover:bg-success-soft disabled:opacity-50">批准所选</button>
           <button type="button" onClick={() => void act("reject", [...selected])} disabled={busy !== ""}
-            className="h-7 border border-red-200 bg-red-50 px-2 text-xs text-red-700 hover:bg-red-100 disabled:opacity-50">驳回所选</button>
+            className="h-7 border border-danger/30 bg-danger-soft px-2 text-xs text-danger-ink hover:bg-danger-soft disabled:opacity-50">驳回所选</button>
         </footer>
       ) : null}
     </section>

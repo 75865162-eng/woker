@@ -27,9 +27,9 @@ export function WmsLocationFreezeForm({ item, workspaceId, onClose, onComplete }
   }
   return <form onSubmit={submit} aria-label={`${label}库位作业`} className="space-y-3 rounded-lg border border-border bg-surface p-4">
     <h3 className="font-semibold">{label}库位 · {String(item.code)}</h3>
-    <p className="text-sm text-muted-foreground">冻结暂停该库位库存作业，实物与预占数量保持原值；另一名成员审批后，由申请人执行。</p>
-    <label className="grid gap-1 text-sm">{label}原因<textarea required maxLength={500} disabled={busy} value={reason} onChange={event => { setReason(event.target.value); pending.current = null; }} className="rounded border border-input bg-background p-2" /></label>
+    <p className="text-sm text-muted">冻结暂停该库位库存作业，实物与预占数量保持原值；另一名成员审批后，由申请人执行。</p>
+    <label className="grid gap-1 text-sm">{label}原因<textarea required maxLength={500} disabled={busy} value={reason} onChange={event => { setReason(event.target.value); pending.current = null; }} className="rounded border border-border bg-background p-2" /></label>
     <div className="flex gap-2"><Button type="submit" disabled={busy || !reason.trim()}>申请{label}</Button><Button type="button" variant="ghost" disabled={busy} onClick={onClose}>关闭作业</Button></div>
-    {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+    {error && <p role="alert" className="text-sm text-danger-ink">{error}</p>}
   </form>;
 }

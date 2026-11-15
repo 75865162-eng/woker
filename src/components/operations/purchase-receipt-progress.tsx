@@ -39,7 +39,7 @@ export function PurchaseReceiptProgress({ ids, workspaceId, sourceReference }: {
   return <section aria-label="采购收货进度" className="space-y-3 rounded border border-border p-3">
     <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">实际收货进度</h3><Button type="button" size="sm" variant="secondary" disabled={loading} onClick={() => setAttempt(value => value + 1)}>刷新收货进度</Button></div>
     {loading && <p role="status" className="text-sm text-muted">正在读取仓库收货进度…</p>}
-    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+    {error && <p role="alert" className="text-sm text-danger">{error}</p>}
     {!loading && !error && !receipts.length && <p className="text-sm text-muted">尚未创建收货单。</p>}
     {receipts.map(receipt => <div key={receipt.id} className="space-y-2 border-t border-border pt-3">
       <p className="text-sm font-medium">{receipt.number} · {labels[receipt.status] ?? receipt.status}</p>
@@ -50,7 +50,7 @@ export function PurchaseReceiptProgress({ ids, workspaceId, sourceReference }: {
         const shortQty = receipt.lines.reduce((sum, line) => sum + Math.max(0, line.expectedQty - line.receivedQty), 0);
         const rejectedQty = receipt.lines.reduce((sum, line) => sum + line.rejectedQty, 0);
         const exceptionState = ["RECEIVED", "INSPECTED", "PUTAWAY"].includes(receipt.status);
-        return exceptionState && (shortQty || rejectedQty) ? <div role="status" className="space-y-2 border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950"><p>收货异常：短收 {shortQty} · 拒收 {rejectedQty}。可在仓库收货单中核对明细并继续处理。</p><div className="flex gap-3">{shortQty > 0 && <a className="font-medium text-brand hover:underline" href={`/logistics/warehouse?tab=receipts&sourceReference=${encodeURIComponent(sourceReference)}&workflowStatus=SHORT_RECEIVED`}>查看短收单据</a>}{rejectedQty > 0 && <a className="font-medium text-brand hover:underline" href={`/logistics/warehouse?tab=receipts&sourceReference=${encodeURIComponent(sourceReference)}&workflowStatus=HAS_REJECTED`}>查看拒收单据</a>}</div></div> : null;
+        return exceptionState && (shortQty || rejectedQty) ? <div role="status" className="space-y-2 border border-warning-ink/30 bg-warning-soft px-3 py-2 text-xs text-amber-950"><p>收货异常：短收 {shortQty} · 拒收 {rejectedQty}。可在仓库收货单中核对明细并继续处理。</p><div className="flex gap-3">{shortQty > 0 && <a className="font-medium text-brand hover:underline" href={`/logistics/warehouse?tab=receipts&sourceReference=${encodeURIComponent(sourceReference)}&workflowStatus=SHORT_RECEIVED`}>查看短收单据</a>}{rejectedQty > 0 && <a className="font-medium text-brand hover:underline" href={`/logistics/warehouse?tab=receipts&sourceReference=${encodeURIComponent(sourceReference)}&workflowStatus=HAS_REJECTED`}>查看拒收单据</a>}</div></div> : null;
       })()}
       <WmsReceiptDetails receipt={receipt} />
       <Button type="button" size="sm" variant="secondary" onClick={() => setSelectedId(receipt.id)}>到货记录详情</Button>

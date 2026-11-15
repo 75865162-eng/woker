@@ -20,7 +20,7 @@ export function ResearchResults({ run }: { run: Run }) {
   return <section className="space-y-3 rounded border p-3" aria-label="研究结论与证据">
     <h3 className="font-semibold">研究结论与证据</h3>
     <p className="text-sm">市场：{run.marketplace}{run.asin ? ` · ASIN：${run.asin}` : ""}{selected ? ` · 已选方向：${selected.name}` : ""}。请求时间不代表源数据日期或新鲜度，请核对原始响应。</p>
-    {run.mode === "fixture" && <p className="rounded bg-amber-50 p-2 text-sm text-amber-900">隔离样本，仅验证流程，不构成真实市场研究或采购建议。</p>}
+    {run.mode === "fixture" && <p className="rounded bg-warning-soft p-2 text-sm text-warning-ink">隔离样本，仅验证流程，不构成真实市场研究或采购建议。</p>}
     {run.results.map((result, index) => <article key={index} className="space-y-2 border-t pt-3" aria-label={`阶段 ${index + 1} 研究结果`}>
       <h4 className="font-semibold">阶段 {index + 1}{result.verdict ? ` · ${verdictLabels[result.verdict]}（${result.verdict}）` : ""}</h4>
       <p className="whitespace-pre-wrap break-words text-sm">{result.summary}</p>
@@ -30,8 +30,8 @@ export function ResearchResults({ run }: { run: Run }) {
         scenarios: result.decisionAnalysis.scenarios.map(scenario => ({ ...scenario, result: evaluateResearchEconomics(scenario) })),
         scorecards: result.decisionAnalysis.scorecards.map(card => ({ ...card, result: evaluateProductScorecard(card) })),
       }, null, 2)}</pre></details>}
-      <ul className="space-y-2">{result.claims.map((claim, claimIndex) => <li key={claimIndex} className="space-y-1 rounded bg-slate-50 p-2 text-sm">
-        <p className={claim.kind === "assumption" || claim.kind === "estimated" ? "font-medium text-amber-900" : "font-medium"}>{claimLabels[claim.kind]}</p>
+      <ul className="space-y-2">{result.claims.map((claim, claimIndex) => <li key={claimIndex} className="space-y-1 rounded bg-surface-muted p-2 text-sm">
+        <p className={claim.kind === "assumption" || claim.kind === "estimated" ? "font-medium text-warning-ink" : "font-medium"}>{claimLabels[claim.kind]}</p>
         <p className="whitespace-pre-wrap break-words">{claim.text}</p>
         {claim.formula && <p className="whitespace-pre-wrap break-words">计算公式：{claim.formula}</p>}
         {claim.applicableDate && <p>声明适用日期：{claim.applicableDate}</p>}
@@ -39,8 +39,8 @@ export function ResearchResults({ run }: { run: Run }) {
         <div className="flex flex-wrap gap-2">{claim.evidenceIds.length ? claim.evidenceIds.map(id => {
           const call = successfulCalls.get(id);
           return call ? <a key={id} className="break-all underline" href={`#research-evidence-${id}`} onClick={() => setExpanded(previous => ({ ...previous, [id]: true }))}>证据：{call.provider} · {call.tool} · {id}</a>
-            : <span key={id} className="break-all text-red-700">证据缺失或调用未成功：{id}</span>;
-        }) : <span className="text-amber-900">未引用成功调用证据</span>}</div>
+            : <span key={id} className="break-all text-danger-ink">证据缺失或调用未成功：{id}</span>;
+        }) : <span className="text-warning-ink">未引用成功调用证据</span>}</div>
       </li>)}</ul>
     </article>)}
     {evidenceIds.some(id => successfulCalls.has(id)) && <div className="space-y-2 border-t pt-3">

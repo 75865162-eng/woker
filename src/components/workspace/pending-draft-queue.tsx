@@ -4,6 +4,8 @@ import { Download, Layers3, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { OperationProgress } from "@/components/ui/operation-progress";
+import { StandardDataTable } from "@/components/ui/table-variants";
+import { type DataTableColumn } from "@/components/ui/data-table";
 import { useWorkspaceStore } from "@/lib/stores/workspace-store";
 
 function downloadArrayBuffer(data: ArrayBuffer, fileName: string) {
@@ -61,6 +63,26 @@ export function PendingDraftQueue() {
     () => new Map(campaignGroups.map((group) => [group.id, group.campaignName])),
     [campaignGroups],
   );
+  const pendingGroupColumns: DataTableColumn<(typeof pendingGroups)[number]>[] = [
+    { key: "campaignName", header: "广告活动名称", render: (group) => <span className="font-semibold text-muted">{group.campaignName}</span> },
+    { key: "adGroupName", header: "广告组名称", render: (group) => <span className="font-bold text-foreground">{group.adGroupName}</span> },
+    { key: "rowCount", header: "修改行数", numeric: true, render: (group) => <span className="font-black text-brand">{group.rowCount}</span> },
+    {
+      key: "remove",
+      header: "移除",
+      align: "center",
+      render: (group) => (
+        <button
+          type="button"
+          onClick={() => removePendingDraftsForCampaignGroup(group.campaignGroupId)}
+          className="mx-auto grid h-8 w-8 place-items-center rounded border border-border text-muted hover:border-danger hover:text-danger"
+          title="移出待处理"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      ),
+    },
+  ];
 
   async function exportAllPendingDrafts() {
     if (pendingAdjustmentDrafts.length === 0) {
@@ -118,7 +140,7 @@ export function PendingDraftQueue() {
   }
 
   return (
-    <section className="rounded-lg border border-border bg-white">
+    <section className="rounded-lg border border-border bg-surface">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
         <div>
           <div className="flex items-center gap-2">
@@ -150,43 +172,13 @@ export function PendingDraftQueue() {
         </div>
       </header>
       <div className="p-5">
-        {pendingGroups.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm font-semibold text-muted">
-            运行广告组规则后，修改结果会自动暂存在这里。
-          </div>
-        ) : (
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[640px] border-collapse text-sm">
-              <thead className="bg-surface-muted text-xs font-black text-muted">
-                <tr>
-                  <th className="border-b border-r border-border px-4 py-3 text-left">广告活动名称</th>
-                  <th className="border-b border-r border-border px-4 py-3 text-left">广告组名称</th>
-                  <th className="w-28 border-b border-r border-border px-4 py-3 text-right">修改行数</th>
-                  <th className="w-20 border-b border-border px-4 py-3 text-center">移除</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pendingGroups.map((group) => (
-                  <tr key={group.campaignGroupId}>
-                    <td className="border-b border-r border-border px-4 py-3 font-semibold text-muted">{group.campaignName}</td>
-                    <td className="border-b border-r border-border px-4 py-3 font-bold text-foreground">{group.adGroupName}</td>
-                    <td className="border-b border-r border-border px-4 py-3 text-right font-black tabular-nums text-brand">{group.rowCount}</td>
-                    <td className="border-b border-border px-4 py-3 text-center">
-                      <button
-                        type="button"
-                        onClick={() => removePendingDraftsForCampaignGroup(group.campaignGroupId)}
-                        className="mx-auto grid h-8 w-8 place-items-center rounded border border-border text-muted hover:border-danger hover:text-danger"
-                        title="移出待处理"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <StandardDataTable
+          ariaLabel="待处理修改"
+          rows={pendingGroups}
+          getRowKey={(group) => group.campaignGroupId}
+          columns={pendingGroupColumns}
+          empty="运行广告组规则后，修改结果会自动暂存在这里。"
+        />
       </div>
     </section>
   );

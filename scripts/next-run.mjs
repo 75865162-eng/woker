@@ -84,6 +84,10 @@ async function cleanupStandaloneOutput() {
         rm(path.join(standaloneDir, entry.name), {
           force: true,
           recursive: true,
+          // Windows 会短暂锁住深层嵌套的 .next-* 副本（EPERM/EBUSY/ENOTEMPTY），
+          // 有限重试即可收敛；构建产物本身与代码无关，不应因此判构建失败。
+          maxRetries: 5,
+          retryDelay: 200,
         }),
       ),
   );

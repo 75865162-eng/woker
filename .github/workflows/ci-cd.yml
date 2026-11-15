@@ -43,7 +43,7 @@ concurrency:
 
 jobs:
   performance-regression:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.deploy_production && !inputs.initial_deployment)
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -69,7 +69,7 @@ jobs:
 
       - name: Measure base revision
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.base_sha }}
         run: |
           set -euo pipefail
           baseline_dir="$RUNNER_TEMP/erp-performance-base"
@@ -124,6 +124,18 @@ jobs:
         if: steps.plan.outputs.release == 'true'
         run: npm run db:generate
 
+      - name: Validate Prisma schema
+        if: steps.plan.outputs.release == 'true'
+        run: npx --no-install prisma validate
+
+      - name: Typecheck
+        if: steps.plan.outputs.release == 'true'
+        run: npm run typecheck
+
+      - name: UI regression guard
+        if: steps.plan.outputs.release == 'true'
+        run: npm run ui:guard
+
       - name: Test
         if: steps.plan.outputs.release == 'true'
         run: npm run test
@@ -166,8 +178,8 @@ jobs:
           retention-days: 14
 
   deploy-production:
-    needs: build
-    if: github.event_name == 'workflow_dispatch' && inputs.deploy_production && needs.build.outputs.release == 'true'
+    needs: [build, performance-regression]
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.deploy_production && needs.build.result == 'success' && needs.build.outputs.release == 'true' && (needs.performance-regression.result == 'success' || (inputs.initial_deployment && needs.performance-regression.result == 'skipped')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment: production

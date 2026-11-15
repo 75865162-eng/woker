@@ -163,7 +163,7 @@ export function ConditionBuilder({
             onChange={(event) =>
               applyGroupUpdate((current) => ({ ...current, logic: event.target.value as LogicalOperator }))
             }
-            className="h-8 rounded-md border border-border bg-white px-2 text-xs font-semibold text-foreground"
+            className="h-8 rounded-md border border-border bg-surface px-2 text-xs font-semibold text-foreground"
           >
             <option value="AND">AND</option>
             <option value="OR">OR</option>
@@ -184,12 +184,12 @@ export function ConditionBuilder({
         {visibleConditions.map((item) => (
           <div
             key={item.id}
-            className="grid gap-2 rounded-md border border-border bg-white p-2 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_110px_minmax(0,0.8fr)_36px]"
+            className="grid gap-2 rounded-md border border-border bg-surface p-2 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_110px_minmax(0,0.8fr)_36px]"
           >
             <select
               value={item.dataSource ?? "bulk"}
               onChange={(event) => updateCondition(item.id, { dataSource: event.target.value as ConditionDataSource })}
-              className="h-9 min-w-0 rounded-md border border-border bg-white px-2 text-sm font-medium"
+              className="h-9 min-w-0 rounded-md border border-border bg-surface px-2 text-sm font-medium"
             >
               {dataSourceOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -200,7 +200,7 @@ export function ConditionBuilder({
             <select
               value={item.metric}
               onChange={(event) => updateCondition(item.id, { metric: event.target.value as ConditionMetricKey })}
-              className="h-9 min-w-0 rounded-md border border-border bg-white px-2 text-sm font-medium"
+              className="h-9 min-w-0 rounded-md border border-border bg-surface px-2 text-sm font-medium"
             >
               {Array.from(groupedMetricOptions.entries()).map(([category, options]) => (
                 <optgroup key={category} label={category}>
@@ -222,7 +222,7 @@ export function ConditionBuilder({
                   max: event.target.value === "between" ? item.max ?? 0 : undefined,
                 })
               }
-              className="h-9 rounded-md border border-border bg-white px-2 text-sm font-medium"
+              className="h-9 rounded-md border border-border bg-surface px-2 text-sm font-medium"
             >
               {operatorOptions.map((option) => (
                 <option key={option.value} value={option.value}>

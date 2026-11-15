@@ -1,4 +1,4 @@
-import { getProductsResponse } from "@/app/api/products/route";
+import { getProductsResponse } from "@/app/api/products/handler";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { ProductWorkbench } from "@/components/app-shell/lazy-workbenches";
 import { getOrganizationRolePermissionsSnapshot } from "@/lib/accounts/role-permissions-server";

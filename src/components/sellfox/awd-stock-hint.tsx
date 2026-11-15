@@ -43,9 +43,9 @@ export function SellfoxAwdStockHint() {
   }, [position]);
   return <>
     <button ref={trigger} type="button" aria-label="查看AWD库存明细" aria-describedby={position ? id : undefined} className="inline-flex items-center gap-1 text-muted/60" onPointerEnter={show} onPointerLeave={closeSoon} onFocus={show} onBlur={() => setPosition(null)} onClick={event => { event.stopPropagation(); show(); }}>—<ChevronDown aria-hidden="true" className="h-3 w-3" /></button>
-    {position ? createPortal(<div ref={panel} id={id} role="tooltip" aria-label="AWD库存明细" style={position} className="fixed z-50 w-56 max-h-[calc(100dvh-1rem)] overflow-auto border border-border bg-white p-3 text-xs text-foreground shadow-lg" onPointerEnter={cancelClose} onPointerLeave={closeSoon} onClick={event => event.stopPropagation()}>
+    {position ? createPortal(<div ref={panel} id={id} role="tooltip" aria-label="AWD库存明细" style={position} className="fixed z-50 w-56 max-h-[calc(100dvh-1rem)] overflow-auto border border-border bg-surface p-3 text-xs text-foreground shadow-lg" onPointerEnter={cancelClose} onPointerLeave={closeSoon} onClick={event => event.stopPropagation()}>
       <dl className="space-y-2">{["AWD可售", "AWD预留", "小计"].map(label => <div key={label} className="flex items-center justify-between gap-4"><dt>{label}</dt><dd className="tabular-nums text-muted">—</dd></div>)}</dl>
-      <p className="mt-3 border-t border-border pt-2 text-[11px] text-muted">{unavailableReason}，不按 0 统计。</p>
+      <p className="mt-3 border-t border-border pt-2 text-label text-muted">{unavailableReason}，不按 0 统计。</p>
     </div>, document.body) : null}
   </>;
 }

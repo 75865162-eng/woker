@@ -1,11 +1,29 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import ExcelJS from "exceljs";
 import { parseSellfoxAdCampaignReport } from "@/lib/sellfox/ads-campaign-contract";
 import { parseSellfoxAdGroupReport } from "@/lib/sellfox/ads-ad-group-contract";
 import { parseSellfoxAdPlacementReport } from "@/lib/sellfox/ads-placement-contract";
 import { readSellfoxView, sellfoxViewParams, sellfoxAdsResource, sellfoxColumnDomain } from "@/lib/sellfox/workbench-view";
 const scope = { storeName: "Fixture", startDate: "2026-10-24", endDate: "2026-10-24" };
+
+test("proposal identity and approval UI stay scoped and do not claim Ads execution", async () => {
+  const root = process.cwd();
+  const [schema, generator, migration, component] = await Promise.all([
+    readFile(path.join(root, "prisma/schema.prisma"), "utf8"),
+    readFile(path.join(root, "src/lib/sellfox/ads-proposal.ts"), "utf8"),
+    readFile(path.join(root, "prisma/migrations/20261216010000_sellfox_proposal_identity/migration.sql"), "utf8"),
+    readFile(path.join(root, "src/components/sellfox/sellfox-ads-proposals.tsx"), "utf8"),
+  ]);
+  assert.match(schema, /@@unique\(\[organizationId, workspaceId, storeId, entityType, externalId, kind\], map: "SellfoxAdsProposal_key"\)/);
+  assert.match(generator, /organizationId_workspaceId_storeId_entityType_externalId_kind/);
+  assert.match(migration, /DROP INDEX IF EXISTS "SellfoxAdsProposal_key"/);
+  assert.match(migration, /HAVING count\(\*\) > 1/);
+  assert.match(component, /审批不会写回 Amazon Ads/);
+  assert.doesNotMatch(component, /待双人复核后执行/);
+});
 const base = { 店铺: "Fixture", 日期: "2026-10-24", 广告活动ID: "campaign", 广告曝光量: 10, 广告点击量: 2, 广告花费: 1.5, 广告订单量: 0, 广告销售额: 0 };
 async function xlsx(rows: Record<string, unknown>[], headers = Object.keys(rows[0])) {
   const book = new ExcelJS.Workbook(), sheet = book.addWorksheet("report");

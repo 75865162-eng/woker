@@ -11,7 +11,7 @@ import { gallerySaveName, normalizeGallerySnapshot, type GallerySaveSummary, typ
 function GalleryHistoryThumbnail({ src, name }: { src?: string | null; name: string }) {
   const [failed, setFailed] = useState(false);
   return (
-    <span className="flex h-[75px] w-[75px] shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-white">
+    <span className="flex h-[75px] w-[75px] shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-surface">
       {src && !failed ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={src} alt={`${name}缩略图`} width={75} height={75} loading="lazy" decoding="async" fetchPriority="low" className="h-full w-full object-contain" onError={() => setFailed(true)} />
@@ -98,10 +98,10 @@ export function GallerySaveControls({ snapshot, onRestore, disabled }: {
         }}><History className="h-4 w-4" />历史</Button></span>
       </div>
       {message ? <p role="status" className="text-xs text-brand">{message}</p> : null}
-      {error && !open ? <p role="alert" className="text-xs text-red-600">{error}</p> : null}
+      {error && !open ? <p role="alert" className="text-xs text-danger-ink">{error}</p> : null}
       {open ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => { if (!busy) closeHistory(); }}>
-          <div role="dialog" aria-modal="true" aria-labelledby="gallery-history-title" className="w-full max-w-2xl rounded-lg border border-border bg-white p-5 shadow-xl" onClick={event => event.stopPropagation()} onKeyDown={event => {
+          <div role="dialog" aria-modal="true" aria-labelledby="gallery-history-title" className="w-full max-w-2xl rounded-lg border border-border bg-surface p-5 shadow-xl" onClick={event => event.stopPropagation()} onKeyDown={event => {
             if (event.key === "Escape" && !busy) closeHistory();
             if (event.key === "Tab") {
               const elements = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), [href], input:not(:disabled), [tabindex="0"]'));
@@ -115,7 +115,7 @@ export function GallerySaveControls({ snapshot, onRestore, disabled }: {
               <span ref={dialogCloseRef}><Button variant="ghost" size="icon" aria-label="关闭历史" onClick={closeHistory} disabled={busy}><X className="h-4 w-4" /></Button></span>
             </div>
             <p className="mb-3 text-xs text-muted">当前账号保存的记录；名称唯一；同名保存覆盖原记录并更新保存时间，点击记录可恢复。</p>
-            {error ? <p role="alert" className="mb-3 text-sm text-red-600">{error}<Button variant="ghost" size="sm" disabled={busy} onClick={() => void loadHistory(page)}>重试</Button></p> : null}
+            {error ? <p role="alert" className="mb-3 text-sm text-danger-ink">{error}<Button variant="ghost" size="sm" disabled={busy} onClick={() => void loadHistory(page)}>重试</Button></p> : null}
             {busy ? <p role="status" className="py-6 text-center text-sm text-muted">正在处理…</p> : null}
             {loaded && !busy ? (
               <div className="max-h-[55vh] overflow-auto">

@@ -29,5 +29,5 @@ export function parseTransferOrderPayload(raw:unknown){
  return {action,lines,reference:requireText(value.reference,action==='TRANSFER_ORDER_SHIP'?'发运凭据':'签收凭据',1000)} as const;
 }
 export function validateTransferQuantities(action:'TRANSFER_ORDER_SHIP'|'TRANSFER_ORDER_RECEIVE',selected:readonly{lineId:string;quantity:number}[],lines:readonly TransferOrderLine[]){
- for(const item of selected){const line=lines.find(line=>line.id===item.lineId);if(!line)throw new WmsInputError('明细不属于本调拨单。',422);const remaining=action==='TRANSFER_ORDER_SHIP'?line.quantity-line.shippedQty:line.shippedQty-line.receivedQty;if(item.quantity>remaining)throw new WmsInputError(action==='TRANSFER_ORDER_SHIP'?'发出超过计划剩余量。':'签收超过在途剩余量。',422);}
+ for(const item of selected){const line=lines.find(line=>line.id===item.lineId);if(!line)throw new WmsInputError('明细不属于本调拨单。',422);const remaining=action==='TRANSFER_ORDER_SHIP'?line.quantity-line.shippedQty:line.shippedQty-line.receivedQty-resolvedDiscrepancy(line);if(item.quantity>remaining)throw new WmsInputError(action==='TRANSFER_ORDER_SHIP'?'发出超过计划剩余量。':'签收超过在途剩余量。',422);}
 }

@@ -5,7 +5,7 @@ import { WmsError, type WmsScope } from '@/lib/wms/contracts';
 import { requireRevision, requireText } from '@/lib/wms/rules';
 import {
   parseCarrierDraft, parseUnsalablePolicy, parseWarehouseDraft,
-  unsalableFingerprint, unsalableRows, type UnsalableInput, type UnsalablePolicy,
+  unsalableFingerprint, unsalableRows, type CarrierDraft, type UnsalableInput, type UnsalablePolicy, type WarehouseDraft,
 } from './ops-rules';
 
 type OpKind = 'carrier' | 'warehouse';
@@ -48,11 +48,9 @@ export async function saveOpsMaster(scope: WmsScope, kind: OpKind, body: Record<
       await auditWms(tx, scope, `operations.${kind}.update`, id, json({ workspaceId: scope.workspaceId, code: draft.code, revision: updated.revision }));
       return updated;
     }
-    // draft 是两个解析器的联合类型；TS 无法把条件表达式与 draft 的类型关联起来，
-    // 在写入分支里各自窄化，避免把 Carrier 草稿送进 ThirdPartyWarehouse（缺 provider）。
     const created = kind === 'carrier'
-      ? await tx.carrier.create({ data: { id: crypto.randomUUID(), ...scoped(scope), ...parseCarrierDraft(body), createdBy: scope.actorUserId } })
-      : await tx.thirdPartyWarehouse.create({ data: { id: crypto.randomUUID(), ...scoped(scope), ...parseWarehouseDraft(body), createdBy: scope.actorUserId } });
+      ? await tx.carrier.create({ data: { id: crypto.randomUUID(), ...scoped(scope), ...(draft as CarrierDraft), createdBy: scope.actorUserId } })
+      : await tx.thirdPartyWarehouse.create({ data: { id: crypto.randomUUID(), ...scoped(scope), ...(draft as WarehouseDraft), createdBy: scope.actorUserId } });
     await auditWms(tx, scope, `operations.${kind}.create`, created.id, json({ workspaceId: scope.workspaceId, code: draft.code }));
     return created;
   });

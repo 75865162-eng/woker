@@ -1,5 +1,5 @@
 import { processImportJob } from "@/lib/jobs/processor";
-import { getAmazonSyncQueue, getImageUpscaleJobQueue, getImportJobQueue, getProductOutboxQueue, getSellfoxSyncQueue } from "@/lib/queue/redis-queue";
+import { getImageUpscaleJobQueue, getImportJobQueue, getProductOutboxQueue, getSellfoxSyncQueue } from "@/lib/queue/redis-queue";
 import { processProductOutboxEvent } from "@/lib/products/product-outbox";
 import { prisma } from "@/lib/db/prisma";
 import { isSellfoxManualBackfill } from "@/lib/sellfox/backfill-plan";

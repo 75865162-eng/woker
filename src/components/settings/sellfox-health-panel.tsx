@@ -47,7 +47,7 @@ export function SellfoxHealthPanel() {
   return <Card><CardHeader><CardTitle>赛狐同步运行状态</CardTitle></CardHeader><CardContent className="space-y-2 text-sm">
     <p>凭据在「设置 → 集成 → 赛狐 Open API 凭据」输入并保存；运维页仅查看状态。</p>
     <a href="/settings?tab=integrations#sellfox-credentials" className="text-brand underline">配置赛狐凭据</a>
-    {state.error ? <p role="alert" className="text-red-600">{state.error}</p> : data ? <>
+    {state.error ? <p role="alert" className="text-danger-ink">{state.error}</p> : data ? <>
       <p>凭据：{data.configured ? "configured" : "未配置"} · 队列：{data.queueEnabled ? "已启用" : "未启用"} · Worker：{data.worker.online ? "在线" : "离线或心跳超时"}</p>
       <p className="text-xs text-muted">最近心跳：{date(data.worker.lastSeenAt)} · 计划时间均为北京时间；实际执行受队列顺序影响。</p>
       <div className="overflow-x-auto"><table className="w-full text-left"><thead><tr><th>数据域</th><th>计划</th><th>最近入队</th><th>下次计划</th></tr></thead><tbody>{data.schedules.map((item) => <tr key={item.resource} className="border-t border-border"><td className="py-2">{resourceLabels[item.resource] ?? item.resource}</td><td>{item.enabled ? "已启用" : "已关闭"}</td><td>{date(item.lastEnqueuedAt)}</td><td>{date(item.nextRunAt)}</td></tr>)}</tbody></table></div>

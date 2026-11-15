@@ -65,7 +65,7 @@ export function incrementalFailureCode(resource: string, status: number) {
   return `${prefix}_${status === 403 ? "ROLE_OR_SCOPE" : "VALIDATION"}`;
 }
 export class SyncInputError extends Error {
-  constructor(message: string, readonly status = 400) { super(message); this.name = "SyncInputError"; }
+  constructor(message: string, readonly status = 400, readonly code?: string) { super(message); this.name = "SyncInputError"; }
 }
 export function syncCenterEnabled(scope: SyncScope, value = process.env.AMAZON_SYNC_CENTER_SCOPES): boolean {
   return syncScopeAllowed(scope, value);

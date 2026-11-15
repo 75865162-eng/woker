@@ -24,7 +24,7 @@ export function BrandCollectionForm({ configuration, plans, getHeaders, onComman
       <Button type="button" size="sm" variant="secondary" disabled={finding || busy} onClick={() => void discover()}>从完整商品快照载入 ASIN</Button>{discovery && <p className="text-xs text-muted">{discovery}</p>}
       <p className="text-xs text-muted">{preview}</p><p className="text-xs text-muted">日期边缘不足完整周期不外扩、不采集；早期历史能否返回由 Amazon 决定。商品清单只证明对象来源，不能代替品牌资格。所有报告的官方保留期未统一，不默认承诺 730 天。</p>
       <p className="text-xs text-muted">访问权限统一在账号设置管理；Amazon 根据实际授权与品牌资格返回报告。</p>
-      {error && <p role="alert" className="text-xs text-red-700">{error}</p>}<Button size="sm" type="submit" disabled={busy || !collection}>申请保存回补清单</Button>
+      {error && <p role="alert" className="text-xs text-danger-ink">{error}</p>}<Button size="sm" type="submit" disabled={busy || !collection}>申请保存回补清单</Button>
     </form>
     {current && !plans.length && <Button size="sm" variant="secondary" disabled={busy} onClick={() => void onCommand({ action: "save-plan", name: "品牌分析 · 已批准范围历史回补", resource: "brand_analytics", enabled: true, mode: "snapshot", intervalMinutes: 1440, priority: 4, maxAttempts: 3, retentionDays: 3650, sourceIds: [configuration.id] })}>申请启用后台回补计划</Button>}
     {!!plans.length && <p className="text-xs text-muted">已有后台计划：{plans.map(p => `${p.id}（${p.enabled ? "启用" : "暂停"}）`).join("、")}。在“同步计划”审批暂停或恢复；失败任务从原检查点恢复。</p>}

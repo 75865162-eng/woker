@@ -5,19 +5,30 @@ import { verifyPasswordAsync } from "@/lib/auth/password";
 import { measureServerOperation } from "@/lib/server/performance";
 import { getOrganizationRolePermissionsSnapshot } from "@/lib/accounts/role-permissions-server";
 import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
+import { clearLoginFailures, LoginRateLimitUnavailableError, peekLoginRateLimit, recordLoginFailure } from "@/lib/auth/login-rate-limit";
 import { prisma } from "@/lib/db/prisma";
+import { getTrustedClientIp, RequestSecurityConfigurationError } from "@/lib/auth/request-security";
 
 export const runtime = "nodejs";
 
-function getClientIp(request: Request) {
-  const forwardedFor = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  const realIp = request.headers.get("x-real-ip")?.trim();
+function tooManyAttempts(retryAfterSeconds: number) {
+  return NextResponse.json(
+    { error: "尝试次数过多，请稍后再试。" },
+    { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } },
+  );
+}
 
-  return forwardedFor || realIp || "";
+/** Count a failed attempt and fail closed immediately once the budget is spent. */
+async function failedLogin(ip: string, email: string) {
+  const verdict = await recordLoginFailure(ip, email);
+  return verdict.allowed
+    ? NextResponse.json({ error: "账号或密码不正确。" }, { status: 401 })
+    : tooManyAttempts(verdict.retryAfterSeconds);
 }
 
 export async function POST(request: Request) {
   try {
+    const clientIp = getTrustedClientIp(request);
     const body = (await request.json()) as { email?: string; password?: string };
     const email = body.email?.trim().toLowerCase();
     const password = body.password ?? "";
@@ -26,14 +37,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "请输入账号和密码。" }, { status: 400 });
     }
 
+    const precheck = await peekLoginRateLimit(clientIp, email);
+    if (!precheck.allowed) {
+      return tooManyAttempts(precheck.retryAfterSeconds);
+    }
+
     if (getAuthDriver() === "local") {
       const configuredEmail = (process.env.BOOTSTRAP_ADMIN_EMAIL || "1").trim().toLowerCase();
       const configuredPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD || "1";
 
       if (email !== configuredEmail || password !== configuredPassword) {
-        return NextResponse.json({ error: "账号或密码不正确。" }, { status: 401 });
+        return failedLogin(clientIp, email);
       }
 
+      await clearLoginFailures(clientIp, email);
       const user = {
         id: "local-admin",
         email: configuredEmail,
@@ -65,8 +82,10 @@ export async function POST(request: Request) {
       }));
 
       if (!user || user.status !== "active" || !await measureServerOperation("login.password", () => verifyPasswordAsync(password, user.passwordHash))) {
-        return NextResponse.json({ error: "账号或密码不正确。" }, { status: 401 });
+        return failedLogin(clientIp, email);
       }
+
+      await clearLoginFailures(clientIp, email);
 
       if (user.memberships.length === 0) {
         return NextResponse.json({ error: "账号尚未加入任何组织。" }, { status: 403 });
@@ -76,7 +95,6 @@ export async function POST(request: Request) {
       const rolePermissionsSnapshotPromise = getOrganizationRolePermissionsSnapshot(membership.organizationId);
       const loginAt = new Date();
       const loginAtText = loginAt.toLocaleString("zh-CN", { hour12: false });
-      const clientIp = getClientIp(request);
 
       const { sessionCookie, rolePermissionsCookie } = await createSession(
         user.id,
@@ -164,6 +182,15 @@ export async function POST(request: Request) {
       return response;
     }
   } catch (error) {
+    if (error instanceof LoginRateLimitUnavailableError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 503, headers: { "Retry-After": String(error.retryAfterSeconds) } },
+      );
+    }
+    if (error instanceof RequestSecurityConfigurationError) {
+      return NextResponse.json({ error: error.message }, { status: 503 });
+    }
     const message = error instanceof Error ? error.message : "登录失败。";
     return NextResponse.json({ error: message }, { status: 500 });
   }

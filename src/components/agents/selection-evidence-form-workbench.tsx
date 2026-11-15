@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { WorkbenchPageTemplate } from "@/components/templates/page-templates";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +16,7 @@ import { chainFetch, chainHeaders } from "./chain-handoff";
 type Environment = { organization: boolean; actor: boolean; erpUrl: boolean; cookie: boolean; database: boolean; actorMatches: boolean };
 type Data = LocalSelection & { environment: Environment; receipt?: { sku: string; queuePending: boolean } };
 type Slug = { slug: string; status: string; blockWrite: boolean; error?: string };
-const field = "w-full rounded-md border border-border bg-white px-3 py-2 text-sm disabled:bg-surface-muted";
+const field = "w-full rounded-md border border-border bg-surface px-3 py-2 text-sm disabled:bg-surface-muted";
 const blankSupplier = (): Supplier => ({ title: "", price: "", moq: "", shopName: "", url: "" });
 const blankReview = (asin = ""): Review => ({ asin, star: 1, date: "", text: "" });
 async function requestData<T>(url: string, init?: RequestInit): Promise<T> {
@@ -100,7 +101,7 @@ export function SelectionEvidenceFormWorkbench() {
   const reason = blocked ? "证据未齐全或属于测试资料，禁止上传/写库。" : !canEdit || !privileged || !environment?.actorMatches ? "需要当前组织有效的所有者/数据库管理员，且操作者须与登录用户一致。" : dirty ? "请先保存当前表单，核对重建后的门禁。" : "";
   const uploadReason = reason || (!canUpload ? "没有商品编辑权限。" : !environment?.erpUrl ? "ERP 地址未配置。" : "");
   const createReason = reason || (!canCreate ? "没有商品创建权限。" : !environment?.database || !environment.organization || !environment.actor ? "数据库或写库身份未就绪。" : "");
-  return <div className="space-y-4">
+  return <WorkbenchPageTemplate context={
     <Card><CardHeader><CardTitle>本机选品证据</CardTitle></CardHeader><CardContent className="space-y-3">
       <div className="flex flex-wrap items-center gap-3"><label>Slug <select aria-label="Slug" className={field} value={slug} disabled={busy || Boolean(dirty)} onChange={e => setSlug(e.target.value)}><option value="">请选择</option>{slugs.map(s => <option key={s.slug} value={s.slug}>{s.slug} · {s.status}</option>)}</select></label><Button variant="secondary" disabled={busy || Boolean(dirty)} onClick={() => void reloadSlugs()}>刷新目录</Button><Link className="text-sm text-brand underline" href="/agents/market">打开 Market 上传 draft</Link></div>
       <p className="text-xs text-muted">目录来自当前运行 aecob 的主机。编辑内容只在保存后落盘；有未保存修改时请先保存，再编辑另一区块或切换目录。</p>
@@ -109,6 +110,7 @@ export function SelectionEvidenceFormWorkbench() {
       {!busy && !slugs.length && !error && <p className="text-sm text-muted">本机没有可用 Slug，请先完成本地选品采集。</p>}
       {data && <><p className="text-sm">关键词：{data.keyword} · 竞品 ASIN：{data.asins.join("、") || "无"}</p><div className="flex flex-wrap gap-2"><Badge tone={blocked ? "amber" : "green"}>{data.quality.status}</Badge><Badge tone={blocked ? "red" : "green"}>blockWrite：{String(data.quality.blockWrite)}</Badge>{(["validReviews", "taggedQuotes", "suppliers", "images", "uploadedImages"] as const).map((key, i) => <Badge tone="gray" key={key}>{["有效评论", "标签引用", "供应商", "本地图片", "已上传图片"][i]}：{data.quality[key]}</Badge>)}</div><ul className="list-disc pl-5 text-xs text-muted">{data.quality.reasons.map(r => <li key={r.code}>{r.code}：{r.code === "REVIEWS_NEEDS_DATA" ? "请在下方补低星评论。" : r.code === "SUPPLIERS_NEEDS_DATA" ? "请在下方补至少 3 个不同的真实 1688 商品链接。" : r.code === "TAGS_NEEDS_DATA" ? "评论尚未命中标签，需核对真实原文或由管理员补充词典。" : r.fallback}</li>)}</ul></>}
     </CardContent></Card>
+  } main={<div className="space-y-4">
     {data && <>
       <Card><CardHeader><CardTitle>A · 低星评论</CardTitle></CardHeader><CardContent className="space-y-3">
         <p className="text-xs text-muted">粘贴真实 1–3 星原文，最多 240 字；日期可空。保存替换当前竞品评论（包含删除），并打标签、重建工作簿。</p>
@@ -131,5 +133,5 @@ export function SelectionEvidenceFormWorkbench() {
         </div></details>
       </CardContent></Card>
     </>}
-  </div>;
+  </div>} />;
 }

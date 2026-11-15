@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Database, Download, RefreshCcw, Search, Trash2 } from "lucide-react";
+import { ListPageTemplate } from "@/components/templates/page-templates";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { StandardDataTable } from "@/components/ui/table-variants";
+import { type DataTableColumn } from "@/components/ui/data-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { buildSaihuSearchMergeWorkbook, createSaihuSearchMergeFileName } from "@/lib/saihu-search-merge/merge";
 import { clearSaihuHistoryRecords, listSaihuHistoryRecords } from "@/lib/saihu-search-merge/history";
@@ -72,44 +75,26 @@ async function getHistoryDownloadBlob(record: SaihuHistoryRecord) {
 
 function HistoryRowsPreview({ rows }: { rows: SaihuMergedRow[] }) {
   const previewRows = rows.slice(0, 20);
+  const previewColumns: DataTableColumn<SaihuMergedRow>[] = [
+    { key: "searchTerm", header: "搜索词", className: "max-w-[220px] truncate font-medium text-foreground", cellAttributes: (row) => ({ title: row.searchTerm }), render: (row) => row.searchTerm },
+    { key: "translation", header: "翻译", className: "max-w-[220px] truncate text-muted", cellAttributes: (row) => ({ title: row.translation }), render: (row) => row.translation || "--" },
+    { key: "orderCount", header: "订单", numeric: true, render: (row) => formatNumber(row.orderCount) },
+    { key: "impressions", header: "曝光", numeric: true, render: (row) => formatNumber(row.impressions) },
+    { key: "clicks", header: "点击", numeric: true, render: (row) => formatNumber(row.clicks) },
+    { key: "spend", header: "花费", numeric: true, render: (row) => formatNumber(row.spend, 2) },
+    { key: "sales", header: "销售额", numeric: true, render: (row) => formatNumber(row.sales, 2) },
+    { key: "sourceRows", header: "来源行", numeric: true, render: (row) => formatNumber(row.sourceRows) },
+  ];
 
   return (
-    <div className="overflow-hidden rounded-md border border-border">
-      <div className="max-h-[380px] overflow-auto thin-scrollbar">
-        <table className="min-w-[980px] w-full border-collapse text-left text-sm">
-          <thead className="sticky top-0 z-[1] bg-surface-muted text-xs font-semibold text-muted">
-            <tr>
-              <th className="border-b border-border px-3 py-2">搜索词</th>
-              <th className="border-b border-border px-3 py-2">翻译</th>
-              <th className="border-b border-border px-3 py-2 text-right">订单</th>
-              <th className="border-b border-border px-3 py-2 text-right">曝光</th>
-              <th className="border-b border-border px-3 py-2 text-right">点击</th>
-              <th className="border-b border-border px-3 py-2 text-right">花费</th>
-              <th className="border-b border-border px-3 py-2 text-right">销售额</th>
-              <th className="border-b border-border px-3 py-2 text-right">来源行</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border bg-white">
-            {previewRows.map((row) => (
-              <tr key={row.searchTerm} className="hover:bg-surface-muted/50">
-                <td className="max-w-[220px] truncate px-3 py-2 font-medium text-foreground" title={row.searchTerm}>
-                  {row.searchTerm}
-                </td>
-                <td className="max-w-[220px] truncate px-3 py-2 text-muted" title={row.translation}>
-                  {row.translation || "--"}
-                </td>
-                <td className="px-3 py-2 text-right metric-tabular">{formatNumber(row.orderCount)}</td>
-                <td className="px-3 py-2 text-right metric-tabular">{formatNumber(row.impressions)}</td>
-                <td className="px-3 py-2 text-right metric-tabular">{formatNumber(row.clicks)}</td>
-                <td className="px-3 py-2 text-right metric-tabular">{formatNumber(row.spend, 2)}</td>
-                <td className="px-3 py-2 text-right metric-tabular">{formatNumber(row.sales, 2)}</td>
-                <td className="px-3 py-2 text-right metric-tabular">{formatNumber(row.sourceRows)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <StandardDataTable
+      ariaLabel="历史记录合并结果预览"
+      rows={previewRows}
+      getRowKey={(row) => row.searchTerm}
+      columns={previewColumns}
+      empty="暂无合并结果。"
+      maxHeight="380px"
+    />
   );
 }
 
@@ -172,10 +157,25 @@ export function SaihuSearchMergeHistory() {
     [records, selectedRecordId],
   );
 
+  const historyColumns: DataTableColumn<SaihuHistoryRecord>[] = [
+    { key: "createdAt", header: "时间", width: 180, className: "whitespace-nowrap metric-tabular text-muted", render: (record) => formatDateTime(record.createdAt) },
+    { key: "action", header: "动作", width: 100, align: "center", render: (record) => <Badge tone={record.action === "export" ? "green" : "blue"} className="min-w-[84px] justify-center whitespace-nowrap px-2">{getActionLabel(record.action)}</Badge> },
+    { key: "sourceFileName", header: "源文件", width: 100, className: "truncate font-medium text-foreground", cellAttributes: (record) => ({ title: record.sourceFileName }), render: (record) => record.sourceFileName },
+    { key: "outputFileName", header: "导出文件", width: 100, className: "truncate text-muted", cellAttributes: (record) => ({ title: record.outputFileName }), render: (record) => record.outputFileName || "--" },
+    { key: "sourceRows", header: "原始行", width: 85, numeric: true, render: (record) => formatNumber(record.summary.sourceRows) },
+    { key: "mergedRows", header: "合并词", width: 85, numeric: true, render: (record) => formatNumber(record.summary.mergedRows) },
+    { key: "duplicateTermCount", header: "重复词", width: 85, numeric: true, render: (record) => formatNumber(record.summary.duplicateTermCount) },
+    { key: "totalOrders", header: "订单", width: 85, numeric: true, render: (record) => formatNumber(record.summary.totalOrders) },
+    { key: "totalImpressions", header: "曝光", width: 85, numeric: true, render: (record) => formatNumber(record.summary.totalImpressions) },
+    { key: "totalClicks", header: "点击", width: 85, numeric: true, render: (record) => formatNumber(record.summary.totalClicks) },
+    { key: "totalSpend", header: "花费", width: 85, numeric: true, render: (record) => formatNumber(record.summary.totalSpend, 2) },
+    { key: "totalSales", header: "销售额", width: 85, numeric: true, render: (record) => formatNumber(record.summary.totalSales, 2) },
+    { key: "files", header: "文件", width: 200, align: "right", render: (record) => <div className="flex justify-end gap-2 whitespace-nowrap"><Button size="sm" variant="secondary" className="min-w-[72px] whitespace-nowrap px-2" onClick={() => handleViewRecord(record.id)}>查看</Button><Button size="sm" variant="secondary" className="min-w-[84px] whitespace-nowrap px-2" onClick={() => void handleDownload(record)}><Download className="h-4 w-4" />下载</Button></div> },
+  ];
+
   return (
-    <>
-      <div className="space-y-5">
-        <Card>
+    <ListPageTemplate
+      header={<Card>
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -194,8 +194,9 @@ export function SaihuSearchMergeHistory() {
               </div>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-4 xl:grid-cols-5">
+        </Card>}
+        stats={<Card><CardContent>
+            <div className="grid gap-[var(--gap-section)] md:grid-cols-4 xl:grid-cols-5">
               <div className="rounded-md border border-border bg-surface-muted/40 px-4 py-3">
                 <p className="text-xs font-medium text-muted">总记录</p>
                 <p className="mt-2 text-xl font-bold metric-tabular">{formatNumber(pagination.total)}</p>
@@ -218,8 +219,9 @@ export function SaihuSearchMergeHistory() {
               </div>
             </div>
           </CardContent>
-        </Card>
+        </Card>}
 
+        table={<div className="flex flex-col gap-[var(--gap-section)]">
         <Card>
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -228,7 +230,7 @@ export function SaihuSearchMergeHistory() {
                 <CardTitle>记录明细</CardTitle>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <label className="flex items-center gap-2 rounded-md border border-border bg-white px-3 py-2 text-sm text-muted">
+                <label className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm text-muted">
                   <Search className="h-4 w-4" />
                   <input
                     value={search}
@@ -249,7 +251,7 @@ export function SaihuSearchMergeHistory() {
                     setPage(1);
                     setPageSize(Number(event.target.value));
                   }}
-                  className="rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground outline-none"
+                  className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none"
                 >
                   <option value={10}>10 / 页</option>
                   <option value={25}>25 / 页</option>
@@ -273,66 +275,14 @@ export function SaihuSearchMergeHistory() {
           <CardContent>
             {records.length ? (
               <div className="space-y-4">
-              <div className="overflow-hidden rounded-md border border-border">
-                  <div className="max-h-[620px] overflow-auto thin-scrollbar">
-                    <table className="min-w-[1060px] w-full table-fixed border-collapse text-left text-sm">
-                    <thead className="sticky top-0 z-[1] bg-surface-muted text-xs font-semibold text-muted">
-                      <tr>
-                        <th className="w-[180px] border-b border-border px-3 py-2">时间</th>
-                        <th className="w-[100px] border-b border-border px-3 py-2">动作</th>
-                        <th className="w-[100px] border-b border-border px-3 py-2">源文件</th>
-                        <th className="w-[100px] border-b border-border px-3 py-2">导出文件</th>
-                        <th className="border-b border-border px-3 py-2 text-right">原始行</th>
-                        <th className="border-b border-border px-3 py-2 text-right">合并词</th>
-                        <th className="border-b border-border px-3 py-2 text-right">重复词</th>
-                        <th className="border-b border-border px-3 py-2 text-right">订单</th>
-                        <th className="border-b border-border px-3 py-2 text-right">曝光</th>
-                        <th className="border-b border-border px-3 py-2 text-right">点击</th>
-                        <th className="border-b border-border px-3 py-2 text-right">花费</th>
-                        <th className="border-b border-border px-3 py-2 text-right">销售额</th>
-                        <th className="w-[200px] border-b border-border px-3 py-2 text-right">文件</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border bg-white">
-                      {records.map((record) => (
-                        <tr key={record.id} className={`hover:bg-surface-muted/50 ${record.id === selectedRecordId ? "bg-brand/5" : ""}`}>
-                          <td className="whitespace-nowrap px-3 py-2 metric-tabular text-muted">{formatDateTime(record.createdAt)}</td>
-                          <td className="px-3 py-2 text-center">
-                            <Badge tone={record.action === "export" ? "green" : "blue"} className="min-w-[84px] justify-center whitespace-nowrap px-2">
-                              {getActionLabel(record.action)}
-                            </Badge>
-                          </td>
-                          <td className="max-w-[100px] truncate px-3 py-2 font-medium text-foreground" title={record.sourceFileName}>
-                            {record.sourceFileName}
-                          </td>
-                          <td className="max-w-[100px] truncate px-3 py-2 text-muted" title={record.outputFileName}>
-                            {record.outputFileName || "--"}
-                          </td>
-                          <td className="px-3 py-2 text-right metric-tabular">{formatNumber(record.summary.sourceRows)}</td>
-                          <td className="px-3 py-2 text-right metric-tabular">{formatNumber(record.summary.mergedRows)}</td>
-                          <td className="px-3 py-2 text-right metric-tabular">{formatNumber(record.summary.duplicateTermCount)}</td>
-                          <td className="px-3 py-2 text-right metric-tabular">{formatNumber(record.summary.totalOrders)}</td>
-                          <td className="px-3 py-2 text-right metric-tabular">{formatNumber(record.summary.totalImpressions)}</td>
-                          <td className="px-3 py-2 text-right metric-tabular">{formatNumber(record.summary.totalClicks)}</td>
-                          <td className="px-3 py-2 text-right metric-tabular">{formatNumber(record.summary.totalSpend, 2)}</td>
-                          <td className="px-3 py-2 text-right metric-tabular">{formatNumber(record.summary.totalSales, 2)}</td>
-                          <td className="w-[200px] px-3 py-2 text-right">
-                            <div className="flex justify-end gap-2 whitespace-nowrap">
-                              <Button size="sm" variant="secondary" className="min-w-[72px] whitespace-nowrap px-2" onClick={() => handleViewRecord(record.id)}>
-                                查看
-                              </Button>
-                              <Button size="sm" variant="secondary" className="min-w-[84px] whitespace-nowrap px-2" onClick={() => void handleDownload(record)}>
-                                <Download className="h-4 w-4" />
-                                下载
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                <StandardDataTable
+                  ariaLabel="赛狐搜索词合并历史记录"
+                  rows={records}
+                  getRowKey={(record) => record.id}
+                  columns={historyColumns}
+                  rowClassName={(record) => record.id === selectedRecordId ? "bg-brand/5" : undefined}
+                  maxHeight="620px"
+                />
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-sm text-muted">
                     第 {pagination.page} / {pagination.pageCount} 页，共 {formatNumber(pagination.total)} 条记录。
@@ -429,7 +379,7 @@ export function SaihuSearchMergeHistory() {
             </Card>
           </div>
         ) : null}
-      </div>
-    </>
+      </div>}
+    />
   );
 }

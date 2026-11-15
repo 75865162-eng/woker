@@ -33,6 +33,11 @@ describe('WMS in-transit rules',()=>{
   assert.throws(()=>validateTransferQuantities('TRANSFER_ORDER_RECEIVE',[{lineId:'foreign',quantity:1}],[line]));
   assert.doesNotThrow(()=>validateTransferQuantities('TRANSFER_ORDER_RECEIVE',[{lineId:'l',quantity:4}],[line]));
  });
+ it('差异已分类数量不能再次签收入库，避免消耗已结清在途',()=>{
+  const current={...line,quantity:10,shippedQty:6,receivedQty:2,discrepancyQty:4};
+  assert.throws(()=>validateTransferQuantities('TRANSFER_ORDER_RECEIVE',[{lineId:'l',quantity:1}],[current]));
+  assert.doesNotThrow(()=>validateTransferQuantities('TRANSFER_ORDER_RECEIVE',[{lineId:'l',quantity:1}],[{...current,discrepancyQty:3}]));
+ });
  it('requires explicit distinct routes, integral quantities and evidence',()=>{
   const row={sourceBalanceId:'b',targetLocationId:'t',quantity:1},draft={number:'N',reason:'R',idempotencyKey:'key',lines:[row]};
   assert.throws(()=>parseTransferOrderDraft({...draft,lines:[row,row]}));

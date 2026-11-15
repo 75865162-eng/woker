@@ -103,7 +103,7 @@ export function DescriptionGeneratorCard({
       <CardContent className="space-y-4">
         <div className="grid gap-3 xl:grid-cols-4">
           {weightedFields.map((field) => (
-            <div key={field.key} className="rounded-md border border-border bg-white p-3">
+            <div key={field.key} className="rounded-md border border-border bg-surface p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <p className={labelClass}>{field.label}</p>
                 <span className="text-sm font-bold text-foreground">{field.weight}%</span>
@@ -117,7 +117,7 @@ export function DescriptionGeneratorCard({
 
         <div className="grid gap-3 xl:grid-cols-[repeat(3,minmax(0,1fr))_minmax(0,1.15fr)]">
           {visibleFields.map((field) => (
-            <div key={field.key} className="rounded-md border border-border bg-white p-3">
+            <div key={field.key} className="rounded-md border border-border bg-surface p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <p className={labelClass}>{field.label}</p>
                 <span className="text-xs font-bold text-muted">{field.weight}% 权重</span>
@@ -143,7 +143,7 @@ export function DescriptionGeneratorCard({
                 const result = generator.results[index] || "";
 
                 return (
-                  <div key={index} className="rounded-md border border-border bg-white p-3">
+                  <div key={index} className="rounded-md border border-border bg-surface p-3">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs font-black text-brand">五点{index + 1}</p>
                       <Badge tone={result.length <= 220 ? "green" : "amber"}>
@@ -159,7 +159,7 @@ export function DescriptionGeneratorCard({
             </div>
 
             {error ? (
-              <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+              <div className="mt-3 rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm font-medium text-danger-ink">
                 {error}
               </div>
             ) : null}
@@ -194,7 +194,7 @@ export function DescriptionGeneratorCard({
                       return (
                         <div
                           key={record.id}
-                          className="rounded-md border border-border bg-white p-3"
+                          className="rounded-md border border-border bg-surface p-3"
                         >
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-xs font-bold text-muted">
@@ -259,7 +259,7 @@ function PromptEditorDialog({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-      <div className="w-full max-w-3xl rounded-lg border border-border bg-white shadow-xl">
+      <div className="w-full max-w-3xl rounded-lg border border-border bg-surface shadow-xl">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
             <h2 className="text-lg font-black text-foreground">提示词修改</h2>

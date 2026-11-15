@@ -18,7 +18,7 @@ export function FinanceAuxiliaryPanel({bookId,vouchers,subjects,canCreate,canApp
  const selected=vouchers.find(row=>row.id===voucherId);
  return <details className="space-y-3 border-b border-border py-4"><summary className="cursor-pointer text-sm font-semibold">辅助核算与凭证类别</summary>
  <p className="text-xs text-muted">目标端定义类型、项目及科目规则。项目可改名、停用或删除未引用自定义项，系统项保留名称；必填项在审核和过账时检查，红字沿用原凭证维度。</p>
- {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
+ {error&&<p role="alert" className="text-sm text-danger-ink">{error}</p>}
  {canApprove&&<div className="grid gap-2 sm:grid-cols-3">
  <input aria-label="辅助定义编码" className={cls} value={code} onChange={e=>setCode(e.target.value)} placeholder="编码"/><input aria-label="辅助定义名称" className={cls} value={name} onChange={e=>setName(e.target.value)} placeholder="名称"/>
  <input aria-label="辅助制度依据" className={cls} value={policyReference} onChange={e=>setPolicyReference(e.target.value)} placeholder="目标端制度依据"/>

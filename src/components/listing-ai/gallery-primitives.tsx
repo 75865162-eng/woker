@@ -38,7 +38,7 @@ export function ImageStrip({
   const gridClass = variant === "gallery" ? "grid-cols-3" : "grid-cols-1";
 
   return (
-    <div className="rounded-md border border-border bg-white p-3">
+    <div className="rounded-md border border-border bg-surface p-3">
       <div className="mb-3 flex items-center justify-between gap-2">
         <p className={labelClass}>{title}</p>
         <MiniUploader images={images} label="Upload" onUpload={onUpload} />
@@ -72,7 +72,7 @@ export function AmazonLinkButton({ asin }: { asin: string }) {
   return (
     <a
       aria-disabled={disabled}
-      className={`flex h-10 items-center justify-center rounded-md border border-border bg-white text-muted transition ${
+      className={`flex h-10 items-center justify-center rounded-md border border-border bg-surface text-muted transition ${
         disabled
           ? "pointer-events-none opacity-40"
           : "hover:bg-surface-muted hover:text-brand"
@@ -134,7 +134,7 @@ export function GalleryCell({
     </div>
   ) : image ? (
     <div
-      className={`group overflow-hidden rounded-md border ${mine ? "border-brand" : "border-border"} bg-white`}
+      className={`group overflow-hidden rounded-md border ${mine ? "border-brand" : "border-border"} bg-surface`}
       draggable={draggable && !disabled}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
@@ -148,7 +148,7 @@ export function GalleryCell({
         }`}
       >
         <button
-          className="absolute inset-0 flex h-full w-full cursor-zoom-in items-center justify-center bg-white"
+          className="absolute inset-0 flex h-full w-full cursor-zoom-in items-center justify-center bg-surface"
           onClick={onPreview}
           type="button"
           title="View large image"
@@ -162,16 +162,16 @@ export function GalleryCell({
           />
         </button>
         {onRemove ? (
-          <button type="button" className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-md border border-border bg-white/95 text-red-600 shadow-sm hover:bg-red-50 disabled:opacity-40" aria-label="删除此图片" title="删除此图片" disabled={disabled} draggable={false} onClick={event => { event.stopPropagation(); onRemove(); }}>
+          <button type="button" className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-md border border-border bg-surface/95 text-danger-ink shadow-sm hover:bg-danger-soft disabled:opacity-40" aria-label="删除此图片" title="删除此图片" disabled={disabled} draggable={false} onClick={event => { event.stopPropagation(); onRemove(); }}>
             <X className="h-4 w-4" />
           </button>
         ) : null}
         {draggable ? (
           <div className="absolute inset-x-2 bottom-2 flex items-end justify-between gap-2">
-            <GripVertical className="h-4 w-4 rounded bg-white/90 text-muted shadow-sm" />
+            <GripVertical className="h-4 w-4 rounded bg-surface/90 text-muted shadow-sm" />
             <div className="flex flex-col gap-1 opacity-0 transition group-hover:opacity-100">
             <button
-              className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-white/95 text-muted shadow-sm hover:text-brand disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-surface/95 text-muted shadow-sm hover:text-brand disabled:cursor-not-allowed disabled:opacity-40"
               disabled={disabled || !canMoveUp}
               onClick={onMoveUp}
               type="button"
@@ -180,7 +180,7 @@ export function GalleryCell({
               <ArrowUp className="h-4 w-4" />
             </button>
             <button
-              className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-white/95 text-muted shadow-sm hover:text-brand disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-surface/95 text-muted shadow-sm hover:text-brand disabled:cursor-not-allowed disabled:opacity-40"
               disabled={disabled || !canMoveDown}
               onClick={onMoveDown}
               type="button"
@@ -201,7 +201,7 @@ export function GalleryCell({
     >
       {onUpload ? (
         <>
-          <button type="button" className="absolute inset-0 flex h-full w-full items-center justify-center hover:bg-white disabled:cursor-wait" disabled={disabled} aria-label="上传此位置的图片" title="上传此位置的图片" onClick={() => uploadInput.current?.click()}>
+          <button type="button" className="absolute inset-0 flex h-full w-full items-center justify-center hover:bg-surface disabled:cursor-wait" disabled={disabled} aria-label="上传此位置的图片" title="上传此位置的图片" onClick={() => uploadInput.current?.click()}>
             <Plus className="h-8 w-8" />
           </button>
           <input ref={uploadInput} className="hidden" type="file" accept="image/*" disabled={disabled} onChange={event => { onUpload(event.target.files); event.target.value = ""; }} />
@@ -320,7 +320,7 @@ export function ImagePreviewModal({
       aria-modal="true"
     >
       <div
-        className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-md border border-border bg-white shadow-2xl"
+        className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-md border border-border bg-surface shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
@@ -412,7 +412,7 @@ export function InfoField({
 }) {
   return (
     <div
-      className={`rounded-md border border-border bg-white p-4 ${className}`}
+      className={`rounded-md border border-border bg-surface p-4 ${className}`}
     >
       <p className={labelClass}>{label}</p>
       <div className="mt-3">{children}</div>
@@ -424,7 +424,7 @@ export function AlignedPlaceholder({ label }: { label: string }) {
   return (
     <div className="rounded-md border border-dashed border-border bg-surface-muted/60 p-4">
       <p className={labelClass}>{label}</p>
-      <div className="mt-3 flex h-[calc(100%-28px)] items-center justify-center rounded-md bg-white/60 text-xs font-bold text-muted">
+      <div className="mt-3 flex h-[calc(100%-28px)] items-center justify-center rounded-md bg-surface/60 text-xs font-bold text-muted">
         不适用
       </div>
     </div>

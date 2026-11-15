@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AdsScopeBoundary, useAdsScopeCurrent } from "./ads-scope-boundary";
 import { Play, RefreshCw } from "lucide-react";
+import { workspaceScopeHeaders } from "@/lib/workspace/workspace-scope-store";
 
 type ReportTypeRow = {
   reportType: string;
@@ -43,6 +45,11 @@ function formatTime(value: string | null) {
 
 /** SP 五类绩效报表的实盘采集面板：状态、覆盖区间与手动触发。 */
 export function AdsReportAcquisition() {
+  return <AdsScopeBoundary><AdsReportAcquisitionBody /></AdsScopeBoundary>;
+}
+
+function AdsReportAcquisitionBody() {
+  const isScopeCurrent = useAdsScopeCurrent();
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -51,9 +58,10 @@ export function AdsReportAcquisition() {
   const [selected, setSelected] = useState("");
 
   const load = useCallback(async (signal?: AbortSignal) => {
+    if (!isScopeCurrent()) return;
     setLoading(true);
     try {
-      const response = await fetch("/api/integrations/amazon/ads/reports", { cache: "no-store", signal });
+      const response = await fetch("/api/integrations/amazon/ads/reports", { cache: "no-store", signal, headers: workspaceScopeHeaders() });
       const body = await response.json() as Overview;
       if (!response.ok) throw new Error(body.error || `读取失败（${response.status}）`);
       setData(body);
@@ -64,7 +72,7 @@ export function AdsReportAcquisition() {
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  }, []);
+  }, [isScopeCurrent]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -73,13 +81,14 @@ export function AdsReportAcquisition() {
   }, [load]);
 
   async function sync(profileId: string) {
+    if (!isScopeCurrent()) return;
     setBusy(true);
     setMessage("");
     setError("");
     try {
       const response = await fetch("/api/integrations/amazon/ads/reports", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: workspaceScopeHeaders(true),
         body: JSON.stringify({ action: "sync", profileId }),
       });
       const body = await response.json() as { tasks?: Array<{ reportType: string; created: boolean }>; enqueued?: number; executionRole?: string; error?: string };

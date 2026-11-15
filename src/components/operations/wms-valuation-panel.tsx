@@ -6,7 +6,7 @@ import {useWmsOptions} from './use-wms-options';
 import {WmsOptionsStatus} from './wms-options-status';
 import {valuedActions} from '@/lib/wms/valuation-view';
 type Item=Record<string,unknown>;
-const cls='h-9 rounded border border-input bg-background px-2';
+const cls='h-9 rounded border border-border bg-background px-2';
 export function WmsValuationPanel({workspaceId,kind,items,onSaved}:{workspaceId:string;kind:'cost-rules'|'finance-drafts';items:Item[];onSaved:()=>void}){
  const lots=useWmsOptions('lots',workspaceId,kind==='cost-rules'),rules=useWmsOptions('cost-rules',workspaceId,kind==='finance-drafts');
  const [form,setForm]=useState({lotId:'',unitCost:'',currency:'',inventoryAccount:'',reference:''}),[offsets,setOffsets]=useState<Record<string,string>>({}),[reason,setReason]=useState(''),[selected,setSelected]=useState<Record<string,string>>({}),[busy,setBusy]=useState(false),[message,setMessage]=useState('');

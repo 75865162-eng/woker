@@ -2,12 +2,23 @@
 /* Exclude the old documentation placeholder retained by incremental scans. */
 @source not inline("text-[length:var(--sf-*)]");
 
+/* ============================================================================
+ * 第 1 层：设计令牌
+ * ----------------------------------------------------------------------------
+ * 全部为语义令牌。业务代码只允许引用本层，不允许写裸色值 / 裸字号 / 裸圆角。
+ * 密度相关令牌（行高、内距、控件高、正文字号）会被 html[data-density] 覆盖，
+ * 见文件底部「密度模式」区块。
+ * ========================================================================== */
+
 :root {
+  /* ---------- 颜色：表面与文字 ---------- */
   --background: #f6f7f9;
   --foreground: #111827;
   --surface: #ffffff;
   --surface-muted: #eef2f5;
+  --surface-sunken: #f8fafb;
   --border: #d9e0e7;
+  --border-strong: #c3ccd6;
   --muted: #667085;
   --brand: #176b87;
   --brand-dark: #0f4d63;
@@ -15,6 +26,88 @@
   --success: #16a34a;
   --danger: #dc2626;
   --info: #2563eb;
+
+  /* 状态浅底：提示条、状态药丸背景 */
+  --success-soft: #ecfdf3;
+  --danger-soft: #fef2f2;
+  --warning-soft: #fffbeb;
+  --info-soft: #eff6ff;
+  --accent-soft: #fff7ed;
+
+  /* 状态墨色：浅底上的文字色，直接取 -700 档保证 4.5:1 */
+  --success-ink: #15803d;
+  --danger-ink: #b91c1c;
+  --warning-ink: #b45309;
+  --info-ink: #1d4ed8;
+  --neutral-ink: #374151;
+
+  /* ---------- 间距：4px 基数 ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --pad-page: 24px;   /* 页面左右留白 */
+  --pad-card: 16px;   /* 卡片内距 */
+  --gap-section: 16px; /* 区块纵向间距 */
+  --gap-field: 12px;  /* 表单字段间距 */
+
+  /* ---------- 圆角 ---------- */
+  --radius-sm: 4px;
+  --radius-md: 6px;   /* 标准控件、输入框、按钮 */
+  --radius-lg: 8px;   /* 卡片、面板 */
+  --radius-xl: 12px;  /* 弹层、抽屉 */
+  --radius-full: 999px;
+
+  /* ---------- 阴影：仅用于浮层，平面内容一律靠边框分层 ---------- */
+  --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-2: 0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-3: 0 4px 12px rgba(16, 24, 40, 0.1), 0 2px 4px rgba(16, 24, 40, 0.05);
+  --shadow-pop: 0 8px 24px rgba(16, 24, 40, 0.14), 0 2px 6px rgba(16, 24, 40, 0.06);
+
+  /* ---------- 层级：全站只允许这六档 ---------- */
+  --z-base: 0;
+  --z-sticky: 10;
+  --z-dropdown: 30;
+  --z-drawer: 40;
+  --z-modal: 50;
+  --z-toast: 60;
+
+  /* ---------- 动效 ---------- */
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-slow: 260ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ---------- 壳层尺寸 ---------- */
+  --shell-nav: 224px;
+  --shell-nav-collapsed: 64px;
+  --shell-topbar: 48px;
+  --shell-tabbar: 36px;
+
+  /* ---------- 密度：standard 默认（html[data-density] 覆盖） ---------- */
+  --row-h: 40px;
+  --cell-py: 10px;
+  --cell-px: 12px;
+  --control-h: 36px;
+  --control-h-sm: 28px;
+
+  /*
+   * 带缩略图的行：商品主档首列是 60×60 图片，行高必须容下它。
+   * 这是内容约束而非排版偏好，因此三档密度下都固定 61px，
+   * 虚拟滚动的 rowHeight 也按这个值计算。
+   */
+  --row-h-thumb: 61px;
+
+  /* ---------- 旧名兼容：上一轮已落地的引用点保持有效 ---------- */
+  --row-default: var(--row-h);
+  --row-compact: 32px;
+  --row-comfortable: 48px;
+  --table-cell-px: var(--cell-px);
+  --page-pad: var(--pad-page);
 }
 
 @theme inline {
@@ -22,7 +115,9 @@
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
   --color-surface-muted: var(--surface-muted);
+  --color-surface-sunken: var(--surface-sunken);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-muted: var(--muted);
   --color-brand: var(--brand);
   --color-brand-dark: var(--brand-dark);
@@ -30,9 +125,102 @@
   --color-success: var(--success);
   --color-danger: var(--danger);
   --color-info: var(--info);
+  --color-success-soft: var(--success-soft);
+  --color-danger-soft: var(--danger-soft);
+  --color-warning-soft: var(--warning-soft);
+  --color-info-soft: var(--info-soft);
+  --color-accent-soft: var(--accent-soft);
+  --color-success-ink: var(--success-ink);
+  --color-danger-ink: var(--danger-ink);
+  --color-warning-ink: var(--warning-ink);
+  --color-info-ink: var(--info-ink);
+  --color-neutral-ink: var(--neutral-ink);
+
+  /* 圆角与阴影接入 Tailwind 命名空间：rounded-lg / shadow-2 直接可用。
+     注意不能写成 var(--radius-lg) —— 那是自引用，会失效。 */
+
+  /*
+   * 兼容别名 —— shadcn 时代的类名，主题里原本没有对应色值，
+   * 导致这些 class 不生成任何 CSS（文字继承父级、边框回落 currentColor）。
+   * 统一指向 ERP 令牌，不改调用点即可修正渲染。
+   * 新代码请直接用 surface / border / muted / brand。
+   */
+  --color-card: var(--surface);
+  --color-card-foreground: var(--foreground);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--foreground);
+  --color-primary: var(--brand);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--surface-muted);
+  --color-secondary-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted);
+  --color-accent-foreground: #ffffff;
+  --color-destructive: var(--danger);
+  --color-input: var(--border);
+  --color-ring: var(--brand);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
+
+/*
+ * 排版尺度
+ * display 20/28/600 : 页面标题（壳层 h1）
+ * title   18/26/600 : 详情页对象名、抽屉标题
+ * section 15/20/600 : 模块标题、卡片标题、表格主数据
+ * body    13/20/400 : 正文、表单项
+ * table   13/20/400 : 表格单元格（等宽数字由 .metric-tabular 叠加）
+ * meta    12/16/400 : 辅助信息、表头、计数、时间戳
+ * label   11/16/400 : 密度受压区的标签（Sellfox 复刻面、密集面板）
+ * micro   11/16/600 : 仅导航分组标签
+ */
+@theme {
+  --text-display: 20px;
+  --text-display--line-height: 28px;
+  --text-display--font-weight: 600;
+  --text-title: 18px;
+  --text-title--line-height: 26px;
+  --text-title--font-weight: 600;
+  --text-section: 15px;
+  --text-section--line-height: 20px;
+  --text-section--font-weight: 600;
+  --text-body: 13px;
+  --text-body--line-height: 20px;
+  --text-body--font-weight: 400;
+  --text-table: 13px;
+  --text-table--line-height: 20px;
+  --text-table--font-weight: 400;
+  --text-meta: 12px;
+  --text-meta--line-height: 16px;
+  --text-meta--font-weight: 400;
+  --text-label: 11px;
+  --text-label--line-height: 16px;
+  --text-label--font-weight: 400;
+  --text-micro: 11px;
+  --text-micro--line-height: 16px;
+  --text-micro--font-weight: 600;
+
+  /*
+   * Tailwind 内置字号收口到本套基线。
+   * text-sm 是全站正文主力（改造前 14px），任务书要求正文 13px，
+   * 改令牌值即可全站生效，调用点一行不用动。
+   * text-xs 本就是 12px，显式写死避免被上游改成 0.75rem。
+   */
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 13px;
+  --text-sm--line-height: 20px;
+
+  /* 阴影令牌：平面内容一律用边框分层，阴影只给浮层 */
+  --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-2: 0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-3: 0 4px 12px rgba(16, 24, 40, 0.1), 0 2px 4px rgba(16, 24, 40, 0.05);
+  --shadow-pop: 0 8px 24px rgba(16, 24, 40, 0.14), 0 2px 6px rgba(16, 24, 40, 0.06);
+}
+
+/* ============================================================================
+ * 第 2 层：基础样式
+ * ========================================================================== */
 
 * {
   box-sizing: border-box;
@@ -40,22 +228,13 @@
 
 html {
   background: var(--background);
-  /* 全站默认企业 ERP 密集排版基准：14px。舒适密度由 html[data-erp-density="comfortable"] 覆盖。 */
-  font-size: 14px;
-  overflow-x: clip;
-}
-
-html[data-erp-density="comfortable"] {
-  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   min-height: 100vh;
   background: var(--background);
   color: var(--foreground);
-  /* 页面级不允许横向滚动：宽表一律走内部 overflow-x 容器；
-     clip 不产生滚动容器，不影响粘性表头，只收敛 1~3px 的布局伪影。 */
-  overflow-x: clip;
   font-family:
     "PingFang SC",
     "Hiragino Sans GB",
@@ -66,6 +245,9 @@ body {
     Arial,
     Helvetica,
     sans-serif;
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  font-variant-numeric: tabular-nums;
 }
 
 button,
@@ -73,6 +255,7 @@ input,
 select,
 textarea {
   font: inherit;
+  font-variant-numeric: inherit;
 }
 
 input[type="number"] {
@@ -95,13 +278,19 @@ button {
   background: rgba(23, 107, 135, 0.16);
 }
 
+/* 键盘可达性：统一焦点环，全站只允许这一种 */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
 .metric-tabular {
   font-variant-numeric: tabular-nums;
 }
 
 .thin-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: #b7c2cc transparent;
+  scrollbar-color: var(--border-strong) transparent;
 }
 
 .thin-scrollbar::-webkit-scrollbar {
@@ -110,108 +299,205 @@ button {
 }
 
 .thin-scrollbar::-webkit-scrollbar-thumb {
-  background: #b7c2cc;
-  border-radius: 999px;
+  background: var(--border-strong);
+  border-radius: var(--radius-full);
 }
 
-/* ---- 全站统一页面框架（PageFrame）----
-   只作用于框架容器，默认舒适密度下不改变任何既有业务工作台的样式。 */
-.erp-page-frame [data-erp-page-body] {
-  min-width: 0;
+/*
+ * 打印与导出：去掉壳层装饰，表格按纸张宽度重排。
+ * 财务凭证、对账单需要能直接打印。
+ */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+
+  table {
+    font-size: 10pt;
+  }
 }
 
-.erp-page-frame [data-erp-page-body] table {
+/* ============================================================================
+ * 第 3 层：遗留表格归化层
+ * ----------------------------------------------------------------------------
+ * 存量页面上还有 140+ 个手写 <table>，它们各自带着 text-xs、p-2、随手写的边框。
+ * 逐个改标记风险高（每个表的列语义、空态、操作列都不同），收益却是同一份：
+ * 「字号、表头、分隔线、悬停、行高」五件事全站一致。
+ *
+ * 所以这里用一层作用域受限的 CSS 统一这五件事，标记不动、行为不动。
+ * 行高与内距跟随密度令牌，切换密度时这些表也真实变化。
+ *
+ * 明确的豁免面（有意保留原貌）：
+ *   .ads-main / .ads-synced-shell —— 广告模块有自己独立的归化层
+ *   .sellfox-ui                  —— 赛狐复刻界面，像素还原是产品要求
+ *   .erp-table-reset             —— 需要完全手写样式的特例（打印、画布）
+ * ========================================================================== */
+
+main table:not(.ads-main *):not(.ads-synced-shell *):not(.sellfox-ui *):not(.erp-table-reset *) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-table);
+  line-height: var(--text-table--line-height);
+  color: var(--foreground);
   font-variant-numeric: tabular-nums;
 }
 
-.erp-page-frame summary {
-  cursor: pointer;
-  list-style: none;
+main table:not(.ads-main *):not(.ads-synced-shell *):not(.sellfox-ui *):not(.erp-table-reset *) > thead {
+  background: var(--surface-muted);
 }
 
-.erp-page-frame summary::-webkit-details-marker {
-  display: none;
+main table:not(.ads-main *):not(.ads-synced-shell *):not(.sellfox-ui *):not(.erp-table-reset *) > thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: calc(var(--cell-py) - 2px) var(--cell-px);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: var(--text-meta);
+  font-weight: 400;
+  line-height: var(--text-meta--line-height);
+  white-space: nowrap;
 }
 
-/* ---- 全站密度 token ----
-   紧凑（默认）与舒适两档语义变量，业务层可直接引用；改一处即全站生效。 */
-:root {
-  --erp-table-fs: 13px;          /* 表格正文字号 */
-  --erp-th-fs: 12px;             /* 表头字号 */
-  --erp-cell-py: 0.3rem;         /* 单元格上下内边距 */
-  --erp-control-h: 1.75rem;      /* 输入框 / 下拉高度（28px） */
-  --erp-control-fs: 13px;        /* 表单控件字号 */
+/* 默认左对齐不能覆盖 DataTable 数字列显式的 text-right / text-center。 */
+:where(main table:not(.ads-main *):not(.ads-synced-shell *):not(.sellfox-ui *):not(.erp-table-reset *) > thead th):not(.text-right):not(.text-center) {
+  text-align: left;
 }
 
-html[data-erp-density="comfortable"] {
-  --erp-table-fs: 14px;
-  --erp-th-fs: 12.5px;
-  --erp-cell-py: 0.5rem;
-  --erp-control-h: 2.125rem;     /* 34px */
-  --erp-control-fs: 14px;
+main table:not(.ads-main *):not(.ads-synced-shell *):not(.sellfox-ui *):not(.erp-table-reset *) > tbody > tr {
+  height: var(--row-h);
 }
 
-/* ---- 表格 / 表单统一密度（放入 base 层：业务 utility 类仍可按需覆盖外观）---- */
-@layer base {
-  html table {
-    font-size: var(--erp-table-fs);
-    font-variant-numeric: tabular-nums;
-    border-collapse: collapse;
-  }
-
-  html :is(td, th) {
-    padding-top: var(--erp-cell-py);
-    padding-bottom: var(--erp-cell-py);
-    line-height: 1.45;
-    vertical-align: middle;
-  }
-
-  html th {
-    font-size: var(--erp-th-fs);
-    font-weight: 600;
-    text-align: left;
-    white-space: nowrap;
-  }
-
-  /* 表头粘顶：长列表滚动时列名始终可见（无滚动容器的表格不受影响） */
-  html thead th {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    background: #f8fafc;
-    box-shadow: inset 0 -1px 0 var(--border);
-  }
-
-  /* 斑马纹与悬停反馈：提升宽表逐行可读性；业务页可用 utility 类覆盖 */
-  html tbody tr:nth-child(even) td {
-    background: rgba(238, 242, 245, 0.45);
-  }
-
-  html tbody tr:hover td {
-    background: rgba(23, 107, 135, 0.06);
-  }
-
-  /* 表单控件统一高度与字号（排除 checkbox / radio / range） */
-  html :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="number"]):not([type="color"]), select) {
-    height: var(--erp-control-h);
-    font-size: var(--erp-control-fs);
-    line-height: 1.2;
-  }
-
-  html textarea {
-    font-size: var(--erp-control-fs);
-    line-height: 1.5;
-  }
+main table:not(.ads-main *):not(.ads-synced-shell *):not(.sellfox-ui *):not(.erp-table-reset *) > tbody td {
+  padding: var(--cell-py) var(--cell-px);
+  vertical-align: middle;
 }
 
-/* ---- 密集模式的结构性收紧（需强于业务默认，保持非分层；含 /dashboard 等 skipFrame 页面）---- */
-html[data-erp-density="dense"] :is(td, th) {
-  padding-top: 0.28rem;
-  padding-bottom: 0.28rem;
-  line-height: 1.4;
+main table:not(.ads-main *):not(.ads-synced-shell *):not(.sellfox-ui *):not(.erp-table-reset *) > tbody > tr + tr {
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
 }
 
-html[data-erp-density="dense"] th {
-  font-size: 12px;
-  font-weight: 600;
+main table:not(.ads-main *):not(.ads-synced-shell *):not(.sellfox-ui *):not(.erp-table-reset *) > tbody > tr:hover {
+  background: color-mix(in srgb, var(--surface-muted) 60%, transparent);
+}
+
+/* 数字列跟着表头一起收口：金额与数量一律等宽，避免纵向不齐 */
+main table:not(.ads-main *):not(.ads-synced-shell *):not(.sellfox-ui *):not(.erp-table-reset *) > tbody td:has(> .metric-tabular) {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================================
+ * 第 4 层：密度模式
+ * ----------------------------------------------------------------------------
+ * 由 <DensityProvider> 写 html[data-density]，值持久化到 localStorage。
+ * 三档真实改变：表格行高、单元格内距、控件高度、正文字号、模块标题字号。
+ * 不改变：页面标题、表头字号（保持 12px，再小不可读）。
+ * ========================================================================== */
+
+html[data-density="compact"] {
+  --row-h: 32px;
+  --cell-py: 6px;
+  --cell-px: 10px;
+  --control-h: 32px;
+  --control-h-sm: 26px;
+  --pad-card: 12px;
+  --gap-section: 12px;
+  --gap-field: 8px;
+  --text-body: 13px;
+  --text-body--line-height: 18px;
+  --text-table: 13px;
+  --text-table--line-height: 18px;
+  --text-section: 14px;
+  --text-section--line-height: 18px;
+}
+
+html[data-density="standard"] {
+  --row-h: 40px;
+  --cell-py: 10px;
+  --cell-px: 12px;
+  --control-h: 36px;
+  --control-h-sm: 28px;
+  --pad-card: 16px;
+  --gap-section: 16px;
+  --gap-field: 12px;
+  --text-body: 13px;
+  --text-body--line-height: 20px;
+  --text-table: 13px;
+  --text-table--line-height: 20px;
+  --text-section: 15px;
+  --text-section--line-height: 20px;
+}
+
+html[data-density="comfortable"] {
+  --row-h: 48px;
+  --cell-py: 14px;
+  --cell-px: 14px;
+  --control-h: 40px;
+  --control-h-sm: 30px;
+  --pad-card: 20px;
+  --gap-section: 20px;
+  --gap-field: 16px;
+  --text-body: 14px;
+  --text-body--line-height: 22px;
+  --text-table: 14px;
+  --text-table--line-height: 22px;
+  --text-section: 15px;
+  --text-section--line-height: 22px;
+}
+
+/* 广告模块自带一套以 --control-h 计算的控件尺寸，固定回 40px 保持原貌 */
+:is(.ads-main, .ads-synced-shell) {
+  --control-h: 40px;
+}
+
+/* ============================================================================
+ * 第 5 层：可复用的语义组合类
+ * ----------------------------------------------------------------------------
+ * 只放「同一串类名在 20 处以上重复出现」的组合，避免再长出第二套设计系统。
+ * ========================================================================== */
+
+.erp-field {
+  height: var(--control-h);
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: 0 var(--space-3);
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  color: var(--foreground);
+  transition: border-color var(--motion-fast) var(--ease-standard);
+}
+
+.erp-field::placeholder {
+  color: color-mix(in srgb, var(--muted) 80%, transparent);
+}
+
+.erp-field:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.erp-field:focus {
+  border-color: var(--brand);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 14%, transparent);
+}
+
+.erp-field:disabled {
+  background: var(--surface-muted);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.erp-field[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.erp-field[aria-invalid="true"]:focus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 14%, transparent);
 }

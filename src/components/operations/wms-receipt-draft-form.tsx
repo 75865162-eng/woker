@@ -25,9 +25,9 @@ export function WmsReceiptDraftForm({ receipt, workspaceId, onClose, onComplete 
   }
   return <form aria-label="编辑收货草稿" onSubmit={submit} className="space-y-3 rounded-lg border border-border p-4">
     <h3 className="font-semibold">修改草稿计划数量</h3>
-    <p className="text-sm text-muted-foreground">仅可修改未收货、未关联采购单的本人草稿。保存后需按新版本重新申请收货审批。</p>
-    {receipt.lines.map(line => <div key={line.id} className="grid gap-1 text-sm"><WmsReceiptLot lotId={line.lotId} lot={line.lot} /><input aria-label={`${line.lotId} 计划数量`} required disabled={busy} type="number" min={1} max={2147483647} step={1} value={quantities[line.id]} onChange={event => setQuantities(current => ({ ...current, [line.id]: event.target.value }))} className="h-9 rounded border border-input bg-background px-3" /></div>)}
+    <p className="text-sm text-muted">仅可修改未收货、未关联采购单的本人草稿。保存后需按新版本重新申请收货审批。</p>
+    {receipt.lines.map(line => <div key={line.id} className="grid gap-1 text-sm"><WmsReceiptLot lotId={line.lotId} lot={line.lot} /><input aria-label={`${line.lotId} 计划数量`} required disabled={busy} type="number" min={1} max={2147483647} step={1} value={quantities[line.id]} onChange={event => setQuantities(current => ({ ...current, [line.id]: event.target.value }))} className="h-9 rounded border border-border bg-background px-3" /></div>)}
     <div className="flex gap-2"><Button type="submit" disabled={busy}>保存草稿</Button><Button type="button" variant="ghost" disabled={busy} onClick={onClose}>关闭编辑</Button></div>
-    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+    {error && <p role="alert" className="text-sm text-danger">{error}</p>}
   </form>;
 }

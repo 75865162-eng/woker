@@ -21,8 +21,11 @@
 /.next-dev */
 /.next-build/
 /.next-build*/
+/.next-b1/
+/.next-deploy/
 /.next-amazon-live/
 /.next-auth-check/
+/.next-verify/
 /out/
 
 # production
@@ -70,3 +73,8 @@ standalone-start.*.log
 
 # Python helpers generate only local bytecode
 /scripts/lili/__pycache__/
+
+/.next-run/
+
+# WorkBuddy local workspace data (memory, traceability copy, git backup)
+/.workbuddy/

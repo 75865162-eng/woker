@@ -33,7 +33,7 @@ export function RunLiveButton({ slug, locale }: { slug: string; locale: Locale }
       >
         {pending ? "…" : tx(locale, "检查工作流执行能力", "Check workflow availability")}
       </button>
-      {text && <p className={`mt-2 text-sm ${ok ? "text-emerald-700" : "text-[#9a3412]"}`}>{text}</p>}
+      {text && <p className={`mt-2 text-sm ${ok ? "text-success-ink" : "text-warning-ink"}`}>{text}</p>}
     </div>
   );
 }

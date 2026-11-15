@@ -62,7 +62,7 @@ try {
   assert.ok(docker(["port", pgName, "5432"]).endsWith(":" + pgPort));
   assert.ok(docker(["port", redisName, "6379"]).endsWith(":" + redisPort));
   const env = {
-    PATH: process.env.PATH, TMPDIR: tmpdir(), ERP_RUNTIME_MODE: "production", NODE_ENV: "development",
+    PATH: process.env.PATH, TMPDIR: tmpdir(), ERP_RUNTIME_MODE: "production", NODE_ENV: "development", __NEXT_PROCESSED_ENV: "true",
     DATABASE_URL: `postgresql://postgres:fixture_password@127.0.0.1:${pgPort}/erp_fixture`, REDIS_URL: `redis://127.0.0.1:${redisPort}`,
     QUEUE_DRIVER: "redis", STORAGE_DRIVER: "local", UPLOAD_DIR: path.join(directory, "uploads"),
     AUTH_DRIVER: "database", AUTH_SECRET: "isolated-runtime-fixture-secret", NEXT_TELEMETRY_DISABLED: "1",
@@ -75,7 +75,8 @@ try {
   const baseline = schema.replace(/model (ImportJob|ImageUpscaleJob) \{[\s\S]*?\n\}/g, block => block.replace(/^  (executionToken|leaseExpiresAt|executionAttempts|maxAttempts) .*\n/gm, "").replace(/^  @@index\(\[status, leaseExpiresAt\]\).*\n/gm, ""));
   writeFileSync(beforeLeaseSchema, baseline);
   writeFileSync(config, `import { defineConfig } from ${JSON.stringify(path.join(root, "node_modules/prisma/config.js"))}; export default defineConfig({ schema: ${JSON.stringify(beforeLeaseSchema)}, datasource: {url: ${JSON.stringify(env.DATABASE_URL)}} });`);
-  execFileSync(process.execPath, ["node_modules/prisma/build/index.js", "db", "push", "--config", config], { cwd: root, env, stdio: ["ignore", logFd, logFd] });
+  // Prisma CLI may auto-load cwd/.env; launch from the disposable directory.
+  execFileSync(process.execPath, [path.join(root, "node_modules/prisma/build/index.js"), "db", "push", "--config", config], { cwd: directory, env, stdio: ["ignore", logFd, logFd] });
   await sql(env.DATABASE_URL, readFileSync(path.join(root, "prisma/migrations/20261106170000_runtime_execution_leases/migration.sql"), "utf8"));
   const passwordHash = `scrypt:fixture:${scryptSync("fixture_password", "fixture", 64).toString("base64url")}`;
   await sql(env.DATABASE_URL, `INSERT INTO "Organization" (id,name,slug,"updatedAt") VALUES ('fixture-org','Fixture','runtime-fixture',now());

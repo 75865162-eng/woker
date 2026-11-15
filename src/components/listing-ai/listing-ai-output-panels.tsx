@@ -5,6 +5,8 @@ import { Check, Clipboard, Loader2, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StandardDataTable } from "@/components/ui/table-variants";
+import type { DataTableColumn } from "@/components/ui/data-table";
 import { ImageGeneratorBoard } from "@/components/listing-ai/image-generator-board";
 import {
   AnalysisCard,
@@ -163,6 +165,15 @@ export function ImagePlanSection({
   ) => void;
   onRunImageGenerator: () => void;
 }) {
+  const imageColumns: DataTableColumn<ListingOptimizationResult["imagePlan"][number]>[] = [
+    { key: "imageNo", header: "No", className: "font-black text-foreground", render: item => item.imageNo },
+    { key: "theme", header: "主题", className: "font-bold text-foreground", render: item => item.theme },
+    { key: "sellingPoint", header: "卖点", className: "text-muted", render: item => item.amplifiedSellingPoint },
+    { key: "copy", header: "文案", className: "text-muted", render: item => item.englishCopy },
+    { key: "status", header: "状态", render: () => <Badge tone="amber">Planned</Badge> },
+    { key: "prompt", header: "Prompt", render: item => <details><summary className="cursor-pointer font-bold text-brand">展开</summary><p className="mt-2 text-xs leading-5 text-muted">{item.enPrompt}</p><p className="mt-2 text-xs leading-5 text-muted">{item.negativePrompt}</p></details> },
+  ];
+
   return (
     <div className="space-y-4">
       {result ? (
@@ -172,54 +183,13 @@ export function ImagePlanSection({
             onCopy={() => copyText("images", formatImages(result))}
             copied={copied === "images"}
           />
-          <Card>
-            <CardContent className="overflow-x-auto p-0">
-              <table className="w-full min-w-[1180px] text-left text-sm">
-                <thead className="bg-surface-muted text-xs font-bold text-muted">
-                  <tr>
-                    <th className="px-4 py-3">No</th>
-                    <th className="px-4 py-3">主题</th>
-                    <th className="px-4 py-3">卖点</th>
-                    <th className="px-4 py-3">文案</th>
-                    <th className="px-4 py-3">状态</th>
-                    <th className="px-4 py-3">Prompt</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {result.imagePlan.map((item) => (
-                    <tr key={`${item.imageNo}-${item.slot}`} className="align-top">
-                      <td className="px-4 py-3 font-black text-foreground">
-                        {item.imageNo}
-                      </td>
-                      <td className="px-4 py-3 font-bold text-foreground">
-                        {item.theme}
-                      </td>
-                      <td className="px-4 py-3 text-muted">
-                        {item.amplifiedSellingPoint}
-                      </td>
-                      <td className="px-4 py-3 text-muted">{item.englishCopy}</td>
-                      <td className="px-4 py-3">
-                        <Badge tone="amber">Planned</Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <details>
-                          <summary className="cursor-pointer font-bold text-brand">
-                            展开
-                          </summary>
-                          <p className="mt-2 text-xs leading-5 text-muted">
-                            {item.enPrompt}
-                          </p>
-                          <p className="mt-2 text-xs leading-5 text-muted">
-                            {item.negativePrompt}
-                          </p>
-                        </details>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </CardContent>
-          </Card>
+          <StandardDataTable
+            rows={result.imagePlan}
+            columns={imageColumns}
+            getRowKey={(item) => `${item.imageNo}-${item.slot}`}
+            ariaLabel="Image Execution Board"
+            className="min-w-[1180px] text-sm"
+          />
         </>
       ) : (
         <EmptyOutput title="Image Execution Board" />
@@ -259,7 +229,7 @@ function EmptyAiState({
           分析、Listing、图片执行表、A+ 和自检结果。
         </p>
         {error ? (
-          <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+          <div className="mt-4 rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm font-medium text-danger-ink">
             {error}
           </div>
         ) : null}
@@ -286,7 +256,7 @@ function OutputHeader({
   copied: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between rounded-lg border border-border bg-white px-5 py-4 shadow-sm">
+    <div className="flex items-center justify-between rounded-lg border border-border bg-surface px-5 py-4 shadow-sm">
       <h2 className="text-lg font-black text-foreground">{title}</h2>
       <Button variant="secondary" size="sm" onClick={onCopy}>
         {copied ? (

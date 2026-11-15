@@ -19,7 +19,7 @@ import {
 } from "@/lib/products/operations-progress";
 import type { ProductOperationProgress, ProductOperationStage, ProductOperationStageEvidence, ProductOperationStageStatus } from "@/lib/products/types";
 
-const inputClass = "h-9 w-full rounded-md border border-border bg-white px-2 text-sm text-foreground outline-none focus:border-brand";
+const inputClass = "h-9 w-full rounded-md border border-border bg-surface px-2 text-sm text-foreground outline-none focus:border-brand";
 
 export function ProductOperationsProgress({
   productName,
@@ -133,7 +133,7 @@ export function ProductOperationsProgress({
 
   return (
     <div className="fixed inset-0 z-40 bg-foreground/40 p-3 backdrop-blur-sm">
-      <div className="mx-auto flex h-full w-full max-w-[1500px] flex-col overflow-hidden rounded-lg bg-white shadow-xl">
+      <div className="mx-auto flex h-full w-full max-w-[1500px] flex-col overflow-hidden rounded-lg bg-surface shadow-xl">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div>
             <div className="flex items-center gap-2">
@@ -350,7 +350,7 @@ function EvidenceUpload({
 
   return (
     <div className="space-y-1">
-      <label className="inline-flex h-8 cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-semibold text-foreground transition-colors hover:bg-surface-muted">
+      <label className="inline-flex h-8 cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-surface px-3 text-xs font-semibold text-foreground transition-colors hover:bg-surface-muted">
         <Icon className="h-4 w-4 text-brand" />
         {uploading ? "上传中" : fileName ? "重新上传" : `上传${label}`}
         <input className="hidden" type="file" accept={accept} disabled={uploading} onChange={(event) => onChange(event.target.files?.[0] ?? null)} />

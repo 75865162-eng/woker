@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AdsScopeBoundary } from "./ads-scope-boundary";
 import { Database, Menu, RefreshCw } from "lucide-react";
 import { AdsAccounts } from "./ads-accounts";
 import { AdsBusinessChanges } from "./ads-business-changes";
 import { reportMetricFields, type ReportCompleteness } from "@/lib/amazon-ads/report-completeness";
+import { workspaceScopeHeaders } from "@/lib/workspace/workspace-scope-store";
 
 type Profile = { profileRecordId: string; amazonProfileId: string; countryCode: string; marketplaceId: string | null; currencyCode: string | null; timezone: string | null; sellerAccountId: string | null; sellerName: string | null };
 type Entity = { id: string; profileId: string; externalId: string; entityType: string; keywordText?: string | null; matchType?: string | null; expressionType?: string | null; targetingExpression?: unknown; campaignId?: string | null; adGroupId?: string | null; parentExternalId?: string | null; name: string | null; state: string | null; budgetAmount: string | null; budgetType: string | null; bid: string | null; targetingType: string | null; startDate: string | null; endDate: string | null; payload: unknown; syncedAt: string; sourceTaskId: string; sourceTask?: { status: string; stage: string } };
@@ -62,9 +64,10 @@ function reportPage(value: unknown): ReportPage {
 }
 
 /** A changed request key hides old rows immediately, before effect cleanup runs. */
+class AdsScopeEmptyError extends Error {}
 function useLocalRead<T>(url: string | null, parse: (body: unknown) => T) {
   const [revision, setRevision] = useState(0);
-  const [result, setResult] = useState<{ key: string; data?: T; error?: string } | null>(null);
+  const [result, setResult] = useState<{ key: string; data?: T; error?: string; scopeEmpty?: boolean } | null>(null);
   const key = `${url}\n${revision}`;
   useEffect(() => {
     if (!url) return;
@@ -73,23 +76,33 @@ function useLocalRead<T>(url: string | null, parse: (body: unknown) => T) {
       controller.abort();
       setResult({ key, error: "本地广告数据读取超时，请重试。" });
     }, 15000);
-    void fetch(url, { cache: "no-store", signal: controller.signal }).then(async response => {
-      if (!response.ok) throw new Error(response.status === 401 ? "登录已过期，请重新登录。" : response.status === 403 ? "没有权限查看此广告范围（403）。" : response.status === 404 ? "记录不存在或不可访问。" : `无法读取本地广告数据（${response.status}）。`);
+    void fetch(url, { cache: "no-store", signal: controller.signal, headers: workspaceScopeHeaders() }).then(async response => {
+      if (!response.ok) {
+        // 没有分配 Amazon 卖家账号是「无数据可见」，不是故障：显示空态而不是错误告警。
+        if (response.status === 403) {
+          const failure = await response.json().catch(() => null) as { code?: string } | null;
+          if (failure?.code === "AMAZON_SCOPE_EMPTY") throw new AdsScopeEmptyError("当前账号未分配 Amazon 卖家账号。");
+        }
+        throw new Error(response.status === 401 ? "登录已过期，请重新登录。" : response.status === 403 ? "没有权限查看此广告范围（403）。" : response.status === 404 ? "记录不存在或不可访问。" : `无法读取本地广告数据（${response.status}）。`);
+      }
       const body: unknown = await response.json().catch(() => { throw new Error("本地数据响应不是有效 JSON。"); });
       const data = parse(body);
       if (!controller.signal.aborted) setResult({ key, data });
     }).catch(error => {
-      if (!controller.signal.aborted) setResult({ key, error: error instanceof Error ? error.message : "无法读取本地广告数据。" });
+      if (controller.signal.aborted) return;
+      if (error instanceof AdsScopeEmptyError) setResult({ key, scopeEmpty: true });
+      else setResult({ key, error: error instanceof Error ? error.message : "无法读取本地广告数据。" });
     }).finally(() => window.clearTimeout(timer));
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [url, key, parse]);
   const current = result?.key === key ? result : null;
-  return { data: current?.data, error: current?.error, loading: !!url && !current, refresh: () => setRevision(value => value + 1) };
+  return { data: current?.data, error: current?.error, scopeEmpty: current?.scopeEmpty, loading: !!url && !current, refresh: () => setRevision(value => value + 1) };
 }
 function url(params: Record<string, string>) {
   return `/api/integrations/amazon/ads/data?${new URLSearchParams({ kind: "entities", pageSize: String(pageSize), sortBy: "name", sortDirection: "asc", ...params })}`;
 }
-function ReadState({ loading, error, empty, retry }: { loading: boolean; error?: string; empty: boolean; retry: () => void }) {
+function ReadState({ loading, error, empty, retry, scopeEmpty }: { loading: boolean; error?: string; empty: boolean; retry: () => void; scopeEmpty?: boolean }) {
+  if (scopeEmpty) return <div className="ads-synced-empty" role="status"><strong>当前账号未分配 Amazon 卖家账号</strong><p>该账号看不到任何 Amazon 广告数据。请联系管理员在「工作区 → Amazon 数据授权」中分配 Seller 数据授权后刷新。</p></div>;
   return loading ? <p role="status" className="ads-synced-empty">正在读取本地广告数据…</p> : error ? <div role="alert" className="ads-synced-error">{error} <button type="button" onClick={retry}>重试</button></div> : empty ? <div className="ads-synced-empty"><strong>没有已保存的记录</strong><p>请检查筛选与同步状态；本地空结果不代表 Amazon 中没有广告。</p></div> : null;
 }
 function Metadata({ data }: { data?: EntityPage }) {
@@ -290,7 +303,11 @@ function AdGroupDetail({ profileId, groupId, navigate }: { profileId: string; gr
   </>;
 }
 
-export function AdsCampaignWorkspace({ path, navigate, onData, onDemo }: { path: string; navigate: (path: string) => void; onData: () => void; onDemo: () => void }) {
+export function AdsCampaignWorkspace(props: { path: string; navigate: (path: string) => void; onData: () => void; onDemo: () => void }) {
+  return <AdsScopeBoundary><AdsCampaignWorkspaceBody {...props} /></AdsScopeBoundary>;
+}
+
+function AdsCampaignWorkspaceBody({ path, navigate, onData, onDemo }: { path: string; navigate: (path: string) => void; onData: () => void; onDemo: () => void }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobile, setMobile] = useState(false);
   const [accounts, setAccounts] = useState(path === "/amazon-ads/accounts");

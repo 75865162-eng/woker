@@ -49,7 +49,7 @@ function assert(condition: unknown, message: string): asserts condition {
   checks += 1;
 }
 function step(name: string) { stage = name; console.log(`→ ${name}`); }
-function text(value: unknown) { return value === null || value === undefined ? '' : String(value); }
+function text(value: unknown) { return String(value ?? ''); }
 
 /** 先按外键依赖顺序删，再对剩余表多轮兜底清理。 */
 async function reset() {

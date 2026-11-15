@@ -70,7 +70,8 @@ export const operationsSections: OperationsSection[] = [
     fields: "交易编号、关联订单、入账时间、状态、收入、退款、佣金、履约费、调整、赔偿与币种；结算报告明细",
     source: "Finances、结算报告、赔偿报告；税务报告与适用发票接口待接入",
     boundary: "财务沿用服务端管理员和范围校验；结算只展示已确认站点归属的行，未知归属隔离。不同来源金额不直接相加，报告发现窗口不等于结算周期。",
-    entries: [{ view: "finance", label: "财务交易" }, { view: "settlements", label: "结算报告" }, { view: "reimbursements", label: "赔偿" }, { view: "finance-ledger", label: "ERP 总账", href: "/operations/finance-ledger" },
+    entries: [      { view: "finance", label: "财务交易" }, { view: "settlements", label: "结算报告" }, { view: "reimbursements", label: "赔偿" }, { view: "finance-ledger", label: "ERP 总账", href: "/operations/finance-ledger" },
+      { view: "settlement-allocations", label: "结算 SKU 分摊", href: "/operations/settlement-allocations" },
       { view: "expense-management", label: "ERP 费用单", href: "/operations/expenses" },
       { view: "tax-invoices", label: "税务与发票", pending: { source: "适用税务报告 / 发票接口", fields: "符合站点及权限条件的税务、发票数据", requirement: "需核验站点、税务身份及接口资格后接入；此入口不申请发票或执行税务动作。" } }],
   },
@@ -116,10 +117,10 @@ export const operationsAdminNav = [["overview", "数据总览"], ["approvals", "
 export function OperationsSectionCards({ navigate }: { navigate: (view: string) => void }) {
   return <section aria-label="经营中台业务板块" className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
     {operationsSections.map((section, index) => <article key={section.id} className="min-w-0 rounded-lg border border-border bg-surface p-4">
-      <p className="text-[10px] font-medium text-muted">板块 {String(index + 1).padStart(2, "0")}</p>
+      <p className="text-label font-medium text-muted">板块 {String(index + 1).padStart(2, "0")}</p>
       <h2 className="mt-1 text-sm font-semibold">{section.label}</h2>
       <p className="mt-2 text-xs leading-relaxed text-muted">{section.fields}</p>
-      <p className="mt-2 text-[11px] leading-relaxed text-muted">主要来源：{section.source}</p>
+      <p className="mt-2 text-label leading-relaxed text-muted">主要来源：{section.source}</p>
       <button type="button" className="mt-3 min-h-9 text-xs font-medium text-brand-dark hover:underline" onClick={() => navigate(section.entries[0].view)}>进入{section.label} →</button>
     </article>)}
   </section>;

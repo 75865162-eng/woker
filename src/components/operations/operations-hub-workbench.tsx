@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, ArrowUpRight, CheckCircle2, ChevronLeft, ChevronRight, CloudCog, LockKeyhole, PackageSearch, RefreshCw, ShieldCheck } from "lucide-react";
+import { AlertCircle, ArrowUpRight, ChevronLeft, ChevronRight, CloudCog, LockKeyhole, PackageSearch, RefreshCw, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { StandardDataTable } from "@/components/ui/table-variants";
+import { type DataTableColumn } from "@/components/ui/data-table";
 import { WorkbenchDialog } from "@/components/ui/workbench-dialog";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
 import { amazonReadDomains, type AmazonReadDomain, type AmazonSyncResource, type DomainFreshnessSummary, type OperationsDailyMetric, type OperationsReadiness, type OperationsSyncRun } from "@/lib/operations/types";
@@ -282,6 +284,29 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true }: 
           : { tone: "amber", label: "未配置" }
     : { tone: "gray", label: loading ? "读取中" : "不可用" };
 
+  const inventoryColumns: DataTableColumn<InventorySnapshot>[] = [
+    { key: "sellerSku", header: "Seller SKU", render: (row) => <span className="font-medium text-foreground">{row.sellerSku}</span> },
+    { key: "asin", header: "ASIN / FNSKU", render: (row) => <>{row.asin || "—"}<span className="block text-xs text-muted">{row.fnSku || row.condition || ""}</span></> },
+    { key: "fulfillable", header: "可售", numeric: true, render: (row) => row.fulfillableQuantity.toLocaleString("zh-CN") },
+    { key: "inbound", header: "入库合计", numeric: true, render: (row) => (row.inboundWorkingQuantity + row.inboundShippedQuantity + row.inboundReceivingQuantity).toLocaleString("zh-CN") },
+    { key: "reserved", header: "预留", numeric: true, render: (row) => row.reservedQuantity.toLocaleString("zh-CN") },
+    { key: "unfulfillable", header: "不可售", numeric: true, render: (row) => row.unfulfillableQuantity.toLocaleString("zh-CN") },
+    { key: "capturedAt", header: "快照时间", render: (row) => <span className="text-xs text-muted">{formatDateTime(row.capturedAt)}</span> },
+    { key: "action", header: "操作", render: (row) => <Button size="sm" variant="secondary" onClick={() => setSelectedInventory(row)}>库存详情</Button> },
+  ];
+  const metricsColumns: DataTableColumn<OperationsDailyMetric>[] = [
+    { key: "date", header: "日期", render: (row) => <span className="text-muted">{row.date}</span> },
+    { key: "sku", header: "SKU / ASIN", render: (row) => <>{row.sku || "—"}<span className="block text-xs text-muted">{row.asin || ""}</span></> },
+    { key: "sales", header: "销售额", numeric: true, cellAttributes: (row) => ({ title: row.fieldNotes.sales ?? undefined }), render: (row) => money(row.sales, row.currency) },
+    { key: "adSpend", header: "广告花费", numeric: true, cellAttributes: (row) => ({ title: row.fieldNotes.adSpend ?? undefined }), render: (row) => money(row.adSpend, row.currency) },
+    { key: "tacos", header: "TACOS", numeric: true, cellAttributes: (row) => ({ title: row.fieldNotes.tacos ?? undefined }), render: (row) => row.tacos === null ? "—" : `${row.tacos.toFixed(2)}%` },
+  ];
+  const runsColumns: DataTableColumn<OperationsSyncRun>[] = [
+    { key: "resource", header: "数据域", render: (run) => <span className="font-medium text-foreground">{resourceLabel(run.resource)}</span> },
+    { key: "status", header: "状态", render: (run) => { const badge = runBadge(run.status); return <Badge tone={badge.tone}>{badge.label}</Badge>; } },
+    { key: "startedAt", header: "请求时间", render: (run) => <span className="text-muted">{formatDateTime(run.startedAt)}</span> },
+    { key: "result", header: "结果 / 失败原因", render: (run) => <>{run.error || (run.status === "SUCCEEDED" ? "同步成功" : "等待执行结果")}<details className="mt-1 text-xs"><summary>运行详情</summary><p>{run.id} · 耗时：{run.finishedAt ? `${Math.max(0, Math.round((Date.parse(run.finishedAt) - Date.parse(run.startedAt)) / 1000))} 秒` : "执行中"}</p><pre className="whitespace-pre-wrap">{JSON.stringify(run.summary, null, 2)}</pre></details></> },
+  ];
   return (
     <div className="space-y-5">
       {embeddedTab && ["inventory", "ads"].includes(embeddedTab) && <div className="flex justify-end"><Button size="sm" variant="secondary" onClick={() => void refreshAll()}>刷新数据</Button></div>}
@@ -295,7 +320,7 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true }: 
       {tab === "orders" && <section className="border border-border p-5"><h3 className="text-sm font-bold">Amazon 订单</h3><p className="mt-2 text-sm text-muted">订单列表、商品明细和同步进度统一在订单管理查看。</p><a className="mt-3 inline-block text-sm text-brand hover:underline" href="/operations?view=orders">打开订单管理</a></section>}
 
       {notice ? (
-        <div className="flex items-start gap-3 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
+        <div className="flex items-start gap-3 border border-warning-ink/30 bg-warning-soft px-4 py-3 text-sm text-warning-ink" role="status">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <p>{notice}</p>
         </div>
@@ -322,9 +347,9 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true }: 
         </div>
 
         {!readiness?.connection.runtimeConfiguration.configured ? (
-          <div className="mt-4 flex flex-wrap items-start gap-3 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="mt-4 flex flex-wrap items-start gap-3 border border-warning-ink/30 bg-warning-soft px-4 py-3 text-sm text-warning-ink">
             <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" />
-            <div><p className="font-semibold">等待服务端 SP-API 配置</p><p className="mt-1 text-xs text-amber-800">页面只显示缺少的变量名，不会读取密钥值。</p><div className="mt-2 flex flex-wrap gap-2">{readiness?.connection.runtimeConfiguration.missingEnvironmentVariables.map((key) => <code key={key} className="border border-amber-200 bg-white px-2 py-1 text-xs">{key}</code>)}</div></div>
+            <div><p className="font-semibold">等待服务端 SP-API 配置</p><p className="mt-1 text-xs text-warning-ink">页面只显示缺少的变量名，不会读取密钥值。</p><div className="mt-2 flex flex-wrap gap-2">{readiness?.connection.runtimeConfiguration.missingEnvironmentVariables.map((key) => <code key={key} className="border border-warning-ink/30 bg-surface px-2 py-1 text-xs">{key}</code>)}</div></div>
           </div>
         ) : null}
 
@@ -335,7 +360,7 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true }: 
             const summary = readiness?.domains?.[domain];
             const badge = summary ? freshnessBadge(summary.status) : { tone: "gray" as const, label: "读取中" };
             return (
-              <div key={domain} className="min-h-28 bg-white p-4">
+              <div key={domain} className="min-h-28 bg-surface p-4">
                 <div className="flex items-center justify-between gap-2"><p className="text-sm font-bold text-foreground">{resourceLabel(domain)}</p><Badge tone={badge.tone}>{badge.label}</Badge></div>
                 <p className="mt-2 text-xs text-muted">{summary?.source ?? (domain === "inventory" ? "Amazon SP-API" : domain === "ads" ? "现有 PPC 模块" : "Amazon SP-API")}</p>
                 <p className="mt-1 text-xs text-muted">{freshnessReason(summary ?? { resource: domain, status: "NOT_SYNCED", source: null, syncRunId: null, lastSuccessAt: null, lastAttemptAt: null, lastAttemptStatus: null, lastAttemptError: null, reason: "状态读取中。", recommendedAction: null })}</p>
@@ -349,7 +374,7 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true }: 
         <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <p className="text-xs text-muted">Marketplace：{readiness?.connection.marketplaceParticipations.map((item) => `${item.countryCode} (${item.marketplaceId})`).join("、") || "尚未验证"}</p>
           <div className="flex flex-wrap items-end gap-2">
-            <label className="grid gap-1 text-xs font-semibold text-muted">同步域<select value={selectedResource} onChange={(event) => setSelectedResource(event.target.value as AmazonReadDomain)} className="h-9 min-w-36 border border-border bg-white px-2 text-sm font-medium text-foreground"><option value="inventory">库存</option>{amazonReadDomains.filter((domain) => domain !== "inventory").map((domain) => <option key={domain} value={domain}>{resourceLabel(domain)}</option>)}</select></label>
+            <label className="grid gap-1 text-xs font-semibold text-muted">同步域<select value={selectedResource} onChange={(event) => setSelectedResource(event.target.value as AmazonReadDomain)} className="h-9 min-w-36 border border-border bg-surface px-2 text-sm font-medium text-foreground"><option value="inventory">库存</option>{amazonReadDomains.filter((domain) => domain !== "inventory").map((domain) => <option key={domain} value={domain}>{resourceLabel(domain)}</option>)}</select></label>
             <Button size="sm" onClick={() => void requestSync()} disabled={requesting}><ShieldCheck className="h-4 w-4" />{requesting ? "提交中..." : "请求只读同步"}</Button>
           </div>
         </div>
@@ -360,8 +385,8 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true }: 
           <div><div className="flex items-center gap-2"><PackageSearch className="h-4 w-4 text-brand" /><h3 className="text-sm font-bold text-foreground">Amazon 库存快照</h3><Badge tone={freshnessBadge(readiness?.inventory.status === "FRESH" ? "FRESH" : readiness?.inventory.status === "STALE" ? "STALE" : "NOT_SYNCED").tone}>{readiness?.inventory.status === "FRESH" ? "新鲜" : readiness?.inventory.status === "STALE" ? "已过期" : "未同步"}</Badge></div>
             <p className="mt-1 text-xs text-muted">可售 {inventoryQuantity(readiness?.inventory.fulfillableQuantity)} · 入库合计 {inventoryQuantity(readiness?.inventory.inboundQuantity)} · 预留 {inventoryQuantity(readiness?.inventory.reservedQuantity)} · 不可售 {inventoryQuantity(readiness?.inventory.unfulfillableQuantity)}</p>
             <p className="mt-1 text-xs text-muted">Amazon 快照时间：{formatDateTime(readiness?.inventory.capturedAt ?? null)} · 新鲜度沿用服务端阈值 · {readiness?.inventory.snapshotCount.toLocaleString("zh-CN") ?? 0} 个 SKU</p>
-            {readiness?.domains.inventory.reason ? <p className="mt-1 text-xs text-amber-800">{readiness.domains.inventory.reason} {readiness.domains.inventory.recommendedAction}</p> : null}
-            {readiness?.domains.inventory.lastAttemptError ? <p className="mt-1 text-xs text-red-700">最近同步失败：{readiness.domains.inventory.lastAttemptError}</p> : null}
+            {readiness?.domains.inventory.reason ? <p className="mt-1 text-xs text-warning-ink">{readiness.domains.inventory.reason} {readiness.domains.inventory.recommendedAction}</p> : null}
+            {readiness?.domains.inventory.lastAttemptError ? <p className="mt-1 text-xs text-danger-ink">最近同步失败：{readiness.domains.inventory.lastAttemptError}</p> : null}
           </div>
           <Button size="sm" onClick={() => void requestSync("inventory")} disabled={requesting || !canSync}>立即同步库存</Button>
           <form className="flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); setInventoryPage(1); setInventorySku(inventorySkuInput.trim()); }}>
@@ -369,13 +394,15 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true }: 
             <Button size="sm" variant="secondary" type="submit"><PackageSearch className="h-4 w-4" />查询</Button>
           </form>
         </div>
-        {inventoryError && <p role="alert" className="mt-3 text-sm text-red-700">{inventoryError}</p>}
-        <div className="mt-4 overflow-x-auto border border-border">
-          <table aria-label="Amazon 库存快照" className="w-full min-w-[760px] text-left text-sm">
-            <thead className="border-b border-border bg-surface-muted text-xs text-muted"><tr><th className="px-3 py-2.5">Seller SKU</th><th className="px-3 py-2.5">ASIN / FNSKU</th><th className="px-3 py-2.5 text-right">可售</th><th className="px-3 py-2.5 text-right">入库合计</th><th className="px-3 py-2.5 text-right">预留</th><th className="px-3 py-2.5 text-right">不可售</th><th className="px-3 py-2.5">快照时间</th><th className="px-3 py-2.5">操作</th></tr></thead>
-            <tbody>{inventory?.rows.length ? inventory.rows.map((row) => <tr key={row.id} className="border-b border-border last:border-0"><td className="px-3 py-2.5 font-medium text-foreground">{row.sellerSku}</td><td className="px-3 py-2.5 text-muted">{row.asin || "—"}<span className="block text-xs">{row.fnSku || row.condition || ""}</span></td><td className="px-3 py-2.5 text-right tabular-nums">{row.fulfillableQuantity.toLocaleString("zh-CN")}</td><td className="px-3 py-2.5 text-right tabular-nums">{(row.inboundWorkingQuantity + row.inboundShippedQuantity + row.inboundReceivingQuantity).toLocaleString("zh-CN")}</td><td className="px-3 py-2.5 text-right tabular-nums">{row.reservedQuantity.toLocaleString("zh-CN")}</td><td className="px-3 py-2.5 text-right tabular-nums">{row.unfulfillableQuantity.toLocaleString("zh-CN")}</td><td className="px-3 py-2.5 text-xs text-muted">{formatDateTime(row.capturedAt)}</td><td className="px-3 py-2.5"><Button size="sm" variant="secondary" onClick={() => setSelectedInventory(row)}>库存详情</Button></td></tr>) : <tr><td colSpan={8} className="px-3 py-8 text-center text-sm text-muted">{inventoryLoading ? "读取库存快照中..." : inventorySku ? "当前成功快照中没有匹配 SKU。" : "当前工作区暂无成功库存快照。"}</td></tr>}</tbody>
-          </table>
-        </div>
+        {inventoryError && <p role="alert" className="mt-3 text-sm text-danger-ink">{inventoryError}</p>}
+        <StandardDataTable
+          className="mt-4"
+          ariaLabel="Amazon 库存快照"
+          rows={inventory?.rows ?? []}
+          getRowKey={(row) => row.id}
+          columns={inventoryColumns}
+          empty={inventoryLoading ? "读取库存快照中..." : inventorySku ? "当前成功快照中没有匹配 SKU。" : "当前工作区暂无成功库存快照。"}
+        />
         <div className="mt-3 flex items-center justify-end gap-2 text-xs text-muted"><span>{inventory?.pagination.total ?? 0} 条 · 第 {inventory?.pagination.page ?? inventoryPage} / {Math.max(inventory?.pagination.pageCount ?? 0, 1)} 页</span><Button variant="secondary" size="sm" aria-label="上一页库存" onClick={() => setInventoryPage((page) => Math.max(1, page - 1))} disabled={inventoryPage <= 1 || inventoryLoading}><ChevronLeft className="h-4 w-4" /></Button><Button variant="secondary" size="sm" aria-label="下一页库存" onClick={() => setInventoryPage((page) => page + 1)} disabled={inventoryLoading || (inventory?.pagination.pageCount ?? 0) <= inventoryPage}><ChevronRight className="h-4 w-4" /></Button></div>
       </section>}
 
@@ -396,24 +423,28 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true }: 
             <Button size="sm" variant="secondary" type="submit">查询</Button>
           </form>
         </div>
-        <div className="mt-4 overflow-x-auto border border-border">
-          <table className="w-full min-w-[700px] text-left text-sm">
-            <thead className="border-b border-border bg-surface-muted text-xs text-muted"><tr><th className="px-3 py-2.5">日期</th><th className="px-3 py-2.5">SKU / ASIN</th><th className="px-3 py-2.5 text-right">销售额</th><th className="px-3 py-2.5 text-right">广告花费</th><th className="px-3 py-2.5 text-right">TACOS</th></tr></thead>
-            <tbody>{metrics?.rows.length ? metrics.rows.map((row, index) => <tr key={`${row.date}:${row.sku}:${row.asin}:${row.currency}:${index}`} className="border-b border-border last:border-0"><td className="px-3 py-2.5 text-muted">{row.date}</td><td className="px-3 py-2.5 font-medium text-foreground">{row.sku || "—"}<span className="block text-xs text-muted">{row.asin || ""}</span></td><td className="px-3 py-2.5 text-right tabular-nums" title={row.fieldNotes.sales ?? undefined}>{money(row.sales, row.currency)}</td><td className="px-3 py-2.5 text-right tabular-nums" title={row.fieldNotes.adSpend ?? undefined}>{money(row.adSpend, row.currency)}</td><td className="px-3 py-2.5 text-right tabular-nums" title={row.fieldNotes.tacos ?? undefined}>{row.tacos === null ? "—" : `${row.tacos.toFixed(2)}%`}</td></tr>) : <tr><td colSpan={5} className="px-3 py-8 text-center text-sm text-muted">{metricsLoading ? "读取经营指标中..." : metrics?.emptyReason ?? "当前日期范围没有可读取指标。"}</td></tr>}</tbody>
-          </table>
-        </div>
+        <StandardDataTable
+          className="mt-4"
+          ariaLabel="经营指标 · 广告 × 销量"
+          rows={metrics?.rows ?? []}
+          getRowKey={(row) => `${row.date}:${row.sku}:${row.asin}:${row.currency}`}
+          columns={metricsColumns}
+          empty={metricsLoading ? "读取经营指标中..." : metrics?.emptyReason ?? "当前日期范围没有可读取指标。"}
+        />
         <div className="mt-3 flex items-center justify-end gap-2 text-xs text-muted"><span>第 {metricPage} 页</span><Button variant="secondary" size="sm" aria-label="上一页经营指标" onClick={() => setMetricPage((page) => Math.max(1, page - 1))} disabled={metricPage <= 1 || metricsLoading}><ChevronLeft className="h-4 w-4" /></Button><Button variant="secondary" size="sm" aria-label="下一页经营指标" onClick={() => setMetricPage((page) => page + 1)} disabled={metricsLoading || !metrics?.pagination.hasNextPage}><ChevronRight className="h-4 w-4" /></Button></div>
       </section>}
 
       {["overview", "sync", "runs"].includes(tab) && <section>
         <div className="flex items-center gap-2"><h3 className="text-sm font-bold text-foreground">同步历史</h3><span className="text-xs text-muted">最近 {readiness?.runs.length ?? 0} 条</span></div>
         <div className="mt-3 flex flex-wrap gap-2 text-xs"><select aria-label="历史数据域" value={runResource} onChange={(e) => setRunResource(e.target.value)}><option value="">全部域</option>{amazonReadDomains.map((domain) => <option key={domain} value={domain}>{resourceLabel(domain)}</option>)}</select><select aria-label="历史状态" value={runStatus} onChange={(e) => setRunStatus(e.target.value)}><option value="">全部状态</option>{["SUCCEEDED", "FAILED", "BLOCKED", "QUEUED", "RUNNING"].map((status) => <option key={status}>{status}</option>)}</select><input aria-label="历史开始日期" type="date" value={runDate} onChange={(e) => setRunDate(e.target.value)} /><span className="text-muted">筛选最近 20 次运行</span></div>
-        <div className="mt-3 overflow-x-auto border border-border">
-          <table className="w-full min-w-[700px] text-left text-sm">
-            <thead className="border-b border-border bg-surface-muted text-xs text-muted"><tr><th className="px-3 py-2.5">数据域</th><th className="px-3 py-2.5">状态</th><th className="px-3 py-2.5">请求时间</th><th className="px-3 py-2.5">结果 / 失败原因</th></tr></thead>
-            <tbody>{readiness?.runs.length ? readiness.runs.filter((run) => (!runResource || run.resource === runResource) && (!runStatus || run.status === runStatus) && (!runDate || run.startedAt.slice(0, 10) >= runDate) && (tab !== "overview" || run.status === "FAILED" || run.status === "BLOCKED")).map((run) => { const badge = runBadge(run.status); return <tr key={run.id} className="border-b border-border last:border-0"><td className="px-3 py-2.5 font-medium text-foreground">{resourceLabel(run.resource)}</td><td className="px-3 py-2.5"><Badge tone={badge.tone}>{badge.label}</Badge></td><td className="px-3 py-2.5 text-muted">{formatDateTime(run.startedAt)}</td><td className="max-w-xl px-3 py-2.5 text-muted">{run.error || (run.status === "SUCCEEDED" ? "同步成功" : "等待执行结果")}<details className="mt-1 text-xs"><summary>运行详情</summary><p>{run.id} · 耗时：{run.finishedAt ? `${Math.max(0, Math.round((Date.parse(run.finishedAt) - Date.parse(run.startedAt)) / 1000))} 秒` : "执行中"}</p><pre className="whitespace-pre-wrap">{JSON.stringify(run.summary, null, 2)}</pre></details></td></tr>; }) : <tr><td colSpan={4} className="px-3 py-8 text-center text-sm text-muted"><CheckCircle2 className="mx-auto mb-2 h-5 w-5" />{loading ? "读取同步历史中..." : "暂无同步记录。"}</td></tr>}</tbody>
-          </table>
-        </div>
+        <StandardDataTable
+          className="mt-3"
+          ariaLabel="同步历史"
+          rows={readiness?.runs.filter((run) => (!runResource || run.resource === runResource) && (!runStatus || run.status === runStatus) && (!runDate || run.startedAt.slice(0, 10) >= runDate) && (tab !== "overview" || run.status === "FAILED" || run.status === "BLOCKED")) ?? []}
+          getRowKey={(run) => run.id}
+          columns={runsColumns}
+          empty={loading ? "读取同步历史中..." : "暂无同步记录。"}
+        />
       </section>}
     </div>
   );

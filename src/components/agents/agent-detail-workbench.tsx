@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CheckCircle2, Database, FileText, RefreshCw, ShieldX } from "lucide-react";
 import { PrefetchLink } from "@/components/app-shell/prefetch-link";
+import { DetailPageTemplate } from "@/components/templates/page-templates";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAppShellUser } from "@/components/app-shell/app-shell-context";
@@ -172,8 +173,7 @@ export function AgentDetailWorkbench({ agentId }: { agentId: string }) {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4">
-      <div className="flex items-center justify-between gap-3">
+    <DetailPageTemplate className="mx-auto max-w-5xl" header={<div className="flex items-center justify-between gap-3">
         <PrefetchLink href="/agents">
           <Button type="button" size="sm" variant="secondary">
             <ArrowLeft className="h-4 w-4" />
@@ -184,12 +184,11 @@ export function AgentDetailWorkbench({ agentId }: { agentId: string }) {
           <RefreshCw className="h-4 w-4" />
           刷新
         </Button>
-      </div>
-
+      </div>} >
       <Card>
         <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <CardTitle>{agent?.name ?? agentId}</CardTitle>
+            <CardTitle className="text-section">{agent?.name ?? agentId}</CardTitle>
             <p className="mt-1 max-w-3xl text-xs font-medium text-muted">{agent?.description ?? "-"}</p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -198,8 +197,8 @@ export function AgentDetailWorkbench({ agentId }: { agentId: string }) {
             <Badge tone={statusTone(latestExecution?.status)}>{latestExecution?.status ?? "暂无运行"}</Badge>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {error ? <div className="rounded-md border border-danger/30 bg-red-50 px-3 py-2 text-sm font-semibold text-danger">{error}</div> : null}
+        <CardContent className="space-y-[var(--gap-section)]">
+          {error ? <div className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm font-semibold text-danger">{error}</div> : null}
 
           <section className="grid gap-3 md:grid-cols-2">
             <div className="rounded-md border border-border bg-surface-muted px-3 py-2.5">
@@ -238,13 +237,13 @@ export function AgentDetailWorkbench({ agentId }: { agentId: string }) {
           <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
             <Card>
               <CardHeader>
-                <CardTitle>执行</CardTitle>
+                <CardTitle className="text-section">执行</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 {latestExecution?.traces?.length ? (
                   latestExecution.traces.slice(0, 8).map((trace) => (
                     <div key={trace.id} className="flex items-start gap-3 rounded-md border border-border px-3 py-2">
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success-ink" />
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-foreground">{trace.message ?? trace.type}</div>
                         <div className="mt-1 text-xs font-medium text-muted">{trace.type} · {formatDate(trace.createdAt)}</div>
@@ -259,7 +258,7 @@ export function AgentDetailWorkbench({ agentId }: { agentId: string }) {
 
             <Card>
               <CardHeader>
-                <CardTitle>工具</CardTitle>
+                <CardTitle className="text-section">工具</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 {(data?.tools ?? []).length ? (
@@ -287,7 +286,7 @@ export function AgentDetailWorkbench({ agentId }: { agentId: string }) {
 
           <Card>
             <CardHeader className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-              <CardTitle>证据</CardTitle>
+              <CardTitle className="text-section">证据</CardTitle>
               <Badge tone="gray">{evidence.length} 条</Badge>
             </CardHeader>
             <CardContent className="space-y-2">
@@ -301,7 +300,7 @@ export function AgentDetailWorkbench({ agentId }: { agentId: string }) {
 
           <Card>
             <CardHeader>
-              <CardTitle>审批动作</CardTitle>
+              <CardTitle className="text-section">审批动作</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {latestApproval ? (
@@ -342,7 +341,7 @@ export function AgentDetailWorkbench({ agentId }: { agentId: string }) {
 
           <Card>
             <CardHeader>
-              <CardTitle>执行历史</CardTitle>
+              <CardTitle className="text-section">执行历史</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {(data?.executions ?? []).length ? (
@@ -366,7 +365,7 @@ export function AgentDetailWorkbench({ agentId }: { agentId: string }) {
           {latestExecution?.toolCalls?.length ? (
             <Card>
               <CardHeader>
-                <CardTitle>工具执行</CardTitle>
+                <CardTitle className="text-section">工具执行</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 {latestExecution.toolCalls.map((toolCall) => (
@@ -383,13 +382,13 @@ export function AgentDetailWorkbench({ agentId }: { agentId: string }) {
           ) : null}
         </CardContent>
       </Card>
-    </div>
+    </DetailPageTemplate>
   );
 }
 
 function InfoPanel({ title, value }: { title: string; value: string }) {
   return (
-    <div className="rounded-md border border-border bg-white p-4">
+    <div className="rounded-md border border-border bg-surface p-4">
       <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-muted">
         {title === "证据" ? <Database className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
         {title}

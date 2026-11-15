@@ -25,12 +25,42 @@ type TeamAccountsResponse = {
 };
 
 const REQUEST_CACHE_TTL_MS = 5000;
+/** 查询结果缓存的条数上限，超出后淘汰最久未命中的键。 */
+const QUERY_CACHE_LIMIT = 60;
 const workspacesCache = new Map<string, CachedResponse<WorkspacesResponse>>();
 const workspacesInflight = new Map<string, Promise<WorkspacesResponse>>();
 const teamAccountsCache = new Map<string, CachedResponse<TeamAccountsResponse>>();
 const teamAccountsInflight = new Map<string, Promise<TeamAccountsResponse>>();
+const queryCache = new Map<string, CachedResponse<unknown>>();
 let identityScope = "unbound";
 let cacheGeneration = 0;
+
+export function workspaceApiCacheToken() { return `${identityScope}:${cacheGeneration}`; }
+
+function queryCacheKey(key: string) {
+  return `${identityScope}:${cacheGeneration}:${key}`;
+}
+
+/** 读取快照：命中后把它移到队尾，实现 LRU。没有过期时间——调用方先出内容再后台校验。 */
+export function readWorkspaceApiQuery<T>(key: string): CachedResponse<T> | null {
+  const fullKey = queryCacheKey(key);
+  const hit = queryCache.get(fullKey);
+  if (!hit) return null;
+  queryCache.delete(fullKey);
+  queryCache.set(fullKey, hit);
+  return hit as CachedResponse<T>;
+}
+
+export function writeWorkspaceApiQuery<T>(key: string, data: T) {
+  const fullKey = queryCacheKey(key);
+  queryCache.delete(fullKey);
+  queryCache.set(fullKey, { cachedAt: Date.now(), data });
+  while (queryCache.size > QUERY_CACHE_LIMIT) {
+    const oldest = queryCache.keys().next();
+    if (oldest.done) break;
+    queryCache.delete(oldest.value);
+  }
+}
 
 export function setWorkspaceApiCacheScope(scope: string) {
   if (scope === identityScope) return;
@@ -52,6 +82,7 @@ export function invalidateWorkspaceApiCache() {
   workspacesInflight.clear();
   teamAccountsCache.clear();
   teamAccountsInflight.clear();
+  queryCache.clear();
 }
 
 export async function fetchWorkspacesCached(options?: { signal?: AbortSignal; force?: boolean }) {

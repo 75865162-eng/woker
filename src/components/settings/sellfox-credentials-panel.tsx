@@ -80,7 +80,7 @@ export function SellfoxCredentialsPanel() {
       if (!controller.signal.aborted && generation === epoch.current) setTesting(false);
     }
   }
-  return <section id="sellfox-credentials" className="scroll-mt-4 space-y-3 rounded-lg border border-border bg-white p-5">
+  return <section id="sellfox-credentials" className="scroll-mt-4 space-y-3 rounded-lg border border-border bg-surface p-5">
     {status ? <>
       <fieldset disabled={testing} className="min-w-0">
         <SellfoxCredentialsForm key={`${status.scope.organizationId}:${status.scope.workspaceId}`} configured={status.configured} canEdit={status.canEdit} encryptionReady={status.encryptionReady && status.storageReady} scopeLabel={`${status.scope.organizationId} / ${status.scope.workspaceId}`} onSave={save} />
@@ -88,15 +88,15 @@ export function SellfoxCredentialsPanel() {
       <div className="space-y-2">
         <Button type="button" variant="secondary" size="sm" disabled={!status.canEdit || !status.configured || saving || testing} onClick={() => void testConnection()}>{testing ? "正在测试连接…" : "测试连接"}</Button>
         <p className="text-xs text-muted">测试已保存的凭据；修改输入框后请先保存。点击后仅请求赛狐 Token，不读取业务数据或启动同步，每分钟限一次。</p>
-        {testResult && <p role={testResult.passed ? "status" : "alert"} className={testResult.passed ? "text-sm text-emerald-700" : "text-sm text-red-700"}>{testResult.message}</p>}
+        {testResult && <p role={testResult.passed ? "status" : "alert"} className={testResult.passed ? "text-sm text-success-ink" : "text-sm text-danger-ink"}>{testResult.message}</p>}
       </div>
       <p className="text-xs text-muted">来源：{status.source === "database" ? "工作区加密配置" : status.source === "environment" ? "现有服务端环境变量" : "尚未配置"} · 版本 {status.revision}{status.updatedAt ? ` · 更新时间 ${new Date(status.updatedAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}` : ""}</p>
-      {status.configurationError && <p role="alert" className="text-xs text-red-700">{status.configurationError}</p>}
-      {!status.storageReady && <p role="alert" className="text-xs text-amber-800">凭据表尚未就绪，请管理员按审批流程应用当前版本迁移。页面不会自动执行迁移。</p>}
-      {!status.encryptionReady && <p className="text-xs text-amber-800">服务端需配置 SELLFOX_CREDENTIAL_ENCRYPTION_KEY（32 字节 Base64）；不要替换已有主密钥。主密钥不在此表单输入。</p>}
+      {status.configurationError && <p role="alert" className="text-xs text-danger-ink">{status.configurationError}</p>}
+      {!status.storageReady && <p role="alert" className="text-xs text-warning-ink">凭据表尚未就绪，请管理员按审批流程应用当前版本迁移。页面不会自动执行迁移。</p>}
+      {!status.encryptionReady && <p className="text-xs text-warning-ink">服务端需配置 SELLFOX_CREDENTIAL_ENCRYPTION_KEY（32 字节 Base64）；不要替换已有主密钥。主密钥不在此表单输入。</p>}
       <p className="text-xs text-muted">新凭据用于后续任务，正在运行的任务继续使用启动时版本，不会因保存而自动重启。</p>
     </> : <><h2 className="text-sm font-semibold">赛狐 Open API 凭据</h2>{!error && <p className="text-xs text-muted">正在读取当前工作区配置…</p>}</>}
-    {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+    {error && <p role="alert" className="text-sm text-danger-ink">{error}</p>}
     <Button variant="secondary" size="sm" type="button" disabled={saving} onClick={() => setRefresh(value => value + 1)}>重新读取配置</Button>
   </section>;
 }

@@ -68,7 +68,7 @@ export function FreightEstimator() {
         <Metric label="货物总毛重" value={estimate.value?.actualWeightKg ? `${estimate.value.actualWeightKg} kg` : "--"} />
         <Metric label="参考运费" value={estimate.value ? `${estimate.value.currency} ${estimate.value.estimatedFreight}` : "--"} />
       </div>
-      {touched && estimate.error && <p role="status" className="text-sm text-amber-800">{estimate.error}</p>}
+      {touched && estimate.error && <p role="status" className="text-sm text-warning-ink">{estimate.error}</p>}
       <p className="text-xs text-muted">结果为本地估算，不含最低收费、附加费、税费或汇率换算；不代表货代报价、Amazon 费用或已发生的物流成本。</p>
     </CardContent>
   </Card><FbaStorageEstimator /></div>;
@@ -104,7 +104,7 @@ function FbaStorageEstimator() {
         <Metric label="计费体积" value={estimate.value ? `${estimate.value.volumeCubicFeet} ft³` : "--"} />
         <Metric label="估算仓储费" value={estimate.value ? `${estimate.value.currency} ${estimate.value.estimatedFee}` : "--"} />
       </div>
-      {touched && estimate.error && <p role="status" className="text-sm text-amber-800">{estimate.error}</p>}
+      {touched && estimate.error && <p role="status" className="text-sm text-warning-ink">{estimate.error}</p>}
       <p className="text-xs text-muted">沿用 Wimoor 的立方英寸换算和月费乘积公式；不含季节、库龄、站点费率规则或 Amazon 实际账单，结果不会写入财务账。</p>
     </CardContent>
   </Card>;

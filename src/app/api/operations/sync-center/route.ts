@@ -47,7 +47,7 @@ import { requestChange, approvalSelect } from "@/lib/amazon-sync/change-approval
 export const runtime = "nodejs";
 function json(value: unknown, status = 200) { return NextResponse.json(value, { status, headers: { "Cache-Control": "no-store" } }); }
 function fail(error: unknown) {
-  if (error instanceof SyncInputError) return json({ error: error.message, ...(error instanceof AmazonReadError ? { code: error.businessCode } : error instanceof AmazonCloudExecutionError || error instanceof AmazonCloudRelayError ? { code: error.code } : {}) }, error.status);
+  if (error instanceof SyncInputError) return json({ error: error.message, ...(error instanceof AmazonReadError ? { code: error.businessCode } : error instanceof AmazonCloudExecutionError || error instanceof AmazonCloudRelayError ? { code: error.code } : error.code ? { code: error.code } : {}) }, error.status);
   if (error && typeof error === "object" && "code" in error && error.code === "P2002") return json({ error: "数据已存在或有活动任务冲突，请刷新。" }, 409);
   return json({ error: "同步中心请求失败，请检查数据库、加密配置或 Amazon 授权。未返回内部错误或凭证。" }, 500);
 }

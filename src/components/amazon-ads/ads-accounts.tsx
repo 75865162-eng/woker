@@ -1,8 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
+import { AdsScopeBoundary, useAdsScopeCurrent } from "./ads-scope-boundary";
 import { Link2, Pause, Play, RefreshCw, ShieldCheck } from "lucide-react";
 import { AdsButton } from "./ads-controls";
 import { amazonAdsTokenExpiryNotice } from "@/lib/amazon-ads/token-expiry";
+import { workspaceScopeHeaders } from "@/lib/workspace/workspace-scope-store";
 
 type Profile = {
   id: string; authorizationId: string; region: string; profileId: string; advertiserAccountId: string | null; advertiserAccountRevision: number; countryCode: string;
@@ -23,6 +25,11 @@ type TaskDetail = { id: string; planId: string; profileId: string; status: strin
 const formatSyncDate = (value: string | null) => value ? new Intl.DateTimeFormat("zh-CN", { dateStyle: "short", timeStyle: "short" }).format(new Date(value)) : "—";
 
 export function AdsAccounts() {
+  return <AdsScopeBoundary><AdsAccountsBody /></AdsScopeBoundary>;
+}
+
+function AdsAccountsBody() {
+  const isScopeCurrent = useAdsScopeCurrent();
   const [data, setData] = useState<Payload | null>(null);
   const [syncData, setSyncData] = useState<SyncPayload | null>(null);
   const [taskDetail, setTaskDetail] = useState<TaskDetail | null>(null);
@@ -43,11 +50,12 @@ export function AdsAccounts() {
     return notice ? [{ id: profile.authorizationId, expiresAt: profile.authorization.refreshTokenExpiresAt, ...notice }] : [];
   }) : [];
   async function load() {
+    if (!isScopeCurrent()) return;
     setError(""); setLoading(true);
     try {
       const [response, syncResponse] = await Promise.all([
-        fetch("/api/integrations/amazon/ads/profiles", { cache: "no-store" }),
-        fetch(syncUrl(taskPage, taskStatus, taskProfile), { cache: "no-store" }),
+        fetch("/api/integrations/amazon/ads/profiles", { cache: "no-store", headers: workspaceScopeHeaders() }),
+        fetch(syncUrl(taskPage, taskStatus, taskProfile), { cache: "no-store", headers: workspaceScopeHeaders() }),
       ]);
       const [payload, syncPayload] = await Promise.all([
         response.json() as Promise<Payload & { error?: string }>,
@@ -66,9 +74,10 @@ export function AdsAccounts() {
     return `/api/integrations/amazon/ads/sync?${params.toString()}`;
   }
   async function loadTaskHistory(page: number, status = taskStatus, profileId = taskProfile) {
+    if (!isScopeCurrent()) return;
     setSyncLoading(true); setError("");
     try {
-      const response = await fetch(syncUrl(page, status, profileId), { cache: "no-store" });
+      const response = await fetch(syncUrl(page, status, profileId), { cache: "no-store", headers: workspaceScopeHeaders() });
       const payload = await response.json() as SyncPayload & { error?: string };
       if (!response.ok) throw new Error(payload.error ?? "无法加载同步任务历史。");
       setSyncData(payload); setTaskPage(page); setTaskStatus(status); setTaskProfile(profileId);
@@ -79,19 +88,21 @@ export function AdsAccounts() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void load(); }, []);
   async function authorize() {
+    if (!isScopeCurrent()) return;
     setBusy(true); setError("");
     try {
-      const response = await fetch("/api/integrations/amazon/ads/oauth/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ region }) });
+      const response = await fetch("/api/integrations/amazon/ads/oauth/start", { method: "POST", headers: workspaceScopeHeaders(true), body: JSON.stringify({ region }) });
       const payload = await response.json() as { consentUrl?: string; error?: string };
       if (!response.ok || !payload.consentUrl) throw new Error(payload.error ?? "无法开始 Amazon Ads 授权。");
-      window.location.assign(payload.consentUrl);
+      if (isScopeCurrent()) window.location.assign(payload.consentUrl);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "无法开始 Amazon Ads 授权。"); setBusy(false); }
   }
   async function disconnect(authorizationId: string) {
+    if (!isScopeCurrent()) return;
     if (!window.confirm("断开此 Amazon Ads 授权？同步任务将停止，已保存的历史数据会保留。")) return;
     setError(""); setMessage(""); setBusy(true);
     try {
-      const response = await fetch("/api/integrations/amazon/ads/profiles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "disconnect", authorizationId }) });
+      const response = await fetch("/api/integrations/amazon/ads/profiles", { method: "POST", headers: workspaceScopeHeaders(true), body: JSON.stringify({ action: "disconnect", authorizationId }) });
       const payload = await response.json() as { error?: string };
       if (!response.ok) throw new Error(payload.error ?? "无法断开 Amazon Ads 授权。");
       setMessage("Amazon Ads 授权已断开；历史数据已保留。");
@@ -100,9 +111,10 @@ export function AdsAccounts() {
     finally { setBusy(false); }
   }
   async function bind(profile: Profile, sellerAccountId: string | null | undefined, advertiserAccountId?: string | null) {
+    if (!isScopeCurrent()) return;
     setMessage(""); setError("");
     try {
-      const response = await fetch("/api/integrations/amazon/ads/profiles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ profileRecordId: profile.id, profileId: profile.profileId, ...(sellerAccountId !== undefined ? { sellerAccountId: sellerAccountId || null } : {}), ...(advertiserAccountId !== undefined ? { advertiserAccountId, expectedAdvertiserAccountId: profile.advertiserAccountId ?? null, expectedAdvertiserAccountRevision: profile.advertiserAccountRevision ?? 0 } : {}) }) });
+      const response = await fetch("/api/integrations/amazon/ads/profiles", { method: "POST", headers: workspaceScopeHeaders(true), body: JSON.stringify({ profileRecordId: profile.id, profileId: profile.profileId, ...(sellerAccountId !== undefined ? { sellerAccountId: sellerAccountId || null } : {}), ...(advertiserAccountId !== undefined ? { advertiserAccountId, expectedAdvertiserAccountId: profile.advertiserAccountId ?? null, expectedAdvertiserAccountRevision: profile.advertiserAccountRevision ?? 0 } : {}) }) });
       const payload = await response.json() as { error?: string };
       if (!response.ok) throw new Error(payload.error ?? "店铺绑定失败。");
       setMessage(advertiserAccountId !== undefined ? `Profile ${profile.profileId} 的账户绑定已保存（尚未验证）。` : `Profile ${profile.profileId} 的店铺绑定已保存。`);
@@ -110,9 +122,10 @@ export function AdsAccounts() {
     } catch (reason) { setError(reason instanceof Error ? reason.message : "店铺绑定失败。"); }
   }
   async function control(planId: string, action: "pause" | "resume" | "retry") {
+    if (!isScopeCurrent()) return;
     setError(""); setMessage("");
     try {
-      const response = await fetch("/api/integrations/amazon/ads/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ planId, action }) });
+      const response = await fetch("/api/integrations/amazon/ads/sync", { method: "POST", headers: workspaceScopeHeaders(true), body: JSON.stringify({ planId, action }) });
       const payload = await response.json() as { error?: string };
       if (!response.ok) throw new Error(payload.error ?? "同步计划更新失败。");
       setMessage(action === "pause" ? "自动同步计划已暂停。" : action === "resume" ? "同步计划已恢复；满足配置与接口条件后会自动排队。" : "失败任务已排队重试。");
@@ -120,9 +133,10 @@ export function AdsAccounts() {
     } catch (reason) { setError(reason instanceof Error ? reason.message : "同步计划更新失败。"); }
   }
   async function pullEntities(profileRecordId: string, resource: "ads-entities" | "ads-reports" = "ads-entities") {
+    if (!isScopeCurrent()) return;
     setError(""); setMessage(""); setBusy(true);
     try {
-      const response = await fetch("/api/operations/sync-center/replica", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resource, profileRecordId }) });
+      const response = await fetch("/api/operations/sync-center/replica", { method: "POST", headers: workspaceScopeHeaders(true), body: JSON.stringify({ resource, profileRecordId }) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? "广告对象回传失败。");
       setMessage(resource === "ads-reports" ? `广告报表已回传，共 ${payload.versionIds.length} 个版本、${payload.factCount} 条事实。` : `广告对象已回传到本地，共 ${payload.rowCount} 条。`);
@@ -131,9 +145,10 @@ export function AdsAccounts() {
     finally { setBusy(false); }
   }
   async function runNow(planId: string) {
+    if (!isScopeCurrent()) return;
     setError(""); setMessage("");
     try {
-      const response = await fetch("/api/integrations/amazon/ads/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ planId, action: "run" }) });
+      const response = await fetch("/api/integrations/amazon/ads/sync", { method: "POST", headers: workspaceScopeHeaders(true), body: JSON.stringify({ planId, action: "run" }) });
       const payload = await response.json() as { error?: string; status?: string };
       if (!response.ok) throw new Error(payload.error ?? "无法开始同步任务。");
       setMessage(payload.status === "QUEUED" ? "同步任务已进入队列。" : "同步任务已保存，将由 worker 恢复投递。");
@@ -141,11 +156,12 @@ export function AdsAccounts() {
     } catch (reason) { setError(reason instanceof Error ? reason.message : "无法开始同步任务。"); }
   }
   async function viewTask(taskId: string, page = 1) {
+    if (!isScopeCurrent()) return;
     setTaskDetailLoading(true); setError("");
     if (page === 1) setTaskDetail(null);
     try {
       const params = new URLSearchParams({ taskId, attemptPage: String(page), attemptPageSize: "10" });
-      const response = await fetch(`/api/integrations/amazon/ads/sync?${params.toString()}`, { cache: "no-store" });
+      const response = await fetch(`/api/integrations/amazon/ads/sync?${params.toString()}`, { cache: "no-store", headers: workspaceScopeHeaders() });
       const payload = await response.json() as { taskDetail?: TaskDetail; error?: string };
       if (!response.ok || !payload.taskDetail) throw new Error(payload.error ?? "无法加载同步任务详情。");
       setTaskDetail(payload.taskDetail);
@@ -154,10 +170,11 @@ export function AdsAccounts() {
     finally { setTaskDetailLoading(false); }
   }
   async function cancelTask(taskId: string) {
+    if (!isScopeCurrent()) return;
     if (!window.confirm("确认取消这条 Amazon Ads 同步任务？已提交的页面和历史数据会保留。")) return;
     setError(""); setMessage("");
     try {
-      const response = await fetch("/api/integrations/amazon/ads/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "cancel", taskId }) });
+      const response = await fetch("/api/integrations/amazon/ads/sync", { method: "POST", headers: workspaceScopeHeaders(true), body: JSON.stringify({ action: "cancel", taskId }) });
       const payload = await response.json() as { error?: string; status?: string; alreadyFinished?: boolean };
       if (!response.ok) throw new Error(payload.error ?? "无法取消同步任务。");
       setMessage(payload.alreadyFinished ? `任务 ${taskId.slice(0, 8)} 已结束，无需取消。` : `任务 ${taskId.slice(0, 8)} 已取消。`);

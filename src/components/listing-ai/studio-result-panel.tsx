@@ -18,6 +18,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StandardDataTable } from "@/components/ui/table-variants";
+import type { DataTableColumn } from "@/components/ui/data-table";
 import { AnalysisCard, AnalysisList, ScoreTile } from "@/components/listing-ai/output-primitives";
 import { CharMeter, inputClass, textareaClass } from "@/components/listing-ai/studio-fields";
 import {
@@ -152,6 +154,13 @@ export function StudioResultPanel({
   };
   const filled = compareStats.total - compareStats.missing;
   const imagesBusy = Object.values(imageRuns).some((run) => run.loading);
+  const comparisonColumns: DataTableColumn<StudioResult["comparison"][number]>[] = [
+    { key: "dimension", header: "项目", width: 104, sticky: true, className: "font-bold text-foreground", headerClassName: "bg-surface-muted font-bold text-foreground", render: row => row.dimension },
+    { key: "competitor", header: "竞品", render: row => row.competitor === "NEEDS_DATA" ? <Badge tone="red">NEEDS_DATA</Badge> : <span className="text-foreground">{row.competitor}</span> },
+    { key: "ours", header: "我方方案", render: row => row.ours === "NEEDS_DATA" ? <Badge tone="red">NEEDS_DATA</Badge> : row.ours },
+    { key: "gap", header: "差异", render: row => <span className="text-muted">{row.gap || "—"}</span> },
+    { key: "action", header: "建议动作", render: row => row.action || "—" },
+  ];
 
   function toggleRewrite(key: string) {
     setRewriteText("");
@@ -217,7 +226,7 @@ export function StudioResultPanel({
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <CardTitle>3 生成结果</CardTitle>
-            <p className="mt-1 text-[11px] text-muted">
+            <p className="mt-1 text-label text-muted">
               {modelLabel ? `模型 ${modelLabel}` : "等待读取模型配置"}
               {generationNote ? ` · ${generationNote}` : ""}
             </p>
@@ -251,8 +260,8 @@ export function StudioResultPanel({
                   {count ? (
                     <span
                       className={cn(
-                        "rounded-full px-1.5 text-[10px]",
-                        tab === item.id ? "bg-white/20 text-white" : "bg-surface-muted text-muted",
+                        "rounded-full px-1.5 text-label",
+                        tab === item.id ? "bg-surface/20 text-white" : "bg-surface-muted text-muted",
                       )}
                     >
                       {count}
@@ -322,7 +331,7 @@ export function StudioResultPanel({
                 <Badge tone={result.missingFacts.length ? "amber" : "green"}>
                   上架前必须补齐 {result.missingFacts.length}
                 </Badge>
-                <span className="text-[11px] text-muted">缺数据不会补零，也不会编造</span>
+                <span className="text-label text-muted">缺数据不会补零，也不会编造</span>
               </div>
               {result.missingFacts.length ? (
                 <ul className="list-disc space-y-1 pl-4 text-xs leading-relaxed text-foreground">
@@ -342,13 +351,13 @@ export function StudioResultPanel({
             <section>
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-foreground">标题候选</h3>
-                <span className="text-[11px] text-muted">上限 {studioTitleMaxChars} 字符</span>
+                <span className="text-label text-muted">上限 {studioTitleMaxChars} 字符</span>
               </div>
               <div className="space-y-2">
                 {result.titles.map((title, index) => {
                   const key = `title-${index}`;
                   return (
-                    <div key={`${title.type}-${index}`} className="rounded-md border border-border bg-white p-3">
+                    <div key={`${title.type}-${index}`} className="rounded-md border border-border bg-surface p-3">
                       <div className="mb-1.5 flex flex-wrap items-center gap-2">
                         <Badge tone={title.type === "balanced" ? "green" : "blue"}>
                           {titleTypeLabel(title.type)}
@@ -357,14 +366,14 @@ export function StudioResultPanel({
                         <div className="ml-auto flex items-center gap-2">
                           <button
                             type="button"
-                            className="text-[11px] text-muted hover:text-brand"
+                            className="text-label text-muted hover:text-brand"
                             onClick={() => toggleRewrite(key)}
                           >
                             改写
                           </button>
                           <button
                             type="button"
-                            className="text-[11px] text-muted hover:text-brand"
+                            className="text-label text-muted hover:text-brand"
                             onClick={() => onCopy(key, title.text)}
                           >
                             {copied === key ? "已复制" : "复制"}
@@ -373,7 +382,7 @@ export function StudioResultPanel({
                           originalResult.titles[index].text !== title.text ? (
                             <button
                               type="button"
-                              className="flex items-center gap-1 text-[11px] text-muted hover:text-brand"
+                              className="flex items-center gap-1 text-label text-muted hover:text-brand"
                               onClick={() => updateTitle(index, originalResult.titles[index].text)}
                             >
                               <RefreshCw className="h-3 w-3" />
@@ -388,7 +397,7 @@ export function StudioResultPanel({
                         onChange={(event) => updateTitle(index, event.target.value)}
                       />
                       {title.reason ? (
-                        <p className="mt-1 text-[11px] leading-relaxed text-muted">{title.reason}</p>
+                        <p className="mt-1 text-label leading-relaxed text-muted">{title.reason}</p>
                       ) : null}
                       <RewriteBar
                         open={rewriteOpen === key}
@@ -408,16 +417,16 @@ export function StudioResultPanel({
             <section>
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-foreground">五点描述</h3>
-                <span className="text-[11px] text-muted">每条都标了事实来源</span>
+                <span className="text-label text-muted">每条都标了事实来源</span>
               </div>
-              <div className="divide-y divide-border rounded-md border border-border bg-white">
+              <div className="divide-y divide-border rounded-md border border-border bg-surface">
                 {result.bullets.map((bullet, index) => {
                   const key = `bullet-${index}`;
                   const needsData = bullet.sourceFact === "NEEDS_DATA";
                   return (
                     <div key={`${bullet.index}-${index}`} className="p-3">
                       <div className="flex gap-3">
-                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand text-[11px] font-bold text-white">
+                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand text-label font-bold text-white">
                           {bullet.index}
                         </span>
                         <div className="min-w-0 flex-1">
@@ -426,7 +435,7 @@ export function StudioResultPanel({
                             value={bullet.text}
                             onChange={(event) => updateBullet(index, event.target.value)}
                           />
-                          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+                          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-label">
                             {bullet.sellingPoint ? (
                               <span className="text-muted">卖点：{bullet.sellingPoint}</span>
                             ) : null}
@@ -480,19 +489,19 @@ export function StudioResultPanel({
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-foreground">产品描述</h3>
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-muted">
+                  <span className="text-label text-muted">
                     {Array.from(result.description).length} 字符
                   </span>
                   <button
                     type="button"
-                    className="text-[11px] text-muted hover:text-brand"
+                    className="text-label text-muted hover:text-brand"
                     onClick={() => toggleRewrite("description-0")}
                   >
                     改写
                   </button>
                   <button
                     type="button"
-                    className="text-[11px] text-muted hover:text-brand"
+                    className="text-label text-muted hover:text-brand"
                     onClick={() => onCopy("description", result.description)}
                   >
                     {copied === "description" ? "已复制" : "复制"}
@@ -500,7 +509,7 @@ export function StudioResultPanel({
                   {originalResult && originalResult.description !== result.description ? (
                     <button
                       type="button"
-                      className="flex items-center gap-1 text-[11px] text-muted hover:text-brand"
+                      className="flex items-center gap-1 text-label text-muted hover:text-brand"
                       onClick={() =>
                         onChangeResult((current) => ({
                           ...current,
@@ -555,7 +564,7 @@ export function StudioResultPanel({
         {result && tab === "image" ? (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface-muted/40 px-3 py-2">
-              <p className="text-[11px] leading-relaxed text-muted">
+              <p className="text-label leading-relaxed text-muted">
                 6 张图的拍摄方案。提示词可逐条修改后生成；生成走系统保存的生图模型。
               </p>
               <Button size="sm" onClick={onGenerateAllImages} disabled={imagesBusy || !imageIdeas.length}>
@@ -582,7 +591,7 @@ export function StudioResultPanel({
                 const run = imageRuns[index];
                 const expanded = Boolean(expandedPrompt[index]);
                 return (
-                  <div key={`${idea.slot}-${index}`} className="rounded-md border border-border bg-white p-3">
+                  <div key={`${idea.slot}-${index}`} className="rounded-md border border-border bg-surface p-3">
                     <div className="mb-1 flex items-center gap-2">
                       <Badge tone="blue">{idea.slot}</Badge>
                       <span className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground">
@@ -600,18 +609,18 @@ export function StudioResultPanel({
                       </button>
                     </div>
                     {idea.sellingPoint ? (
-                      <p className="mb-1.5 text-[11px] text-muted">卖点：{idea.sellingPoint}</p>
+                      <p className="mb-1.5 text-label text-muted">卖点：{idea.sellingPoint}</p>
                     ) : null}
 
                     {expanded ? (
                       <div className="space-y-2">
                         <textarea
-                          className={cn(textareaClass, "min-h-[96px] font-mono text-[11px]")}
+                          className={cn(textareaClass, "min-h-[96px] font-mono text-label")}
                           value={idea.prompt}
                           onChange={(event) => onImageIdeaChange(index, { prompt: event.target.value })}
                         />
                         <input
-                          className={cn(inputClass, "py-1 text-[11px]")}
+                          className={cn(inputClass, "py-1 text-label")}
                           value={idea.negativePrompt}
                           onChange={(event) =>
                             onImageIdeaChange(index, { negativePrompt: event.target.value })
@@ -620,7 +629,7 @@ export function StudioResultPanel({
                         />
                       </div>
                     ) : (
-                      <p className="line-clamp-2 font-mono text-[11px] leading-relaxed text-muted">
+                      <p className="line-clamp-2 font-mono text-label leading-relaxed text-muted">
                         {idea.prompt}
                       </p>
                     )}
@@ -641,7 +650,7 @@ export function StudioResultPanel({
                       </Button>
                       <button
                         type="button"
-                        className="text-[11px] text-muted hover:text-brand"
+                        className="text-label text-muted hover:text-brand"
                         onClick={() => onCopy(`prompt-${index}`, idea.prompt)}
                       >
                         {copied === `prompt-${index}` ? "已复制" : "复制提示词"}
@@ -649,7 +658,7 @@ export function StudioResultPanel({
                     </div>
 
                     {run?.error ? (
-                      <p className="mt-2 text-[11px] leading-relaxed text-danger">{run.error}</p>
+                      <p className="mt-2 text-label leading-relaxed text-danger">{run.error}</p>
                     ) : null}
 
                     {run?.images.length ? (
@@ -687,62 +696,25 @@ export function StudioResultPanel({
               <Badge tone={compareStats.missing ? "amber" : "gray"}>
                 缺竞品数据 {compareStats.missing}
               </Badge>
-              <span className="text-[11px] text-muted">竞品列没有原文依据时标 NEEDS_DATA，不推测。</span>
+              <span className="text-label text-muted">竞品列没有原文依据时标 NEEDS_DATA，不推测。</span>
               <button
                 type="button"
-                className="ml-auto text-[11px] text-muted hover:text-brand"
+                className="ml-auto text-label text-muted hover:text-brand"
                 onClick={() => onCopy("compare", formatStudioComparison(result))}
               >
                 {copied === "compare" ? "已复制" : "复制表格"}
               </button>
             </div>
 
-            <div className="overflow-x-auto rounded-md border border-border">
-              <table className="w-full min-w-[760px] border-collapse text-xs">
-                <thead>
-                  <tr className="bg-surface-muted text-left">
-                    <th className="sticky left-0 w-[104px] bg-surface-muted px-3 py-2 font-bold text-foreground">
-                      项目
-                    </th>
-                    <th className="px-3 py-2 font-bold text-foreground">竞品</th>
-                    <th className="px-3 py-2 font-bold text-foreground">我方方案</th>
-                    <th className="px-3 py-2 font-bold text-foreground">差异</th>
-                    <th className="px-3 py-2 font-bold text-foreground">建议动作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.comparison.map((row, index) => (
-                    <tr
-                      key={`${row.dimension}-${index}`}
-                      className={cn(
-                        "border-t border-border align-top",
-                        row.status === "needs-data" ? "bg-accent/5" : "bg-white",
-                      )}
-                    >
-                      <td className="sticky left-0 bg-inherit px-3 py-2 font-bold text-foreground">
-                        {row.dimension}
-                      </td>
-                      <td className="px-3 py-2 leading-relaxed">
-                        {row.competitor === "NEEDS_DATA" ? (
-                          <Badge tone="red">NEEDS_DATA</Badge>
-                        ) : (
-                          <span className="text-foreground">{row.competitor}</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 leading-relaxed text-foreground">
-                        {row.ours === "NEEDS_DATA" ? (
-                          <Badge tone="red">NEEDS_DATA</Badge>
-                        ) : (
-                          row.ours
-                        )}
-                      </td>
-                      <td className="px-3 py-2 leading-relaxed text-muted">{row.gap || "—"}</td>
-                      <td className="px-3 py-2 leading-relaxed text-foreground">{row.action || "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <StandardDataTable
+              rows={result.comparison}
+              columns={comparisonColumns}
+              getRowKey={(row) => `${row.dimension}-${result.comparison.indexOf(row)}`}
+              rowClassName={(row) => cn("align-top", row.status === "needs-data" ? "bg-accent/5" : "bg-surface")}
+              stickyFirstColumn
+              ariaLabel="竞品按项对比"
+              className="min-w-[760px] text-xs [&_td]:leading-relaxed"
+            />
           </div>
         ) : null}
       </CardContent>

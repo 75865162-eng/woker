@@ -68,7 +68,7 @@ function PricingNameInput({ value, onChange }: { value: string; onChange: (value
       ref={inputRef}
       rows={1}
       style={{ height: 32 }}
-      className="max-h-[60px] w-full resize-none overflow-y-auto rounded-md border border-border bg-white px-2 py-1 text-xs leading-5 text-foreground outline-none focus:border-brand"
+      className="max-h-[60px] w-full resize-none overflow-y-auto rounded-md border border-border bg-surface px-2 py-1 text-xs leading-5 text-foreground outline-none focus:border-brand"
       value={value}
       onChange={(event) => onChange(event.target.value)}
       onInput={(event) => resize(event.currentTarget)}
@@ -277,7 +277,7 @@ export function ProductWorkbookDetailSections({
                         onAssetChange={(asset) => onCompetitorChange(index, "hotVariantImage", asset.thumbUrl || asset.originalUrl, asset)}
                       />
                       <select
-                        className="h-8 w-[130px] rounded-md border border-border bg-white px-2 text-xs font-semibold text-foreground outline-none focus:border-brand"
+                        className="h-8 w-[130px] rounded-md border border-border bg-surface px-2 text-xs font-semibold text-foreground outline-none focus:border-brand"
                         value={row.type}
                         onChange={(event) => onCompetitorChange(index, "type", event.target.value)}
                       >
@@ -291,7 +291,7 @@ export function ProductWorkbookDetailSections({
                     <div className="space-y-2">
                       <textarea
                         rows={2}
-                        className="block h-[105px] w-full min-w-0 resize-none rounded-md border border-border bg-white px-1 py-2 text-xs leading-4 text-foreground outline-none focus:border-brand"
+                        className="block h-[105px] w-full min-w-0 resize-none rounded-md border border-border bg-surface px-1 py-2 text-xs leading-4 text-foreground outline-none focus:border-brand"
                         value={row.asin}
                         onChange={(event) => onCompetitorChange(index, "asin", event.target.value)}
                       />
@@ -309,7 +309,7 @@ export function ProductWorkbookDetailSections({
                       ) : (
                         <textarea
                           rows={2}
-                          className="block h-[180px] w-full min-w-0 resize-none rounded-md border border-border bg-white px-1 py-2 text-xs leading-4 text-foreground outline-none focus:border-brand"
+                          className="block h-[180px] w-full min-w-0 resize-none rounded-md border border-border bg-surface px-1 py-2 text-xs leading-4 text-foreground outline-none focus:border-brand"
                           value={String(row[field] ?? "")}
                           onChange={(event) => onCompetitorChange(index, field, event.target.value)}
                         />
@@ -320,7 +320,7 @@ export function ProductWorkbookDetailSections({
                     <div className="w-[150px] space-y-2">
                       <textarea
                         rows={2}
-                        className="block h-[50px] w-full min-w-0 resize-none rounded-md border border-border bg-white px-1 py-2 text-xs leading-4 text-foreground outline-none focus:border-brand"
+                        className="block h-[50px] w-full min-w-0 resize-none rounded-md border border-border bg-surface px-1 py-2 text-xs leading-4 text-foreground outline-none focus:border-brand"
                         value={row.note}
                         onChange={(event) => onCompetitorChange(index, "note", event.target.value)}
                       />
@@ -564,7 +564,7 @@ function ImageUploadSquare({
           title="查看大图"
         >
           {isPdf ? (
-            <div className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-md bg-white text-center">
+            <div className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-md bg-surface text-center">
               <FileText className="h-10 w-10 text-brand" />
               <span className="max-w-[112px] truncate px-2 text-xs font-semibold text-foreground">{asset?.name || "PDF"}</span>
             </div>
@@ -595,7 +595,7 @@ function ImageUploadSquare({
         <div className="space-y-2">
           <button
             type="button"
-            className="flex h-[130px] w-[130px] items-center justify-center rounded-md border border-dashed border-border bg-surface-muted text-center text-xs font-semibold text-muted transition-colors hover:border-brand hover:bg-white"
+            className="flex h-[130px] w-[130px] items-center justify-center rounded-md border border-dashed border-border bg-surface-muted text-center text-xs font-semibold text-muted transition-colors hover:border-brand hover:bg-surface"
             disabled={isUploading}
             onClick={() => fileInputRef.current?.click()}
           >
@@ -604,7 +604,7 @@ function ImageUploadSquare({
           {isUploading ? <UploadProgressBar progress={uploadProgress} /> : null}
         </div>
       )}
-      {uploadError ? <p className="text-[11px] font-semibold text-danger">{uploadError}</p> : null}
+      {uploadError ? <p className="text-label font-semibold text-danger">{uploadError}</p> : null}
       <input ref={fileInputRef} type="file" accept={allowPdf ? "image/*,.pdf" : "image/*"} className="hidden" onChange={(event) => void handleFile(event.target.files?.[0])} />
 
       {previewOpen && (image || asset?.id) ? (
@@ -624,15 +624,15 @@ function ImageUploadSquare({
               {isPdf ? (
                 <>
                   {previewLoading ? <p className="absolute text-sm font-semibold text-white">正在下载</p> : null}
-                  <object data={previewSource} type="application/pdf" className={`h-[82vh] w-[88vw] rounded-lg bg-white shadow-2xl ${previewLoading ? "opacity-0" : ""}`} onLoad={() => setPreviewLoading(false)} onClick={(event) => event.stopPropagation()}>
-                    <p className="rounded-lg bg-white px-4 py-3 text-sm text-muted">PDF 预览不可用。</p>
+                  <object data={previewSource} type="application/pdf" className={`h-[82vh] w-[88vw] rounded-lg bg-surface shadow-2xl ${previewLoading ? "opacity-0" : ""}`} onLoad={() => setPreviewLoading(false)} onClick={(event) => event.stopPropagation()}>
+                    <p className="rounded-lg bg-surface px-4 py-3 text-sm text-muted">PDF 预览不可用。</p>
                   </object>
                 </>
               ) : (
                 <>
                   {previewLoading ? <p className="absolute text-sm font-semibold text-white">正在下载</p> : null}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={previewSource} alt="竞品大图" className={`max-h-[82vh] max-w-[88vw] rounded-lg bg-white object-contain shadow-2xl ${previewLoading ? "opacity-0" : ""}`} onLoad={() => setPreviewLoading(false)} onError={() => setPreviewLoading(false)} onClick={(event) => event.stopPropagation()} />
+                  <img src={previewSource} alt="竞品大图" className={`max-h-[82vh] max-w-[88vw] rounded-lg bg-surface object-contain shadow-2xl ${previewLoading ? "opacity-0" : ""}`} onLoad={() => setPreviewLoading(false)} onError={() => setPreviewLoading(false)} onClick={(event) => event.stopPropagation()} />
                 </>
               )}
             </div>
@@ -758,7 +758,7 @@ function RemarkImagesUploader({
           ))}
         </div>
       ) : (
-        <div className="mt-3 rounded-md border border-dashed border-border bg-white px-3 py-6 text-center text-xs font-semibold text-muted">
+        <div className="mt-3 rounded-md border border-dashed border-border bg-surface px-3 py-6 text-center text-xs font-semibold text-muted">
           导入 Excel 中非热销变体图片，或手动批量上传图片 / PDF 后会显示在这里。
         </div>
       )}
@@ -781,7 +781,7 @@ function UploadProgressBar({ progress }: { progress: number }) {
       >
         <div className="h-full rounded-full bg-brand transition-[width] duration-150" style={{ width: `${percentage}%` }} />
       </div>
-      <p className="mt-1 text-center text-[10px] font-semibold tabular-nums text-muted">{percentage}%</p>
+      <p className="mt-1 text-center text-label font-semibold tabular-nums text-muted">{percentage}%</p>
     </div>
   );
 }
@@ -837,7 +837,7 @@ function NegativePointEditor({
 
   return (
     <>
-      <div className={`h-[180px] w-full min-w-0 rounded-md border border-border p-1 ${disabled ? "bg-surface-muted" : "bg-white"}`}>
+      <div className={`h-[180px] w-full min-w-0 rounded-md border border-border p-1 ${disabled ? "bg-surface-muted" : "bg-surface"}`}>
         <div className="grid grid-cols-[minmax(0,1fr)_42px] gap-1">
           <input
             className="h-8 min-w-0 rounded border border-border px-1 text-xs outline-none focus:border-brand disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-muted"
@@ -856,7 +856,7 @@ function NegativePointEditor({
         </div>
         <button
           type="button"
-          className="mt-1 h-[134px] w-full overflow-hidden rounded border border-border bg-white px-2 py-2 text-left text-xs text-foreground disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-muted"
+          className="mt-1 h-[134px] w-full overflow-hidden rounded border border-border bg-surface px-2 py-2 text-left text-xs text-foreground disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-muted"
           disabled={disabled}
           onClick={() => {
             setDraft(parsed);
@@ -873,7 +873,7 @@ function NegativePointEditor({
 
       {open ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/55 p-6">
-          <div className="flex max-h-[88vh] w-full max-w-3xl flex-col rounded-lg bg-white shadow-2xl">
+          <div className="flex max-h-[88vh] w-full max-w-3xl flex-col rounded-lg bg-surface shadow-2xl">
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
               <div>
                 <h3 className="text-lg font-bold text-foreground">差评原文</h3>
@@ -1079,7 +1079,7 @@ function ImprovementTable({
             </ImprovementCell>
           </tr>
           <tr>
-            <td colSpan={12} className="border-b border-r border-border bg-white px-1 py-1 first:border-l">
+            <td colSpan={12} className="border-b border-r border-border bg-surface px-1 py-1 first:border-l">
               <PeakSeasonWeightMatrix
                 value={improvement.peakSeasonWeights}
                 onChange={onPeakSeasonWeightsChange}
@@ -1101,7 +1101,7 @@ function ImprovementTable({
                         type="button"
                         variant="secondary"
                         size="sm"
-                        className="h-6 shrink-0 px-2 text-[11px]"
+                        className="h-6 shrink-0 px-2 text-label"
                         disabled={remarkUploading}
                         onClick={() => remarkUploadRef.current?.click()}
                       >
@@ -1109,7 +1109,7 @@ function ImprovementTable({
                         {remarkUploading ? "上传中" : "批量上传"}
                       </Button>
                     </div>
-                    {remarkUploadError ? <p className="text-[10px] font-semibold text-danger">{remarkUploadError}</p> : null}
+                    {remarkUploadError ? <p className="text-label font-semibold text-danger">{remarkUploadError}</p> : null}
                   </div>
                 ) : (
                   column.label
@@ -1217,7 +1217,7 @@ function ImprovementCell({
   colSpan?: number;
   style?: CSSProperties;
 }) {
-  return <td colSpan={colSpan} style={style} className={`h-9 border-b border-r border-border bg-white px-2 py-1 align-top text-foreground first:border-l ${className}`}>{children}</td>;
+  return <td colSpan={colSpan} style={style} className={`h-9 border-b border-r border-border bg-surface px-2 py-1 align-top text-foreground first:border-l ${className}`}>{children}</td>;
 }
 
 function ImprovementInput({
@@ -1251,7 +1251,7 @@ function ImprovementInput({
       <textarea
         ref={textareaRef}
         style={width ? { width } : undefined}
-        className={`min-h-8 resize-none overflow-hidden whitespace-pre-wrap break-words rounded-md border border-border bg-white px-2 py-2 text-xs font-semibold leading-5 text-foreground outline-none placeholder:text-muted focus:border-brand ${className}`}
+        className={`min-h-8 resize-none overflow-hidden whitespace-pre-wrap break-words rounded-md border border-border bg-surface px-2 py-2 text-xs font-semibold leading-5 text-foreground outline-none placeholder:text-muted focus:border-brand ${className}`}
         value={value}
         placeholder={placeholder}
         rows={1}
@@ -1262,7 +1262,7 @@ function ImprovementInput({
 
   return (
     <input
-      className={`h-8 rounded-md border border-border bg-white px-2 text-xs font-semibold text-foreground outline-none placeholder:text-muted focus:border-brand ${className}`}
+      className={`h-8 rounded-md border border-border bg-surface px-2 text-xs font-semibold text-foreground outline-none placeholder:text-muted focus:border-brand ${className}`}
       value={value}
       placeholder={placeholder}
       onChange={(event) => onChange(event.target.value)}
@@ -1293,7 +1293,7 @@ export function PeakSeasonWeightMatrix({
         <div className="text-xs font-semibold text-muted">旺季月份</div>
         <button
           type="button"
-          className="rounded border border-border bg-white px-2 py-0.5 text-[11px] font-semibold text-muted hover:border-brand hover:text-brand"
+          className="rounded border border-border bg-surface px-2 py-0.5 text-label font-semibold text-muted hover:border-brand hover:text-brand"
           onClick={onReset}
         >
           清除
@@ -1310,7 +1310,7 @@ export function PeakSeasonWeightMatrix({
           <tbody>
             {peakSeasonWeightLevels.map((weight) => (
               <tr key={weight}>
-                <td className="h-8 border-r border-b border-border bg-surface-muted px-1 text-[11px] font-semibold text-muted">
+                <td className="h-8 border-r border-b border-border bg-surface-muted px-1 text-label font-semibold text-muted">
                   {weight}
                 </td>
                 {weights.map((monthWeight, monthIndex) => {
@@ -1323,12 +1323,12 @@ export function PeakSeasonWeightMatrix({
                         aria-pressed={selected}
                         title={`${monthIndex + 1}月：${weight}`}
                         className={[
-                          "flex h-8 w-full items-center justify-center border-0 text-[11px] font-semibold transition-colors",
+                          "flex h-8 w-full items-center justify-center border-0 text-label font-semibold transition-colors",
                           active
                             ? selected
-                              ? "bg-orange-500 text-white"
-                              : "bg-orange-100 text-orange-900"
-                            : "bg-white text-transparent hover:bg-surface-muted",
+                              ? "bg-accent text-white"
+                              : "bg-warning-soft text-warning-ink"
+                            : "bg-surface text-transparent hover:bg-surface-muted",
                         ].join(" ")}
                         onClick={() => updateMonth(monthIndex, weight)}
                       >
@@ -1340,9 +1340,9 @@ export function PeakSeasonWeightMatrix({
               </tr>
             ))}
             <tr>
-              <td className="h-8 border-r border-border bg-surface-muted px-1 text-[11px] font-semibold text-muted">权重</td>
+              <td className="h-8 border-r border-border bg-surface-muted px-1 text-label font-semibold text-muted">权重</td>
               {peakSeasonMonths.map((month) => (
-                <td key={`bottom-${month}`} className="h-8 border-r border-border bg-surface-muted px-1 text-[11px] font-semibold text-foreground last:border-r-0">
+                <td key={`bottom-${month}`} className="h-8 border-r border-border bg-surface-muted px-1 text-label font-semibold text-foreground last:border-r-0">
                   {month}月
                 </td>
               ))}
@@ -1382,7 +1382,7 @@ function KeywordBulkInput({ onApply }: { onApply: (keywords: TrialKeywordRow[]) 
     <label className="flex h-full flex-col text-xs font-semibold text-muted">
       批量输入关键词
       <textarea
-        className="mt-1 min-h-[240px] flex-1 w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground outline-none focus:border-brand"
+        className="mt-1 min-h-[240px] flex-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-brand"
         value={value}
         placeholder={"espresso shot mirror 0.2 456 1879\nespresso mirror 0.49 1539 1155349\n\n或旧格式：\nespresso shot mirror\n0.63\n488\n1756622"}
         onChange={(event) => handleChange(event.target.value)}

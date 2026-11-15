@@ -34,20 +34,20 @@ type Payload = {
 const providerMeta: Record<Provider, { label: string; accent: string; purpose: string; readScope: string }> = {
   amazon: {
     label: "Amazon MCP",
-    accent: "border-l-sky-500",
+    accent: "border-l-info",
     purpose: "读 ERP 里已发布的 Amazon 订单、广告、库存快照；写操作只能提交审批，不会直接改数。",
     readScope: "授权店铺 × 站点的已发布快照",
   },
   sellfox: {
     label: "赛狐 MCP",
-    accent: "border-l-emerald-500",
+    accent: "border-l-success",
     purpose: "读赛狐同步的店铺、Listing、FBA 库存、销量、广告与利润日报，并做补货和广告诊断。",
     readScope: "凭证店铺范围内的 9 个数据集",
   },
 };
 
-const field = "h-8 rounded-md border border-border bg-white px-2 text-xs text-foreground";
-const card = "rounded-lg border border-border bg-white shadow-sm";
+const field = "h-8 rounded-md border border-border bg-surface px-2 text-xs text-foreground";
+const card = "rounded-lg border border-border bg-surface shadow-sm";
 
 function relative(iso: string | null) {
   if (!iso) return "从未使用";
@@ -97,9 +97,9 @@ function CopyButton({ value, label = "复制" }: { value: string; label?: string
 }
 
 function HealthIcon({ state }: { state: string }) {
-  if (state === "ok") return <Check className="h-4 w-4 shrink-0 text-emerald-600" />;
-  if (state === "warn") return <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />;
-  return <X className="h-4 w-4 shrink-0 text-red-600" />;
+  if (state === "ok") return <Check className="h-4 w-4 shrink-0 text-success-ink" />;
+  if (state === "warn") return <AlertTriangle className="h-4 w-4 shrink-0 text-warning-ink" />;
+  return <X className="h-4 w-4 shrink-0 text-danger-ink" />;
 }
 
 function scopedHeaders() {
@@ -274,14 +274,14 @@ export function McpSettingsPanel() {
             <div key={item.label} className="rounded-md border border-border bg-surface-muted/60 px-3 py-2">
               <dt className="text-xs text-muted">{item.label}</dt>
               <dd className="mt-0.5 text-lg font-bold text-foreground">{item.value}</dd>
-              <p className="text-[11px] text-muted">{item.hint}</p>
+              <p className="text-label text-muted">{item.hint}</p>
             </div>
           ))}
         </dl>
       </section>
 
       {loading && <p role="status" className="text-sm text-muted">加载中…</p>}
-      {error && <p role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p role="alert" className="rounded-md border border-danger/20 bg-danger-soft px-3 py-2 text-sm text-danger-ink">{error}</p>}
 
       {data && (
         <>
@@ -337,7 +337,7 @@ export function McpSettingsPanel() {
                       <p className="text-xs font-semibold text-muted">可读数据集（{data.sellfox.datasets.length}）</p>
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
                         {data.sellfox.datasets.map(dataset => (
-                          <span key={dataset.key} title={`${dataset.table} · ${dataset.description}`} className="rounded border border-border bg-surface-muted px-1.5 py-0.5 text-[11px]">
+                          <span key={dataset.key} title={`${dataset.table} · ${dataset.description}`} className="rounded border border-border bg-surface-muted px-1.5 py-0.5 text-label">
                             {dataset.label}
                           </span>
                         ))}
@@ -351,7 +351,7 @@ export function McpSettingsPanel() {
                       {bucket.tools.map(tool => (
                         <li key={tool.name} className="text-xs leading-5">
                           <code className="font-mono text-foreground">{tool.name}</code>
-                          <span className="ml-1 rounded bg-surface-muted px-1 text-[10px] text-muted">{tool.operationMode === "READ_ONLY" ? "只读" : "需审批"}</span>
+                          <span className="ml-1 rounded bg-surface-muted px-1 text-label text-muted">{tool.operationMode === "READ_ONLY" ? "只读" : "需审批"}</span>
                           <span className="block text-muted">{tool.description}</span>
                         </li>
                       ))}
@@ -359,7 +359,7 @@ export function McpSettingsPanel() {
                   </details>
 
                   {probeResult && (
-                    <p className={`border-t border-border px-4 py-2 text-xs ${probeResult.ok ? "text-emerald-700" : "text-amber-700"}`} role="status">
+                    <p className={`border-t border-border px-4 py-2 text-xs ${probeResult.ok ? "text-success-ink" : "text-warning-ink"}`} role="status">
                       {probeResult.ok ? "✓ " : "! "}{probeResult.detail}
                     </p>
                   )}
@@ -381,8 +381,8 @@ export function McpSettingsPanel() {
                 <li key={row.key} className="flex items-start gap-2 border-b border-border/60 pb-2 last:border-0">
                   <HealthIcon state={row.state} />
                   <div className="min-w-0">
-                    <p className={`text-xs font-semibold ${row.state === "ok" ? "" : "text-amber-800"}`}>{row.label}</p>
-                    <p className="text-[11px] leading-4 text-muted">{row.detail}</p>
+                    <p className={`text-xs font-semibold ${row.state === "ok" ? "" : "text-warning-ink"}`}>{row.label}</p>
+                    <p className="text-label leading-4 text-muted">{row.detail}</p>
                   </div>
                 </li>
               ))}
@@ -412,7 +412,7 @@ export function McpSettingsPanel() {
                       <tr key={`${target}-${credential.id}`} className="border-b border-border/70 align-middle">
                         <td className="py-2 pr-3">
                           <span className="font-semibold">{credential.name}</span>
-                          <span className="block font-mono text-[11px] text-muted">{credential.tokenPrefix}…</span>
+                          <span className="block font-mono text-label text-muted">{credential.tokenPrefix}…</span>
                         </td>
                         <td className="py-2 pr-3">{providerMeta[target].label}</td>
                         <td className="py-2 pr-3"><Badge tone={state.tone}>{state.label}</Badge></td>
@@ -453,7 +453,7 @@ export function McpSettingsPanel() {
                         type="button"
                         onClick={() => setProvider(item)}
                         aria-pressed={provider === item}
-                        className={`h-8 rounded-md border px-3 text-xs font-semibold ${provider === item ? "border-brand bg-brand text-white" : "border-border bg-white text-foreground hover:bg-surface-muted"}`}
+                        className={`h-8 rounded-md border px-3 text-xs font-semibold ${provider === item ? "border-brand bg-brand text-white" : "border-border bg-surface text-foreground hover:bg-surface-muted"}`}
                       >
                         {providerMeta[item].label}
                       </button>
@@ -483,7 +483,7 @@ export function McpSettingsPanel() {
                       4. 可读范围{provider === "sellfox" ? `（${data.sellfox.stores.length} 个店铺，留空=全部）` : `（${amazonScopeOptions.length} 个店铺站点）`}
                     </span>
                     {provider === "sellfox" && data.sellfox.stores.length > 0 && (
-                      <button type="button" className="text-[11px] text-brand" onClick={() => setStoreIds(storeIds.length ? [] : data.sellfox.stores.map(store => store.id))}>
+                      <button type="button" className="text-label text-brand" onClick={() => setStoreIds(storeIds.length ? [] : data.sellfox.stores.map(store => store.id))}>
                         {storeIds.length ? "清空" : "全选"}
                       </button>
                     )}
@@ -515,7 +515,7 @@ export function McpSettingsPanel() {
                 <div>
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-muted">5. 允许工具（建议只勾要用的）</span>
-                    <button type="button" className="text-[11px] text-brand" onClick={() => setTools(tools.length === activeTools.length ? [] : activeTools.map(tool => tool.name))}>
+                    <button type="button" className="text-label text-brand" onClick={() => setTools(tools.length === activeTools.length ? [] : activeTools.map(tool => tool.name))}>
                       {tools.length === activeTools.length ? "清空" : "全选"}
                     </button>
                   </div>
@@ -525,7 +525,7 @@ export function McpSettingsPanel() {
                         <input type="checkbox" className="mt-0.5" checked={tools.includes(tool.name)} onChange={event => setTools(value => event.target.checked ? [...value, tool.name] : value.filter(item => item !== tool.name))} />
                         <span className="min-w-0">
                           <span className="font-mono">{tool.name}</span>
-                          <span className="block text-[11px] leading-4 text-muted">{tool.description}</span>
+                          <span className="block text-label leading-4 text-muted">{tool.description}</span>
                         </span>
                       </label>
                     ))}
@@ -548,14 +548,14 @@ export function McpSettingsPanel() {
             </div>
 
             {token && (
-              <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3">
-                <p className="text-xs font-semibold text-amber-900">新密钥只显示一次，关闭后无法再查看。请现在复制到客户端配置。</p>
+              <div className="mt-3 rounded-md border border-accent/30 bg-warning-soft p-3">
+                <p className="text-xs font-semibold text-warning-ink">新密钥只显示一次，关闭后无法再查看。请现在复制到客户端配置。</p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <input aria-label="新 MCP 密钥" readOnly className={`${field} min-w-[320px] flex-1 font-mono`} value={token.value} />
                   <CopyButton value={token.value} label="复制密钥" />
                   <Button variant="secondary" size="sm" onClick={() => setToken(null)}>已保存，关闭</Button>
                 </div>
-                <p className="mt-1 text-[11px] text-amber-800">服务：{providerMeta[token.provider].label} · 前缀 {token.provider === "amazon" ? "amcp_" : "sfmcp_"}，只能用于对应端点。</p>
+                <p className="mt-1 text-label text-warning-ink">服务：{providerMeta[token.provider].label} · 前缀 {token.provider === "amazon" ? "amcp_" : "sfmcp_"}，只能用于对应端点。</p>
               </div>
             )}
           </section>
@@ -582,7 +582,7 @@ export function McpSettingsPanel() {
                       <span className="text-xs font-semibold">{providerMeta[item.provider].label}</span>
                       <CopyButton value={snippet} />
                     </div>
-                    <pre className="max-h-48 overflow-auto px-3 py-2 text-[11px] leading-5 text-foreground">{snippet}</pre>
+                    <pre className="max-h-48 overflow-auto px-3 py-2 text-label leading-5 text-foreground">{snippet}</pre>
                   </div>
                 );
               })}

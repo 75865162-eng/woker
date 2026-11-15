@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { WorkbenchPageTemplate } from "@/components/templates/page-templates";
 import { Button } from "@/components/ui/button";
 import { AreaField, Badge, Field, Kpis, Notice, Section, SelectField, Table, Tabs, bp, extPost, today, useExt, statusLabel } from "./kit";
 
@@ -48,8 +49,7 @@ export function ReviewsWorkbench() {
   const current = reviews.data?.items.find(row => row.id === editId);
   const summary = reviews.data?.summary;
 
-  return <div className="space-y-6">
-    <Notice error={error || reviews.error || performance.error || ""} notice={notice} />
+  return <WorkbenchPageTemplate context={<Notice error={error || reviews.error || performance.error || ""} notice={notice} />} main={<div className="space-y-6">
     <Tabs value={tab} onChange={value => setTab(value as "REVIEW" | "PERF")} tabs={[{ id: "REVIEW", label: "评论与差评", count: summary?.total }, { id: "PERF", label: "店铺绩效", count: performance.data?.items.length }]} />
 
     {tab === "REVIEW" && <>
@@ -161,5 +161,5 @@ export function ReviewsWorkbench() {
         />
       </Section>
     </>}
-  </div>;
+  </div>} />;
 }

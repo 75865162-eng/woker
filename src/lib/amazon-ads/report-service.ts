@@ -501,7 +501,7 @@ export async function reportAcquisitionOverview(scope: SyncScope, actor: string,
   const access = await amazonDataAccess(scope, actor);
   const sellers = await prisma.sellerAccount.findMany({ where: { ...scope, status: "active" }, select: { id: true, displayName: true } });
   const profiles = await prisma.amazonAdsProfile.findMany({
-    where: { ...scope, ...sellerAccessWhere(access), authorization: { status: "CONNECTED" }, ...(profileRecordId ? { id: profileRecordId } : {}), sellerAccountId: { in: sellers.map(seller => seller.id) } },
+    where: { ...scope, AND: [sellerAccessWhere(access), { sellerAccountId: { in: sellers.map(seller => seller.id) } }], authorization: { status: "CONNECTED" }, ...(profileRecordId ? { id: profileRecordId } : {}) },
     select: { id: true, profileId: true, region: true, countryCode: true, marketplaceId: true, sellerAccountId: true, currencyCode: true, timezone: true, authorization: { select: { name: true, status: true } } },
     take: 50,
   });

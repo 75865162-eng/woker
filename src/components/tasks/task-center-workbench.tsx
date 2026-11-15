@@ -2,9 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, RefreshCw, RotateCcw, Search } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
+import { Toolbar, controlClassName } from "@/components/ui/toolbar";
+import { ListPageTemplate } from "@/components/templates/page-templates";
+import { cn } from "@/lib/utils";
 
 type ImportJobStatus = "queued" | "running" | "done" | "failed";
 
@@ -58,11 +62,11 @@ const statusOptions = [
   { value: "failed", label: "失败" },
 ];
 
-const statusTone: Record<ImportJobStatus, "blue" | "green" | "amber" | "red"> = {
-  queued: "amber",
-  running: "blue",
-  done: "green",
-  failed: "red",
+const statusTone: Record<ImportJobStatus, StatusTone> = {
+  queued: "warning",
+  running: "info",
+  done: "success",
+  failed: "danger",
 };
 
 const statusLabel: Record<ImportJobStatus, string> = {
@@ -109,6 +113,18 @@ function getJobDownloadUrl(job: ImportJob) {
   }
 
   return `/api/files/${encodeURIComponent(job.id)}/download`;
+}
+
+function queueText(job: ImportJob) {
+  if (job.status === "queued") {
+    return `排队 ${formatElapsedSince(job.createdAt)} · 前方 ${job.diagnostics?.aheadCount ?? "-"} 个`;
+  }
+
+  if (job.diagnostics?.queueState === "active") return "已进入 Worker";
+  if (job.status === "done") return "队列已完成";
+  if (job.diagnostics?.queueState === "missing") return "队列消息不存在";
+
+  return job.diagnostics?.queueState ?? "-";
 }
 
 export function TaskCenterWorkbench() {
@@ -213,140 +229,218 @@ export function TaskCenterWorkbench() {
     }
   }
 
-  return (
-    <Card>
-      <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <CardTitle>任务中心</CardTitle>
-          <p className="mt-1 text-xs font-medium text-muted">按当前工作区查看上传、解析、导出任务状态。</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={status}
-            onChange={(event) => setStatus(event.target.value)}
-            className="h-9 rounded-md border border-border bg-white px-3 text-xs font-semibold text-foreground outline-none"
+  function goToPage(page: number) {
+    backgroundRefreshRef.current = false;
+    setQuery((current) => ({ ...current, page }));
+  }
+
+  const columns: DataTableColumn<ImportJob>[] = [
+    {
+      key: "file",
+      header: "文件",
+      width: 280,
+      render: (job) => (
+        <>
+          <span className="block truncate font-semibold text-foreground" title={job.file?.originalName ?? job.id}>
+            {job.file?.originalName ?? job.id}
+          </span>
+          <span className="mt-0.5 block truncate text-xs text-muted">
+            {formatSize(job.file?.size)} · {formatDate(job.createdAt)}
+          </span>
+          {job.error ? (
+            <span className="mt-0.5 block truncate text-xs font-semibold text-danger" title={job.error}>
+              {job.error}
+            </span>
+          ) : null}
+        </>
+      ),
+    },
+    {
+      key: "type",
+      header: "类型",
+      width: 104,
+      render: (job) => <span className="block truncate text-sm text-muted">{typeLabel[job.type] ?? job.type}</span>,
+    },
+    {
+      key: "status",
+      header: "队列状态",
+      width: 184,
+      render: (job) => (
+        <>
+          <StatusPill tone={job.diagnostics?.suspectedStuck ? "danger" : statusTone[job.status]}>
+            {job.diagnostics?.suspectedStuck ? "疑似卡死" : statusLabel[job.status]}
+          </StatusPill>
+          <span className="mt-1 block truncate text-xs text-muted" title={queueText(job)}>
+            {queueText(job)}
+          </span>
+        </>
+      ),
+    },
+    {
+      key: "worker",
+      header: "Worker",
+      width: 148,
+      render: (job) => (
+        <>
+          <StatusPill
+            tone={job.diagnostics?.workerHasTask ? "success" : job.diagnostics?.workerOnline ? "info" : "danger"}
+            dot
           >
-            {statusOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            className="h-9 w-56 rounded-md border border-border px-3 text-xs font-semibold outline-none focus:border-brand"
-            placeholder="搜索文件名"
-          />
-          <Button type="button" size="sm" variant="secondary" onClick={submitSearch}>
-            <Search className="h-4 w-4" />
-            查询
-          </Button>
-          <Button type="button" size="sm" variant="ghost" onClick={refreshTasks}>
+            {job.diagnostics?.workerHasTask ? "已领取" : job.diagnostics?.workerOnline ? "在线" : "离线"}
+          </StatusPill>
+          <span className="mt-1 block truncate text-xs text-muted">{job.diagnostics?.workerCount ?? 0} 个在线</span>
+        </>
+      ),
+    },
+    {
+      key: "progress",
+      header: "处理进度",
+      width: 196,
+      render: (job) => (
+        <>
+          <div className="h-1.5 w-full max-w-[150px] overflow-hidden rounded-full bg-surface-muted">
+            <div
+              className="h-full rounded-full bg-brand"
+              style={{ width: `${Math.min(Math.max(job.progress, 0), 100)}%` }}
+            />
+          </div>
+          <span className="mt-1 block truncate text-xs font-semibold text-muted metric-tabular">
+            {job.diagnostics && job.diagnostics.processedCount != null && job.diagnostics.totalCount != null
+              ? `${job.diagnostics.processedCount.toLocaleString("zh-CN")} / ${job.diagnostics.totalCount.toLocaleString("zh-CN")} 条`
+              : `${job.progress}%`}
+          </span>
+          {job.diagnostics?.phase ? (
+            <span className="block truncate text-xs text-muted" title={job.diagnostics.phase}>
+              {job.diagnostics.phase}
+            </span>
+          ) : null}
+        </>
+      ),
+    },
+    {
+      key: "times",
+      header: "时间诊断",
+      width: 204,
+      render: (job) => (
+        <span className="block text-xs leading-5 text-muted metric-tabular">
+          <span className="block truncate">创建 {formatDate(job.createdAt)}</span>
+          <span className="block truncate">
+            开始 {job.diagnostics?.startedAt ? formatDate(job.diagnostics.startedAt) : "-"}
+          </span>
+          <span className="block truncate">
+            更新 {formatDate(job.updatedAt)} · {formatElapsedSince(job.updatedAt)}前
+          </span>
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      header: "操作",
+      width: 124,
+      align: "right",
+      render: (job) => (
+        <span className="flex justify-end gap-1">
+          {job.status === "done" && job.resultKey ? (
+            <a
+              href={getJobDownloadUrl(job)}
+              className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-surface px-2.5 text-xs font-semibold text-foreground transition-colors hover:bg-surface-muted"
+            >
+              <Download className="h-3.5 w-3.5" />
+              下载
+            </a>
+          ) : null}
+          {job.status === "failed" ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="whitespace-nowrap"
+              disabled={retryingId === job.id}
+              onClick={() => retryJob(job.id)}
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              重试
+            </Button>
+          ) : null}
+        </span>
+      ),
+    },
+  ];
+
+  return (
+    <ListPageTemplate
+      header={error ? <Alert tone="danger">{error}</Alert> : null}
+      filters={<Toolbar
+        actions={
+          <Button type="button" size="sm" variant="secondary" onClick={refreshTasks} disabled={loading}>
             <RefreshCw className="h-4 w-4" />
             刷新
           </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {error ? <div className="rounded-md border border-danger/30 bg-red-50 px-3 py-2 text-sm font-semibold text-danger">{error}</div> : null}
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="min-w-full divide-y divide-border text-sm">
-            <thead className="bg-surface-muted text-xs font-bold text-muted">
-              <tr>
-                <th className="px-3 py-2 text-left">文件</th>
-                <th className="px-3 py-2 text-left">类型</th>
-                <th className="px-3 py-2 text-left">队列状态</th>
-                <th className="px-3 py-2 text-left">Worker</th>
-                <th className="px-3 py-2 text-left">处理进度</th>
-                <th className="px-3 py-2 text-left">时间诊断</th>
-                <th className="px-3 py-2 text-right">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border bg-white">
-              {loading ? (
-                <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center text-sm font-semibold text-muted">加载中...</td>
-                </tr>
-              ) : jobs.length ? (
-                jobs.map((job) => (
-                  <tr key={job.id}>
-                    <td className="px-3 py-2">
-                      <div className="max-w-md truncate font-semibold text-foreground">{job.file?.originalName ?? job.id}</div>
-                      <div className="text-xs text-muted">{formatSize(job.file?.size)} · {formatDate(job.createdAt)}</div>
-                      {job.error ? <div className="mt-1 max-w-md truncate text-xs font-semibold text-danger">{job.error}</div> : null}
-                    </td>
-                    <td className="px-3 py-2 text-xs font-semibold text-muted">{typeLabel[job.type] ?? job.type}</td>
-                    <td className="px-3 py-2">
-                      <Badge tone={job.diagnostics?.suspectedStuck ? "red" : statusTone[job.status]}>{job.diagnostics?.suspectedStuck ? "疑似卡死" : statusLabel[job.status]}</Badge>
-                      <div className="mt-1 text-xs text-muted">
-                        {job.status === "queued"
-                          ? `排队 ${formatElapsedSince(job.createdAt)} · 前方 ${job.diagnostics?.aheadCount ?? "-"} 个`
-                          : job.diagnostics?.queueState === "active"
-                            ? "已进入 Worker"
-                            : job.status === "done"
-                              ? "队列已完成"
-                              : job.diagnostics?.queueState === "missing"
-                                ? "队列消息不存在"
-                                : job.diagnostics?.queueState}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <Badge tone={job.diagnostics?.workerHasTask ? "green" : job.diagnostics?.workerOnline ? "blue" : "red"}>
-                        {job.diagnostics?.workerHasTask ? "已领取" : job.diagnostics?.workerOnline ? "Worker 在线" : "Worker 离线"}
-                      </Badge>
-                      <div className="mt-1 text-xs text-muted">{job.diagnostics?.workerCount ?? 0} 个在线</div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="h-2 w-32 overflow-hidden rounded-full bg-surface-muted">
-                        <div className="h-full rounded-full bg-brand" style={{ width: `${Math.min(Math.max(job.progress, 0), 100)}%` }} />
-                      </div>
-                      <div className="mt-1 text-xs font-semibold text-muted">
-                        {job.diagnostics && job.diagnostics.processedCount != null && job.diagnostics.totalCount != null
-                          ? `${job.diagnostics.processedCount.toLocaleString("zh-CN")} / ${job.diagnostics.totalCount.toLocaleString("zh-CN")} 条`
-                          : `${job.progress}%`}
-                      </div>
-                      {job.diagnostics?.phase ? <div className="text-xs text-muted">{job.diagnostics.phase}</div> : null}
-                    </td>
-                    <td className="px-3 py-2 text-xs font-semibold text-muted">
-                      <div>创建：{formatDate(job.createdAt)}</div>
-                      <div>开始：{job.diagnostics?.startedAt ? formatDate(job.diagnostics.startedAt) : "-"}</div>
-                      <div>更新：{formatDate(job.updatedAt)} · {formatElapsedSince(job.updatedAt)}前</div>
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <div className="flex justify-end gap-2">
-                        {job.status === "done" && job.resultKey ? (
-                          <a href={getJobDownloadUrl(job)} className="inline-flex h-8 items-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-semibold text-foreground hover:bg-surface-muted">
-                            <Download className="h-4 w-4" />
-                            下载
-                          </a>
-                        ) : null}
-                        {job.status === "failed" ? (
-                          <Button type="button" size="sm" variant="ghost" disabled={retryingId === job.id} onClick={() => retryJob(job.id)}>
-                            <RotateCcw className="h-4 w-4" />
-                            重试
-                          </Button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center text-sm font-semibold text-muted">暂无任务</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="flex items-center justify-between text-xs font-semibold text-muted">
-          <span>共 {pagination.total} 条，第 {pagination.page} / {pagination.pageCount} 页</span>
+        }
+      >
+        <select
+          value={status}
+          onChange={(event) => setStatus(event.target.value)}
+          aria-label="状态筛选"
+          className={cn(controlClassName, "w-36")}
+        >
+          {statusOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") submitSearch();
+          }}
+          aria-label="搜索文件名"
+          className={cn(controlClassName, "w-64")}
+          placeholder="搜索文件名"
+        />
+        <Button type="button" size="sm" variant="primary" onClick={submitSearch}>
+          <Search className="h-4 w-4" />
+          查询
+        </Button>
+      </Toolbar>}
+
+      table={<div className="overflow-hidden rounded-lg border border-border bg-surface">
+        <DataTable
+          className="rounded-none border-0"
+          columns={columns}
+          rows={jobs}
+          getRowKey={(job) => job.id}
+          loading={loading}
+          empty="当前范围没有任务。上传 Bulk 文件或发起商品导出后，任务会出现在这里。"
+        />
+      </div>}
+      pagination={<div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface px-4 py-2.5 text-xs text-muted">
+          <span className="metric-tabular">
+            共 {pagination.total.toLocaleString("zh-CN")} 条，第 {pagination.page} / {pagination.pageCount} 页
+          </span>
           <div className="flex gap-2">
-            <Button type="button" size="sm" variant="secondary" disabled={pagination.page <= 1 || loading} onClick={() => { backgroundRefreshRef.current = false; setQuery((current) => ({ ...current, page: current.page - 1 })); }}>上一页</Button>
-            <Button type="button" size="sm" variant="secondary" disabled={pagination.page >= pagination.pageCount || loading} onClick={() => { backgroundRefreshRef.current = false; setQuery((current) => ({ ...current, page: current.page + 1 })); }}>下一页</Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={pagination.page <= 1 || loading}
+              onClick={() => goToPage(pagination.page - 1)}
+            >
+              上一页
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={pagination.page >= pagination.pageCount || loading}
+              onClick={() => goToPage(pagination.page + 1)}
+            >
+              下一页
+            </Button>
           </div>
-        </div>
-      </CardContent>
-    </Card>
+        </div>}
+    />
   );
 }

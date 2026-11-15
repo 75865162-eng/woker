@@ -19,6 +19,7 @@ function generate(changes: Record<string, string>, invalidBase = false) {
     git("config", "user.email", "test@example.invalid");
     git("config", "user.name", "Deployment test");
     put("package-lock.json", "{}");
+    put("src/lib/runtime/worker-registry.json", readFileSync(resolve("src/lib/runtime/worker-registry.json"), "utf8"));
     git("add", ".");
     git("commit", "-qm", "baseline");
     const base = git("rev-parse", "HEAD");
@@ -43,7 +44,7 @@ test("documentation does not build, migrate or restart services", () => {
 test("every application release moves all Workers to the current code", () => {
   const plan = generate({ "src/components/example.tsx": "component" });
   assert.equal(plan.requiresWebRestart, true);
-  for (const key of ["requiresWorkerRestart", "requiresImageWorkerRestart", "requiresAmazonSyncWorkerRestart", "requiresSellfoxSyncWorkerRestart"]) assert.equal(plan[key], true, key);
+  for (const key of ["requiresWorkerRestart", "requiresImageWorkerRestart", "requiresAmazonSyncWorkerRestart", "requiresSellfoxSyncWorkerRestart", "requiresForecastWorkerRestart"]) assert.equal(plan[key], true, key);
   for (const key of ["requiresMigration", "requiresPrismaGenerate", "requiresRuntimeConfig", "requiresCaddyReload", "requiresInfraUpdate"]) assert.equal(plan[key], false, key);
 });
 
@@ -58,7 +59,7 @@ test("shared libraries conservatively restart both dependent workers", () => {
 test("worker and runtime entry changes restart all registered services without database migration", () => {
   for (const file of ["scripts/image-upscale-worker.ts", "scripts/amazon-sync-worker.ts", "scripts/sellfox-sync-worker.ts", "scripts/runtime/environment.mjs"]) {
     const plan = generate({ [file]: "worker" });
-    for (const key of ["requiresWorkerRestart", "requiresImageWorkerRestart", "requiresAmazonSyncWorkerRestart", "requiresSellfoxSyncWorkerRestart"]) assert.equal(plan[key], true, key);
+    for (const key of ["requiresWorkerRestart", "requiresImageWorkerRestart", "requiresAmazonSyncWorkerRestart", "requiresSellfoxSyncWorkerRestart", "requiresForecastWorkerRestart"]) assert.equal(plan[key], true, key);
     assert.equal(plan.requiresMigration, false);
   }
 });

@@ -7,6 +7,7 @@ import { ChainHandoffNotice, chainFetch, chainHeaders, sendChainHandoff, useChai
 
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Clock3, FileText, RefreshCw, Sparkles, SquareKanban, TriangleAlert } from "lucide-react";
+import { WorkbenchPageTemplate } from "@/components/templates/page-templates";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAppShellUser } from "@/components/app-shell/app-shell-context";
@@ -353,22 +354,21 @@ export function ListingAgentWorkbench() {
   }
 
   return (
-    <div className="space-y-4">
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+    <WorkbenchPageTemplate kpis={<section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="关键词" value={report?.keywordMap.primaryKeywords.length ?? 0} icon={<Sparkles className="h-5 w-5 text-brand" />} />
         <MetricCard label="要点" value={report?.bulletDrafts.length ?? 0} icon={<FileText className="h-5 w-5 text-brand" />} />
         <MetricCard label="工具调用" value={currentExecution?.toolCallCount ?? 0} icon={<Clock3 className="h-5 w-5 text-brand" />} />
         <MetricCard label="记忆条目" value={memoryItems.length} icon={<SquareKanban className="h-5 w-5 text-brand" />} />
-      </section>
+      </section>} main={<div className="space-y-[var(--gap-section)]">
 
-      <section className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+      <section className="grid gap-[var(--gap-section)] xl:grid-cols-[1.05fr_0.95fr]">
         <Card>
           <CardHeader>
-            <CardTitle>刊登简报</CardTitle>
+            <CardTitle className="text-section">刊登简报</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <ChainHandoffNotice payload={chain.payload} error={chain.error} />
-            {error ? <div className="rounded-md border border-danger/30 bg-red-50 px-3 py-2 text-sm font-semibold text-danger">{error}</div> : null}
+            {error ? <div className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm font-semibold text-danger">{error}</div> : null}
             {selectedHandoff ? (
               <div className="rounded-md border border-brand/20 bg-brand/5 p-3">
                 <div className="text-xs font-bold uppercase tracking-wide text-muted">产品交接</div>
@@ -414,7 +414,7 @@ export function ListingAgentWorkbench() {
         <Card>
           <CardHeader className="flex items-center justify-between gap-3">
             <div>
-              <CardTitle>审批</CardTitle>
+              <CardTitle className="text-section">审批</CardTitle>
               <p className="mt-1 text-xs font-medium text-muted">刊登草稿进入审批后在这里处理。</p>
             </div>
             {currentApproval ? <Badge tone={currentApproval.status === "APPROVED" ? "green" : currentApproval.status === "REJECTED" ? "red" : "amber"}>{currentApproval.status}</Badge> : null}
@@ -445,9 +445,9 @@ export function ListingAgentWorkbench() {
         </Card>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <section className="grid gap-[var(--gap-section)] xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
-          <CardHeader><CardTitle>关键词图谱</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-section">关键词图谱</CardTitle></CardHeader>
           <CardContent className="space-y-2">
             {report ? report.keywordMap.groups.map((group) => (
               <div key={group.placement} className="rounded-md border border-border p-3">
@@ -462,7 +462,7 @@ export function ListingAgentWorkbench() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>标题</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-section">标题</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {report ? (
               <>
@@ -480,9 +480,9 @@ export function ListingAgentWorkbench() {
         </Card>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <section className="grid gap-[var(--gap-section)] xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
-          <CardHeader><CardTitle>要点</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-section">要点</CardTitle></CardHeader>
           <CardContent className="space-y-2">
             {report?.bulletDrafts.length ? report.bulletDrafts.map((item) => (
               <div key={item.bullet} className="rounded-md border border-border p-3">
@@ -494,7 +494,7 @@ export function ListingAgentWorkbench() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>描述与 A+</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-section">描述与 A+</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {report ? (
               <>
@@ -512,9 +512,9 @@ export function ListingAgentWorkbench() {
         </Card>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <section className="grid gap-[var(--gap-section)] xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
-          <CardHeader><CardTitle>刊登草稿</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-section">刊登草稿</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {report ? (
               <>
@@ -532,13 +532,13 @@ export function ListingAgentWorkbench() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>执行时间线</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-section">执行时间线</CardTitle></CardHeader>
           <CardContent className="space-y-2">
             {traces.length ? traces.map((trace) => (
-              <div key={trace.id} className="rounded-md border border-border bg-white px-3 py-2">
+              <div key={trace.id} className="rounded-md border border-border bg-surface px-3 py-2">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm font-semibold text-foreground">{trace.type}</div>
-                  <div className="text-[11px] text-muted">{formatDate(trace.createdAt)}</div>
+                  <div className="text-label text-muted">{formatDate(trace.createdAt)}</div>
                 </div>
                 {trace.message ? <div className="mt-1 text-xs text-muted">{trace.message}</div> : null}
               </div>
@@ -547,9 +547,9 @@ export function ListingAgentWorkbench() {
         </Card>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <section className="grid gap-[var(--gap-section)] xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
-          <CardHeader><CardTitle>工具调用</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-section">工具调用</CardTitle></CardHeader>
           <CardContent className="space-y-2">
             {toolCalls.length ? toolCalls.map((toolCall) => (
               <div key={toolCall.id} className="rounded-md border border-border p-3">
@@ -557,14 +557,14 @@ export function ListingAgentWorkbench() {
                   <div className="text-sm font-semibold text-foreground">{toolCall.toolName}</div>
                   <Badge tone={toolCall.riskLevel === "CRITICAL" ? "red" : toolCall.riskLevel === "HIGH" ? "amber" : toolCall.riskLevel === "MEDIUM" ? "blue" : "gray"}>{toolCall.riskLevel}</Badge>
                 </div>
-                <div className="mt-1 text-[11px] text-muted">{toolCall.toolId}</div>
+                <div className="mt-1 text-label text-muted">{toolCall.toolId}</div>
               </div>
             )) : <EmptyState text="当前执行暂无工具调用。" />}
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>证据</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-section">证据</CardTitle></CardHeader>
           <CardContent className="space-y-2">
             {report?.evidence.length ? report.evidence.map((item, index) => (
               <div key={`${item.metric}-${index}`} className="rounded-md border border-border p-3">
@@ -576,28 +576,28 @@ export function ListingAgentWorkbench() {
         </Card>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <section className="grid gap-[var(--gap-section)] xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
-          <CardHeader><CardTitle>记忆</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-section">记忆</CardTitle></CardHeader>
           <CardContent className="space-y-2">
             {memoryItems.length ? memoryItems.map((memory) => (
               <div key={memory.id} className="rounded-md border border-border p-3">
                 <div className="text-sm font-semibold text-foreground">{memory.summary}</div>
-                <div className="mt-1 text-[11px] text-muted">{memory.scope} / {memory.scopeKey}</div>
+                <div className="mt-1 text-label text-muted">{memory.scope} / {memory.scopeKey}</div>
               </div>
             )) : <EmptyState text="暂无记忆条目。" />}
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>摘要</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-section">摘要</CardTitle></CardHeader>
           <CardContent>
             {report ? <div className="text-sm text-foreground">{report.summary}</div> : <EmptyState text="暂无摘要。" />}
           </CardContent>
         </Card>
-      </section>
-    </div>
-  );
+       </section>
+     </div>} />
+   );
 }
 
 function MetricCard({ label, value, icon }: { label: string; value: string | number; icon: React.ReactNode }) {

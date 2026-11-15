@@ -19,6 +19,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
+import { WorkbenchPageTemplate } from "@/components/templates/page-templates";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImageUpscaleWorkbench } from "@/components/image-upscale/image-upscale-workbench";
@@ -1164,8 +1165,8 @@ export function ListingAiWorkbench() {
   }
 
   return (
-    <div className="space-y-4">
-      <Card>
+    <WorkbenchPageTemplate
+      context={<Card>
         <CardContent className="overflow-x-auto p-2">
           <div className="flex min-w-max gap-2">
             {tabs.map((tab) => {
@@ -1188,9 +1189,9 @@ export function ListingAiWorkbench() {
             })}
           </div>
         </CardContent>
-      </Card>
+      </Card>}
 
-      <main>
+      main={<main>
         {activeTab === "input" ? (
           <ListingAiInputPanel
             titleGenerator={activeTitleGenerator}
@@ -1268,8 +1269,8 @@ export function ListingAiWorkbench() {
           />
         ) : null}
         {activeTab === "upscale" ? <ImageUpscaleWorkbench /> : null}
-      </main>
-    </div>
+      </main>}
+    />
   );
 }
 
@@ -1542,7 +1543,7 @@ function ImagesSection({
       const end = Math.max(start, range.end);
       if (start > cursor) parts.push(escapeHtml(value.slice(cursor, start)));
       parts.push(
-        `<span class="font-bold text-red-700">${escapeHtml(value.slice(start, end))}</span>`,
+        `<span class="font-bold text-danger-ink">${escapeHtml(value.slice(start, end))}</span>`,
       );
       cursor = end;
     });
@@ -1604,8 +1605,8 @@ function ImagesSection({
   function styleClasses(styleKey?: string) {
     const style = styleKey ? cellStyles[styleKey] : undefined;
     return [
-      style?.redText ? "text-red-700 font-bold" : "text-foreground",
-      style?.yellowBg ? "bg-yellow-100" : "bg-white",
+      style?.redText ? "text-danger-ink font-bold" : "text-foreground",
+      style?.yellowBg ? "bg-warning-soft" : "bg-surface",
     ].join(" ");
   }
 
@@ -2329,7 +2330,7 @@ function ImagesSection({
               }
             />
             {excelError ? (
-              <span className="max-w-md truncate text-xs font-semibold text-red-600">
+              <span className="max-w-md truncate text-xs font-semibold text-danger-ink">
                 {excelError}
               </span>
             ) : null}
@@ -2345,7 +2346,7 @@ function ImagesSection({
               onClick={markSelectedTextRed}
               title="当前单元格文字标红"
             >
-              <span className="text-base font-black leading-none text-red-700">A</span>
+              <span className="text-base font-black leading-none text-danger-ink">A</span>
               红字
             </Button>
             <Button
@@ -2355,7 +2356,7 @@ function ImagesSection({
               onClick={() => toggleFocusedCellStyle("yellowBg")}
               title="当前单元格背景标黄"
             >
-              <Highlighter className="h-4 w-4 text-yellow-600" />
+              <Highlighter className="h-4 w-4 text-warning-ink" />
               黄底
             </Button>
             <Button
@@ -2459,12 +2460,12 @@ function ImagesSection({
             <tbody className="divide-y divide-border">
               {Array.from({ length: maxRows }).map((_, index) => (
                 <tr key={index}>
-                  <td className="sticky left-0 z-[1] bg-white px-3 py-3 align-middle">
+                  <td className="sticky left-0 z-[1] bg-surface px-3 py-3 align-middle">
                     <label className="block text-sm font-black text-foreground">
                       Image {index + 1}
                     </label>
                     <textarea
-                      className="mt-2 h-[200px] w-full resize-none rounded-md border border-border bg-white px-2 py-1.5 text-xs font-medium leading-5 text-foreground outline-none transition placeholder:text-muted focus:border-brand focus:ring-2 focus:ring-brand/10"
+                      className="mt-2 h-[200px] w-full resize-none rounded-md border border-border bg-surface px-2 py-1.5 text-xs font-medium leading-5 text-foreground outline-none transition placeholder:text-muted focus:border-brand focus:ring-2 focus:ring-brand/10"
                       value={ownImages.imageNotes?.[index] ?? ""}
                       onChange={(event) =>
                         updateImageNote(index, event.target.value)
@@ -2539,7 +2540,7 @@ function ImagesSection({
               ))}
               {infoRows.map((row) => (
                 <tr key={row.label}>
-                  <td className="sticky left-0 z-[1] bg-white px-3 py-3 align-middle text-sm font-black text-foreground">
+                  <td className="sticky left-0 z-[1] bg-surface px-3 py-3 align-middle text-sm font-black text-foreground">
                     {row.label}
                   </td>
                   {competitorColumns.map((column) => {
@@ -2582,7 +2583,7 @@ function ImagesSection({
                 </tr>
               ))}
               <tr>
-                <td className="sticky left-0 z-[1] bg-white px-3 py-3 align-middle text-sm font-black text-foreground">
+                <td className="sticky left-0 z-[1] bg-surface px-3 py-3 align-middle text-sm font-black text-foreground">
                   {aplusRow.label}
                 </td>
                 {competitorColumns.map((column) => {
@@ -2647,7 +2648,7 @@ function ImagesSection({
           onClick={() => setClearGalleryConfirmOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-lg bg-white p-6 shadow-2xl"
+            className="w-full max-w-md rounded-lg bg-surface p-6 shadow-2xl"
             role="dialog"
             aria-modal="true"
             aria-labelledby="clear-gallery-title"
@@ -2788,7 +2789,7 @@ function CompetitorColumn({
   onImagesUpload: (files: FileList | null) => void;
 }) {
   return (
-    <div className="rounded-md border border-border bg-white">
+    <div className="rounded-md border border-border bg-surface">
       <div className="border-b border-border bg-surface-muted px-4 py-3">
         <p className="text-base font-black text-foreground">{label}</p>
       </div>
@@ -2911,7 +2912,7 @@ function MineColumn({
 
         <InfoField label="标题" className="overflow-hidden">
           <textarea
-            className={`${fieldClass} h-20 resize-none ${input.currentTitle.length > 200 ? "border-red-300 bg-red-50" : ""}`}
+            className={`${fieldClass} h-20 resize-none ${input.currentTitle.length > 200 ? "border-danger/30 bg-danger-soft" : ""}`}
             value={input.currentTitle}
             onChange={(event) => update("currentTitle", event.target.value)}
             placeholder="标题通用上限 ≤200 字符；最强差异化卖点放在前 80 位"
@@ -2920,8 +2921,8 @@ function MineColumn({
             <span
               className={
                 input.currentTitle.length <= 200
-                  ? "text-green-700"
-                  : "text-red-700"
+                  ? "text-success-ink"
+                  : "text-danger-ink"
               }
             >
               {input.currentTitle.length}/200 chars
@@ -2929,8 +2930,8 @@ function MineColumn({
             <span
               className={
                 input.currentTitle.slice(0, 80).trim()
-                  ? "text-green-700"
-                  : "text-amber-700"
+                  ? "text-success-ink"
+                  : "text-warning-ink"
               }
             >
               前 80 字符放核心卖点
@@ -2943,7 +2944,7 @@ function MineColumn({
 
         <InfoField label="五点描述" className="overflow-hidden">
           <textarea
-            className={`${fieldClass} h-52 resize-none ${bulletTotal > 1000 ? "border-red-300 bg-red-50" : ""}`}
+            className={`${fieldClass} h-52 resize-none ${bulletTotal > 1000 ? "border-danger/30 bg-danger-soft" : ""}`}
             value={input.currentBullets}
             onChange={(event) => update("currentBullets", event.target.value)}
             placeholder={
@@ -2951,7 +2952,7 @@ function MineColumn({
             }
           />
           <p
-            className={`mt-2 text-xs font-bold ${bulletTotal <= 1000 ? "text-green-700" : "text-red-700"}`}
+            className={`mt-2 text-xs font-bold ${bulletTotal <= 1000 ? "text-success-ink" : "text-danger-ink"}`}
           >
             已填写 {bulletLines.length}/5 条；合计 {bulletTotal}/1000
             字符，利于索引收录。
@@ -2991,7 +2992,7 @@ function MineColumn({
         </InfoField>
         <InfoField label="主卖点" className="overflow-hidden">
           <textarea
-            className={`${fieldClass} h-28 resize-none border-amber-300 bg-amber-50/40`}
+            className={`${fieldClass} h-28 resize-none border-warning-ink/30 bg-warning-soft/40`}
             value={input.mainSellingPoint1}
             onChange={(event) =>
               update("mainSellingPoint1", event.target.value)

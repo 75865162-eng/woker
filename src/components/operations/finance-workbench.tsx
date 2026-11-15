@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { WorkbenchDialog } from "@/components/ui/workbench-dialog";
+import { StandardDataTable } from "@/components/ui/table-variants";
+import { type DataTableColumn } from "@/components/ui/data-table";
 import { BusinessRecordFields } from "./business-record-fields";
 
 type FinanceResult = {
@@ -15,6 +17,17 @@ export function FinanceWorkbench({ sellerAccountId = "", marketplaceId = "", get
   const [currency, setCurrency] = useState(""), [orderId, setOrderId] = useState(""), [classification, setClassification] = useState(""), [from, setFrom] = useState(""), [to, setTo] = useState(""), [page, setPage] = useState(1);
   const [sourceRunId, setSourceRunId] = useState(""), [dateMode, setDateMode] = useState("day"), [fromTimestamp, setFromTimestamp] = useState(""), [toTimestamp, setToTimestamp] = useState("");
   const [selected, setSelected] = useState<FinanceResult["rows"][number] | null>(null);
+  const financeColumns: DataTableColumn<FinanceResult["rows"][number]>[] = [
+    { key: "transaction", header: "交易 / 实际站点", render: (r) => (<>{r.transactionId}<span className="block text-muted">{r.marketplaceId}</span></>) },
+    { key: "postedAt", header: "入账（UTC）", render: (r) => new Date(r.postedAt).toISOString() },
+    { key: "type", header: "类型 / 原始状态", render: (r) => (<>{r.transactionType ?? "未返回"}<span className="block text-muted">{r.rawStatus ?? "未返回"}</span></>) },
+    { key: "original", header: "原币金额", numeric: true, render: (r) => `${r.originalAmount} ${r.currency}` },
+    { key: "converted", header: "折算金额", numeric: true, render: (r) => r.conversionStatus === "CONVERTED" ? `${r.convertedAmount} ${r.convertedCurrency}` : "未配置有效汇率" },
+    { key: "order", header: "关联订单 / 分类", render: (r) => (<>{r.orderId ?? "无关联订单"}<span className="block text-muted">{r.classification === "NON_ORDER" ? "非订单交易" : "订单关联"}</span></>) },
+    { key: "tz", header: "站点时区", render: (r) => r.marketplaceTimeZone },
+    { key: "source", header: "原始入库批次", render: (r) => <span className="block break-all">{r.sourceRunId}</span> },
+    { key: "action", header: "操作", render: (r) => <Button size="sm" variant="secondary" onClick={() => setSelected(r)}>交易详情</Button> },
+  ];
   const [rawStatus, setRawStatus] = useState("");
   const [result, setResult] = useState<FinanceResult | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(""), [refresh, setRefresh] = useState(0);
   useEffect(() => {
@@ -48,12 +61,17 @@ export function FinanceWorkbench({ sellerAccountId = "", marketplaceId = "", get
       <Button size="sm" variant="secondary" disabled={loading} onClick={() => setRefresh(v => v + 1)}>刷新财务</Button>
     </div>
     {loading && <p role="status" className="text-sm text-muted">读取已落库交易…</p>}
-    {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+    {error && <p role="alert" className="text-sm text-danger-ink">{error}</p>}
     {result && <>
       <p className="text-xs text-muted">本范围未折算 {result.unconvertedCount} 条；所选采集源／卖家下待归属隔离 {result.quarantinedCount} 条（不按站点、币种过滤，不计入下表）。</p>
       {result.sources.map(s => <p key={s.id} className="break-all text-xs text-muted">{s.seller.displayName} · {s.resourceCursor ? `${s.resourceCursor.status} / ${s.resourceCursor.watermarkFrom} — ${s.resourceCursor.watermarkTo}` : "尚无窗口"}</p>)}
-      <div className="overflow-x-auto"><table aria-label="Amazon 财务交易" className="w-full min-w-[900px] text-left text-xs"><thead className="bg-surface-muted"><tr>{["交易 / 实际站点", "入账（UTC）", "类型 / 原始状态", "原币金额", "折算金额", "关联订单 / 分类", "站点时区", "原始入库批次", "操作"].map(v => <th className="py-2 font-medium" key={v}>{v}</th>)}</tr></thead><tbody>{result.rows.map(r => <tr key={`${r.sourceId}:${r.transactionId}`} className="border-t border-border"><td className="py-3">{r.transactionId}<span className="block text-muted">{r.marketplaceId}</span></td><td>{new Date(r.postedAt).toISOString()}</td><td>{r.transactionType ?? "未返回"}<span className="block text-muted">{r.rawStatus ?? "未返回"}</span></td><td>{r.originalAmount} {r.currency}</td><td>{r.conversionStatus === "CONVERTED" ? `${r.convertedAmount} ${r.convertedCurrency}` : "未配置有效汇率"}</td><td>{r.orderId ?? "无关联订单"}<span className="block text-muted">{r.classification === "NON_ORDER" ? "非订单交易" : "订单关联"}</span></td><td>{r.marketplaceTimeZone}</td><td className="break-all">{r.sourceRunId}</td><td><Button size="sm" variant="secondary" onClick={() => setSelected(r)}>交易详情</Button></td></tr>)}</tbody></table></div>
-      {!result.rows.length && <p className="py-6 text-center text-sm text-muted">当前范围没有已归属的财务交易。请先配置财务策略并提交执行审批。</p>}
+      <StandardDataTable
+        ariaLabel="Amazon 财务交易"
+        rows={result.rows}
+        getRowKey={(r) => `${r.sourceId}:${r.transactionId}`}
+        columns={financeColumns}
+        empty="当前范围没有已归属的财务交易。请先配置财务策略并提交执行审批。"
+      />
       <div className="flex justify-end gap-3 text-xs"><span>{result.pagination.total} 条 · 第 {page} / {Math.max(1, result.pagination.pageCount)} 页</span><Button size="sm" variant="secondary" disabled={loading || page <= 1} onClick={() => setPage(p => p - 1)}>财务上一页</Button><Button size="sm" variant="secondary" disabled={loading || page >= result.pagination.pageCount} onClick={() => setPage(p => p + 1)}>财务下一页</Button></div>
     </>}
     <WorkbenchDialog open={!!selected} drawer title="财务交易详情" onClose={() => setSelected(null)}>{selected && <div className="space-y-4">

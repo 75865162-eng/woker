@@ -69,10 +69,10 @@ export function WmsStocktakePanel({ workspaceId, stocktakeId, onChanged }: { wor
     finally { pending.current = false; setBusy(false); }
   }
   async function downloadPrint(){if(!detail||busy)return;setBusy(true);setError('');try{const response=await fetch('/api/operations/wms-stocktake-print?'+new URLSearchParams({id:detail.id}),{headers:{'x-workspace-id':workspaceId},cache:'no-store'});if(!response.ok){const result=await response.json();throw Error(result.error??'打印导出失败。');}const url=URL.createObjectURL(await response.blob()),link=document.createElement('a');try{link.href=url;link.download='stocktake.html';link.click();}finally{URL.revokeObjectURL(url);}}catch(cause){setError(cause instanceof Error?cause.message:'打印导出失败。');}finally{setBusy(false);}}
-  const field = "h-9 rounded border border-input bg-background px-2";
+  const field = "h-9 rounded border border-border bg-background px-2";
   return <section aria-label="盘点作业" className="space-y-3 rounded border border-border p-3">
-    <p className="text-sm text-muted-foreground">盘点期间库存仍可作业；账面变化后须取消重盘。单次最多 100 个库位批次，空值表示未实盘，零须明确录入。</p>
-    {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+    <p className="text-sm text-muted">盘点期间库存仍可作业；账面变化后须取消重盘。单次最多 100 个库位批次，空值表示未实盘，零须明确录入。</p>
+    {error && <p role="alert" className="text-sm text-danger-ink">{error}</p>}
     {notice && <p role="status" className="text-sm">{notice}</p>}
     <details><summary className="cursor-pointer text-sm">新建盘点单</summary>
       <form className="mt-3 flex flex-wrap items-end gap-3" onSubmit={async event => {

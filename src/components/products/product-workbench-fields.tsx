@@ -9,6 +9,7 @@ export function LabeledInput({
   placeholder,
   type = "text",
   size = "default",
+  className,
 }: {
   label: string;
   value: string;
@@ -16,9 +17,10 @@ export function LabeledInput({
   placeholder?: string;
   type?: string;
   size?: "default" | "compact";
+  className?: string;
 }) {
   const isNumberInput = type === "number";
-  const heightClass = size === "compact" ? "h-8" : "h-10";
+  const heightClass = size === "compact" ? "h-[var(--control-h-sm)]" : "h-[var(--control-h)]";
   const [numberText, setNumberText] = useState(value);
 
   useEffect(() => {
@@ -28,10 +30,10 @@ export function LabeledInput({
   }, [isNumberInput, value]);
 
   return (
-    <label className="text-xs font-semibold text-muted">
+    <label className={`block min-w-0 text-meta font-semibold text-muted ${className ?? ""}`}>
       {label}
       <input
-        className={`mt-1 ${heightClass} w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none focus:border-brand`}
+        className={`mt-1 ${heightClass} w-full rounded-md border border-border bg-surface px-3 text-body text-foreground outline-none transition-colors hover:border-border-strong focus:border-brand`}
         type={isNumberInput ? "text" : type}
         inputMode={isNumberInput ? "decimal" : undefined}
         value={isNumberInput ? numberText : value}
@@ -85,7 +87,7 @@ export function SmallInput({
 
   return (
     <input
-      className={`h-8 rounded-md border border-border bg-white px-2 text-xs text-foreground outline-none focus:border-brand ${compact ? "w-[60px] min-w-[60px]" : "w-full min-w-[88px]"}`}
+      className={`h-8 rounded-md border border-border bg-surface px-2 text-xs text-foreground outline-none focus:border-brand ${compact ? "w-[60px] min-w-[60px]" : "w-full min-w-[88px]"}`}
       type={isNumberInput ? "text" : type}
       inputMode={isNumberInput ? "decimal" : undefined}
       value={isNumberInput ? numberText : value}
@@ -133,7 +135,7 @@ export function DecimalInput({
 
   return (
     <input
-      className={`h-8 rounded-md border border-border bg-white px-2 text-xs text-foreground outline-none focus:border-brand ${compact ? "w-[60px] min-w-[60px]" : "w-full min-w-[88px]"}`}
+      className={`h-8 rounded-md border border-border bg-surface px-2 text-xs text-foreground outline-none focus:border-brand ${compact ? "w-[60px] min-w-[60px]" : "w-full min-w-[88px]"}`}
       type="text"
       inputMode="decimal"
       value={text}
@@ -174,7 +176,7 @@ export function SmallTextarea({
 
   return (
     <textarea
-      className={`${sizeClass} rounded-md border border-border px-2 py-2 text-xs outline-none focus:border-brand ${disabled ? "cursor-not-allowed bg-surface-muted text-muted" : "bg-white text-foreground"}`}
+      className={`${sizeClass} rounded-md border border-border px-2 py-2 text-xs outline-none focus:border-brand ${disabled ? "cursor-not-allowed bg-surface-muted text-muted" : "bg-surface text-foreground"}`}
       value={value}
       disabled={disabled}
       onChange={(event) => onChange(event.target.value)}

@@ -1,6 +1,8 @@
 'use client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { DataTable } from '@/components/ui/data-table';
+import { StatusPill } from '@/components/ui/status-pill';
 
 type Item = { id: string; bookId: string; voucherId: string; voucher: { sourceKey: string }; subjectId: string; revision: number; counterparty: string; kind: string; currency: string; amount: string; allocated: string; remaining: string; dueDate: string; evidence: string; status: string };
 type LedgerData = { truncated?: { items: boolean; settlements: boolean }; items: Item[]; settlements: Array<{ id: string; documentId: string; paymentId: string; amount: string; date: string; evidence: string; reversedAt: string | null }> };
@@ -53,7 +55,7 @@ export function FinanceOpenItems({ bookId, periodId, periodOpen, vouchers, subje
   return <section className="space-y-3 border-b border-border py-4" aria-label="应收应付与核销">
     <h2 className="text-sm font-semibold">应收应付与核销</h2>
     <p className="text-xs text-muted">仅从已过账凭证登记辅助往来项，不重复生成凭证。核销记录关联开放期间，不修改原凭证。</p>
-    {error && <p role="alert" className="text-sm text-red-700">{error}</p>}{notice && <p role="status" className="text-sm text-emerald-700">{notice}</p>}
+    {error && <p role="alert" className="text-sm text-danger-ink">{error}</p>}{notice && <p role="status" className="text-sm text-success-ink">{notice}</p>}
     {canApprove && <form className="grid gap-2 border-b border-border pb-3 sm:grid-cols-2 xl:grid-cols-4" onSubmit={event => { event.preventDefault(); void submit({ action: 'confirm-purchase', bookId, voucherId, voucherRevision: selectedVoucher?.revision, subjectId, purchaseOrderId, orderRevision: Number(orderRevision), dueDate, evidence }); }}>
       <strong className="text-xs sm:col-span-2 xl:col-span-4">采购来源确认（不重复记账）</strong>
       <p className="text-xs text-muted sm:col-span-2 xl:col-span-4">确认已过账收货贷方代表应付，或采购付款借方代表付款。供应商由采购单读取；科目须与来源导入映射一致，不自动将收货草稿或订单金额确认为债务。</p>
@@ -84,8 +86,36 @@ export function FinanceOpenItems({ bookId, periodId, periodOpen, vouchers, subje
       <label className="grid gap-1 text-xs sm:col-span-2">核销依据<input className={cls} required maxLength={1000} value={settlementEvidence} onChange={event => setSettlementEvidence(event.target.value)} /></label>
       <Button size="sm" disabled={busy || !documentId || !paymentId || !amount || !settlementEvidence.trim()}>保存核销</Button>
     </form>}
-    <div className="overflow-x-auto"><table aria-label="往来项余额" className="w-full min-w-[900px] text-left text-xs"><thead><tr>{['类型', '往来对象', '科目', '凭证来源', '到期日', '原金额', '已核销', '未核销'].map(value => <th key={value} className="border-b border-border p-2">{value}</th>)}</tr></thead><tbody>{data.items.map(row => <tr key={row.id} className="border-b border-border"><td className="p-2">{labels[row.kind] ?? row.kind}</td><td className="p-2">{row.counterparty}</td><td className="p-2">{subjects.find(subject=>subject.id===row.subjectId)?.code}</td><td className="p-2">{row.voucher.sourceKey}</td><td className="p-2">{row.dueDate.slice(0,10)}</td><td className="p-2">{row.amount} {row.currency}</td><td className="p-2">{row.allocated}</td><td className="p-2">{row.remaining}</td></tr>)}</tbody></table>{!data.items.length && <p className="py-4 text-center text-xs text-muted">当前账套没有往来项。</p>}</div>
-    <div className="overflow-x-auto"><table aria-label="核销记录" className="w-full min-w-[700px] text-left text-xs"><thead><tr>{['核销日期', '单据 / 资金项', '金额', '依据', '状态', '操作'].map(value => <th key={value} className="border-b border-border p-2">{value}</th>)}</tr></thead><tbody>{data.settlements.map(row => <tr key={row.id} className="border-b border-border"><td className="p-2">{row.date.slice(0,10)}</td><td className="p-2">{data.items.find(item => item.id === row.documentId)?.counterparty ?? row.documentId} / {data.items.find(item => item.id === row.paymentId)?.voucher.sourceKey ?? row.paymentId}</td><td className="p-2">{row.amount}</td><td className="p-2">{row.evidence}</td><td className="p-2">{row.reversedAt ? '已冲销' : '有效'}</td><td className="p-2">{canApprove && !row.reversedAt && <Button size="sm" variant="secondary" disabled={busy} onClick={() => { const reason = window.prompt('核销冲销依据'); if (reason?.trim()) void submit({ action: 'reverse-settlement', bookId, settlementId: row.id, evidence: reason.trim() }); }}>冲销</Button>}</td></tr>)}</tbody></table>{!data.settlements.length && <p className="py-4 text-center text-xs text-muted">当前账套没有核销记录。</p>}</div>
+    <DataTable
+      rows={data.items}
+      getRowKey={row => row.id}
+      ariaLabel="往来项余额"
+      empty="当前账套没有往来项。"
+      columns={[
+        { key: 'kind', header: '类型', width: 104, render: row => labels[row.kind] ?? row.kind },
+        { key: 'counterparty', header: '往来对象', render: row => row.counterparty },
+        { key: 'subject', header: '科目', width: 110, render: row => subjects.find(subject => subject.id === row.subjectId)?.code ?? '—' },
+        { key: 'voucher', header: '凭证来源', width: 208, render: row => row.voucher.sourceKey },
+        { key: 'dueDate', header: '到期日', width: 106, render: row => row.dueDate.slice(0, 10) },
+        { key: 'amount', header: '原金额', width: 132, numeric: true, render: row => `${row.amount} ${row.currency}` },
+        { key: 'allocated', header: '已核销', width: 116, numeric: true, render: row => row.allocated },
+        { key: 'remaining', header: '未核销', width: 116, numeric: true, render: row => row.remaining },
+      ]}
+    />
+    <DataTable
+      rows={data.settlements}
+      getRowKey={row => row.id}
+      ariaLabel="核销记录"
+      empty="当前账套没有核销记录。"
+      columns={[
+        { key: 'date', header: '核销日期', width: 108, render: row => row.date.slice(0, 10) },
+        { key: 'pair', header: '单据 / 资金项', render: row => `${data.items.find(item => item.id === row.documentId)?.counterparty ?? row.documentId} / ${data.items.find(item => item.id === row.paymentId)?.voucher.sourceKey ?? row.paymentId}` },
+        { key: 'amount', header: '金额', width: 124, numeric: true, render: row => row.amount },
+        { key: 'evidence', header: '依据', render: row => row.evidence },
+        { key: 'status', header: '状态', width: 92, render: row => (row.reversedAt ? <StatusPill tone="neutral">已冲销</StatusPill> : <StatusPill tone="success" dot>有效</StatusPill>) },
+        { key: 'actions', header: '操作', width: 92, align: 'right', render: row => (canApprove && !row.reversedAt ? <Button size="sm" variant="secondary" disabled={busy} onClick={() => { const reason = window.prompt('核销冲销依据'); if (reason?.trim()) void submit({ action: 'reverse-settlement', bookId, settlementId: row.id, evidence: reason.trim() }); }}>冲销</Button> : <span className="text-muted">—</span>) },
+      ]}
+    />
     {(data.truncated?.items || data.truncated?.settlements) && <p className="text-xs text-muted">仅显示部分往来与核销记录，不代表全账套汇总。</p>}
   </section>;
 }

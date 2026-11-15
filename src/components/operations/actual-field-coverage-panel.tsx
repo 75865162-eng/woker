@@ -21,7 +21,7 @@ export function ActualFieldCoveragePanel({ sourceId, requestHeaders }: { sourceI
   }, [sourceId, requestHeaders, refresh]);
   return <section aria-label="实际字段覆盖报告" className="space-y-3 rounded border border-border p-3">
     <div className="flex items-center justify-between"><h3 className="text-sm font-semibold">原件到业务数据的实际覆盖</h3><Button size="sm" variant="secondary" onClick={() => setRefresh(value => value + 1)}>刷新实际覆盖</Button></div>
-    {error && <p role="alert" className="text-xs text-red-700">{error}</p>}
+    {error && <p role="alert" className="text-xs text-danger-ink">{error}</p>}
     {!report && !error && <p role="status" className="text-xs text-muted">正在核对原件、持久化证据与业务查询…</p>}
     {report && <>
       <dl className="grid grid-cols-2 gap-3 text-xs md:grid-cols-4">{[
@@ -33,7 +33,7 @@ export function ActualFieldCoveragePanel({ sourceId, requestHeaders }: { sourceI
       ].map(([label, value]) => <div key={label}><dt className="text-muted">{label}</dt><dd className="mt-1 text-base font-semibold">{value}</dd></div>)}</dl>
       <p className="text-xs text-muted">实际出现的业务日期：{report.business.firstObservedBusinessDate ?? "未知"} 至 {report.business.lastObservedBusinessDate ?? "未知"}。起止日期不证明中间日期连续完整。</p>
       <p className="text-xs text-muted">批次证据可能覆盖重复行，不能作为全量业务行完成率。官方字段总数、全字段验收和真实 API 验收仍未完成；业务查询与统计分别读取，采集中数值可能变化。</p>
-      {report.persistence.evidenceTruncated && <p role="alert" className="text-xs text-amber-700">批次证据已截断，仅展示本次读取范围。</p>}
+      {report.persistence.evidenceTruncated && <p role="alert" className="text-xs text-warning-ink">批次证据已截断，仅展示本次读取范围。</p>}
       <p className="text-xs text-muted">最近已批准币种重解析：{report.settlementReplays.recent.length} 次{report.settlementReplays.truncated ? "（已截断）" : ""}。原件数量限本来源任务及已关联的卖家报告，旧共享档案可能未计入。</p>
     </>}
   </section>;

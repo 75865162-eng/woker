@@ -37,7 +37,8 @@ try {
     try { await candidate.connect(); db = candidate; break; } catch { await candidate.end().catch(() => {}); await new Promise(resolve => setTimeout(resolve, 250)); }
   }
   assert.ok(db, 'temporary PostgreSQL ready');
-  const env = { WMS_TRANSFER_BROWSER: transferBrowser ? "1" : "0", WMS_FREEZE_BROWSER: freezeBrowser ? "1" : "0", PATH: process.env.PATH, TMPDIR: dir, DATABASE_URL: url, CHECKPOINT_DISABLE: '1' };
+  const webPort = 3017;
+  const env = { WMS_TRANSFER_BROWSER: transferBrowser ? "1" : "0", WMS_FREEZE_BROWSER: freezeBrowser ? "1" : "0", PATH: process.env.PATH, TMPDIR: dir, DATABASE_URL: url, CHECKPOINT_DISABLE: '1', NODE_ENV: 'production', ERP_RUNTIME_MODE: 'production', AUTH_PUBLIC_ORIGIN: `http://127.0.0.1:${webPort}` };
   if (events || (!capacity && !stocktake && !freeze && !transfer)) {
     docker(['image', 'inspect', 'redis:7']);
     docker(['run', '--pull=never', '-d', '--name', redisName, '--label', `codex.fixture=${label}`, '--memory=128m', '--cpus=1', '-p', '127.0.0.1::6379', 'redis:7']);

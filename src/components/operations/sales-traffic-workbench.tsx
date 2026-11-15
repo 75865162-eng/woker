@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { StandardDataTable } from "@/components/ui/table-variants";
+import { type DataTableColumn } from "@/components/ui/data-table";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
 import type { SyncSourceView } from "@/lib/amazon-sync/contracts";
 import type { SalesRow } from "@/lib/amazon-sync/sales-query";
@@ -61,6 +63,26 @@ export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onT
     finally { if (n === mutation.current) setBusy(false); }
   };
   const select = (set: (s: string) => void, value: string) => { set(value); setPage(1); };
+  const salesColumns: DataTableColumn<SalesRow>[] = [
+    {
+      key: "businessDate",
+      header: "业务日 / 来源",
+      render: (row) => (<>{row.businessDate}<span className="block text-muted">{row.sellerName} · {row.amazonSellerId} · {row.marketplaceId}</span></>),
+    },
+    {
+      key: "sales",
+      header: "销售额",
+      numeric: true,
+      render: (row) => row.metrics.orderedProductSales ? `${row.metrics.orderedProductSales.amount} ${row.metrics.orderedProductSales.currencyCode}` : "缺失",
+    },
+    { key: "units", header: "销量 / 订单商品数", render: (row) => `${row.metrics.unitsOrdered ?? "缺失"} / ${row.metrics.totalOrderItems ?? "缺失"}` },
+    { key: "traffic", header: "Sessions / Page views", render: (row) => `${row.metrics.sessions ?? "缺失"} / ${row.metrics.pageViews ?? "缺失"}` },
+    {
+      key: "quality",
+      header: "质量 / 数据版本",
+      render: (row) => (<>{row.quality}<details><summary className="cursor-pointer text-brand">来源与版本</summary><p className="max-w-sm break-all">Reports 2021-06-30 · GET_SALES_AND_TRAFFIC_REPORT<br />报告 {row.reportId} · 文档 {row.documentId}<br />任务 / 版本 {row.syncRunId}<br />获取 {String(row.capturedAt)} · 发布 {String(row.publishedAt)}</p>{onTask && <Button size="sm" variant="secondary" onClick={() => onTask(row.syncRunId)}>查看来源任务</Button>}</details></>),
+    },
+  ];
   return <div className="space-y-4" data-testid="sales-traffic-workbench">
     <p className="text-xs text-muted">店铺逐日汇总 · 日期为 Marketplace 报告业务日（含结束日） · 每日选择最新成功版本。SKU / ASIN 日销量不在本报告粒度内。</p>
     {!taskId && <form className="flex flex-wrap items-end gap-2 rounded border border-border p-3" onSubmit={e => { e.preventDefault(); void requestSync(); }}>
@@ -78,9 +100,15 @@ export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onT
       <label className="grid gap-1 text-xs">业务日期排序<select aria-label="业务日期排序" className={input} value={direction} onChange={e => select(setDirection, e.target.value)}><option value="desc">最新在前</option><option value="asc">最早在前</option></select></label>
       <Button size="sm" variant="secondary" disabled={loading || busy} onClick={() => setReload(v => v + 1)}>刷新日报</Button><Button size="sm" disabled={!canExport || busy || loading || !result} onClick={() => void exportData()}>按当前条件异步导出</Button>
     </div>
-    {error && <p role="alert" className="text-sm text-red-700">{error}</p>}{notice && <p role="status" className="text-sm text-brand">{notice}</p>}
+    {error && <p role="alert" className="text-sm text-danger-ink">{error}</p>}{notice && <p role="status" className="text-sm text-brand">{notice}</p>}
     {job && <p className="text-xs">导出 {job.id} · {job.status} · {job.rowCount ?? "—"} 条 {job.error}{job.status === "SUCCEEDED" && <Button size="sm" variant="secondary" disabled={busy} onClick={() => void download()}>下载 JSONL（含来源与版本）</Button>}</p>}
     {loading && <p role="status">读取已发布日报…</p>}
-    {result && <><div className="overflow-x-auto"><table className="w-full min-w-[800px] text-left text-xs"><thead><tr>{["业务日 / 来源", "销售额", "销量 / 订单商品数", "Sessions / Page views", "质量 / 数据版本"].map(v => <th className="py-2" key={v}>{v}</th>)}</tr></thead><tbody>{result.rows.map(row => <tr className="border-t border-border" key={row.id}><td className="py-2">{row.businessDate}<span className="block text-muted">{row.sellerName} · {row.amazonSellerId} · {row.marketplaceId}</span></td><td>{row.metrics.orderedProductSales ? `${row.metrics.orderedProductSales.amount} ${row.metrics.orderedProductSales.currencyCode}` : "缺失"}</td><td>{row.metrics.unitsOrdered ?? "缺失"} / {row.metrics.totalOrderItems ?? "缺失"}</td><td>{row.metrics.sessions ?? "缺失"} / {row.metrics.pageViews ?? "缺失"}</td><td>{row.quality}<details><summary className="cursor-pointer text-brand">来源与版本</summary><p className="max-w-sm break-all">Reports 2021-06-30 · GET_SALES_AND_TRAFFIC_REPORT<br />报告 {row.reportId} · 文档 {row.documentId}<br />任务 / 版本 {row.syncRunId}<br />获取 {String(row.capturedAt)} · 发布 {String(row.publishedAt)}</p>{onTask && <Button size="sm" variant="secondary" onClick={() => onTask(row.syncRunId)}>查看来源任务</Button>}</details></td></tr>)}</tbody></table></div>{!result.rows.length && <p className="text-sm text-muted">没有符合条件的成功发布日报；这不代表销量为 0。</p>}<div className="flex items-center justify-end gap-3 text-xs"><span>{result.pagination.total} 条 · {page} / {Math.max(1, result.pagination.pageCount)}</span><Button size="sm" variant="secondary" disabled={page <= 1 || loading} onClick={() => setPage(v => v - 1)}>日报上一页</Button><Button size="sm" variant="secondary" disabled={page >= result.pagination.pageCount || loading} onClick={() => setPage(v => v + 1)}>日报下一页</Button></div></>}
+    {result && <><StandardDataTable
+        ariaLabel="销售流量日报"
+        rows={result.rows}
+        getRowKey={(row) => row.id}
+        columns={salesColumns}
+        empty="没有符合条件的成功发布日报；这不代表销量为 0。"
+      /><div className="flex items-center justify-end gap-3 text-xs"><span>{result.pagination.total} 条 · {page} / {Math.max(1, result.pagination.pageCount)}</span><Button size="sm" variant="secondary" disabled={page <= 1 || loading} onClick={() => setPage(v => v - 1)}>日报上一页</Button><Button size="sm" variant="secondary" disabled={page >= result.pagination.pageCount || loading} onClick={() => setPage(v => v + 1)}>日报下一页</Button></div></>}
   </div>;
 }

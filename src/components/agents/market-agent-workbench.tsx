@@ -8,8 +8,11 @@ import { ChainHandoffNotice, chainFetch, chainHeaders, sendChainHandoff, useChai
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Clock3, FileText, RefreshCw, Sparkles, SquareKanban, ShieldAlert, TriangleAlert } from "lucide-react";
+import { WorkbenchPageTemplate } from "@/components/templates/page-templates";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { StandardDataTable } from "@/components/ui/table-variants";
+import { type DataTableColumn } from "@/components/ui/data-table";
 import { useAppShellUser } from "@/components/app-shell/app-shell-context";
 import { roleCanPerformAction } from "@/lib/accounts/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,7 +27,7 @@ import type {
   AgentTraceEvent,
 } from "@/lib/agent-platform";
 import type { AgentRuntimeConfigStatus } from "@/lib/agent-platform/runtime-config";
-import type { MarketExecutionOutput, MarketResearchReport, ProductOpportunity } from "@/lib/agent-platform/market";
+import type { MarketEvidenceItem, MarketExecutionOutput, MarketResearchReport, ProductOpportunity } from "@/lib/agent-platform/market";
 
 type MarketAgentResponse = {
   agent: AgentCenterItem;
@@ -455,6 +458,22 @@ export function MarketAgentWorkbench() {
   const toolCalls = currentExecution?.toolCalls ?? [];
   const traces = currentExecution?.traces ?? [];
   const memoryItems = data?.memoryItems ?? [];
+  const evidenceColumns: DataTableColumn<MarketEvidenceItem & { key: string }>[] = [
+    { key: "metric", header: "指标", render: (r) => <span className="text-xs font-semibold text-foreground">{r.metric}</span> },
+    { key: "source", header: "来源", render: (r) => <span className="text-xs text-muted">{r.dataSource}</span> },
+    { key: "value", header: "数值", render: (r) => <span className="text-xs text-muted">{JSON.stringify(r.value)}</span> },
+  ];
+  const toolCallColumns: DataTableColumn<AgentToolCall>[] = [
+    { key: "tool", header: "工具", render: (r) => (<><div className="text-xs font-semibold text-foreground">{r.toolName}</div><div className="mt-1 text-label text-muted">{r.toolId}</div></>) },
+    { key: "risk", header: "风险", render: (r) => <Badge tone={r.riskLevel === "CRITICAL" ? "red" : r.riskLevel === "HIGH" ? "amber" : r.riskLevel === "MEDIUM" ? "blue" : "gray"}>{r.riskLevel}</Badge> },
+    { key: "status", header: "状态", render: (r) => <span className="text-xs font-semibold text-muted">{r.status}</span> },
+  ];
+  const executionColumns: DataTableColumn<AgentExecutionSummary>[] = [
+    { key: "run", header: "运行", render: (r) => (<><div className="text-xs font-semibold text-foreground">{r.id}</div><div className="mt-1 text-label text-muted">{formatDate(r.createdAt)}</div></>) },
+    { key: "status", header: "状态", render: (r) => <span className="text-xs font-semibold text-muted">{r.status}</span> },
+    { key: "tokenUsage", header: "Token", render: (r) => <span className="text-xs font-semibold text-muted">{r.tokenUsage}</span> },
+    { key: "toolCallCount", header: "工具", render: (r) => <span className="text-xs font-semibold text-muted">{r.toolCallCount}</span> },
+  ];
   const metrics = useMemo(() => {
     const blueOceanIndex = report?.blueOceanRadar.blueOceanIndex ?? null;
     const demand = report?.blueOceanRadar.demandStrength ?? null;
@@ -471,7 +490,7 @@ export function MarketAgentWorkbench() {
   }, [currentExecution?.tokenUsage, currentExecution?.toolCallCount, report, selectedOpportunity]);
 
   return (
-    <div className="space-y-4">
+    <WorkbenchPageTemplate context={<div className="space-y-[var(--gap-section)]">
       <Card>
         <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
           <div>
@@ -511,8 +530,7 @@ export function MarketAgentWorkbench() {
           </CardContent>
         </Card>
       </section>
-
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+      </div>} kpis={<section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
         <Card>
           <CardContent className="flex items-center gap-3 p-4">
             <Sparkles className="h-5 w-5 text-brand" />
@@ -567,12 +585,12 @@ export function MarketAgentWorkbench() {
             </div>
           </CardContent>
         </Card>
-      </section>
+      </section>} main={<div className="space-y-[var(--gap-section)]">
 
-      <section className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+      <section className="grid gap-[var(--gap-section)] xl:grid-cols-[1.05fr_0.95fr]">
         <Card>
           <CardHeader className="flex flex-col gap-2">
-            <CardTitle>研究简报</CardTitle>
+            <CardTitle className="text-section">研究简报</CardTitle>
             <p className="text-xs font-medium text-muted">输入自然语言目标和筛选条件，市场 Agent 会给出带证据的产品机会。</p>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -595,7 +613,7 @@ export function MarketAgentWorkbench() {
               {selectionFileId ? <><p role="status" className="text-xs text-muted">草稿已上传，可以生成机会。</p><p className="break-all text-xs text-muted">selectionFileId：{selectionFileId}</p></> : null}
             </div>
             {report && !report.selectionSource && <p role="note" className="rounded-md border border-border p-2 text-xs font-semibold text-muted">当前报告没有 Round B selection 证据；模拟数据不可作为全链路验收。请先上传实际 draft 再生成证据机会。</p>}
-            {error ? <div className="rounded-md border border-danger/30 bg-red-50 px-3 py-2 text-sm font-semibold text-danger">{error}</div> : null}
+            {error ? <div className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm font-semibold text-danger">{error}</div> : null}
             <label className="block space-y-1">
               <span className="text-xs font-semibold text-muted">目标</span>
               <textarea value={goal} onChange={(event) => setGoal(event.target.value)} className="min-h-24 w-full rounded-md border border-border px-3 py-2 text-sm outline-none focus:border-brand" />
@@ -678,11 +696,11 @@ export function MarketAgentWorkbench() {
           </CardContent>
         </Card>
 
-        <div className="space-y-4">
+        <div className="space-y-[var(--gap-section)]">
           <Card>
             <CardHeader className="flex items-center justify-between gap-3">
               <div>
-                <CardTitle>研究报告</CardTitle>
+                <CardTitle className="text-section">研究报告</CardTitle>
                 <p className="mt-1 text-xs font-medium text-muted">蓝海雷达、信号摘要和推荐下一步操作。</p>
               </div>
               <Badge tone={badgeTone(metrics.blueOceanIndex)}>{metrics.blueOceanIndex === null ? "未知" : `${metrics.blueOceanIndex}/100`}</Badge>
@@ -721,7 +739,7 @@ export function MarketAgentWorkbench() {
           <Card>
             <CardHeader className="flex items-center justify-between gap-3">
               <div>
-                <CardTitle>审批</CardTitle>
+                <CardTitle className="text-section">审批</CardTitle>
                 <p className="mt-1 text-xs font-medium text-muted">创建项目后，这里会出现待审批动作。</p>
               </div>
               {currentApproval ? <Badge tone={currentApproval.status === "APPROVED" ? "green" : currentApproval.status === "REJECTED" ? "red" : "amber"}>{currentApproval.status}</Badge> : null}
@@ -755,10 +773,10 @@ export function MarketAgentWorkbench() {
         </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <section className="grid gap-[var(--gap-section)] xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
           <CardHeader>
-          <CardTitle>产品机会</CardTitle>
+          <CardTitle className="text-section">产品机会</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {opportunities.length ? (
@@ -799,7 +817,7 @@ export function MarketAgentWorkbench() {
 
         <Card>
           <CardHeader>
-          <CardTitle>机会证据</CardTitle>
+          <CardTitle className="text-section">机会证据</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {selectedOpportunity ? (
@@ -814,26 +832,13 @@ export function MarketAgentWorkbench() {
                   <div className="mt-1 text-sm font-semibold text-foreground">{selectedOpportunity.evidence.length}</div>
                   <div className="mt-2 text-xs text-muted">每条结论都应核对工具输出和时间戳。</div>
                 </div>
-                <div className="overflow-x-auto rounded-md border border-border">
-                  <table className="min-w-full divide-y divide-border text-sm">
-                    <thead className="bg-surface-muted text-xs font-bold text-muted">
-                      <tr>
-                        <th className="px-3 py-2 text-left">指标</th>
-                        <th className="px-3 py-2 text-left">来源</th>
-                        <th className="px-3 py-2 text-left">数值</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border bg-white">
-                      {selectedOpportunity.evidence.map((item, index) => (
-                        <tr key={`${item.metric}-${index}`}>
-                          <td className="px-3 py-2 text-xs font-semibold text-foreground">{item.metric}</td>
-                          <td className="px-3 py-2 text-xs text-muted">{item.dataSource}</td>
-                          <td className="px-3 py-2 text-xs text-muted">{JSON.stringify(item.value)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <StandardDataTable
+                  ariaLabel="市场机会证据"
+                  rows={selectedOpportunity.evidence.map((item, index) => ({ ...item, key: `${item.metric}-${index}` }))}
+                  getRowKey={(item) => item.key}
+                  columns={evidenceColumns}
+                  empty="暂无证据。"
+                />
               </>
             ) : (
               <div className="rounded-md border border-dashed border-border p-4 text-sm font-semibold text-muted">
@@ -844,11 +849,11 @@ export function MarketAgentWorkbench() {
         </Card>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+      <section className="grid gap-[var(--gap-section)] xl:grid-cols-[1.05fr_0.95fr]">
         <Card>
           <CardHeader className="flex items-center justify-between gap-3">
             <div>
-              <CardTitle>执行时间线</CardTitle>
+              <CardTitle className="text-section">执行时间线</CardTitle>
               <p className="mt-1 text-xs font-medium text-muted">研究执行和审批流程。</p>
             </div>
             <Badge tone={currentExecution?.status === "COMPLETED" ? "green" : currentExecution?.status === "WAITING_APPROVAL" ? "amber" : "gray"}>{currentExecution?.status ?? "-"}</Badge>
@@ -866,35 +871,17 @@ export function MarketAgentWorkbench() {
 
         <Card>
           <CardHeader>
-            <CardTitle>工具调用</CardTitle>
+            <CardTitle className="text-section">工具调用</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {toolCalls.length ? (
-              <div className="overflow-x-auto rounded-md border border-border">
-                <table className="min-w-full divide-y divide-border text-sm">
-                  <thead className="bg-surface-muted text-xs font-bold text-muted">
-                    <tr>
-                      <th className="px-3 py-2 text-left">工具</th>
-                      <th className="px-3 py-2 text-left">风险</th>
-                      <th className="px-3 py-2 text-left">状态</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border bg-white">
-                    {toolCalls.map((toolCall) => (
-                      <tr key={toolCall.id}>
-                        <td className="px-3 py-2">
-                          <div className="text-xs font-semibold text-foreground">{toolCall.toolName}</div>
-                          <div className="mt-1 text-[11px] text-muted">{toolCall.toolId}</div>
-                        </td>
-                        <td className="px-3 py-2">
-                          <Badge tone={toolCall.riskLevel === "CRITICAL" ? "red" : toolCall.riskLevel === "HIGH" ? "amber" : toolCall.riskLevel === "MEDIUM" ? "blue" : "gray"}>{toolCall.riskLevel}</Badge>
-                        </td>
-                        <td className="px-3 py-2 text-xs font-semibold text-muted">{toolCall.status}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <StandardDataTable
+                ariaLabel="市场 Agent 工具调用"
+                rows={toolCalls}
+                getRowKey={(toolCall) => toolCall.id}
+                columns={toolCallColumns}
+                empty="当前执行暂无工具调用。"
+              />
             ) : (
               <div className="rounded-md border border-dashed border-border p-4 text-sm font-semibold text-muted">
                 当前执行暂无工具调用。
@@ -904,41 +891,25 @@ export function MarketAgentWorkbench() {
         </Card>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <section className="grid gap-[var(--gap-section)] xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
           <CardHeader>
-            <CardTitle>最近运行</CardTitle>
+            <CardTitle className="text-section">最近运行</CardTitle>
           </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-border text-sm">
-              <thead className="bg-surface-muted text-xs font-bold text-muted">
-                <tr>
-                  <th className="px-3 py-2 text-left">运行</th>
-                  <th className="px-3 py-2 text-left">状态</th>
-                  <th className="px-3 py-2 text-left">Token</th>
-                  <th className="px-3 py-2 text-left">工具</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border bg-white">
-                {(data?.executions ?? []).map((execution) => (
-                  <tr key={execution.id}>
-                    <td className="px-3 py-2">
-                      <div className="text-xs font-semibold text-foreground">{execution.id}</div>
-                      <div className="mt-1 text-[11px] text-muted">{formatDate(execution.createdAt)}</div>
-                    </td>
-                    <td className="px-3 py-2 text-xs font-semibold text-muted">{execution.status}</td>
-                    <td className="px-3 py-2 text-xs font-semibold text-muted">{execution.tokenUsage}</td>
-                    <td className="px-3 py-2 text-xs font-semibold text-muted">{execution.toolCallCount}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <CardContent>
+            <StandardDataTable
+              ariaLabel="市场 Agent 最近运行"
+              rows={data?.executions ?? []}
+              getRowKey={(execution) => execution.id}
+              columns={executionColumns}
+              empty="暂无运行记录。"
+            />
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>记忆</CardTitle>
+            <CardTitle className="text-section">记忆</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {memoryItems.length ? (
@@ -946,7 +917,7 @@ export function MarketAgentWorkbench() {
                 <div key={item.id} className="rounded-md border border-border bg-surface-muted p-3">
                   <div className="text-xs font-bold uppercase tracking-wide text-muted">{item.scope}</div>
                   <div className="mt-1 text-sm font-semibold text-foreground">{item.summary}</div>
-                  <div className="mt-2 text-[11px] text-muted">{item.scopeKey}</div>
+                  <div className="mt-2 text-label text-muted">{item.scopeKey}</div>
                 </div>
               ))
             ) : (
@@ -956,16 +927,16 @@ export function MarketAgentWorkbench() {
             )}
           </CardContent>
         </Card>
-      </section>
-    </div>
-  );
+       </section>
+     </div>} />
+   );
 }
 
 function MetricBox({ label, value, tone }: { label: string; value: number | null; tone: "blue" | "amber" | "red" }) {
   return (
     <div className="rounded-md border border-border bg-surface-muted px-3 py-2">
-      <div className="text-[11px] font-bold uppercase tracking-wide text-muted">{label}</div>
-      <div className={`mt-1 text-sm font-semibold ${tone === "blue" ? "text-brand" : tone === "amber" ? "text-amber-700" : "text-danger"}`}>{value ?? "未知"}</div>
+      <div className="text-label font-bold uppercase tracking-wide text-muted">{label}</div>
+      <div className={`mt-1 text-sm font-semibold ${tone === "blue" ? "text-brand" : tone === "amber" ? "text-warning-ink" : "text-danger"}`}>{value ?? "未知"}</div>
     </div>
   );
 }
@@ -975,7 +946,7 @@ function TimelineRow({ trace }: { trace: AgentTraceEvent }) {
     <div className="rounded-md border border-border bg-surface-muted px-3 py-2">
       <div className="flex items-center justify-between gap-3">
         <div className="text-xs font-bold uppercase tracking-wide text-muted">{trace.type}</div>
-        <div className="text-[11px] text-muted">{formatDate(trace.createdAt)}</div>
+        <div className="text-label text-muted">{formatDate(trace.createdAt)}</div>
       </div>
       {trace.message ? <div className="mt-1 text-sm font-semibold text-foreground">{trace.message}</div> : null}
     </div>

@@ -33,7 +33,7 @@ export function ToolLab({ locale, tools }: { locale: Locale; tools: ToolCard[] }
       <div className="grid gap-2">
         {shown.map((tool) => (
           <Link key={tool.name} href={`/lili/v2/tools/${tool.name}`} className="lili-card flex items-start gap-3 px-4 py-3 hover:border-brand">
-            <span className={`mt-0.5 rounded-full px-2 py-0.5 text-xs ${tool.readOnly ? "bg-emerald-50 text-emerald-700" : "bg-surface-muted text-brand"}`}>
+            <span className={`mt-0.5 rounded-full px-2 py-0.5 text-xs ${tool.readOnly ? "bg-success-soft text-success-ink" : "bg-surface-muted text-brand"}`}>
               {tool.readOnly ? "read" : "write"}
             </span>
             <span>

@@ -44,12 +44,12 @@ export function ConclusionExcelField({
   return (
     <div className="text-xs font-semibold text-muted">
       <p>结论 Excel 表（必传）</p>
-      <div className="mt-1 flex min-h-10 items-center justify-between gap-2 rounded-md border border-border bg-white px-3 py-2">
+      <div className="mt-1 flex min-h-10 items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 py-2">
         <div className="min-w-0">
           <p className={`truncate text-sm font-semibold ${file ? "text-foreground" : "text-danger"}`}>
             {file?.name || "未上传"}
           </p>
-          <p className="mt-0.5 text-[11px] text-muted">
+          <p className="mt-0.5 text-label text-muted">
             {file ? `${formatFileSize(file.size)} · ${file.storageType}` : "已取消或确认上架前必须上传"}
           </p>
         </div>
@@ -209,7 +209,7 @@ export function MultiSelectField({
       <button
         ref={triggerRef}
         type="button"
-        className={`mt-1 flex h-10 w-full items-center justify-between gap-3 rounded-md border bg-white px-3 text-left text-sm outline-none transition-colors focus:border-brand ${
+        className={`mt-1 flex h-10 w-full items-center justify-between gap-3 rounded-md border bg-surface px-3 text-left text-sm outline-none transition-colors focus:border-brand ${
           open ? "border-brand ring-2 ring-brand/15" : "border-border"
         }`}
         onClick={() => setOpen((current) => !current)}
@@ -219,9 +219,9 @@ export function MultiSelectField({
       </button>
 
       {open ? (
-        <div style={panelStyle} className="rounded-lg border border-border bg-white shadow-2xl">
+        <div style={panelStyle} className="rounded-lg border border-border bg-surface shadow-2xl">
           <div className="border-b border-border px-3 py-3">
-            <label className="flex h-10 items-center gap-2 rounded-md border border-border bg-white px-3 text-sm text-foreground focus-within:border-brand">
+            <label className="flex h-10 items-center gap-2 rounded-md border border-border bg-surface px-3 text-sm text-foreground focus-within:border-brand">
               <Search className="h-4 w-4 shrink-0 text-muted" />
               <input
                 className="w-full bg-transparent outline-none placeholder:text-muted"
@@ -248,8 +248,8 @@ export function MultiSelectField({
               className="flex w-full items-center gap-3 rounded-md px-1 py-2 text-left hover:bg-surface-muted"
               onClick={toggleAllVisible}
             >
-              <span className={`flex h-5 w-5 items-center justify-center rounded-sm border ${allVisibleSelected ? "border-brand bg-brand text-white" : "border-border bg-white"}`}>
-                {allVisibleSelected ? <span className="text-[11px] font-bold leading-none">✓</span> : null}
+              <span className={`flex h-5 w-5 items-center justify-center rounded-sm border ${allVisibleSelected ? "border-brand bg-brand text-white" : "border-border bg-surface"}`}>
+                {allVisibleSelected ? <span className="text-label font-bold leading-none">✓</span> : null}
               </span>
               <span className="text-sm font-semibold text-foreground">全选</span>
               <span className="ml-auto text-xs font-medium text-muted">
@@ -269,8 +269,8 @@ export function MultiSelectField({
                       className="flex w-full items-center gap-3 rounded-md px-1 py-2 text-left hover:bg-surface-muted"
                       onClick={() => toggle(option)}
                     >
-                      <span className={`flex h-5 w-5 items-center justify-center rounded-sm border ${checked ? "border-brand bg-brand text-white" : "border-border bg-white"}`}>
-                        {checked ? <span className="text-[11px] font-bold leading-none">✓</span> : null}
+                      <span className={`flex h-5 w-5 items-center justify-center rounded-sm border ${checked ? "border-brand bg-brand text-white" : "border-border bg-surface"}`}>
+                        {checked ? <span className="text-label font-bold leading-none">✓</span> : null}
                       </span>
                       <span className={`min-w-0 flex-1 truncate text-sm ${checked ? "font-bold text-foreground" : "font-medium text-foreground"}`}>{option}</span>
                     </button>

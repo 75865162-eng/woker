@@ -14,7 +14,7 @@ export function OperationProgress({ label, progress }: OperationProgressProps) {
         <span className="truncate text-foreground">{label}</span>
         <span className="tabular-nums text-muted">{boundedProgress}%</span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-white">
+      <div className="h-1.5 overflow-hidden rounded-full bg-surface">
         <div className="h-full rounded-full bg-brand transition-all duration-300" style={{ width: `${boundedProgress}%` }} />
       </div>
     </div>

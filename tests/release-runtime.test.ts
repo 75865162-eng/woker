@@ -38,6 +38,7 @@ restart_worker=false
 restart_image_worker=false
 restart_amazon_sync_worker=true
 restart_sellfox_sync_worker=true
+restart_forecast_worker=true
 caddy_reload=false
 install_runtime_from_release /new-release
 cat "$fixture_dir/calls"
@@ -47,7 +48,7 @@ cat "$fixture_dir/calls"
 
 test("selected sync services really restart and verify the new process release", () => {
   const calls = run(false);
-  for (const service of ["amazon-sync-worker", "amazon-sellfox-sync-worker"]) {
+  for (const service of ["amazon-sync-worker", "amazon-sellfox-sync-worker", "amazon-forecast-worker"]) {
     assert.ok(calls.includes(`enable ${service}\n`));
     assert.ok(calls.includes(`restart ${service}\n`));
     assert.ok(calls.includes(`show ${service} --property=MainPID --value`));

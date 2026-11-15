@@ -8,7 +8,7 @@ export default function ForbiddenPage() {
     <AppShell title="Access Denied" subtitle="当前账号没有访问这个页面的权限">
       <Card>
         <CardContent className="flex min-h-[360px] flex-col items-center justify-center text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-md bg-red-50 text-red-700">
+          <div className="flex h-14 w-14 items-center justify-center rounded-md bg-danger-soft text-danger-ink">
             <ShieldAlert className="h-7 w-7" />
           </div>
           <h2 className="mt-5 text-xl font-black text-foreground">访问被拒绝</h2>

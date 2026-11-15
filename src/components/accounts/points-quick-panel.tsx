@@ -28,7 +28,7 @@ type OverrideRow = {
 };
 
 const fieldClass =
-  "h-9 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none focus:border-brand";
+  "h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-brand";
 
 export function PointsQuickPanel({
   userId,
@@ -156,14 +156,14 @@ export function PointsQuickPanel({
           {row?.pendingRequests ? <Badge tone="blue">待审批 {row.pendingRequests}</Badge> : null}
         </div>
         <div className="flex items-center gap-2 text-sm">
-          <span className={`text-lg font-black ${balance === 0 ? "text-red-600" : "text-foreground"}`}>{balance}</span>
+          <span className={`text-lg font-black ${balance === 0 ? "text-danger-ink" : "text-foreground"}`}>{balance}</span>
           <span className="text-xs text-muted">/ {totalQuota} 可用</span>
         </div>
       </div>
 
       <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-border">
         <div
-          className={`h-full ${usedPercent >= 80 ? "bg-red-500" : usedPercent >= 60 ? "bg-amber-500" : "bg-brand"}`}
+          className={`h-full ${usedPercent >= 80 ? "bg-danger" : usedPercent >= 60 ? "bg-accent" : "bg-brand"}`}
           style={{ width: `${usedPercent}%` }}
         />
       </div>
@@ -173,18 +173,18 @@ export function PointsQuickPanel({
         <span>结转 {row?.carriedIn ?? 0}</span>
         <span>补充 {row?.extraGranted ?? 0}</span>
         <span>已用 {row?.consumed ?? 0}</span>
-        {row?.reserved ? <span className="text-amber-600">冻结 {row.reserved}</span> : null}
+        {row?.reserved ? <span className="text-warning-ink">冻结 {row.reserved}</span> : null}
       </div>
 
       {lowBalance && balance > 0 ? (
-        <p className="mt-2 flex items-center gap-1 text-xs text-amber-700">
+        <p className="mt-2 flex items-center gap-1 text-xs text-warning-ink">
           <AlertTriangle className="h-3.5 w-3.5" />
           剩余额度已低于 20%，建议追加。
         </p>
       ) : null}
 
       {balance === 0 && totalQuota > 0 ? (
-        <p className="mt-2 flex items-center gap-1 text-xs text-red-600">
+        <p className="mt-2 flex items-center gap-1 text-xs text-danger-ink">
           <AlertTriangle className="h-3.5 w-3.5" />
           本周期额度已用完，该成员需要提交申请。
         </p>
@@ -261,7 +261,7 @@ export function PointsQuickPanel({
           </div>
 
           {adjustOpen ? (
-            <div className="space-y-2 rounded-md border border-border bg-white px-3 py-3">
+            <div className="space-y-2 rounded-md border border-border bg-surface px-3 py-3">
               <div className="grid grid-cols-2 gap-3">
                 <label className="space-y-1">
                   <span className="text-xs font-bold text-muted">数量（负数为扣减）</span>
@@ -300,8 +300,8 @@ export function PointsQuickPanel({
         </div>
       ) : null}
 
-      {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
-      {notice ? <p className="mt-2 text-xs text-green-700">{notice}</p> : null}
+      {error ? <p className="mt-2 text-xs text-danger-ink">{error}</p> : null}
+      {notice ? <p className="mt-2 text-xs text-success-ink">{notice}</p> : null}
 
       {drawerOpen ? <PointsLedgerDrawer userId={userId} userName={userName} onClose={() => setDrawerOpen(false)} /> : null}
     </div>

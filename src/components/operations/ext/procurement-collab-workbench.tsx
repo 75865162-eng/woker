@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { WorkbenchPageTemplate } from "@/components/templates/page-templates";
 import { Button } from "@/components/ui/button";
 import { AreaField, Badge, Field, Kpis, Notice, Section, SelectField, Table, Tabs, today, useExt, extPost, money, statusLabel } from "./kit";
 
@@ -44,14 +45,12 @@ export function ProcurementCollabWorkbench() {
     });
   }
 
-  return <div className="space-y-6">
-    <Notice error={error || payments.error || exchanges.error || quotations.error || ""} notice={notice} />
-    <Kpis items={[
+  return <WorkbenchPageTemplate context={<Notice error={error || payments.error || exchanges.error || quotations.error || ""} notice={notice} />} kpis={<Kpis items={[
       { label: "待审请款", value: String((payments.data?.items ?? []).filter(row => row.status === "SUBMITTED").length), hint: "提交后进入审批" },
       { label: "待付款", value: String((payments.data?.items ?? []).filter(row => row.status === "APPROVED").length) },
       { label: "换货中", value: String((exchanges.data?.items ?? []).filter(row => ["SUBMITTED", "APPROVED", "SHIPPED"].includes(row.status)).length) },
       { label: "有效报价", value: String((quotations.data?.items ?? []).filter(row => row.status === "ACTIVE").length) },
-    ]} />
+    ]} />} main={<div className="space-y-6">
     <Tabs value={tab} onChange={value => setTab(value as "PAY" | "EXCHANGE" | "QUOTE")} tabs={[{ id: "PAY", label: "请款单" }, { id: "EXCHANGE", label: "换货单" }, { id: "QUOTE", label: "供应商报价" }]} />
 
     {tab === "PAY" && <>
@@ -166,5 +165,5 @@ export function ProcurementCollabWorkbench() {
         </div>}
       </Section>
     </>}
-  </div>;
+  </div>} />;
 }

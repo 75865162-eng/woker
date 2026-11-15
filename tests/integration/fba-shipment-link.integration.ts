@@ -66,6 +66,28 @@ export async function verifyShipmentLinks(scope:WmsScope,draft:FbaPlanDraft,call
   const many=object((await call({...previewBody,expectedRevision:2,shipmentLink:{shipmentId:'SHIP-MANY'}})).item);
   assert.equal((many.items as unknown[]).length,51,'all pages are read through the unified query service');
   await prisma.amazonSyncDataSource.update({where:{id:'source'},data:{activeRunId:'new-ship-run'}});
+  const { actOnFbaLocalPlan } = await import('../../src/lib/fba-local/service');
+  const { createShipmentLabel, downloadShipmentLabel } = await import('../../src/lib/fba-local/shipment-label-service');
+  const { getStorageDriver } = await import('../../src/lib/storage');
+  const shipment = await prisma.fbaLocalShipment.findFirstOrThrow({where:{planId:plan.id}});
+  await actOnFbaLocalPlan(scope,{action:'SAVE_PACKING',id:plan.id,expectedRevision:2,packing:{boxes:[{number:'LABEL-BOX',lengthCm:'30',widthCm:'20',heightCm:'10',grossWeightKg:'2',items:[{lineId:plan.lines[0].id,quantity:6}]}]}});
+  const labelInput={shipmentId:shipment.id,kind:'BOX_LABEL',idempotencyKey:'fixture-label'};
+  const labels=await Promise.all(Array.from({length:6},()=>createShipmentLabel(scope,labelInput)));
+  assert.equal(new Set(labels.map(label=>label.labelId)).size,1);
+  const downloaded=await downloadShipmentLabel(scope,labels[0].labelId);
+  assert.ok(downloaded.buffer.toString().includes('内部标签，非 Amazon 官方箱唛'));
+  await assert.rejects(()=>createShipmentLabel(scope,{...labelInput,kind:'ITEM_LABEL'}));
+  await assert.rejects(()=>downloadShipmentLabel({...scope,workspaceId:'other-workspace'},labels[0].labelId));
+  await prisma.amazonDataAccessGrant.update({where:{id:'grant-operator'},data:{enabled:false}});
+  await assert.rejects(()=>downloadShipmentLabel(scope,labels[0].labelId));
+  await prisma.amazonDataAccessGrant.update({where:{id:'grant-operator'},data:{enabled:true}});
+  const driver=getStorageDriver();const originalPut=driver.putBuffer.bind(driver);const originalDelete=driver.delete.bind(driver);const removed:string[]=[];
+  driver.putBuffer=async input=>{await originalPut(input);throw Error('fixture storage acknowledgement lost');};
+  driver.delete=async key=>{removed.push(key);await originalDelete(key);};
+  try {await assert.rejects(()=>createShipmentLabel(scope,{...labelInput,idempotencyKey:'fixture-orphan'}));assert.equal(removed.length,1);}
+  finally {driver.putBuffer=originalPut;driver.delete=originalDelete;}
+  assert.equal(await prisma.fbaLocalShipmentLabel.count({where:{planId:plan.id}}),1);
+  console.log('PASS: internal labels six-way replay, changed payload rejection, bounded hash download, workspace/revocation isolation and lost storage acknowledgement orphan compensation');
   await verifyCustomsAndFinance(scope,call);
   console.log('PASS: shared published observation query, exact duplicate-SKU row mapping, stale/staged/site/revoked rejection, source-version retention, 10-way idempotency, quantity cap and atomic audit rollback');
 }
