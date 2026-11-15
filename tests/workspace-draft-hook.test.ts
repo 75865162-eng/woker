@@ -6,7 +6,7 @@ import ts from "typescript";
 import { draftStorageKey, readDraft, removeDraft, writeDraft } from "../src/lib/workspace/draft-storage";
 
 const source = readFileSync(new URL("../src/lib/workspace/use-draft-state.ts", import.meta.url), "utf8");
-const compiled = ts.transpileModule(source.replace(/^import .*;\n/gm, "").replace("export function", "function"), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+const compiled = ts.transpileModule(source.replace(/^import .*?;\s*/gms, "").replace("export function", "function"), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText.replace(/\bObject\.defineProperty\(exports, "__esModule", \{ value: true \}\);\s*/g, "");
 
 test("草稿 hook 的延后 React 提交与 A 提交完成不会覆盖 B 草稿", () => {
   const values = new Map<string, string>();

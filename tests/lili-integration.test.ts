@@ -13,6 +13,13 @@ function request(path: string, body?: unknown, origin?: string) {
   return new Request(`http://lili.invalid/api/lili/${path}`, body === undefined ? undefined : { method: "POST", headers: { "content-type": "application/json", ...(origin ? { origin } : {}) }, body: JSON.stringify(body) });
 }
 
+test("Next standalone tracing excludes local output and user uploads", async () => {
+  const config = await readFile("next.config.ts", "utf8");
+  assert.ok(config.includes("outputFileTracingExcludes"));
+  assert.ok(config.includes('"**/uploads/**/*"'));
+  assert.ok(config.includes('"**/.next-build*/**"'));
+});
+
 test("all shipped Lili definitions, translations and full skill procedures are retained", async () => {
   assert.equal(listSkills().length, 116); assert.equal(listTools().length, 107);
   assert.equal(listWorkflows().length, 12);

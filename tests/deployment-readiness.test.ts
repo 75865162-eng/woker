@@ -35,10 +35,10 @@ test("release-check 接受完整合成包，拒绝缺失注册 unit 和真实配
     put("src/lib/runtime/worker-registry.json", JSON.stringify(registry));
     for (const worker of registry) { put(worker.entry); put(`deploy/systemd/${worker.service}.service`); }
     const check = () => {
-      const artifact = path.join(root, "fixture.tar.gz");
-      execFileSync("tar", ["-czf", artifact, "-C", path.join(root, "package"), "."]);
-      writeFileSync(path.join(root, "release-manifest.json"), JSON.stringify({ commit: "fixture", build: "passed", lint: "passed", tests: "passed", artifactSha256: createHash("sha256").update(readFileSync(artifact)).digest("hex") }));
-      execFileSync("bash", [fileURLToPath(new URL("../scripts/release-check.sh", import.meta.url)), artifact], { env: { PATH: process.env.PATH, NODE_ENV: "test", SOURCE_COMMIT: "fixture" }, stdio: "pipe" });
+      const artifact = "fixture.tar.gz";
+      execFileSync("tar", ["-czf", artifact, "-C", "package", "."], { cwd: root });
+      writeFileSync(path.join(root, "release-manifest.json"), JSON.stringify({ commit: "fixture", build: "passed", lint: "passed", tests: "passed", artifactSha256: createHash("sha256").update(readFileSync(path.join(root, artifact))).digest("hex") }));
+      execFileSync("bash", [fileURLToPath(new URL("../scripts/release-check.sh", import.meta.url)), artifact], { cwd: root, env: { PATH: process.env.PATH, NODE_ENV: "test", SOURCE_COMMIT: "fixture" }, stdio: "pipe" });
     };
     check();
     rmSync(path.join(root, "package/deploy/systemd/amazon-forecast-worker.service"));

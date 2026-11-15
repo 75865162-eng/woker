@@ -1,13 +1,13 @@
 {
-  "nativeTables": 145,
+  "nativeTables": 87,
   "rawPalette": 0,
   "arbitraryText": 0,
-  "hexInTsx": 4,
+  "hexInTsx": 0,
   "shadcnResidue": 0,
   "legacyWhiteBg": 0,
   "arbitraryTwValue": 0,
   "nonTokenRadius": 0,
-  "boldDecls": 407,
-  "legacySfVars": 120,
+  "boldDecls": 384,
+  "legacySfVars": 61,
   "adsCssRules": 664
 }

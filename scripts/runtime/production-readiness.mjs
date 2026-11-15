@@ -4,7 +4,7 @@
  *
  * Usage:
  *   npm run check:production                                  # local root .env
- *   npm run check:production -- --gate code                  # internal only
+ *   npm run check:production -- --gate code                  # internal checks, no DB IO
  *   npm run check:production -- --gate deploy                # package + static assets, no DB IO
  *   npm run check:production -- --env /etc/tiaotiao/erp.env  # production EnvironmentFile
  *   npm run check:production -- --env process --gate full    # systemd-injected process.env
@@ -22,7 +22,7 @@ import { parseEnv } from "node:util";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { projectRoot } from "./environment.mjs";
-import { deploymentAssetStatus, migrationCatalog, migrationReadiness, productionEndpointStatus } from "./production-readiness-lib.mjs";
+import { deploymentAssetStatus, encryptionKeyStatus, migrationCatalog, migrationHistoryStatus, productionEndpointStatus } from "./production-readiness-lib.mjs";
 
 const require = createRequire(import.meta.url);
 const { Client } = require("pg");
@@ -46,7 +46,7 @@ const internalIds = new Set([
   "config.env_source", "config.queue_driver", "secret.auth", "gate.write_disabled",
   "config.storage", "build.standalone", "build.static_assets",
   "db.connect", "db.migrations", "db.clean",
-  "secret.amazon_sp_api_encryption_key", "secret.amazon_ads_encryption_key",
+  "secret.amazon_sp_api_encryption_key", "secret.amazon_ads_encryption_key", "secret.sellfox_credential_encryption_key",
 ]);
 const assetIds = new Set([
   // A rendered EnvironmentFile with REPLACE:/GENERATE: leftovers is a package
@@ -61,16 +61,17 @@ const dbIds = new Set([
   "amazon.seller_identity", "amazon.sync_sources", "runtime.worker",
 ]);
 
-/** --gate deploy never touches a database: mark DB checks as informational skips. */
-const skipDb = gate === "deploy";
+/** Only the explicit full gate may touch a database. */
+const skipDb = gate !== "full";
 
 function add(id, label, ok, detail, { blocking = true, db = dbIds.has(id) } = {}) {
+  const text = detail === undefined || detail === null ? "" : String(detail);
   const skipped = skipDb && db;
   checks.push({
     id,
     label,
     ok: skipped ? true : Boolean(ok),
-    detail: skipped ? "SKIP：--gate deploy 不连接数据库" : detail,
+    detail: skipped ? "SKIP：--gate deploy 不连接数据库" : text,
     blocking: skipped ? false : blocking,
     scope: skipped ? "deployment" : internalIds.has(id) ? "internal" : assetIds.has(id) ? "asset" : "deployment",
   });
@@ -113,10 +114,9 @@ const authSecret = env.AUTH_SECRET ?? "";
 add("secret.auth", "AUTH_SECRET 强度", authSecret.length >= 32 && !placeholder.test(authSecret),
   `${authSecret.length} 字符${placeholder.test(authSecret) ? "（模板占位符）" : ""}`);
 
-for (const key of ["AMAZON_SP_API_ENCRYPTION_KEY", "AMAZON_ADS_ENCRYPTION_KEY"]) {
-  let bytes = 0;
-  try { bytes = Buffer.from(env[key] ?? "", "base64").length; } catch { /* invalid */ }
-  add(`secret.${key.toLowerCase()}`, `${key} 为 32 字节`, bytes === 32, `${bytes} 字节`);
+for (const key of ["AMAZON_SP_API_ENCRYPTION_KEY", "AMAZON_ADS_ENCRYPTION_KEY", "SELLFOX_CREDENTIAL_ENCRYPTION_KEY"]) {
+  const status = encryptionKeyStatus(env[key]);
+  add(`secret.${key.toLowerCase()}`, `${key} 为 32 字节 Base64 密钥`, status.ok, `${status.bytes} 字节${status.ok ? "" : "；格式无效或未配置"}`);
 }
 
 const weakPasswords = new Set(["123", "admin", "password", "123456", "admin123", "test", "test1234"]);
@@ -184,7 +184,8 @@ try {
   add("db.connect", "生产数据库可连接", true, "连接成功");
 
   const history = await client.query('SELECT migration_name, checksum, finished_at, rolled_back_at, applied_steps_count FROM "_prisma_migrations"');
-  const migrationStatus = migrationReadiness(migrationCatalog(path.join(projectRoot, "prisma/migrations")), history.rows);
+  const migrationsRoot = path.join(projectRoot, "prisma/migrations");
+  const migrationStatus = migrationHistoryStatus(migrationCatalog(migrationsRoot), history.rows, migrationsRoot);
   add("db.migrations", "迁移全部应用", migrationStatus.ok, migrationStatus.detail);
 
   const synthetic = await client.query(`
@@ -206,8 +207,10 @@ try {
   const sources = await client.query('SELECT count(*)::int AS n FROM "AmazonSyncDataSource" WHERE enabled = true');
   add("amazon.sync_sources", "存在启用的同步数据源", sources.rows[0].n > 0, `启用源=${sources.rows[0].n}`);
 
+  // Prisma 将 DateTime 写入 timestamp（无时区）列时统一存 UTC 值；裸 pg 连接的
+  // 会话时区可能是 Asia/Shanghai，now()::timestamp 会错 8 小时。显式按 UTC 比较。
   const heartbeats = await client.query(`SELECT count(*)::int AS n FROM "WorkerHeartbeat"
-    WHERE "lastSeenAt" > now()::timestamp - interval '3 minutes'`);
+    WHERE "lastSeenAt" > (now() AT TIME ZONE 'UTC') - interval '3 minutes'`);
   add("runtime.worker", "常驻 worker 在线", heartbeats.rows[0].n > 0, `近 3 分钟心跳=${heartbeats.rows[0].n}；需 npm run worker 常驻`);
 } catch (error) {
   if (!skipDb) add("db.connect", "生产数据库可连接", false, error?.message ?? String(error));

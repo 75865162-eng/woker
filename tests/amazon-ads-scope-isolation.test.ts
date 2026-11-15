@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { build } from "esbuild";
 import { chromium } from "@playwright/test";
 
-const root = new URL("../", import.meta.url).pathname;
+const root = fileURLToPath(new URL("../", import.meta.url));
 
 test("五个导出组件保持 props，通过局部边界重挂载业务体且不增加传输", () => {
   for (const [file, name] of [["ads-accounts", "AdsAccounts"], ["ads-campaign-workspace", "AdsCampaignWorkspace"], ["ads-synced-data", "AdsSyncedData"], ["ads-report-acquisition", "AdsReportAcquisition"], ["ads-business-changes", "AdsBusinessChanges"]]) {

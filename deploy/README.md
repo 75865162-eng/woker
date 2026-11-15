@@ -153,8 +153,20 @@ sudo systemctl enable --now amazon-postgres-backup.timer
 
 ## 7. 上线前检查清单
 
+### 构建机资源与产物
+
+生产构建应在 CI runner 完成；不要在生产服务器构建。Next.js 构建可能需要数 GB Node heap，构建机必须同时满足 Node heap 与系统可用内存要求。遇到 `Reached heap limit` 时，先确认没有其他 build/Next 进程占用同一输出目录，再在有足够物理内存的 runner 上重跑；不要在多个进程间共享 `.next-build`，也不要通过删除锁文件绕过仍在运行的构建。standalone 文件追踪应排除仓库中的其他 `.next-build*` 目录，避免把并行验证产物纳入 release trace。
+
+CI 成功后需确认 artifact 中包含 `.next-build/standalone/server.js`、`.next-build/standalone/.next-build/BUILD_ID`、静态资源和 `public`。发布只能消费经过测试、打包与 release manifest 校验的 CI artifact。
+
+### 持久文件存储
+
+`STORAGE_DRIVER=local` 仅在所有 web/worker 主机都挂载同一持久卷至 `UPLOAD_DIR` 时可用；确认挂载路径、读写权限、备份与恢复均已实测。多主机部署应使用共享对象存储（如 S3/R2），并填好对应 endpoint、bucket、region 和凭据。容器/发布目录内的临时磁盘不满足持久化要求。
+
+### 门禁命令
+
 ```bash
-# 1) 部署包完整性（不连数据库，CI/本机都能跑，应 ready=true）
+# 1) 部署包完整性（不连接数据库；build 产物必须先存在）
 npm run check:deploy
 
 # 2) 代码 / 构建 / 数据内部门禁
@@ -165,6 +177,8 @@ sudo npm run check:production -- --env /etc/tiaotiao/erp.env --gate full
 # 或 systemd 已注入环境变量时：
 sudo npm run check:production -- --env process --gate full
 ```
+
+`check:deploy` 中 `build.standalone` 失败代表部署产物不完整，不能继续发布；`config.storage` 的 WARN 必须通过持久卷/对象存储配置和恢复演练关闭。`--gate deploy` 跳过数据库检查，不代表迁移已应用或数据库可用。`--gate full` 会连接指定数据库，执行前必须确认环境文件指向目标环境；不得将本地开发库结果当作生产验收。
 
 `--gate full` 的 `ready=true` 只代表**配置侧**就绪，还必须完成：
 

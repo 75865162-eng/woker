@@ -16,7 +16,14 @@ if [ ! -f "$MANIFEST_PATH" ]; then
   exit 1
 fi
 
-artifact_sha256="$(shasum -a 256 "$ARTIFACT_PATH" | awk '{print $1}')"
+if command -v shasum >/dev/null 2>&1; then
+  artifact_sha256="$(shasum -a 256 "$ARTIFACT_PATH" | awk '{print $1}')"
+elif command -v sha256sum >/dev/null 2>&1; then
+  artifact_sha256="$(sha256sum "$ARTIFACT_PATH" | awk '{print $1}')"
+else
+  echo "Neither shasum nor sha256sum is available." >&2
+  exit 1
+fi
 artifact_size="$(stat -f%z "$ARTIFACT_PATH" 2>/dev/null || stat -c%s "$ARTIFACT_PATH")"
 manifest_sha256="$(node -e 'const fs=require("fs"); const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(data.artifactSha256 || "")' "$MANIFEST_PATH")"
 manifest_commit="$(node -e 'const fs=require("fs"); const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(data.commit || "")' "$MANIFEST_PATH")"
