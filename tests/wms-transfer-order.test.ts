@@ -4,15 +4,28 @@ import {inventoryHistoryRange} from '../src/lib/wms/inventory-history-query';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseTransferOrderDraft, parseTransferOrderPayload, transferOrderStatus, validateTransferQuantities } from '../src/lib/wms/transfer-order-rules';
+import { parseTransferDiscrepancyPayload, validateTransferDiscrepancy, sumDiscrepancyByCategory } from '../src/lib/wms/transfer-order-discrepancy-rules';
 import { normalizeWmsPayload } from '../src/lib/wms/rules';
 describe('WMS in-transit rules',()=>{
- const line={id:'l',quantity:10,shippedQty:6,receivedQty:2};
+ const line={id:'l',quantity:10,shippedQty:6,receivedQty:2,discrepancyQty:0};
  it('keeps partial dispatch and signature separate until all goods arrive',()=>{
   assert.equal(transferOrderStatus([{...line,shippedQty:0,receivedQty:0}]),'DRAFT');
   assert.equal(transferOrderStatus([{...line,receivedQty:0}]),'PARTIALLY_SHIPPED');
   assert.equal(transferOrderStatus([{...line,shippedQty:10,receivedQty:0}]),'IN_TRANSIT');
   assert.equal(transferOrderStatus([line]),'PARTIALLY_RECEIVED');
   assert.equal(transferOrderStatus([{...line,shippedQty:10,receivedQty:10}]),'COMPLETED');
+ });
+ it('completes when received plus discrepancy equals shipped',()=>{
+  assert.equal(transferOrderStatus([{...line,shippedQty:10,receivedQty:7,discrepancyQty:3}]),'COMPLETED');
+  assert.equal(transferOrderStatus([{...line,shippedQty:10,receivedQty:0,discrepancyQty:10}]),'COMPLETED');
+ });
+ it('keeps PARTIALLY_RECEIVED when discrepancy does not zero out net in-transit',()=>{
+  assert.equal(transferOrderStatus([{...line,shippedQty:10,receivedQty:7,discrepancyQty:1}]),'PARTIALLY_RECEIVED');
+  assert.equal(transferOrderStatus([{...line,shippedQty:10,receivedQty:0,discrepancyQty:2}]),'PARTIALLY_RECEIVED');
+ });
+ it('treats lines without discrepancyQty as zero (old callers)',()=>{
+  const legacy={id:'l',quantity:10,shippedQty:10,receivedQty:7} as {id:string;quantity:number;shippedQty:number;receivedQty:number;discrepancyQty:number};
+  assert.equal(transferOrderStatus([legacy]),'PARTIALLY_RECEIVED');
  });
  it('rejects excess dispatch, excess signature and foreign lines',()=>{
   assert.throws(()=>validateTransferQuantities('TRANSFER_ORDER_SHIP',[{lineId:'l',quantity:5}],[line]));
@@ -30,6 +43,24 @@ describe('WMS in-transit rules',()=>{
  it('normalizes conversion with explicit target and justification',()=>{
   assert.deepEqual(normalizeWmsPayload({action:'SKU_CONVERT',targetLotId:'lot',reason:'Repack',quantity:2}),{action:'SKU_CONVERT',targetLotId:'lot',reason:'Repack',quantity:2});
   assert.throws(()=>normalizeWmsPayload({action:'SKU_CONVERT',targetLotId:'lot',reason:'',quantity:2}));
+ });
+ it('routes discrepancy command to the discrepancy parser and enforces net in-transit',()=>{
+  const raw={action:'TRANSFER_ORDER_DISCREPANCY',reference:'R',reason:'short',lines:[{lineId:'l',discrepancies:[{category:'SHORT_RECEIVED',quantity:2,evidence:'photo'},{category:'DAMAGED',quantity:2,evidence:'photo2'}]}]};
+  const parsed=normalizeWmsPayload(raw) as ReturnType<typeof parseTransferDiscrepancyPayload>;
+  assert.equal(parsed.action,'TRANSFER_ORDER_DISCREPANCY');
+  assert.equal(parsed.lines[0].discrepancies.length,2);
+  assert.deepEqual(sumDiscrepancyByCategory(parsed.lines[0].discrepancies),{SHORT_RECEIVED:2,DAMAGED:2,REJECTED:0});
+  const current=[{id:'l',quantity:10,shippedQty:10,receivedQty:6,discrepancyQty:0}];
+  assert.doesNotThrow(()=>validateTransferDiscrepancy(parsed.lines,current));
+  assert.throws(()=>validateTransferDiscrepancy([{lineId:'l',discrepancies:[{category:'SHORT_RECEIVED',quantity:5,evidence:'x'}]}],current));
+  assert.throws(()=>validateTransferDiscrepancy([{lineId:'foreign',discrepancies:[{category:'DAMAGED',quantity:1,evidence:'x'}]}],current));
+ });
+ it('rejects invalid category, duplicate category and blank evidence',()=>{
+  const base=(discrepancies:unknown[])=>({action:'TRANSFER_ORDER_DISCREPANCY',reference:'R',reason:'why',lines:[{lineId:'l',discrepancies}]});
+  assert.throws(()=>parseTransferDiscrepancyPayload(base([{category:'LOST',quantity:1,evidence:'x'}])));
+  assert.throws(()=>parseTransferDiscrepancyPayload(base([{category:'DAMAGED',quantity:1,evidence:'x'},{category:'DAMAGED',quantity:1,evidence:'y'}])));
+  assert.throws(()=>parseTransferDiscrepancyPayload(base([{category:'REJECTED',quantity:1,evidence:'  '}])));
+  assert.throws(()=>parseTransferDiscrepancyPayload(base([{category:'REJECTED',quantity:0,evidence:'x'}])));
  });
 });
 

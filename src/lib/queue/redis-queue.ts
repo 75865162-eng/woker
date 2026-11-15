@@ -34,7 +34,7 @@ let importJobQueue: Queue<{ jobId: string }> | undefined;
 let imageUpscaleJobQueue: Queue<{ jobId: string }> | undefined;
 let productOutboxQueue: Queue<{ eventId: string }> | undefined;
 let wmsEventQueue: Queue<{ deliveryId: string }> | undefined;
-export type AmazonSyncQueueJob = { runId: string; dispatchVersion?: number; exportId?: string; fence?: number; adsTaskId?: string; adsDispatchVersion?: number };
+export type AmazonSyncQueueJob = { runId: string; dispatchVersion?: number; exportId?: string; fence?: number; adsTaskId?: string; adsDispatchVersion?: number; adsReportTaskId?: string; adsReportDispatchVersion?: number };
 let amazonSyncQueue: Queue<AmazonSyncQueueJob> | undefined;
 let sellfoxSyncQueue: Queue<{ runId: string }> | undefined;
 

@@ -8,7 +8,7 @@ const inputClass = 'h-9 min-w-0 rounded border border-border bg-background px-2 
 export function FinanceSourceImport({ periodId, subjects, headers, onSaved }: { periodId: string; subjects: Subject[]; headers: () => Headers; onSaved: () => Promise<void> }) {
   const initialSource = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search);
   const initialKind = initialSource?.get('sourceKind');
-  const [kind, setKind] = useState(initialKind === 'WMS_OVERSEAS_CHARGE' || initialKind === 'FX_REVALUATION' || initialKind === 'WMS_COMMAND' || initialKind === 'WMS_INVENTORY_RISK' || initialKind === 'WMS_COST_ADJUSTMENT' || initialKind === 'PURCHASE_PAYMENT' || initialKind === 'PURCHASE_REFUND' ? initialKind : 'FBA_ADJUSTMENT'), [id, setId] = useState(initialSource?.get('sourceId') ?? '');
+  const [kind, setKind] = useState(initialKind === 'WMS_OVERSEAS_CHARGE' || initialKind === 'FX_REVALUATION' || initialKind === 'WMS_COMMAND' || initialKind === 'WMS_INVENTORY_RISK' || initialKind === 'WMS_COST_ADJUSTMENT' || initialKind === 'PURCHASE_PAYMENT' || initialKind === 'PURCHASE_REFUND' || initialKind === 'PURCHASE_INVOICE' ? initialKind : 'FBA_ADJUSTMENT'), [id, setId] = useState(initialSource?.get('sourceId') ?? '');
   const [preview, setPreview] = useState<Preview | null>(null), [mapping, setMapping] = useState<Record<string, string>>({});
   const [date, setDate] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const generation = useRef(0);
@@ -37,7 +37,7 @@ export function FinanceSourceImport({ periodId, subjects, headers, onSaved }: { 
     <h2 className="text-sm font-semibold">核算来源转入</h2>
     <p className="text-xs text-muted">预览经复核的采购付款或退款、头程费用调整或已计价的库存来源，映射正式科目后保存总账草稿。</p>
     <form className="flex flex-wrap gap-2" onSubmit={event => { event.preventDefault(); void perform(false); }}>
-      <select aria-label="核算来源类型" className={inputClass} disabled={busy} value={kind} onChange={event => { reset(); setKind(event.target.value); }}><option value="WMS_OVERSEAS_CHARGE">已复核海外调拨运输费用</option><option value="FX_REVALUATION">已复核期末汇兑重估</option><option value="FBA_ADJUSTMENT">头程费用调整草稿</option><option value="WMS_COMMAND">库存计价草稿</option><option value="WMS_INVENTORY_RISK">已复核库存跌价评估</option><option value="WMS_COST_ADJUSTMENT">库存成本调整</option><option value="PURCHASE_PAYMENT">已确认采购付款</option><option value="PURCHASE_REFUND">已确认采购退款</option></select>
+      <select aria-label="核算来源类型" className={inputClass} disabled={busy} value={kind} onChange={event => { reset(); setKind(event.target.value); }}><option value="WMS_OVERSEAS_CHARGE">已复核海外调拨运输费用</option><option value="FX_REVALUATION">已复核期末汇兑重估</option><option value="FBA_ADJUSTMENT">头程费用调整草稿</option><option value="WMS_COMMAND">库存计价草稿</option><option value="WMS_INVENTORY_RISK">已复核库存跌价评估</option><option value="WMS_COST_ADJUSTMENT">库存成本调整</option><option value="PURCHASE_PAYMENT">已确认采购付款</option><option value="PURCHASE_REFUND">已确认采购退款</option><option value="PURCHASE_INVOICE">已核准采购发票</option></select>
       <input aria-label="核算草稿 ID" className={inputClass} required disabled={busy} value={id} onChange={event => { reset(); setId(event.target.value); }} placeholder="核算草稿 ID" />
       <Button size="sm" variant="secondary" disabled={busy}>预览来源</Button>
     </form>

@@ -12,7 +12,9 @@ const compat = new FlatCompat({
 const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
-    ignores: [".next/**", ".next-dev/**", ".next-dev*/**", ".next-build/**", ".next-build*/**", ".next-process-*/**", ".next-auth-check/**", ".next-amazon-live/**", "node_modules*/**", "out/**", "build/**", "tmp/**", "outputs/**", "next-env.d.ts", "tmp-node-server.js"],
+    // .next-*/** 覆盖自定义 distDir（如 .next-verify / .next-build-turbo），
+    // 否则 eslint 会扫描数百 MB 的构建产物并拖垮文件代理。
+    ignores: [".next/**", ".next-*/**", "node_modules*/**", "out/**", "build/**", "tmp/**", "outputs/**", "next-env.d.ts", "tmp-node-server.js"],
   },
 ];
 

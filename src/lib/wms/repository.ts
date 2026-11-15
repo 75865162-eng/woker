@@ -8,9 +8,9 @@ export type Tx = Prisma.TransactionClient;
 export async function lockKey(tx: Tx, key: string) {
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))::text`;
 }
-export async function lockAggregate(tx: Tx, scope: WmsScope, id: string, kind: "costRule" | "financeDraft" | "consumable" | "transferOrder" | "receipt" | "reservation" | "approval" | "balance" | "stocktake" | "outbound" | "outboundLine") {
+export async function lockAggregate(tx: Tx, scope: WmsScope, id: string, kind: "assemblyOrder" | "costRule" | "financeDraft" | "consumable" | "transferOrder" | "receipt" | "reservation" | "approval" | "balance" | "stocktake" | "outbound" | "outboundLine") {
   // Table identifiers are a closed server-side set, never caller SQL.
-  const table = { costRule:"WmsCostRule",financeDraft:"WmsFinanceDraft",consumable:"WmsOutboundConsumable", transferOrder:"WmsTransferOrder", receipt: "WmsReceipt", reservation: "WmsReservation", approval: "WmsApproval", balance: "WmsStockBalance", stocktake: "WmsStocktake", outbound: "WmsOutbound", outboundLine: "WmsOutboundLine" }[kind];
+  const table = { assemblyOrder:"WmsAssemblyOrder", costRule:"WmsCostRule",financeDraft:"WmsFinanceDraft",consumable:"WmsOutboundConsumable", transferOrder:"WmsTransferOrder", receipt: "WmsReceipt", reservation: "WmsReservation", approval: "WmsApproval", balance: "WmsStockBalance", stocktake: "WmsStocktake", outbound: "WmsOutbound", outboundLine: "WmsOutboundLine" }[kind];
   await tx.$queryRaw(Prisma.sql`SELECT id FROM ${Prisma.raw(`"${table}"`)} WHERE "organizationId"=${scope.organizationId} AND "workspaceId"=${scope.workspaceId} AND id=${id} FOR UPDATE`);
 }
 export async function activeLocation(tx: Tx, scope: WmsScope, id: string, warehouseId?: string, kind?: string) {

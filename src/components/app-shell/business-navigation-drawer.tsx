@@ -23,7 +23,7 @@ export function BusinessNavigationDrawer({ groups, isActive }: {
       <nav aria-label="业务模块入口" className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
         {matches.map(group => <section key={group.label}>
           <h3 className="mb-2 border-b border-border pb-2 text-xs font-semibold text-muted">{group.label}</h3>
-          <div className="space-y-1">{group.items.map(item => <Link key={item.href} href={item.href} prefetch={false} aria-current={isActive(item.href) ? "page" : undefined} onClick={() => setOpen(false)} className={`flex min-h-10 items-center gap-2 rounded px-3 py-2 text-sm hover:bg-surface-muted ${isActive(item.href) ? "bg-brand/10 font-semibold text-brand" : "text-foreground"}`}><item.icon aria-hidden className="h-4 w-4 shrink-0" />{item.label}</Link>)}</div>
+          <div className="space-y-1">{group.items.map(item => <Link key={item.href} href={item.href} aria-current={isActive(item.href) ? "page" : undefined} onClick={() => setOpen(false)} className={`flex min-h-10 items-center gap-2 rounded px-3 py-2 text-sm hover:bg-surface-muted ${isActive(item.href) ? "bg-brand/10 font-semibold text-brand" : "text-foreground"}`}><item.icon aria-hidden className="h-4 w-4 shrink-0" />{item.label}</Link>)}</div>
         </section>)}
       </nav>
       {!matches.length && <p role="status" className="py-10 text-center text-sm text-muted">没有匹配的业务入口。</p>}

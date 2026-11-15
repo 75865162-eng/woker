@@ -908,17 +908,14 @@ function TemplateLibraryCard({
         <div className="flex flex-1 flex-col gap-3">
           <div className="flex h-[102px] shrink-0 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-surface-muted px-4 py-3 text-center">
             <span className="text-base font-semibold text-foreground">亚马逊官方模板</span>
-            <a
+            <button
+              type="button"
               className="mt-4 inline-flex h-11 items-center gap-2 rounded-xl border border-border bg-white px-5 text-sm font-medium text-foreground transition-colors hover:border-brand hover:text-brand"
-              href="#"
-              onClick={(event) => {
-                event.preventDefault();
-                onDownloadB();
-              }}
+              onClick={() => onDownloadB()}
             >
               <Download className="h-4 w-4" />
               下载官方模板
-            </a>
+            </button>
           </div>
           <div className="flex h-[102px] shrink-0 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-surface-muted px-4 py-3 text-center">
             <FileSpreadsheet className="h-7 w-7 text-brand" />

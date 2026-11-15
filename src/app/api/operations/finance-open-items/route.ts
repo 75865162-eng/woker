@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   try { const value: unknown = await request.clone().json(); if (!value || typeof value !== 'object' || Array.isArray(value)) throw Error('Invalid body'); body = value as Record<string, unknown>; }
   catch { return NextResponse.json({ error: '请求内容无效。' }, { status: 400 }); }
   const action = String(body.action ?? '');
-  const approvalActions = ['settle', 'reverse-settlement'];
+  const approvalActions = ['confirm-purchase', 'settle', 'reverse-settlement'];
   const auth = await requireApiPermission('operations', approvalActions.includes(action) ? 'approve' : 'create', request);
   if (!auth.ok) return auth.response;
   try {

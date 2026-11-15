@@ -4,6 +4,7 @@ import {WmsError,type WmsScope,type WmsCommandInput} from './contracts';
 import {activeLocation,ensureBalances,lockAggregate,lockKey,move,balanceId,snapshot,type Tx} from './repository';
 import {availableQuantity} from './rules';
 import {parseTransferOrderDraft,transferOrderStatus,validateTransferQuantities} from './transfer-order-rules';
+import {validateTransferDiscrepancy} from './transfer-order-discrepancy-rules';
 
 export async function createTransferOrder(tx:Tx,scope:WmsScope,raw:unknown){
  const input=parseTransferOrderDraft(raw),identity=scoped(scope),requestHash=createHash('sha256').update(JSON.stringify(input)).digest('hex');
@@ -66,5 +67,45 @@ export async function executeTransferOrder(tx:Tx,scope:WmsScope,input:WmsCommand
  }
  const lines=await tx.wmsTransferOrderLine.findMany({where:{...scoped(scope),orderId:order.id}}),status=transferOrderStatus(lines);
  const updated=await tx.wmsTransferOrder.update({where:{id:order.id},data:{status,revision:{increment:1}}});
- return {revision:updated.revision,movementIds,transferChange:{reference:payload.reference,status,lines:lines.map(line=>({lineId:line.id,quantity:line.quantity,shippedQty:line.shippedQty,receivedQty:line.receivedQty,inTransitQty:line.shippedQty-line.receivedQty}))}};
+ return {revision:updated.revision,movementIds,transferChange:{reference:payload.reference,status,lines:lines.map(line=>({lineId:line.id,quantity:line.quantity,shippedQty:line.shippedQty,receivedQty:line.receivedQty,discrepancyQty:line.discrepancyQty,inTransitQty:line.shippedQty-line.receivedQty-line.discrepancyQty}))}};
+}
+
+// Approval-time target validation for a discrepancy command. No inventory is
+// touched here; only the order version/status and the pure whole-batch check.
+export async function validateTransferDiscrepancyAction(tx:Tx,scope:WmsScope,input:WmsCommandInput){
+ const payload=input.payload;
+ if(payload.action!=='TRANSFER_ORDER_DISCREPANCY')throw new WmsError('非差异动作。',400);
+ await lockAggregate(tx,scope,input.aggregateId,'transferOrder');
+ const order=await tx.wmsTransferOrder.findFirst({where:{...scoped(scope),id:input.aggregateId},include:{lines:{orderBy:{id:'asc'}}}});
+ if(!order)throw new WmsError('调拨单不存在。',404);
+ if(order.revision!==input.expectedRevision||['COMPLETED','CANCELLED'].includes(order.status))throw new WmsError('调拨单版本已变化或已结束。');
+ validateTransferDiscrepancy(payload.lines,order.lines);
+ return {order};
+}
+
+// Reclassifies net in-transit quantity into discrepancy categories only.
+// Intentionally creates no WmsMovement: shippedQty was already deducted from
+// source onHand at SHIP and never entered the destination, so emitting a
+// movement here would break the physical+in-transit conservation assertion
+// and pollute the valuation chain. claimReference is intentionally left blank.
+export async function executeTransferDiscrepancy(tx:Tx,scope:WmsScope,input:WmsCommandInput,commandId:string,reviewedBy?:string|null){
+ const payload=input.payload;
+ if(payload.action!=='TRANSFER_ORDER_DISCREPANCY')throw new WmsError('非差异动作。',400);
+ await lockAggregate(tx,scope,input.aggregateId,'transferOrder');
+ const order=await tx.wmsTransferOrder.findFirst({where:{...scoped(scope),id:input.aggregateId},include:{lines:{orderBy:{id:'asc'}}}});
+ if(!order)throw new WmsError('调拨单不存在。',404);
+ if(order.revision!==input.expectedRevision||['COMPLETED','CANCELLED'].includes(order.status))throw new WmsError('调拨单版本已变化或已结束。');
+ validateTransferDiscrepancy(payload.lines,order.lines);
+ const requestHash=createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+ for(const line of payload.lines){
+  const lineTotal=line.discrepancies.reduce((sum,item)=>sum+item.quantity,0);
+  for(const item of line.discrepancies){
+   await tx.wmsTransferDiscrepancy.create({data:{...scoped(scope),id:crypto.randomUUID(),orderId:order.id,lineId:line.lineId,category:item.category,quantity:item.quantity,evidence:item.evidence,reason:payload.reason,createdBy:scope.actorUserId,reviewedBy:reviewedBy??undefined,reviewedAt:reviewedBy?new Date():undefined,status:reviewedBy?'REVIEWED':'DRAFT',idempotencyKey:`${input.idempotencyKey}:${line.lineId}:${item.category}`,requestHash}});
+  }
+  await tx.wmsTransferOrderLine.update({where:{id:line.lineId},data:{discrepancyQty:{increment:lineTotal}}});
+ }
+ const lines=await tx.wmsTransferOrderLine.findMany({where:{...scoped(scope),orderId:order.id}}),status=transferOrderStatus(lines);
+ const updated=await tx.wmsTransferOrder.update({where:{id:order.id},data:{status,revision:{increment:1}}});
+ await auditWms(tx,scope,'transfer-order.discrepancy',order.id,{reference:payload.reference,reason:payload.reason});
+ return {revision:updated.revision,movementIds:[] as string[],transferChange:{reference:payload.reference,status,lines:lines.map(line=>({lineId:line.id,quantity:line.quantity,shippedQty:line.shippedQty,receivedQty:line.receivedQty,discrepancyQty:line.discrepancyQty,inTransitQty:line.shippedQty-line.receivedQty-line.discrepancyQty}))}};
 }

@@ -13,6 +13,9 @@ import type {
 } from "./types";
 import { aggregateMetricsForCampaignGroups, enrichMetric } from "@/lib/metrics";
 import type { AdjustmentDraft, CampaignGroup, OverallAdDataRow, PerformanceRow } from "@/lib/types";
+import { gatePpcReportWithInventory, ungatedPpcReport, type GatedPpcReport } from "./ppc-inventory-gate";
+import { failClosedConstraint } from "@/lib/ads-inventory/from-replenishment";
+import type { ConstraintResult } from "@/lib/ads-inventory/constraint";
 
 export interface PpcEvidenceItem {
   claim: string;
@@ -92,6 +95,9 @@ export interface PpcExecutionOutput {
   report: PpcAnalysisReport;
   evidence: PpcEvidenceItem[];
   adjustmentDrafts: AdjustmentDraft[];
+  /** Present only when the caller supplied an inventory constraint resolver. */
+  inventoryGate?: GatedPpcReport["gate"] | null;
+  blockedBidIncreases?: GatedPpcReport["blocked"];
   amazonAdsPlan?: JsonValue;
   memoryItems?: AgentMemoryEntry[];
 }
@@ -113,6 +119,18 @@ export interface PpcExecutionRequest {
   targetAcos?: number;
   targetRoas?: number;
   targetMargin?: number;
+  /** MSKU used to join the replenishment plan; enables the inventory gate. */
+  sellerSku?: string;
+  /** Length of the advertising report window in days; required for daily-spend caps. */
+  adsWindowDays?: number;
+  /** Unit economics for the gate; without a gross margin no boost is allowed. */
+  productEconomics?: {
+    unitPrice?: number | null;
+    unitCost?: number | null;
+    grossMarginPct?: number | null;
+    targetNetMarginPct?: number;
+    currency?: string | null;
+  };
   context?: Record<string, unknown>;
 }
 
@@ -561,6 +579,13 @@ export function createPpcAgentExecutionExecutor(options: {
   request: PpcExecutionRequest;
   requestedByUserId?: string;
   clock?: () => Date;
+  /**
+   * Optional inventory constraint. When supplied, bid increases that conflict with
+   * stock coverage are removed from the report and from the adjustment drafts that
+   * would later become Amazon actions. `null` means "no inventory facts for this
+   * scope", which keeps the report unchanged but is recorded as ungated.
+   */
+  inventoryConstraint?: () => ConstraintResult | null | Promise<ConstraintResult | null>;
 }): AgentRuntimeExecutor {
   const normalized = normalizePpcExecutionRequest(options.request, options.request.context ?? {});
 
@@ -649,9 +674,25 @@ export function createPpcAgentExecutionExecutor(options: {
       }),
     );
 
-    const report = extractReport(reportResult.output, normalized);
+    const rawReport = extractReport(reportResult.output, normalized);
     const evidence = extractEvidence(workspaceLoad.output, adsSnapshot.output, keywordSignal.output, diagnosisResult.output, bidResult.output, negativeResult.output, campaignResult.output, reportResult.output);
+    let gated: GatedPpcReport | null = null;
+    if (options.inventoryConstraint) {
+      try {
+        const constraint = await options.inventoryConstraint();
+        gated = constraint ? gatePpcReportWithInventory(rawReport, constraint) : ungatedPpcReport(rawReport);
+      } catch (error) {
+        // Fail closed: a gate that cannot compute must block bid increases, never
+        // let them through silently.
+        const message = error instanceof Error ? error.message : "unknown";
+        recordTrace("error", "Inventory gate failed", toJsonValue({ message }));
+        gated = gatePpcReportWithInventory(rawReport, failClosedConstraint(`库存门禁计算失败（${message}）：加投不可执行。`));
+      }
+      if (gated) recordTrace("decision", "Inventory gate applied", toJsonValue(gated.gate));
+    }
+    const report = gated?.report ?? rawReport;
     const adjustmentDrafts = buildAdjustmentDrafts(report.bidRecommendations);
+    const gateRisks = gated?.blocked.map((item) => `${item.keyword || item.target}：${item.reason}`) ?? [];
     const memoryItems = buildMemoryItems({
       execution,
       definition,
@@ -667,13 +708,15 @@ export function createPpcAgentExecutionExecutor(options: {
       recommendation: {
         summary: report.recommendation,
         evidence,
-        risks: report.diagnosis.filter((item) => item.severity !== "low").map((item) => item.issue),
+        risks: [...report.diagnosis.filter((item) => item.severity !== "low").map((item) => item.issue), ...gateRisks],
         confidence: computeConfidence(report),
         nextAction: "Review recommendation bundle and request human approval.",
       },
       decision: {
         summary: report.summary,
-        rationale: "PPC diagnosis is ready for human review.",
+        rationale: gated
+          ? `PPC diagnosis is ready for human review. Inventory gate: ${gated.gate.decision}.`
+          : "PPC diagnosis is ready for human review.",
         confidence: computeConfidence(report),
         nextStep: "Review diagnosis, bid, negative, and campaign recommendations",
       },
@@ -681,6 +724,8 @@ export function createPpcAgentExecutionExecutor(options: {
         report,
         evidence,
         adjustmentDrafts,
+        inventoryGate: gated?.gate ?? null,
+        blockedBidIncreases: gated?.blocked ?? [],
       }),
       tokenUsage: 180,
       costCents: 0,

@@ -1,7 +1,8 @@
 import type { ButtonHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
-type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
+// outline 供 wimoor 分支新增的组装/单据工作台使用，视觉与 secondary 一致但语义独立。
+type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "danger";
 type ButtonSize = "sm" | "md" | "icon";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -12,6 +13,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 const variants: Record<ButtonVariant, string> = {
   primary: "bg-brand text-white hover:bg-brand-dark shadow-sm",
   secondary: "border border-border bg-white text-foreground hover:bg-surface-muted",
+  outline: "border border-border bg-white text-foreground hover:bg-surface-muted",
   ghost: "text-muted hover:bg-surface-muted hover:text-foreground",
   danger: "bg-danger text-white hover:bg-red-700",
 };

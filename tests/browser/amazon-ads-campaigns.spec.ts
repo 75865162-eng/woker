@@ -44,6 +44,8 @@ async function setup(page: Page, control: Control = {}, path = "/amazon-ads/camp
     const request = route.request(), url = new URL(request.url());
     expect(url.origin).toBe("http://127.0.0.1:43239");
     if (url.pathname.startsWith("/api/")) {
+      // 报表采集面板独立取数，不进入结构/报表查询的请求断言列表。
+      if (url.pathname === "/api/integrations/amazon/ads/reports") return route.fulfill({ contentType: "application/json", body: JSON.stringify({ mode: "live", executionRole: "local", oauthConfigured: false, reportTypes: [], profiles: [] }) });
       expect(request.method()).toBe("GET"); requests.push(url);
       if (url.pathname === "/api/integrations/amazon/ads/data") {
         await control.wait?.(url);

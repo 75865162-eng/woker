@@ -4,10 +4,12 @@ import path from "node:path";
 import test from "node:test";
 
 const root = process.cwd();
+/** Route assertions are written against URL-style paths; normalise so they hold on Windows too. */
+const slash = (filename: string) => filename.split(path.sep).join("/");
 function files(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
     const filename = path.join(directory, entry.name);
-    return entry.isDirectory() ? files(filename) : [filename];
+    return entry.isDirectory() ? files(filename) : [slash(filename)];
   });
 }
 
@@ -18,9 +20,9 @@ test("business routes retain the authenticated app shell in one persistent App R
   for (const filename of files(path.join(root, "src/app/(erp)"))) {
     if (!filename.endsWith("/page.tsx")) continue;
     const source = readFileSync(filename, "utf8");
-    let routeDirectory = path.dirname(filename);
+    let routeDirectory = path.dirname(slash(filename));
     let routeLayoutOwnsShell = false;
-    while (routeDirectory.startsWith(path.join(root, "src/app/(erp)"))) {
+    while (routeDirectory.startsWith(slash(path.join(root, "src/app/(erp)")))) {
       const layout = path.join(routeDirectory, "layout.tsx");
       if (existsSync(layout) && /@\/components\/app-shell\/(?:app-shell|persistent-app-shell)/.test(readFileSync(layout, "utf8"))) {
         routeLayoutOwnsShell = true;

@@ -6,6 +6,8 @@ import { WmsError, type WmsScope } from '@/lib/wms/contracts';
 import { requireRevision, requireText, strictKeys } from '@/lib/wms/rules';
 import type { Tx } from '@/lib/wms/repository';
 import { amountUnits, itemAmount, itemKind, planSettlement, unitsAmount } from './open-item-rules';
+import { assertFinanceAction } from './access';
+import { resolvePurchaseOpenItem } from './purchase-open-item-service';
 
 function dateValue(value: unknown, label: string) {
   const date = requireText(value, label);
@@ -20,6 +22,7 @@ export async function queryFinanceOpenItems(scope: WmsScope, params: URLSearchPa
   const asOf = dateValue(params.get('asOf') ?? new Date().toISOString().slice(0,10), '账龄日期');
   const where = { ...scoped(scope), bookId };
   return prisma.$transaction(async tx => {
+  await assertFinanceAction(tx, scope, 'view');
   const items = await tx.financeOpenItem.findMany({ where, include: { voucher: { select: { sourceKey: true, date: true } }, documentSettlements: { where: { reversedAt: null }, select: { amount: true } }, paymentSettlements: { where: { reversedAt: null }, select: { amount: true } } }, orderBy: [{ dueDate: 'asc' }, { id: 'asc' }], take: 201 });
   const settlements = await tx.financeSettlement.findMany({ where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 101 });
   return { items: items.slice(0,200).map(({ documentSettlements, paymentSettlements, ...item }) => {
@@ -36,28 +39,42 @@ async function lockBook(tx: Tx, scope: WmsScope, bookId: string) {
 }
 
 export async function createFinanceOpenItem(scope: WmsScope, body: Record<string, unknown>) {
-  strictKeys(body, ['action', 'bookId', 'voucherId', 'subjectId', 'counterparty', 'kind', 'dueDate', 'evidence']);
+  const purchaseBridge = body.action === 'confirm-purchase';
+  strictKeys(body, purchaseBridge ? ['action', 'bookId', 'voucherId', 'subjectId', 'purchaseOrderId', 'orderRevision', 'voucherRevision', 'dueDate', 'evidence'] : ['action', 'bookId', 'voucherId', 'subjectId', 'counterparty', 'kind', 'dueDate', 'evidence']);
   const bookId = requireText(body.bookId, '账套 ID'), voucherId = requireText(body.voucherId, '凭证 ID'), subjectId = requireText(body.subjectId, '科目 ID');
-  const counterparty = requireText(body.counterparty, '往来对象', 160), evidence = requireText(body.evidence, '往来依据', 1000);
-  const kind = itemKind(body.kind), dueDate = dateValue(body.dueDate, '到期日');
+  const evidence = requireText(body.evidence, '往来依据', 1000);
+  const dueDate = dateValue(body.dueDate, '到期日');
+  const orderId = purchaseBridge ? requireText(body.purchaseOrderId, '采购单 ID') : '';
+  const orderRevision = purchaseBridge ? requireRevision(body.orderRevision) : 0;
+  const voucherRevision = purchaseBridge ? requireRevision(body.voucherRevision) : 0;
+  const manualCounterparty = purchaseBridge ? '' : requireText(body.counterparty, '往来对象', 160);
+  const manualKind = purchaseBridge ? 'PAYABLE' : itemKind(body.kind);
   return prisma.$transaction(async tx => {
+    await assertFinanceAction(tx, scope, purchaseBridge ? 'approve' : 'create');
     await lockBook(tx, scope, bookId);
     await tx.$queryRaw`SELECT id FROM "FinanceVoucher" WHERE "organizationId"=${scope.organizationId} AND "workspaceId"=${scope.workspaceId} AND "bookId"=${bookId} AND id=${voucherId} FOR UPDATE`;
-    const voucher = await tx.financeVoucher.findFirst({ where: { ...scoped(scope), id: voucherId, bookId, status: 'POSTED' }, include: { book: true, lines: { where: { subjectId } } } });
+    const voucher = await tx.financeVoucher.findFirst({ where: { ...scoped(scope), id: voucherId, bookId, status: 'POSTED' }, include: { book: true, lines: true } });
     const subject = await tx.financeSubject.findFirst({ where: { ...scoped(scope), bookId, id: subjectId, enabled: true, leaf: true } });
     if (!voucher || !subject) throw new WmsError('往来项必须来自当前工作区已过账凭证的启用末级科目。', 409);
-    if (!voucher.lines.length) throw new WmsError('凭证没有该科目的分录。', 422);
-    const amount = itemAmount(kind, voucher.lines.map(line => ({ debit: amountText(line.debit), credit: amountText(line.credit) })));
+    const wmsCommand = voucher.sourceKey.startsWith('WMS-COMMAND:') ? await tx.wmsCommand.findFirst({ where: { ...scoped(scope), id: voucher.sourceKey.slice('WMS-COMMAND:'.length) }, select: { action: true } }) : null;
+    const purchaseSource = wmsCommand?.action === 'RECEIVE' || voucher.sourceKey.startsWith('PURCHASE-PAYMENT:') || voucher.sourceKey.startsWith('PURCHASE-REFUND:') || voucher.sourceKey.startsWith('PURCHASE-INVOICE:');
+    if (!purchaseBridge && (purchaseSource || manualCounterparty.startsWith('supplier:'))) throw new WmsError('采购来源及供应商身份须通过采购来源确认登记。', 422);
+    if (purchaseBridge && voucher.revision !== voucherRevision) throw new WmsError('凭证版本已变化。', 409);
+    const bridge = purchaseBridge ? await resolvePurchaseOpenItem(tx, scope, voucher, subjectId, orderId, orderRevision) : null;
+    const kind = bridge?.kind ?? manualKind, counterparty = bridge?.counterparty ?? manualCounterparty;
+    const subjectLines = voucher.lines.filter(line => line.subjectId === subjectId);
+    if (!subjectLines.length) throw new WmsError('凭证没有该科目的分录。', 422);
+    const amount = bridge?.amount ?? itemAmount(kind, subjectLines.map(line => ({ debit: amountText(line.debit), credit: amountText(line.credit) })));
     const existing = await tx.financeOpenItem.findFirst({ where: { ...scoped(scope), voucherId, subjectId } });
     if (existing) {
-      if (existing.createdBy!==scope.actorUserId || existing.counterparty!==counterparty || existing.kind!==kind || existing.dueDate.toISOString().slice(0,10)!==dueDate || existing.evidence!==evidence) throw new WmsError('该凭证科目已登记其他往来项。',409);
+      if (existing.status!=='OPEN' || !existing.amount.eq(amount) || existing.currency!==voucher.book.currency || existing.createdBy!==scope.actorUserId || existing.counterparty!==counterparty || existing.kind!==kind || existing.dueDate.toISOString().slice(0,10)!==dueDate || existing.evidence!==evidence) throw new WmsError('该凭证科目已登记其他往来项。',409);
       return { item: { ...existing, amount: amountText(existing.amount) }, reused: true };
     }
     if (voucher.kind!=='STANDARD' || await tx.financeVoucher.count({where:{...scoped(scope),reversalOf:voucherId}})) throw new WmsError('已存在冲销或非普通凭证，不能登记。',409);
     const period = await tx.financePeriod.findFirst({where:{...scoped(scope),bookId,id:voucher.periodId}});
     if(!period || period.status!=='OPEN') throw new WmsError('不能在关闭期间登记新的往来项。',409);
     const item = await tx.financeOpenItem.create({ data: { id: crypto.randomUUID(), ...scoped(scope), bookId, voucherId, subjectId, counterparty, kind, currency: voucher.book.currency, amount: new Prisma.Decimal(amount), dueDate: new Date(`${dueDate}T00:00:00Z`), evidence, createdBy: scope.actorUserId } });
-    await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: scope.actorUserId, action: 'finance.open-item.create', entityType: 'FinanceOpenItem', entityId: item.id, metadata: { workspaceId: scope.workspaceId, bookId, voucherId, subjectId, kind, amount, currency: voucher.book.currency } } });
+    await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: scope.actorUserId, action: 'finance.open-item.create', entityType: 'FinanceOpenItem', entityId: item.id, metadata: { workspaceId: scope.workspaceId, bookId, voucherId, subjectId, kind, amount, currency: voucher.book.currency, purchaseOrderId: orderId || null, orderRevision: purchaseBridge ? orderRevision : null, voucherRevision: voucher.revision, counterparty } } });
     return { item: { ...item, amount: amountText(item.amount) }, reused: false };
   });
 }
@@ -72,6 +89,7 @@ export async function settleFinanceOpenItems(scope: WmsScope, body: Record<strin
   if (normalized <= BigInt(0)) throw new WmsError('核销金额须大于零。', 400);
   const requestHash = hash({ documentId, paymentId, documentRevision, paymentRevision, periodId, date, amount: unitsAmount(normalized), evidence });
   return prisma.$transaction(async tx => {
+    await assertFinanceAction(tx, scope, 'approve');
     const [documentIdentity, paymentIdentity] = await Promise.all([
       tx.financeOpenItem.findFirst({ where: { ...scoped(scope), id: documentId }, select: { bookId: true } }),
       tx.financeOpenItem.findFirst({ where: { ...scoped(scope), id: paymentId }, select: { bookId: true } }),
@@ -117,6 +135,7 @@ export async function settleFinanceOpenItems(scope: WmsScope, body: Record<strin
 }
 
 export async function mutateFinanceOpenItems(scope: WmsScope, body: Record<string, unknown>) {
+  if(body.action==='confirm-purchase') return createFinanceOpenItem(scope, body);
   if(body.action==='register') {
     const voucherId=requireText(body.voucherId,'凭证 ID');
     const voucher=await prisma.financeVoucher.findFirst({where:{...scoped(scope),id:voucherId},select:{bookId:true}});
@@ -128,6 +147,7 @@ export async function mutateFinanceOpenItems(scope: WmsScope, body: Record<strin
   strictKeys(body,['action','bookId','settlementId','evidence']);
   const bookId=requireText(body.bookId,'账套 ID'),settlementId=requireText(body.settlementId,'核销 ID'),evidence=requireText(body.evidence,'撤销依据',2000);
   return prisma.$transaction(async tx=>{
+    await assertFinanceAction(tx, scope, 'approve');
     await lockBook(tx,scope,bookId);
     const row=await tx.financeSettlement.findFirst({where:{...scoped(scope),bookId,id:settlementId}});
     if(!row)throw new WmsError('核销不存在。',404);

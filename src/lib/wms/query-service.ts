@@ -16,6 +16,15 @@ import { reconcileBalances } from "./reconciliation";
 import { presentBalances, presentMovements } from "./stock-context-query";
 import { presentReceipts } from "./receipt-context-query";
 import { queryReceiptWork, receiptWorkFilters, type ReceiptWorkFilter } from "./receipt-query";
+// The WmsTransferDiscrepancy table has no Prisma relation to transfer orders,
+// so attach its rows with a scoped follow-up query instead of an include.
+async function presentTransferOrders(tx: Prisma.TransactionClient, scope: WmsScope, items: readonly Record<string, unknown>[]) {
+  const orderIds = items.map(item => String(item.id));
+  const discrepancies = orderIds.length ? await tx.wmsTransferDiscrepancy.findMany({ where: { ...scoped(scope), orderId: { in: orderIds } } }) : [];
+  const byOrder = new Map<string, typeof discrepancies>();
+  for (const row of discrepancies) { const list = byOrder.get(row.orderId); if (list) list.push(row); else byOrder.set(row.orderId, [row]); }
+  return items.map(item => ({ ...item, discrepancies: byOrder.get(String(item.id)) ?? [] }));
+}
 export const queryKinds = ["inventory-valuation","overseas-transfers","cost-rules","finance-drafts","cost-entries","stock-aging","conversions","inventory-history","consumables","warehouse-types", "warehouse-addresses", "transfer-orders", "warehouses", "areas", "locations", "lots", "receipts", "outbounds", "reservations", "balances", "movements", "transfers", "approvals", "reconciliation", "stocktakes"] as const;
 export type QueryKind = typeof queryKinds[number];
 export async function queryWms(scope: WmsScope, kind: QueryKind, params: URLSearchParams) {
@@ -131,7 +140,7 @@ export async function queryWms(scope: WmsScope, kind: QueryKind, params: URLSear
       const row = value as unknown as Record<string, unknown> & { blind: boolean; status: string; locations?: Array<Record<string, unknown> & { lines: Array<Record<string, unknown>> }> };
       const summary=row.locations?stocktakeSummary(row as unknown as Parameters<typeof stocktakeSummary>[0]):undefined;
       return row.blind && (row.status === "DRAFT" || row.status === "COUNTING") ? { ...row,summary, locations: row.locations?.map(location => ({ ...location, lines: location.lines.map(line => Object.fromEntries(Object.entries(line).filter(([key]) => !key.startsWith("baseline")))) })) } : {...row,summary};
-    }) : items;
+    }) : kind === "transfer-orders" ? await presentTransferOrders(tx, scope, items as unknown as Record<string, unknown>[]) : items;
     const resultItems=historyGranularity?await appendInventoryPeriods(tx,scope,publicItems as unknown as {id:string;openingQty:unknown}[],historyRange!.from,historyRange!.to,historyGranularity as InventoryGranularity):publicItems;
     return { items: resultItems, nextCursor: rows.length > limit && last ? Buffer.from(JSON.stringify({ fingerprint, id: last.id, time: (last[timeKey] as Date).toISOString() })).toString("base64url") : null };
   }, kind === "stock-aging" || kind === "inventory-valuation" || kind === "inventory-history" || kind === "reconciliation" || (kind === "receipts" && filters.workflowStatus) ? { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead } : undefined);

@@ -1,7 +1,8 @@
 import {executeValuationAction} from './valuation-service';
 import {executeConsumableIssue} from './consumable-service';
 import {executeSkuConversion,executeConversionReversal} from './sku-conversion-service';
-import {executeTransferOrder} from './transfer-order-service';
+import {executeTransferOrder,executeTransferDiscrepancy} from './transfer-order-service';
+import {executeAssembly} from './assembly-service';
 import { reservationProgress } from "./reservation-view";
 import { executeLocationFreeze } from "./location-freeze-service";
 import { prisma } from "@/lib/db/prisma";
@@ -46,6 +47,7 @@ export async function executeWmsCommandInTransaction(tx: Tx, scope: WmsScope, in
     let conversion: unknown;
     let reversesCommandId: string|undefined;
     let consumableChange: unknown;
+    let assemblyChange: unknown;
     const movementIds: string[] = [];
     let reservationChange: { quantity: number; before: Record<string, number | string>; after: Record<string, number | string> } | undefined;
     const reservationState = (row: { id: string; balanceId: string; requestedQty: number; pickedQty: number; releasedQty: number; dispatchedQty: number; revision: number }) => ({
@@ -55,6 +57,8 @@ export async function executeWmsCommandInTransaction(tx: Tx, scope: WmsScope, in
     if(payload.action==="ACTIVATE_COST_RULE"||payload.action==="VALUE_COMMAND"){const result=await executeValuationAction(tx,scope,input);revision=result.revision;valuation=result.valuation;
     }else if(payload.action==="TRANSFER_ORDER_SHIP"||payload.action==="TRANSFER_ORDER_RECEIVE"||payload.action==="TRANSFER_ORDER_CANCEL"){
       const result=await executeTransferOrder(tx,scope,input,commandId);revision=result.revision;movementIds.push(...result.movementIds);transferChange=result.transferChange;
+    } else if (payload.action === "TRANSFER_ORDER_DISCREPANCY") {
+      const result=await executeTransferDiscrepancy(tx,scope,input,commandId,approval?.approvedBy??null);revision=result.revision;movementIds.push(...result.movementIds);transferChange=result.transferChange;
     } else if (payload.action === "LOCATION_FREEZE" || payload.action === "LOCATION_UNFREEZE") {
       revision = await executeLocationFreeze(tx, scope, input);
     } else if (payload.action === "STOCKTAKE_START" || payload.action === "STOCKTAKE_COUNT" || payload.action === "STOCKTAKE_REVIEW" || payload.action === "STOCKTAKE_CANCEL" || payload.action === "STOCKTAKE_POST") {
@@ -72,6 +76,8 @@ export async function executeWmsCommandInTransaction(tx: Tx, scope: WmsScope, in
       aggregateId = reservation.id;
       revision = reservation.revision;
       movementIds.push((await move(tx, scope, commandId, 0, balance, { reserved: payload.quantity }, { action: payload.action, sourceType: "RESERVATION", sourceId: reservation.id })).id);
+    } else if (payload.action === "ASSEMBLY_COMPLETE") {
+      const result=await executeAssembly(tx,scope,input,commandId);revision=result.revision;movementIds.push(...result.movementIds);assemblyChange=result.assemblyChange;
     } else if (payload.action === "CONSUMABLE_ISSUE") {
       const result=await executeConsumableIssue(tx,scope,input,commandId);revision=result.revision;movementIds.push(...result.movementIds);consumableChange=result.consumableChange;
     } else if (payload.action === "SKU_CONVERSION_REVERSE") {
@@ -100,7 +106,7 @@ export async function executeWmsCommandInTransaction(tx: Tx, scope: WmsScope, in
     } else {
       throw new WmsError("不支持的库存动作。", 400);
     }
-    const result = { commandId, aggregateId, revision, movementIds, ...(consumableChange?{consumableChange}:{}), ...(reversesCommandId?{reversesCommandId}:{}), ...(conversion?{conversion}:{}), ...(valuation?{valuation}:{}),...(transferChange?{transferChange}:{}), ...(reservationChange ? { reservationChange } : {}), ...(targetBalanceId ? { targetBalanceId } : {}), ...((payload.action === "LOCATION_FREEZE" || payload.action === "LOCATION_UNFREEZE") ? { frozen: payload.action === "LOCATION_FREEZE", reason: payload.reason } : {}) };
+    const result = { commandId, aggregateId, revision, movementIds, ...(consumableChange?{consumableChange}:{}), ...(reversesCommandId?{reversesCommandId}:{}), ...(conversion?{conversion}:{}), ...(valuation?{valuation}:{}),...(transferChange?{transferChange}:{}), ...(assemblyChange?{assemblyChange}:{}), ...(reservationChange ? { reservationChange } : {}), ...(targetBalanceId ? { targetBalanceId } : {}), ...((payload.action === "LOCATION_FREEZE" || payload.action === "LOCATION_UNFREEZE") ? { frozen: payload.action === "LOCATION_FREEZE", reason: payload.reason } : {}) };
     const completed = await tx.wmsCommand.update({ where: { id: commandId }, data: { result: json(result) } });
     await appendWmsCommandEvent(tx, completed);
     if (approval) await tx.wmsApproval.update({ where: { id: approval.id }, data: { status: "CONSUMED", consumedCommandId: commandId, revision: { increment: 1 } } });

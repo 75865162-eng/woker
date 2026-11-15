@@ -1,10 +1,13 @@
 import {requirePositiveQuantity,requireText,strictKeys,WmsInputError} from './rules';
-export type TransferOrderLine={id:string;quantity:number;shippedQty:number;receivedQty:number};
-export const transferOrderActions=['TRANSFER_ORDER_SHIP','TRANSFER_ORDER_RECEIVE','TRANSFER_ORDER_CANCEL'] as const;
+import {parseTransferDiscrepancyPayload} from './transfer-order-discrepancy-rules';
+export type TransferOrderLine={id:string;quantity:number;shippedQty:number;receivedQty:number;discrepancyQty:number};
+export const transferOrderActions=['TRANSFER_ORDER_SHIP','TRANSFER_ORDER_RECEIVE','TRANSFER_ORDER_CANCEL','TRANSFER_ORDER_DISCREPANCY'] as const;
 function object(raw:unknown){if(!raw||typeof raw!=='object'||Array.isArray(raw))throw new WmsInputError('调拨资料须为对象。');return raw as Record<string,unknown>;}
+// Old callers may still build lines without discrepancyQty; treat it as zero.
+function resolvedDiscrepancy(line:TransferOrderLine){return line.discrepancyQty??0;}
 export function transferOrderStatus(lines:readonly TransferOrderLine[]){
- if(lines.every(line=>line.receivedQty===line.quantity))return 'COMPLETED';
- if(lines.some(line=>line.receivedQty>0))return 'PARTIALLY_RECEIVED';
+ if(lines.every(line=>line.shippedQty===line.quantity&&line.receivedQty+resolvedDiscrepancy(line)===line.shippedQty))return 'COMPLETED';
+ if(lines.some(line=>line.receivedQty>0||resolvedDiscrepancy(line)>0))return 'PARTIALLY_RECEIVED';
  if(lines.every(line=>line.shippedQty===line.quantity))return 'IN_TRANSIT';
  return lines.some(line=>line.shippedQty>0)?'PARTIALLY_SHIPPED':'DRAFT';
 }
@@ -18,6 +21,7 @@ export function parseTransferOrderDraft(raw:unknown){
 export function parseTransferOrderPayload(raw:unknown){
  const value=object(raw);const action=value.action;
  if(action==='TRANSFER_ORDER_CANCEL'){strictKeys(value,['action','reason']);return {action,reason:requireText(value.reason,'取消原因',1000)} as const;}
+ if(action==='TRANSFER_ORDER_DISCREPANCY')return parseTransferDiscrepancyPayload(value);
  if(action!=='TRANSFER_ORDER_SHIP'&&action!=='TRANSFER_ORDER_RECEIVE')throw new WmsInputError('调拨动作无效。');
  strictKeys(value,['action','lines','reference']);
  if(!Array.isArray(value.lines)||!value.lines.length||value.lines.length>100)throw new WmsInputError('调拨作业须为 1-100 行。');

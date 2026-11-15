@@ -5,6 +5,14 @@ import { hostname, userInfo } from "node:os";
 import path from "node:path";
 import type { Run, Store } from "./types";
 
+/**
+ * POSIX ownership and mode bits are the only portable way to prove the store folder is private.
+ * Windows does not report a meaningful uid through lstat() and ignores mkdir modes, so the
+ * ownership/mode assertions are limited to POSIX. Directory-ness and symlink rejection still apply
+ * on every platform.
+ */
+const enforcePosixOwnership = process.platform !== "win32";
+
 /** Device-local CLI adapter only. ERP multi-user storage must use its authorized repository boundary. */
 export class LocalResearchStore implements Store {
   constructor(readonly root: string) {}
@@ -14,7 +22,8 @@ export class LocalResearchStore implements Store {
   }
   private async check(folder: string) {
     const stat = await lstat(folder);
-    if (!stat.isDirectory() || stat.isSymbolicLink() || stat.uid !== userInfo().uid || (stat.mode & 0o077) !== 0) throw new Error("UNSAFE_LOCAL_STORE");
+    if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error("UNSAFE_LOCAL_STORE");
+    if (enforcePosixOwnership && (stat.uid !== userInfo().uid || (stat.mode & 0o077) !== 0)) throw new Error("UNSAFE_LOCAL_STORE");
   }
   async create(run: Run) {
     await mkdir(this.root, { recursive: true, mode: 0o700 });
@@ -38,8 +47,11 @@ export class LocalResearchStore implements Store {
     const handle = await open(temp, "wx", 0o600);
     try { await handle.writeFile(JSON.stringify(run)); await handle.sync(); } finally { await handle.close(); }
     await rename(temp, path.join(folder, "state.json"));
-    const directory = await open(folder, "r");
-    try { await directory.sync(); } finally { await directory.close(); }
+    if (enforcePosixOwnership) {
+      // Only POSIX filesystems allow fsync on a directory handle; Windows returns EPERM.
+      const directory = await open(folder, "r");
+      try { await directory.sync(); } finally { await directory.close(); }
+    }
   }
   async transaction<T>(id: string, work: (run: Run, save: () => Promise<void>) => Promise<T>): Promise<T> {
     const folder = this.folder(id);

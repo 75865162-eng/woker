@@ -118,7 +118,8 @@ test("local remote targets and inline mode are refused; production only reads in
 
 test("registry covers existing capabilities; missing, stopping, expired and mismatched heartbeats remain visible", () => {
   const now = new Date("2026-11-06T10:00:00Z");
-  assert.equal(registry.length, 4);
+  // import, image-upscale, amazon-sync, sellfox-sync, forecast
+  assert.equal(registry.length, 5);
   const rows = registeredWorkerHealth([
     { queueName: "sellfox-sync-jobs", status: "online", lastSeenAt: now, metadata: { version: "old", queueReady: false } },
     { queueName: "import-jobs", status: "stopping", lastSeenAt: now },
@@ -145,14 +146,14 @@ test("manager starts registrations, retries failures with backoff and stops ever
     log: () => {},
   });
   manager.start();
-  assert.equal(children.length, 4);
+  assert.equal(children.length, 5);
   assert.deepEqual(launches.map(args => args.at(-1)), registry.map((item: { id: string }) => item.id));
   children[0].emit("exit", 1);
   t.mock.timers.tick(1000);
-  assert.equal(children.length, 5);
+  assert.equal(children.length, 6);
   await manager.stop();
   t.mock.timers.tick(60_000);
-  assert.equal(children.length, 5);
+  assert.equal(children.length, 6);
   assert.equal(restartDelay(10), 30_000);
 });
 

@@ -40,12 +40,22 @@
 
 html {
   background: var(--background);
+  /* 全站默认企业 ERP 密集排版基准：14px。舒适密度由 html[data-erp-density="comfortable"] 覆盖。 */
+  font-size: 14px;
+  overflow-x: clip;
+}
+
+html[data-erp-density="comfortable"] {
+  font-size: 16px;
 }
 
 body {
   min-height: 100vh;
   background: var(--background);
   color: var(--foreground);
+  /* 页面级不允许横向滚动：宽表一律走内部 overflow-x 容器；
+     clip 不产生滚动容器，不影响粘性表头，只收敛 1~3px 的布局伪影。 */
+  overflow-x: clip;
   font-family:
     "PingFang SC",
     "Hiragino Sans GB",
@@ -102,4 +112,106 @@ button {
 .thin-scrollbar::-webkit-scrollbar-thumb {
   background: #b7c2cc;
   border-radius: 999px;
+}
+
+/* ---- 全站统一页面框架（PageFrame）----
+   只作用于框架容器，默认舒适密度下不改变任何既有业务工作台的样式。 */
+.erp-page-frame [data-erp-page-body] {
+  min-width: 0;
+}
+
+.erp-page-frame [data-erp-page-body] table {
+  font-variant-numeric: tabular-nums;
+}
+
+.erp-page-frame summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.erp-page-frame summary::-webkit-details-marker {
+  display: none;
+}
+
+/* ---- 全站密度 token ----
+   紧凑（默认）与舒适两档语义变量，业务层可直接引用；改一处即全站生效。 */
+:root {
+  --erp-table-fs: 13px;          /* 表格正文字号 */
+  --erp-th-fs: 12px;             /* 表头字号 */
+  --erp-cell-py: 0.3rem;         /* 单元格上下内边距 */
+  --erp-control-h: 1.75rem;      /* 输入框 / 下拉高度（28px） */
+  --erp-control-fs: 13px;        /* 表单控件字号 */
+}
+
+html[data-erp-density="comfortable"] {
+  --erp-table-fs: 14px;
+  --erp-th-fs: 12.5px;
+  --erp-cell-py: 0.5rem;
+  --erp-control-h: 2.125rem;     /* 34px */
+  --erp-control-fs: 14px;
+}
+
+/* ---- 表格 / 表单统一密度（放入 base 层：业务 utility 类仍可按需覆盖外观）---- */
+@layer base {
+  html table {
+    font-size: var(--erp-table-fs);
+    font-variant-numeric: tabular-nums;
+    border-collapse: collapse;
+  }
+
+  html :is(td, th) {
+    padding-top: var(--erp-cell-py);
+    padding-bottom: var(--erp-cell-py);
+    line-height: 1.45;
+    vertical-align: middle;
+  }
+
+  html th {
+    font-size: var(--erp-th-fs);
+    font-weight: 600;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  /* 表头粘顶：长列表滚动时列名始终可见（无滚动容器的表格不受影响） */
+  html thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #f8fafc;
+    box-shadow: inset 0 -1px 0 var(--border);
+  }
+
+  /* 斑马纹与悬停反馈：提升宽表逐行可读性；业务页可用 utility 类覆盖 */
+  html tbody tr:nth-child(even) td {
+    background: rgba(238, 242, 245, 0.45);
+  }
+
+  html tbody tr:hover td {
+    background: rgba(23, 107, 135, 0.06);
+  }
+
+  /* 表单控件统一高度与字号（排除 checkbox / radio / range） */
+  html :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="number"]):not([type="color"]), select) {
+    height: var(--erp-control-h);
+    font-size: var(--erp-control-fs);
+    line-height: 1.2;
+  }
+
+  html textarea {
+    font-size: var(--erp-control-fs);
+    line-height: 1.5;
+  }
+}
+
+/* ---- 密集模式的结构性收紧（需强于业务默认，保持非分层；含 /dashboard 等 skipFrame 页面）---- */
+html[data-erp-density="dense"] :is(td, th) {
+  padding-top: 0.28rem;
+  padding-bottom: 0.28rem;
+  line-height: 1.4;
+}
+
+html[data-erp-density="dense"] th {
+  font-size: 12px;
+  font-weight: 600;
 }

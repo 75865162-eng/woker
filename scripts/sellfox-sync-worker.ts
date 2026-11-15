@@ -14,6 +14,7 @@ import { recoverSellfoxQueueRun } from "@/lib/sellfox/queue-recovery";
 import { createRedisConnectionOptions, sellfoxSyncQueueName } from "@/lib/queue/redis-queue";
 import { processSellfoxSyncRun } from "@/lib/sellfox/sync-service";
 import { sellfoxStoreFailure, SellfoxStoreSyncError } from "@/lib/sellfox/sync-errors";
+import { generateAdsProposals } from "@/lib/sellfox/ads-proposal";
 import { SellfoxRequestError, closeSellfoxClient } from "@/lib/sellfox/client";
 import { normalizeSellfoxDates, sellfoxSyncDisabledReason, SellfoxSyncInputError, SellfoxSyncUnavailableError, type SellfoxSyncResource } from "@/lib/sellfox/sync-contract";
 
@@ -53,7 +54,7 @@ async function recoverAndSchedule() {
       const now = new Date();
       if (!due(candidate, now)) continue;
       const scopeKey = JSON.stringify([candidate.organizationId, candidate.workspaceId]);
-      if (!credentialStatuses.has(scopeKey)) credentialStatuses.set(scopeKey, getSellfoxCredentialStatus(candidate).then(status => status.configured));
+      if (!credentialStatuses.has(scopeKey)) credentialStatuses.set(scopeKey, getSellfoxCredentialStatus({ organizationId: candidate.organizationId, workspaceId: candidate.workspaceId }).then(status => status.configured));
       if (!(await credentialStatuses.get(scopeKey))) continue;
       await prisma.$transaction(async (tx) => {
         const lockKey = sellfoxSyncScopeLock(candidate.organizationId, candidate.workspaceId, candidate.resource);
@@ -95,11 +96,32 @@ async function persistHeartbeat(status: "online" | "stopping") {
 
 const heartbeat = createHeartbeatWriter(persistHeartbeat);
 
-void recoverAndSchedule().catch((error) => console.error("[sellfox-sync-worker] schedule recovery failed", sellfoxStoreFailure(error).error));
-const recoveryTimer = setInterval(() => void recoverAndSchedule().catch((error) => console.error("[sellfox-sync-worker] schedule tick failed", sellfoxStoreFailure(error).error)), 30_000);
+function tickFailure(error: unknown) {
+  // Unknown errors are intentionally masked for run logs; worker stdout may keep the class only.
+  const detail = error instanceof Error ? `${error.name}: ${error.message}` : typeof error;
+  return `${sellfoxStoreFailure(error).error} [${detail}]`;
+}
+
+void recoverAndSchedule().catch((error) => console.error("[sellfox-sync-worker] schedule recovery failed", tickFailure(error)));
+const recoveryTimer = setInterval(() => void recoverAndSchedule().catch((error) => console.error("[sellfox-sync-worker] schedule tick failed", tickFailure(error))), 30_000);
 const heartbeatTimer = setInterval(() => void heartbeat().catch((error) => console.error("[sellfox-sync-worker] heartbeat failed", sellfoxStoreFailure(error).error)), 30_000);
 void heartbeat().catch(() => undefined);
-worker.on("completed", (job) => console.log(`[sellfox-sync-worker] completed ${job.data.runId}`));
+worker.on("completed", (job) => {
+  console.log(`[sellfox-sync-worker] completed ${job.data.runId}`);
+  // 广告域同步完成后自动重算「库存×广告」优化方案，保持方案看板当日最新。
+  void (async () => {
+    const run = await prisma.sellfoxSyncRun.findUnique({ where: { id: job.data.runId }, select: { resource: true } });
+    if (!run?.resource.startsWith("ads_")) return;
+    const scopes = await prisma.sellfoxSyncSchedule.findMany({
+      where: { enabled: true, resource: { in: ["ads_report", "ads_campaign", "ads_ad_group", "ads_targeting", "ads_search_term", "ads_placement"] } },
+      select: { organizationId: true, workspaceId: true }, distinct: ["organizationId", "workspaceId"],
+    });
+    for (const scope of scopes) {
+      try { await generateAdsProposals(scope.organizationId, scope.workspaceId); }
+      catch (error) { console.error("[sellfox-sync-worker] ads proposal regeneration failed", sellfoxStoreFailure(error).error); }
+    }
+  })();
+});
 worker.on("failed", (job, error) => console.error(`[sellfox-sync-worker] failed ${job?.data.runId ?? "unknown"}: ${sellfoxStoreFailure(error).error}`));
 
 async function shutdown() {

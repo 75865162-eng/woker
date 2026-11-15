@@ -7,7 +7,9 @@ const tabs = [
   { id: "models", label: "模型与工具" },
   { id: "workspace", label: "工作区" },
   { id: "notifications", label: "通知" },
+  { id: "points", label: "积分额度" },
   { id: "integrations", label: "集成" },
+  { id: "mcp", label: "MCP 接入" },
   { id: "skill-erp", label: "Skill / ERP" },
   { id: "operations", label: "运维" },
 ] as const;
@@ -18,14 +20,18 @@ export function SettingsTabs({
   modelContent,
   workspaceContent,
   notificationContent,
+  pointsContent,
   integrationsContent,
+  mcpContent,
   skillErpContent,
   operationsContent,
 }: {
   modelContent: ReactNode;
   workspaceContent: ReactNode;
   notificationContent: ReactNode;
+  pointsContent: ReactNode;
   integrationsContent: ReactNode;
+  mcpContent: ReactNode;
   skillErpContent: ReactNode;
   operationsContent: ReactNode;
 }) {
@@ -62,7 +68,9 @@ export function SettingsTabs({
     models: modelContent,
     workspace: workspaceContent,
     notifications: notificationContent,
+    points: pointsContent,
     integrations: integrationsContent,
+    mcp: mcpContent,
     "skill-erp": skillErpContent,
     operations: operationsContent,
   };

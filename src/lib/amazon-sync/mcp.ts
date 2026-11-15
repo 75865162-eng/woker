@@ -37,6 +37,13 @@ const adsStatusTools = new Set(["ads_get_sync_status", "ads_get_data_health", "a
 export const mcpTokenHash = (value: string) => createHash("sha256").update(value).digest("hex");
 const credentialSelect = { id: true, name: true, userId: true, tokenPrefix: true, tools: true, scopes: true, status: true, revision: true, expiresAt: true, createdAt: true, lastUsedAt: true } satisfies Prisma.AmazonMcpCredentialSelect;
 
+/** Cross-provider attempts are recorded even when no Amazon identity matched. */
+export async function auditAmazonMcpIsolation(metadata: Prisma.InputJsonObject) {
+  await prisma.auditLog.create({
+    data: { organizationId: null, userId: null, action: "amazon.mcp.isolation.denied", entityType: "AmazonMcpCredential", metadata: { provider: "amazon", ...metadata } },
+  }).catch(() => undefined);
+}
+
 async function audit(scope: SyncScope | null, actor: string | null, action: string, metadata: Prisma.InputJsonObject) {
   await prisma.auditLog.create({ data: { organizationId: scope?.organizationId, userId: actor, action, entityType: "AmazonMcpCredential", metadata: { workspaceId: scope?.workspaceId, ...metadata } } });
 }

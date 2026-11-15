@@ -7,6 +7,7 @@ import { adsScopeEnabled, adsSyncKey, adsSyncScopes } from "./sync-policy";
 import { adsStructureTaskWhere } from "./task-routing";
 import { configuredSyncScopes } from "@/lib/amazon-sync/activation";
 import { ensureAdsPlan } from "./sync-service";
+import { tickAmazonAdsReports } from "./report-scheduler";
 
 const dueStatuses = ["WAITING", "QUEUED", "RUNNING", "RETRY_WAIT"];
 export async function tickAmazonAds(now = new Date()) {
@@ -73,4 +74,7 @@ export async function tickAmazonAds(now = new Date()) {
       }
     } catch { console.error(`[amazon-ads] automatic plan dispatch deferred for ${candidate.id}`); }
   }
+  // 绩效报表与结构同步独立推进：结构失败不阻塞报表，报表失败不回退结构。
+  try { await tickAmazonAdsReports(now); }
+  catch { console.error("[amazon-ads] report dispatch deferred"); }
 }

@@ -30,7 +30,7 @@ export async function CatalogContent({ kind, slug, locale, quotaScopeKey }: { ki
         ["/agents/selection-research", "ASIN 选品研究", "真实来源取证、两次人工确认、HTML 报告和历史恢复。"],
         ["/agents", "Agent 执行与审批", "进入主系统已有执行轨迹和人工审批。"],
         ["/operations", "店铺、同步与 MCP", "使用当前工作区已授权的数据源与个人凭证。"],
-      ].map(([href, title, description]) => <Link key={href} href={href} prefetch={false} className="lili-card space-y-2 p-4 hover:border-brand"><h2 className="font-semibold">{title}</h2><p className="text-sm text-muted">{description}</p></Link>)}
+      ].map(([href, title, description]) => <Link key={href} href={href} className="lili-card space-y-2 p-4 hover:border-brand"><h2 className="font-semibold">{title}</h2><p className="text-sm text-muted">{description}</p></Link>)}
     </div>
     <p className="text-sm text-muted">{explanation} 历史独立库记录和密钥没有自动导入。</p>
   </div>;

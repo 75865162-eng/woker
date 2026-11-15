@@ -18,7 +18,7 @@ export function LiliNavigation({ locale, allowedPaths }: { locale: Locale; allow
         {liliNavigation.filter((item) => allowedPaths.includes(item.path)).map((item) => {
           const href = `/lili/v2/${item.path}`;
           const active = pathname === href || pathname?.startsWith(`${href}/`) || item.path === "start" && pathname === "/lili";
-          return <Link key={item.path} href={href} prefetch={false} aria-current={active ? "page" : undefined}
+          return <Link key={item.path} href={href} aria-current={active ? "page" : undefined}
             className={`rounded-lg px-3 py-2 text-sm ${active ? "bg-surface-muted font-semibold text-brand" : "hover:bg-surface-muted"}`}>{item.title}</Link>;
         })}
       </nav>

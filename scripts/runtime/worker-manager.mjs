@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { applyRuntimeEnvironment, projectRoot } from "./environment.mjs";
 import { runtimeVersion } from "./version.mjs";
@@ -64,10 +65,21 @@ if (process.argv[1] === path.join(projectRoot, "scripts/runtime/worker-manager.m
     for (const item of registry) console.log(`${item.id}: ${item.label}`);
   } else {
     if (args.length > 1 || (args.length && !registry.some(item => item.id === args[0]))) throw new Error("Usage: npm run worker -- [--list|registration-id]");
+    // Single-instance pid file: the scheduled task repeats on a timer and must not spawn a second consumer.
+    // Release directories ship without tmp/, and the lock is advisory: never let it abort startup.
+    const pidPath = path.join(projectRoot, "tmp", `worker-${args[0] ?? "all"}.pid`);
+    const releasePid = () => {
+      try { if (existsSync(pidPath) && readFileSync(pidPath, "utf8").trim() === String(process.pid)) unlinkSync(pidPath); } catch { /* best effort */ }
+    };
+    try {
+      mkdirSync(path.dirname(pidPath), { recursive: true });
+      writeFileSync(pidPath, String(process.pid));
+    } catch { /* keep running without the advisory lock */ }
+    process.on("exit", releasePid);
     const env = { ...applyRuntimeEnvironment(), ERP_RUNTIME_VERSION: runtimeVersion() };
     const manager = supervise(args.length ? registry.filter(item => item.id === args[0]) : registry, { env, onFatal: () => void stop(1) });
     let closing = false;
-    async function stop(code = 0) { if (closing) return; closing = true; await manager.stop(); process.exit(code); }
+    async function stop(code = 0) { if (closing) return; closing = true; await manager.stop(); releasePid(); process.exit(code); }
     process.on("SIGINT", () => void stop());
     process.on("SIGTERM", () => void stop());
     manager.start();

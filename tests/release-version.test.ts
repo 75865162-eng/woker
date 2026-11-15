@@ -6,7 +6,7 @@ import path from "node:path";
 import test, { type TestContext } from "node:test";
 import { formatAppReleaseLabel } from "../src/lib/app-version";
 
-const script = readFileSync(new URL("../scripts/server-artifact-release.sh", import.meta.url), "utf8");
+const script = readFileSync(new URL("../scripts/server-artifact-release.sh", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 // Extract only these functions so the test cannot execute the release workflow.
 const functions = ["read_previous_version", "next_version_label"].map((name) => {
   const match = script.match(new RegExp(`^${name}\\(\\) \\{[\\s\\S]*?^\\}(?=\\n\\n)`, "m"));

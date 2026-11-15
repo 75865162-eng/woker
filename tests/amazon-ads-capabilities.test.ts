@@ -15,20 +15,30 @@ test("SP Product Ad structure coverage does not imply SB or SD support", () => {
   assert.notDeepEqual(campaignNegative.endpoints, groupNegative.endpoints);
 });
 
-test("published report queries never advertise a verified report acquisition contract", () => {
+test("SP 五类绩效报表都有实盘适配器，但仍不声称真实账号已验收", () => {
   const rows = listAdsCapabilities("SP").filter(row => row.mcpTool === "amazon.ads.reports.list");
   assert.equal(rows.length, 5);
-  assert.equal(rows.find(row => row.domain === "campaign-performance")?.acquisition, "ISOLATED_FIXTURE_ONLY");
+  const expected: Record<string, string> = {
+    "campaign-performance": "spCampaigns",
+    "advertised-product-performance": "spAdvertisedProduct",
+    "search-term-performance": "spSearchTerm",
+    "placement-performance": "spCampaigns",
+    "targeting-performance": "spTargeting",
+  };
   for (const row of rows) {
-    assert.equal(row.read, "NOT_IMPLEMENTED");
-    assert.equal(row.contract, "UNVERIFIED");
-    assert.equal(row.apiVersion, null);
-    assert.deepEqual(row.endpoints, []);
-    assert.ok(adsCapabilityBlockers(row).includes("DOMAIN_CONTRACT_UNVERIFIED"));
-    assert.ok(adsCapabilityBlockers(row).includes("READ_ADAPTER_NOT_IMPLEMENTED"));
+    assert.equal(row.read, "REPORT_WORKER");
+    assert.equal(row.acquisition, "FORMAL_LIVE_ADAPTER");
+    assert.equal(row.contract, "DOCUMENTED_REPORT_TYPE");
+    assert.equal(row.apiVersion, "Reporting v3");
+    assert.equal(row.entityType, expected[row.domain]);
+    assert.equal(row.endpoints.length, 2);
+    assert.ok(adsCapabilityBlockers(row).includes("LIVE_ACCEPTANCE_NOT_VERIFIED"));
+    assert.ok(adsCapabilityBlockers(row).includes("PROFILE_PERMISSION_REQUIRES_CHECK"));
+    assert.ok(!adsCapabilityBlockers(row).includes("READ_ADAPTER_NOT_IMPLEMENTED"));
+    assert.ok(!adsCapabilityBlockers(row).includes("ISOLATED_FIXTURE_ONLY"));
   }
-  assert.ok(adsCapabilityBlockers(rows.find(row => row.domain === "campaign-performance")!).includes("ISOLATED_FIXTURE_ONLY"));
-  assert.equal(rows.find(row => row.domain === "search-term-performance")?.acquisition, "NONE");
+  // SP 没有独立位置报表类型，官方做法是 spCampaigns + campaignPlacement。
+  assert.equal(rows.find(row => row.domain === "placement-performance")?.entityType, "spCampaigns");
 });
 
 test("code catalog cannot authorize live access, writes or invent history limits", () => {
@@ -53,11 +63,11 @@ test("capability CLI preserves JSON inventory and exposes isolation in Markdown 
   assert.equal(output.kind, "CODE_INVENTORY_ONLY");
   assert.equal(output.capabilities.length, 18);
   const row = output.capabilities.find(value => value.domain === "campaign-performance")!;
-  assert.equal(row.read, "NOT_IMPLEMENTED");
-  assert.equal(row.acquisition, "ISOLATED_FIXTURE_ONLY");
+  assert.equal(row.read, "REPORT_WORKER");
+  assert.equal(row.acquisition, "FORMAL_LIVE_ADAPTER");
   assert.equal(row.liveAcceptance, "NOT_VERIFIED");
   const markdown = run("--product=SP", "--markdown");
   assert.match(markdown, /Read \| Acquisition \| Contract/);
-  assert.match(markdown, /campaign-performance \| NOT_IMPLEMENTED \| ISOLATED_FIXTURE_ONLY/);
+  assert.match(markdown, /campaign-performance \| REPORT_WORKER \| FORMAL_LIVE_ADAPTER/);
   assert.match(markdown, /NOT a live readiness or authorization decision/);
 });

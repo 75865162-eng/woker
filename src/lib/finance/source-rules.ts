@@ -2,14 +2,14 @@ import { createHash } from 'node:crypto';
 import { WmsError } from '@/lib/wms/contracts';
 import { requireText, strictKeys } from '@/lib/wms/rules';
 
-export type FinanceSourceKind = 'WMS_OVERSEAS_CHARGE' | 'FX_REVALUATION' | 'FBA_ADJUSTMENT' | 'WMS_COMMAND' | 'WMS_INVENTORY_RISK' | 'WMS_COST_ADJUSTMENT' | 'PURCHASE_PAYMENT' | 'PURCHASE_REFUND';
+export type FinanceSourceKind = 'WMS_OVERSEAS_CHARGE' | 'FX_REVALUATION' | 'FBA_ADJUSTMENT' | 'WMS_COMMAND' | 'WMS_INVENTORY_RISK' | 'WMS_COST_ADJUSTMENT' | 'PURCHASE_PAYMENT' | 'PURCHASE_REFUND' | 'PURCHASE_INVOICE';
 export type FinanceSource = {
   kind: FinanceSourceKind; id: string; sourceKey: string; currency: string;
   sourceDate: string; lines: Array<{ account: string; debit: string; credit: string }>;
   evidence: unknown;
 };
 export function parseSourceIdentity(kind: unknown, id: unknown): { kind: FinanceSourceKind; id: string } {
-  if (kind !== 'WMS_OVERSEAS_CHARGE' && kind !== 'FX_REVALUATION' && kind !== 'FBA_ADJUSTMENT' && kind !== 'WMS_COMMAND' && kind !== 'WMS_INVENTORY_RISK' && kind !== 'WMS_COST_ADJUSTMENT' && kind !== 'PURCHASE_PAYMENT' && kind !== 'PURCHASE_REFUND') throw new WmsError('不支持的核算来源。', 400);
+  if (kind !== 'WMS_OVERSEAS_CHARGE' && kind !== 'FX_REVALUATION' && kind !== 'FBA_ADJUSTMENT' && kind !== 'WMS_COMMAND' && kind !== 'WMS_INVENTORY_RISK' && kind !== 'WMS_COST_ADJUSTMENT' && kind !== 'PURCHASE_PAYMENT' && kind !== 'PURCHASE_REFUND' && kind !== 'PURCHASE_INVOICE') throw new WmsError('不支持的核算来源。', 400);
   return { kind, id: requireText(id, '核算来源 ID') };
 }
 export function sourceFingerprint(source: FinanceSource) {
@@ -20,6 +20,8 @@ export function validateSourceDate(source: FinanceSource, date: string) {
   if ((source.kind === 'PURCHASE_PAYMENT' || source.kind === 'PURCHASE_REFUND') && date !== source.sourceDate) {
     throw new WmsError('采购付款或退款凭证日期必须与实际收付日期一致。', 422);
   }
+  // 发票可以晚于开票日入账（跨月到票），但不能早于开票日倒签。
+  if (source.kind === 'PURCHASE_INVOICE' && date < source.sourceDate) throw new WmsError('发票凭证日期不能早于发票开票日期。', 422);
 }
 export function mapSourceLines(source: FinanceSource, currency: string, raw: unknown) {
   if (source.currency !== currency) throw new WmsError('来源币种与账套本位币不一致；须先完成有依据的换汇核算。', 422);

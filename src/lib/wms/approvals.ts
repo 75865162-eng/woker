@@ -1,7 +1,8 @@
 import {validateValuationAction} from './valuation-service';
 import {validateConsumableIssue} from './consumable-service';
 import {validateSkuConversion,validateConversionReversal} from './sku-conversion-service';
-import {validateTransferOrderAction} from './transfer-order-service';
+import {validateAssemblyCompletion} from './assembly-service';
+import {validateTransferOrderAction,validateTransferDiscrepancyAction} from './transfer-order-service';
 import { validateLocationFreeze } from "./location-freeze-service";
 import { prisma } from "@/lib/db/prisma";
 import { authorizeWms, auditWms, scoped, json } from "./access";
@@ -16,6 +17,7 @@ export const requestHash = (input: WmsCommandInput) => hashWmsRequest({ action: 
 async function validateApprovalTarget(tx: Tx, scope: WmsScope, command: WmsCommandInput) {
  if(command.payload.action==="ACTIVATE_COST_RULE"||command.payload.action==="VALUE_COMMAND")await validateValuationAction(tx,scope,command);
   if(command.payload.action==="TRANSFER_ORDER_SHIP"||command.payload.action==="TRANSFER_ORDER_RECEIVE")await validateTransferOrderAction(tx,scope,command);
+  if(command.payload.action==="TRANSFER_ORDER_DISCREPANCY")await validateTransferDiscrepancyAction(tx,scope,command);
   if (command.payload.action === "LOCATION_FREEZE" || command.payload.action === "LOCATION_UNFREEZE") await validateLocationFreeze(tx, scope, command);
   if (command.payload.action === "STOCKTAKE_POST") await validateStocktakePost(tx, scope, command);
   if (["RECEIVE", "INSPECT", "PUTAWAY", "RETURN_REJECTED"].includes(command.payload.action)) await validateReceiptAction(tx, scope, command);
@@ -23,6 +25,7 @@ async function validateApprovalTarget(tx: Tx, scope: WmsScope, command: WmsComma
   if (command.payload.action === "CONSUMABLE_ISSUE") await validateConsumableIssue(tx,scope,command);
   if (command.payload.action === "SKU_CONVERSION_REVERSE") await validateConversionReversal(tx,scope,command);
   if (command.payload.action === "SKU_CONVERT") await validateSkuConversion(tx, scope, command);
+  if (command.payload.action === "ASSEMBLY_COMPLETE") await validateAssemblyCompletion(tx, scope, command);
   if (command.payload.action === "TRANSFER") await validateTransfer(tx, scope, command);
   if (command.payload.action === "RELEASE" || command.payload.action === "DISPATCH") await validateReservationAction(tx, scope, command);
 }

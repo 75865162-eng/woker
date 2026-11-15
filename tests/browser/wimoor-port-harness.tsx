@@ -14,7 +14,7 @@ import { SyncCenterWorkbench } from '@/components/operations/sync-center-workben
 const params = new URLSearchParams(location.search);
 const writable = !params.has('readonly');
 const rolePermissions: RolePermissionMap = { fixture: { operations: writable ? ['view', 'create', 'edit'] : ['view'], wms: writable ? ['view', 'create', 'edit'] : ['view'] } };
-const groups = navigationGroups.map(group => ({ ...group, items: group.items.filter(item => roleCanAccessModule('fixture', item.moduleId, rolePermissions)) })).filter(group => group.items.length);
+const groups = navigationGroups.map(group => ({ ...group, items: group.items.filter(item => roleCanAccessModule('fixture', item.moduleId ?? null, rolePermissions)) })).filter(group => group.items.length);
 localStorage.setItem('amazon_bulk_ad_workspace_scope', JSON.stringify({ workspaceId: 'fixture-workspace' }));
 const getHeaders = () => new Headers({ 'x-workspace-id': 'fixture-workspace' });
 function EvidenceHarness() {
