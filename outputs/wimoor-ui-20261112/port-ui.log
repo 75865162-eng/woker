@@ -1,0 +1,10 @@
+
+Running 3 tests using 1 worker
+
+(node:62883) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/browser/wimoor-port.spec.ts:46:5 › 装箱入口使用现有 API，详情与保存保留 revision，刷新及翻页沿用范围 (1.1s)
+  ✓  2 tests/browser/wimoor-port.spec.ts:75:5 › 只读与撤权时不出现假成功；工作区切换清除装箱详情 (431ms)
+  ✓  3 tests/browser/wimoor-port.spec.ts:87:5 › 菜单复用实际入口和权限过滤，可搜索、关闭并返回焦点 (575ms)
+
+  3 passed (2.9s)

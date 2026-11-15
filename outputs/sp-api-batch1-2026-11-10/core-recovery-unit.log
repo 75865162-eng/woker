@@ -1,0 +1,27 @@
+✔ catalog binds every legacy and business tool without adding an internal Agent capability (4.231542ms)
+✔ business tools pin their real dataset and retain independent grants and date semantics (0.200833ms)
+✔ reimbursement analysis accepts either all dedicated readers or the scoped generic query tool (0.103708ms)
+✔ registration rejects duplicate names, missing handlers, orphan handlers and invalid aliases (0.7145ms)
+✔ aliases retain independent names and sync creation is explicitly an approval request (0.350334ms)
+✔ legacy discovery retains input contracts and newer discovery describes structured outputs truthfully (0.299583ms)
+✔ catalog capability renewal binds the existing task and an already observed ASIN (7.090791ms)
+✔ catalog capability renewal cannot combine with other recovery modes (0.465917ms)
+✔ reimbursement and ledger retries reuse the existing task through approval (3.216167ms)
+✔ retry rejects wrong resources and preserves orders partial-success boundary (0.677125ms)
+✔ first-batch checkpoint resources use existing approval controls and keep cancellations bounded (0.314875ms)
+✔ paused orders resume their original checkpoint while other resources keep their retry boundary (0.123958ms)
+✔ sync chat server pins actor/workspace/request and refuses missing grants or changed credential before domain writes (9.81325ms)
+✔ every shipped skill and workflow uses single-task Codex chat approval without rewriting SOP bodies (2.712416ms)
+✔ one chat confirmation approves and applies the bounded plan; reads and repeated submission never dispatch (1.360709ms)
+✔ interrupted approved plan can apply without a second decision; stale/expired/unsupported plans cannot (0.610209ms)
+✔ unmapped catalog execution explicitly stays in chat and never reports success (15.631042ms)
+✔ chat confirmation supports one scoped first-batch recovery, never other task controls (0.879917ms)
+✔ sync execution requires the intersection of explicit credential and current sync grants (0.490375ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 19
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 368.373875

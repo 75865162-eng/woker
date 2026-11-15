@@ -1,0 +1,163 @@
+
+Running 39 tests using 1 worker
+
+(node:61761) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 tests/browser/wimoor-ui.spec.ts:57:5 › 补收入口复用采购操作，未读取数量不提供创建入口 (991ms)
+  ✓   2 tests/browser/wimoor-ui.spec.ts:76:5 › 采购列表分页、筛选、详情抽屉和拒绝保存 (1.2s)
+  ✓   3 tests/browser/wimoor-ui.spec.ts:102:5 › 采购草稿复用弹窗编辑，保存失败保留内容，新建不复用旧草稿 (662ms)
+  ✓   4 tests/browser/wimoor-ui.spec.ts:119:5 › 编辑草稿保留首批选项之外的原供应商和商品 (478ms)
+  ✘   5 tests/browser/wimoor-ui.spec.ts:129:5 › 采购作废确认包含原因，失败可重试，已作废筛选无写入入口 (30.1s)
+(node:61866) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   6 tests/browser/wimoor-ui.spec.ts:153:5 › 采购服务端搜索覆盖第 100 条之外并丢弃旧筛选响应 (963ms)
+  ✓   7 tests/browser/wimoor-ui.spec.ts:178:5 › 采购按明细选择分页搜索商品，拒绝读取不清除已选商品 (1.0s)
+  ✓   8 tests/browser/wimoor-ui.spec.ts:208:5 › 首批商品为空仍能搜索并选入采购单 (535ms)
+  ✓   9 tests/browser/wimoor-ui.spec.ts:225:5 › 供应商统一入口、搜索、弹窗、刷新保持路由 (553ms)
+  ✘  10 tests/browser/wimoor-ui.spec.ts:238:5 › 只读权限禁用写入，403 清除业务行 (5.1s)
+(node:61948) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  11 tests/browser/wimoor-ui.spec.ts:247:48 › expense-management 未接入布局不发业务请求 (267ms)
+  ✓  12 tests/browser/wimoor-ui.spec.ts:256:5 › WMS 深链接、Tab 切换、刷新与后退 (273ms)
+  ✓  13 tests/browser/wimoor-ui.spec.ts:268:5 › WMS 出库预占列表打开真实响应详情抽屉 (280ms)
+  ✓  14 tests/browser/wimoor-ui.spec.ts:285:5 › 采购工作区切换关闭详情并清除旧数据 (382ms)
+  ✓  15 tests/browser/wimoor-ui.spec.ts:294:5 › 窄屏供应商和弹窗保持可用 (430ms)
+  ✓  16 tests/browser/wimoor-ui.spec.ts:304:5 › Amazon 订单详情保留缺失字段且链接订单商品 (201ms)
+  ✓  17 tests/browser/wimoor-ui.spec.ts:315:5 › 采购转收货调用单个事务接口并展示真实响应单号 (532ms)
+  ✓  18 tests/browser/wimoor-ui.spec.ts:326:5 › 采购收货库位加载后续页并保留选择 (530ms)
+  ✓  19 tests/browser/wimoor-ui.spec.ts:339:5 › 采购转收货失败保留单据和库位供重试 (507ms)
+  ✘  20 tests/browser/wimoor-ui.spec.ts:351:5 › 工作区切换后忽略旧采购写入响应 (30.0s)
+(node:62023) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  21 tests/browser/wimoor-ui.spec.ts:383:5 › 采购详情展示实际收货阶段和数量，刷新失败清除旧进度 (5.5s)
+(node:62042) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  22 tests/browser/wimoor-ui.spec.ts:400:5 › 采购收货草稿不误报为短收异常 (518ms)
+  ✓  23 tests/browser/wimoor-ui.spec.ts:408:5 › 全部收货草稿已取消时采购详情提供作废入口 (490ms)
+  ✓  24 tests/browser/wimoor-ui.spec.ts:419:5 › 关联收货单不可读取时显示缺失而非零进度 (450ms)
+  ✓  25 tests/browser/wimoor-ui.spec.ts:424:5 › 收货单深链接刷新后保持筛选且离开时不污染其他查询 (286ms)
+  ✓  26 tests/browser/wimoor-ui.spec.ts:435:5 › 采购来源异常筛选刷新和清除保持一致 (309ms)
+  ✓  27 tests/browser/wimoor-ui.spec.ts:449:5 › 超过200条供应商可查询选用、筛选，保存失败保留选项 (1.9s)
+  ✓  28 tests/browser/wimoor-ui.spec.ts:486:5 › 供应商查询403清除结果且可重试，切换工作区关闭选择器 (602ms)
+  ✓  29 tests/browser/wimoor-ui.spec.ts:505:5 › 采购明细备注、六位金额合计和重复商品校验贯穿表单与详情 (897ms)
+  ✓  30 tests/browser/wimoor-ui.spec.ts:540:5 › 采购按商品分批建收货单，零数量跳过且失败保留输入 (646ms)
+  ✓  31 tests/browser/wimoor-ui.spec.ts:567:5 › 采购上架完成独立于采购状态，缺失权限不显示零进度 (546ms)
+  ✓  32 tests/browser/wimoor-ui.spec.ts:590:5 › 收货回查按真实关联定位采购单，刷新、清除和Tab切换正确 (1.9s)
+  ✓  33 tests/browser/wimoor-ui.spec.ts:617:5 › 未关联的收货ID不回退到相同来源文本或全部采购单 (432ms)
+  ✓  34 tests/browser/wimoor-ui.spec.ts:624:5 › 仓库来源回查链接使用收货ID而非来源单号 (654ms)
+  ✓  35 tests/browser/wimoor-ui.spec.ts:636:5 › 供应商档案跳转采购记录，首批之外的筛选在刷新和前进后退时保留 (1.5s)
+  ✓  36 tests/browser/wimoor-ui.spec.ts:662:5 › 无权或不存在的供应商筛选不回退为全部采购记录 (340ms)
+  ✓  37 tests/browser/wimoor-ui.spec.ts:669:5 › 只读供应商仍可查询采购记录，切换工作区清除供应商来源 (863ms)
+  ✓  38 tests/browser/wimoor-ui.spec.ts:684:5 › 供应商直接新建采购草稿，失败保留内容，成功后进入该供应商采购记录 (988ms)
+  ✓  39 tests/browser/wimoor-ui.spec.ts:722:5 › 供应商新建采购操作遵循创建权限，切换工作区关闭草稿 (688ms)
+
+
+  1) tests/browser/wimoor-ui.spec.ts:129:5 › 采购作废确认包含原因，失败可重试，已作废筛选无写入入口 ───────────────────────────
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for getByRole('row').filter({ has: getByRole('button', { name: 'PO-FIXTURE-00', exact: true }) }).getByRole('button', { name: '作废采购单', exact: true })
+
+
+      130 |   const { orders, calls } = await setup(page);
+      131 |   const row = page.getByRole('row').filter({ has: page.getByRole('button', { name: 'PO-FIXTURE-00', exact: true }) });
+    > 132 |   await row.getByRole('button', { name: '作废采购单', exact: true }).click();
+          |                                                                 ^
+      133 |   const dialog = page.getByRole('dialog', { name: '作废采购单', exact: true });
+      134 |   await expect(dialog).toContainText('PO-FIXTURE-00');
+      135 |   await expect(dialog.getByRole('button', { name: '确认作废', exact: true })).toBeDisabled();
+        at /Users/chenjieliang/Documents/amazon ad bulk operation/tests/browser/wimoor-ui.spec.ts:132:65
+
+    Error Context: tmp/wimoor-ui-results/wimoor-ui-采购作废确认包含原因，失败可重试，已作废筛选无写入入口/error-context.md
+
+  2) tests/browser/wimoor-ui.spec.ts:238:5 › 只读权限禁用写入，403 清除业务行 ────────────────────────────────────
+
+    Error: expect(locator).toBeDisabled() failed
+
+    Locator: getByRole('button', { name: '标记已下单', exact: true }).first()
+    Expected: disabled
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeDisabled" getByRole('button', { name: '标记已下单', exact: true }).first() with timeout 5000ms
+      - waiting for getByRole('button', { name: '标记已下单', exact: true }).first()
+
+
+      239 |   const { state } = await setup(page, 'readonly=1');
+      240 |   await expect(page.getByRole('button', { name: '添加采购单', exact: true })).toBeDisabled();
+    > 241 |   await expect(page.getByRole('button', { name: '标记已下单', exact: true }).first()).toBeDisabled();
+          |                                                                                  ^
+      242 |   state.denied = true;
+      243 |   await page.getByRole('button', { name: '刷新', exact: true }).click();
+      244 |   await expect(page.getByRole('alert')).toHaveText('隔离测试：当前工作区禁止读取');
+        at /Users/chenjieliang/Documents/amazon ad bulk operation/tests/browser/wimoor-ui.spec.ts:241:82
+
+    Error Context: tmp/wimoor-ui-results/wimoor-ui-只读权限禁用写入，403-清除业务行/error-context.md
+
+  3) tests/browser/wimoor-ui.spec.ts:351:5 › 工作区切换后忽略旧采购写入响应 ───────────────────────────────────────
+
+    Test timeout of 30000ms exceeded.
+
+    Error: page.waitForRequest: Test timeout of 30000ms exceeded.
+
+      359 |   });
+      360 |   const row = page.getByRole('row').filter({ has: page.getByRole('button', { name: 'PO-FIXTURE-00', exact: true }) });
+    > 361 |   const sent = page.waitForRequest(request => request.method() === 'PATCH');
+          |                     ^
+      362 |   await row.getByRole('button', { name: '标记已下单', exact: true }).click();
+      363 |   await sent;
+      364 |   state.denied = true;
+        at /Users/chenjieliang/Documents/amazon ad bulk operation/tests/browser/wimoor-ui.spec.ts:361:21
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for getByRole('row').filter({ has: getByRole('button', { name: 'PO-FIXTURE-00', exact: true }) }).getByRole('button', { name: '标记已下单', exact: true })
+
+
+      360 |   const row = page.getByRole('row').filter({ has: page.getByRole('button', { name: 'PO-FIXTURE-00', exact: true }) });
+      361 |   const sent = page.waitForRequest(request => request.method() === 'PATCH');
+    > 362 |   await row.getByRole('button', { name: '标记已下单', exact: true }).click();
+          |                                                                 ^
+      363 |   await sent;
+      364 |   state.denied = true;
+      365 |   await page.evaluate(() => { localStorage.setItem('amazon_bulk_ad_workspace_scope', JSON.stringify({ workspaceId: 'fixture-other' })); window.dispatchEvent(new Event('amazon-bulk-ad:workspace-scope-changed')); });
+        at /Users/chenjieliang/Documents/amazon ad bulk operation/tests/browser/wimoor-ui.spec.ts:362:65
+
+    Error Context: tmp/wimoor-ui-results/wimoor-ui-工作区切换后忽略旧采购写入响应/error-context.md
+
+  4) tests/browser/wimoor-ui.spec.ts:383:5 › 采购详情展示实际收货阶段和数量，刷新失败清除旧进度 ─────────────────────────────
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  getByRole('region', { name: '采购收货进度' }).locator('[data-quantity="pendingQc"]')
+    Expected: "2"
+    Received: "需刷新"
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveText" getByRole('region', { name: '采购收货进度' }).locator('[data-quantity="pendingQc"]') with timeout 5000ms
+      - waiting for getByRole('region', { name: '采购收货进度' }).locator('[data-quantity="pendingQc"]')
+        14 × locator resolved to <td class="p-2" data-quantity="pendingQc">需刷新</td>
+           - unexpected value "需刷新"
+
+
+      390 |   await progress.getByText('查看收货明细', { exact: true }).click();
+      391 |   await expect(progress.locator('[data-quantity="receivedQty"]')).toHaveText('8');
+    > 392 |   await expect(progress.locator('[data-quantity="pendingQc"]')).toHaveText('2');
+          |                                                                 ^
+      393 |   await expect(progress.locator('[data-quantity="pendingPutaway"]')).toHaveText('2');
+      394 |   await expect(progress.getByRole('link', { name: '处理此收货单' })).toHaveAttribute('href', '/logistics/warehouse?tab=receipts&receiptId=progress-receipt');
+      395 |   denied = true;
+        at /Users/chenjieliang/Documents/amazon ad bulk operation/tests/browser/wimoor-ui.spec.ts:392:65
+
+    Error Context: tmp/wimoor-ui-results/wimoor-ui-采购详情展示实际收货阶段和数量，刷新失败清除旧进度/error-context.md
+
+  4 failed
+    tests/browser/wimoor-ui.spec.ts:129:5 › 采购作废确认包含原因，失败可重试，已作废筛选无写入入口 ────────────────────────────
+    tests/browser/wimoor-ui.spec.ts:238:5 › 只读权限禁用写入，403 清除业务行 ─────────────────────────────────────
+    tests/browser/wimoor-ui.spec.ts:351:5 › 工作区切换后忽略旧采购写入响应 ────────────────────────────────────────
+    tests/browser/wimoor-ui.spec.ts:383:5 › 采购详情展示实际收货阶段和数量，刷新失败清除旧进度 ──────────────────────────────
+  35 passed (1.6m)

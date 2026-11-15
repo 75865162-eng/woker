@@ -1,0 +1,17 @@
+✔ WMS approval controls require live permission, distinct members and unexpired approval (0.563333ms)
+✔ WMS stock buckets never become available before acceptance and putaway (0.135084ms)
+✔ WMS normalized request hash binds revision, aggregate and every quantity (4.754167ms)
+✔ WMS rejects duplicate lines, fractions, overflow and unknown payload fields (0.149125ms)
+✔ WMS row actions distinguish free, picked and already dispatched quantities (1.152417ms)
+✔ WMS multi-line partial putaway skips zero lines without requiring their locations (1.430625ms)
+✔ WMS rejected returns use only the unreturned rejected balance (0.154084ms)
+✔ WMS inspection validates combined acceptance/rejection; receive records omitted lines as short (0.143042ms)
+✔ Stocktake distinguishes an explicit zero from missing observations and rejects malformed scope lines (0.193792ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 138.871542

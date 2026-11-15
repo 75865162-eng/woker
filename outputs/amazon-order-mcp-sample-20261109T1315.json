@@ -1,0 +1,109 @@
+{
+  "checkedAt": "2026-11-09T13:16:29.523Z",
+  "scope": {
+    "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+    "marketplaceId": "ATVPDKIKX0DER"
+  },
+  "query": {
+    "amazonOrderId": "113-5847160-2929837"
+  },
+  "results": [
+    {
+      "status": "fulfilled",
+      "value": {
+        "table": "orders",
+        "total": 1,
+        "requestId": "00b09312-2795-4fd7-b697-64bcb664f6d8",
+        "records": [
+          {
+            "amazonOrderId": "113-5847160-2929837",
+            "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+            "sourceRunId": "266118a2-dba3-44a8-bc40-03260b827a34",
+            "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+            "marketplaceId": "ATVPDKIKX0DER",
+            "createdTime": "2024-11-16T18:52:11.673Z",
+            "sourceUpdatedAt": "2024-11-19T02:00:13.755Z",
+            "rawStatus": null,
+            "normalizedStatus": null,
+            "marketplaceTimeZone": "America/Los_Angeles",
+            "capturedAt": "2026-11-09T13:15:27.583Z",
+            "detailsUpdatedAt": "2024-11-19T02:00:13.755Z",
+            "fulfilledBy": null,
+            "fulfillmentServiceLevel": null,
+            "grandTotalOriginal": null,
+            "currencyCode": null,
+            "items": [
+              {
+                "orderItemId": "114810526480401",
+                "asin": "B08N9HM3MG",
+                "sellerSku": "A002",
+                "quantityOrdered": 1,
+                "proceedsOriginal": null,
+                "currencyCode": null
+              }
+            ],
+            "detailsCurrent": true
+          }
+        ],
+        "evidenceRefs": [
+          {
+            "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+            "syncRunId": "266118a2-dba3-44a8-bc40-03260b827a34"
+          }
+        ],
+        "warnings": [
+          "订单为已提交页的当前事实；不代表历史窗口或订单详情均完整。",
+          "当前订单详情策略未请求 PROCEEDS；不能据此判定 Amazon 未提供金额或账号缺少权限，收入补采需先核实并批准相应数据范围。",
+          "当前页存在金额或币种缺失；明细有效不代表收入数据完整，缺失不能解释为零。",
+          "当前订单同步窗口尚未完成；可查询已提交数据，不代表完整历史。"
+        ]
+      }
+    },
+    {
+      "status": "fulfilled",
+      "value": {
+        "table": "order_items",
+        "total": 1,
+        "requestId": "3727605f-8c07-4d82-afcc-3dfad31a5e43",
+        "records": [
+          {
+            "amazonOrderId": "113-5847160-2929837",
+            "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+            "sourceRunId": "266118a2-dba3-44a8-bc40-03260b827a34",
+            "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+            "marketplaceId": "ATVPDKIKX0DER",
+            "createdTime": "2024-11-16T18:52:11.673Z",
+            "sourceUpdatedAt": "2024-11-19T02:00:13.755Z",
+            "rawStatus": null,
+            "normalizedStatus": null,
+            "capturedAt": "2026-11-09T13:15:27.583Z",
+            "detailsUpdatedAt": "2024-11-19T02:00:13.755Z",
+            "fulfilledBy": null,
+            "fulfillmentServiceLevel": null,
+            "orderItemId": "114810526480401",
+            "asin": "B08N9HM3MG",
+            "sellerSku": "A002",
+            "quantityOrdered": 1,
+            "proceedsOriginal": null,
+            "currencyCode": null,
+            "detailsCurrent": true
+          }
+        ],
+        "evidenceRefs": [
+          {
+            "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+            "syncRunId": "266118a2-dba3-44a8-bc40-03260b827a34"
+          }
+        ],
+        "warnings": [
+          "按订单商品行分页；仅含已采集商品，空结果不代表没有订单或销量。",
+          "商品金额保留原始字符串与币种；过期明细不可作为完整销售统计。",
+          "当前订单详情策略未请求 PROCEEDS；不能据此判定 Amazon 未提供金额或账号缺少权限，收入补采需先核实并批准相应数据范围。",
+          "当前页存在金额或币种缺失；明细有效不代表收入数据完整，缺失不能解释为零。",
+          "当前订单同步窗口尚未完成；可查询已提交数据，不代表完整历史。"
+        ]
+      }
+    }
+  ],
+  "wholeWindowComplete": false
+}

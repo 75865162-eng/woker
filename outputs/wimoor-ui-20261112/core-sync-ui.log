@@ -1,0 +1,12 @@
+
+Running 5 tests using 1 worker
+
+(node:67772) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/browser/sync-center.spec.ts:589:5 › observation domains expose inbound layers, own prices, brand analyses and history without snapshot fallback (858ms)
+  ✓  2 tests/browser/sync-center.spec.ts:624:5 › observation read errors show retryable UI and clear stale records (432ms)
+  ✓  3 tests/browser/sync-center.spec.ts:701:5 › Listing and Catalog navigation use the existing sources contract alongside observation queries (352ms)
+  ✓  4 tests/browser/sync-center.spec.ts:715:5 › Listing empty version shows active progress and failure without exposing staged rows (346ms)
+  ✓  5 tests/browser/sync-center.spec.ts:746:5 › Inventory age displays the selected marketplace report failure (298ms)
+
+  5 passed (3.0s)

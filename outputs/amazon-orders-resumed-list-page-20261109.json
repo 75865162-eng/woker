@@ -1,0 +1,17 @@
+{
+  "at": "2026-11-09T13:44:43.542Z",
+  "taskId": "266118a2-dba3-44a8-bc40-03260b827a34",
+  "rawPage": 1,
+  "operation": "searchOrders",
+  "hashVerified": true,
+  "received": 100,
+  "parsed": 100,
+  "persisted": 100,
+  "insertedInCurrentTask": 100,
+  "updatedInCurrentTask": 0,
+  "hasNext": true,
+  "allIdentitiesAndVersionsMatch": true,
+  "exampleOrderId": "114-8857107-9633064",
+  "windowComplete": false,
+  "amazonRequestsForVerification": 0
+}

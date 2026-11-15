@@ -1,0 +1,90 @@
+{
+  "checkedAt": "2026-11-09T13:58:24.787Z",
+  "taskId": "266118a2-dba3-44a8-bc40-03260b827a34",
+  "status": "SUCCEEDED",
+  "stage": "COMPLETED",
+  "finishedAt": "2026-11-09T13:54:18.752Z",
+  "sourcePublishedRunId": "266118a2-dba3-44a8-bc40-03260b827a34",
+  "sourceRows": 1861,
+  "window": {
+    "to": "2024-11-21T09:25:07.189Z",
+    "from": "2024-11-20T09:25:07.189Z"
+  },
+  "listPages": 3,
+  "detailsCompleted": 1861,
+  "paginationComplete": true,
+  "recordsReceivedFromResumedList": 121,
+  "recordsInserted": 121,
+  "recordsUpdated": 0,
+  "recordsSkipped": 0,
+  "failedAttempts": 2,
+  "failedAttemptsAreNotRejectedRecords": true,
+  "recordsPublished": 1861,
+  "coverage": {
+    "coverage": {
+      "type": "incremental_window",
+      "window": {
+        "to": "2024-11-21T09:25:07.189Z",
+        "from": "2024-11-20T09:25:07.189Z"
+      },
+      "complete": true,
+      "rowCount": 1861,
+      "apiVersion": "2026-01-01",
+      "listComplete": true,
+      "piiCollected": null,
+      "detailsEnabled": true,
+      "pendingDetails": 0,
+      "detailsComplete": true,
+      "factsContainPii": false,
+      "rawMayContainPii": true,
+      "historicalBackfill": {
+        "enabled": true,
+        "deferred": false,
+        "selected": 0
+      }
+    },
+    "windowCheckpoint": {
+      "basis": "REGISTERED_RESOURCE_WINDOW_COVERAGE",
+      "window": {
+        "from": "2024-11-20T09:25:07.189Z",
+        "toExclusive": "2024-11-21T09:25:07.189Z"
+      },
+      "version": 1,
+      "checkedAt": "2026-11-09T13:54:18.752Z",
+      "sourceRevision": 3,
+      "authorizationId": "3895911f-89c4-4ebd-8212-dc58bede447e",
+      "coverageComplete": true,
+      "evidenceTruncated": false,
+      "transportComplete": true,
+      "intervalConvention": "FROM_INCLUSIVE_TO_EXCLUSIVE",
+      "authorizationRevision": 3,
+      "historicalCompleteAtCheck": false
+    }
+  },
+  "requests": [
+    {
+      "event": "searchOrders",
+      "statusCode": 200,
+      "createdAt": "2026-11-09T13:41:20.087Z",
+      "requestId": "380db388-f1a1-4415-96a5-2c132cae6355"
+    },
+    {
+      "event": "searchOrders",
+      "statusCode": 200,
+      "createdAt": "2026-11-09T13:51:19.547Z",
+      "requestId": "b0c0b4cf-41d7-4e55-a3f7-027bbf14027b"
+    },
+    {
+      "event": "searchOrders",
+      "statusCode": 200,
+      "createdAt": "2026-11-09T13:54:18.704Z",
+      "requestId": "3438d2ae-ff2f-4b5e-9312-8e068354ec05"
+    },
+    {
+      "event": "ORDER_WINDOW_COMPLETED",
+      "statusCode": null,
+      "createdAt": "2026-11-09T13:54:18.843Z",
+      "requestId": null
+    }
+  ]
+}

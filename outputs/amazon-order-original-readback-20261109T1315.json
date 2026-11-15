@@ -1,0 +1,18 @@
+{
+  "at": "2026-11-09T13:32:22.922Z",
+  "taskId": "266118a2-dba3-44a8-bc40-03260b827a34",
+  "amazonOrderId": "111-9168602-5411444",
+  "rawPage": 2651,
+  "bodySha256": "05a1b8ad541ac2f7d6d6dd4bd6fcdc97d61a9d4799cfab48775e86f2cee1923d",
+  "hashVerified": true,
+  "orderFieldsMatch": true,
+  "itemFieldsMatch": true,
+  "receivedItems": 1,
+  "persistedItems": 1,
+  "itemIds": [
+    "115106059222681"
+  ],
+  "proceedsRequested": false,
+  "amazonRequests": 0,
+  "windowComplete": false
+}

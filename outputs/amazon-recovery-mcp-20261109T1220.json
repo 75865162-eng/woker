@@ -1,0 +1,145 @@
+{
+  "listing": {
+    "table": "listing_details",
+    "totalUnique": 230,
+    "pages": [
+      {
+        "page": 1,
+        "count": 50,
+        "total": 230,
+        "pagination": {
+          "page": 1,
+          "pageSize": 50,
+          "hasNext": true,
+          "total": 230,
+          "pageCount": 5
+        },
+        "requestId": "0bf1880c-663e-42d8-b99b-317371f630a2"
+      },
+      {
+        "page": 2,
+        "count": 50,
+        "total": 230,
+        "pagination": {
+          "page": 2,
+          "pageSize": 50,
+          "hasNext": true,
+          "total": 230,
+          "pageCount": 5
+        },
+        "requestId": "c8b560a7-ca18-4471-82c3-d6b71a6e0ecb"
+      },
+      {
+        "page": 3,
+        "count": 50,
+        "total": 230,
+        "pagination": {
+          "page": 3,
+          "pageSize": 50,
+          "hasNext": true,
+          "total": 230,
+          "pageCount": 5
+        },
+        "requestId": "a426d82e-97d6-4f48-b0b5-571f44864295"
+      },
+      {
+        "page": 4,
+        "count": 50,
+        "total": 230,
+        "pagination": {
+          "page": 4,
+          "pageSize": 50,
+          "hasNext": true,
+          "total": 230,
+          "pageCount": 5
+        },
+        "requestId": "28642a1b-d32e-494e-854d-4024681cb49d"
+      },
+      {
+        "page": 5,
+        "count": 30,
+        "total": 230,
+        "pagination": {
+          "page": 5,
+          "pageSize": 50,
+          "hasNext": false,
+          "total": 230,
+          "pageCount": 5
+        },
+        "requestId": "716696d6-9712-4d26-bef8-fafc0633823e"
+      }
+    ],
+    "runs": [
+      "39f4e9dc-56d3-429d-9fb2-54f8a8b527ba"
+    ]
+  },
+  "settlementDatePages": {
+    "totalUnique": 283,
+    "pages": [
+      {
+        "page": 1,
+        "count": 50,
+        "total": 283,
+        "hasNext": true,
+        "requestId": "eed4fef3-62f2-4f1d-8b4a-5ae0f6aa31d8"
+      },
+      {
+        "page": 2,
+        "count": 50,
+        "total": 283,
+        "hasNext": true,
+        "requestId": "6262d491-dee0-43fc-b7ab-37023293020a"
+      },
+      {
+        "page": 3,
+        "count": 50,
+        "total": 283,
+        "hasNext": true,
+        "requestId": "a6818b1c-03fc-41d8-8bc6-0b6c45e09d5e"
+      },
+      {
+        "page": 4,
+        "count": 50,
+        "total": 283,
+        "hasNext": true,
+        "requestId": "fcb4c355-e585-445c-8eef-8e93dd9a2926"
+      },
+      {
+        "page": 5,
+        "count": 50,
+        "total": 283,
+        "hasNext": true,
+        "requestId": "0b93b86b-fbb6-480c-852b-fd9b28e12b28"
+      },
+      {
+        "page": 6,
+        "count": 33,
+        "total": 283,
+        "hasNext": false,
+        "requestId": "a5018dc8-c9ac-4777-805a-944267ab2abe"
+      }
+    ],
+    "currencies": [
+      "USD"
+    ],
+    "badDates": 0
+  },
+  "listingSample": [
+    {
+      "sourceId": "8b82d84b-17f5-4245-8d8f-6b3e12a9d359",
+      "syncRunId": "39f4e9dc-56d3-429d-9fb2-54f8a8b527ba"
+    }
+  ],
+  "settlementSample": [
+    {
+      "sourceId": "636d327e-8da0-499a-9322-d6c375475ca5",
+      "syncRunId": "a321796a-bd91-4c45-bc04-b08e4119ce21"
+    },
+    {
+      "sourceId": "636d327e-8da0-499a-9322-d6c375475ca5",
+      "syncRunId": "8adc2c3e-1be3-4f27-9783-547faa1ecf7f",
+      "reportId": "451208020758",
+      "reportDocumentId": "9604a0bad54a4a1221a27e6a2d0c0e5218c1419625ebd1360b9227fcbea43f2b"
+    }
+  ]
+}

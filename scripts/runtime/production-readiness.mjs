@@ -22,7 +22,7 @@ import { parseEnv } from "node:util";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { projectRoot } from "./environment.mjs";
-import { deploymentAssetStatus, productionEndpointStatus } from "./production-readiness-lib.mjs";
+import { deploymentAssetStatus, migrationCatalog, migrationReadiness, productionEndpointStatus } from "./production-readiness-lib.mjs";
 
 const require = createRequire(import.meta.url);
 const { Client } = require("pg");
@@ -183,8 +183,9 @@ try {
   await client.connect();
   add("db.connect", "生产数据库可连接", true, "连接成功");
 
-  const pending = await client.query('SELECT count(*)::int AS n FROM "_prisma_migrations" WHERE finished_at IS NULL');
-  add("db.migrations", "迁移全部应用", pending.rows[0].n === 0, `pending=${pending.rows[0].n}`);
+  const history = await client.query('SELECT migration_name, checksum, finished_at, rolled_back_at, applied_steps_count FROM "_prisma_migrations"');
+  const migrationStatus = migrationReadiness(migrationCatalog(path.join(projectRoot, "prisma/migrations")), history.rows);
+  add("db.migrations", "迁移全部应用", migrationStatus.ok, migrationStatus.detail);
 
   const synthetic = await client.query(`
     SELECT (SELECT count(*) FROM "AmazonSettlementReport" WHERE id LIKE 'e2e-%')

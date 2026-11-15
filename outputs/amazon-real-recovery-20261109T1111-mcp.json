@@ -1,0 +1,853 @@
+{
+  "at": "2026-11-09T11:18:00Z",
+  "scope": {
+    "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+    "marketplaceId": "ATVPDKIKX0DER"
+  },
+  "freshOrder": {
+    "data": {
+      "items": [
+        {
+          "amazonOrderId": "112-9967754-3349068",
+          "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+          "sourceRunId": "266118a2-dba3-44a8-bc40-03260b827a34",
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+          "marketplaceId": "ATVPDKIKX0DER",
+          "createdTime": "2024-11-08T01:43:19.505Z",
+          "sourceUpdatedAt": "2024-11-10T08:08:28.345Z",
+          "rawStatus": null,
+          "normalizedStatus": null,
+          "marketplaceTimeZone": "America/Los_Angeles",
+          "capturedAt": "2026-11-09T11:11:32.976Z",
+          "detailsUpdatedAt": "2024-11-10T08:08:28.345Z",
+          "fulfilledBy": null,
+          "fulfillmentServiceLevel": null,
+          "grandTotalOriginal": null,
+          "currencyCode": null,
+          "items": [
+            {
+              "orderItemId": "113908366965801",
+              "asin": "B0B1CHBDKY",
+              "sellerSku": "53-2X0C-IZU9",
+              "quantityOrdered": 1,
+              "proceedsOriginal": null,
+              "currencyCode": null
+            }
+          ],
+          "detailsCurrent": true
+        }
+      ],
+      "total": 1
+    },
+    "meta": {
+      "source": "AmazonOrderRecord",
+      "isSandbox": false,
+      "lastSyncAt": "2026-11-06T19:31:55.166Z",
+      "freshness": "stale",
+      "grain": [
+        "sellerAccountId",
+        "marketplaceId",
+        "amazonOrderId"
+      ],
+      "currency": null,
+      "attributionWindow": null,
+      "warnings": [
+        "订单为已提交页的当前事实；不代表历史窗口或订单详情均完整。",
+        "当前订单详情策略未请求 PROCEEDS；不能据此判定 Amazon 未提供金额或账号缺少权限，收入补采需先核实并批准相应数据范围。",
+        "当前页存在金额或币种缺失；明细有效不代表收入数据完整，缺失不能解释为零。",
+        "当前订单同步窗口尚未完成；可查询已提交数据，不代表完整历史。"
+      ],
+      "page": {
+        "page": 1,
+        "pageSize": 3,
+        "hasNext": false
+      },
+      "sources": [
+        {
+          "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+          "marketplaceId": "ATVPDKIKX0DER",
+          "syncRunId": "e84f5ab4-a1ba-43e1-bfac-65fa9ea98ba6",
+          "lastSyncAt": "2026-11-06T19:31:55.166Z"
+        }
+      ],
+      "completeness": "PAGE_COMMITTED",
+      "orderCoverage": {
+        "detailsEnabled": true,
+        "recoveryTask": {
+          "id": "266118a2-dba3-44a8-bc40-03260b827a34",
+          "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+          "status": "WAITING",
+          "stage": "FETCHING_DETAILS",
+          "pagesCompleted": 0,
+          "detailsCompletedCount": 507,
+          "attempts": 3,
+          "maxAttempts": 6,
+          "apiRequests": 509,
+          "throttles": 0,
+          "nextAttemptAt": "2026-11-09T11:13:02.831Z",
+          "progress": {
+            "state": "READY",
+            "message": "任务等待队列调度，尚未超过进度观察阈值。",
+            "needsAttention": false,
+            "checkedAt": "2026-11-09T11:13:03.045Z",
+            "lastProgressAt": "2026-11-09T11:12:58.210Z",
+            "progressBasis": "COMMITTED_PAGE_OR_DETAIL",
+            "graceSeconds": 900
+          },
+          "recoveryOutcome": {
+            "state": "ADVANCED",
+            "appliedAt": "2026-11-09T11:11:12.378Z",
+            "baselinePages": 0,
+            "baselineDetails": 491,
+            "baselinePendingDetails": 1249,
+            "pagesAdvanced": 0,
+            "detailsAdvanced": 16,
+            "pendingDetails": 1233,
+            "basis": "APPLIED_APPROVAL_AND_CURRENT_WINDOW_WORK",
+            "historicalUniverseComplete": false
+          },
+          "lastHttpErrorStatus": null,
+          "operatorAction": null,
+          "canRequestRetry": false,
+          "failureReason": null
+        },
+        "historicalBackfill": null,
+        "historicalBackfillEnabled": true,
+        "historicalBackfillWindow": null,
+        "historicalBackfillBasis": "LAST_PUBLISHED_WINDOW",
+        "moneyRequest": {
+          "proceedsRequested": false,
+          "basis": "CURRENT_SOURCE_POLICY"
+        },
+        "money": {
+          "field": "grandTotalOriginal",
+          "returned": 1,
+          "present": 0,
+          "missing": 1
+        },
+        "window": {
+          "from": "2024-11-20T09:25:07.189Z",
+          "to": "2024-11-21T09:25:07.189Z",
+          "status": "RUNNING",
+          "listComplete": false,
+          "detailsComplete": false,
+          "lastSuccessAt": "2026-11-06T19:31:55.166Z",
+          "updatedAt": "2026-11-09T11:12:58.847Z"
+        },
+        "page": {
+          "returned": 1,
+          "detailsCurrent": 1,
+          "detailsMissingOrStale": 0
+        }
+      },
+      "requestId": "69ae6a65-19c3-4c1c-b493-a22cfbfedadd",
+      "toolVersion": "2.0.0",
+      "evidenceRefScope": "RETURNED_PAGE_COMMITTED_RECORDS",
+      "dataset": {
+        "id": "orders",
+        "module": "amazon_sync",
+        "dataType": "orders",
+        "legacyTable": "orders"
+      },
+      "scope": {
+        "pairs": [
+          {
+            "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+            "marketplaceId": "ATVPDKIKX0DER"
+          }
+        ]
+      },
+      "dateSemantics": "created_time_utc_default; source_updated_at_utc_when_dateField_selected",
+      "dateRange": {
+        "from": "2024-11-08",
+        "to": "2024-11-08"
+      },
+      "sort": {
+        "field": "createdTime",
+        "direction": "desc"
+      },
+      "schemaStatus": "application_schema_confirmed_source_sample_pending",
+      "resultStatus": "AVAILABLE",
+      "publicationPolicy": "page_committed_current_facts",
+      "timezone": null
+    },
+    "pagination": {
+      "page": 1,
+      "pageSize": 3,
+      "hasNext": false,
+      "total": 1,
+      "pageCount": 1
+    },
+    "warnings": [
+      "订单为已提交页的当前事实；不代表历史窗口或订单详情均完整。",
+      "当前订单详情策略未请求 PROCEEDS；不能据此判定 Amazon 未提供金额或账号缺少权限，收入补采需先核实并批准相应数据范围。",
+      "当前页存在金额或币种缺失；明细有效不代表收入数据完整，缺失不能解释为零。",
+      "当前订单同步窗口尚未完成；可查询已提交数据，不代表完整历史。"
+    ],
+    "records": [
+      {
+        "amazonOrderId": "112-9967754-3349068",
+        "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+        "sourceRunId": "266118a2-dba3-44a8-bc40-03260b827a34",
+        "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+        "marketplaceId": "ATVPDKIKX0DER",
+        "createdTime": "2024-11-08T01:43:19.505Z",
+        "sourceUpdatedAt": "2024-11-10T08:08:28.345Z",
+        "rawStatus": null,
+        "normalizedStatus": null,
+        "marketplaceTimeZone": "America/Los_Angeles",
+        "capturedAt": "2026-11-09T11:11:32.976Z",
+        "detailsUpdatedAt": "2024-11-10T08:08:28.345Z",
+        "fulfilledBy": null,
+        "fulfillmentServiceLevel": null,
+        "grandTotalOriginal": null,
+        "currencyCode": null,
+        "items": [
+          {
+            "orderItemId": "113908366965801",
+            "asin": "B0B1CHBDKY",
+            "sellerSku": "53-2X0C-IZU9",
+            "quantityOrdered": 1,
+            "proceedsOriginal": null,
+            "currencyCode": null
+          }
+        ],
+        "detailsCurrent": true
+      }
+    ],
+    "total": 1,
+    "hasMore": false,
+    "source": "AmazonOrderRecord",
+    "dataRange": {
+      "from": "2024-11-08",
+      "to": "2024-11-08",
+      "dateSemantics": "created_time_utc_default; source_updated_at_utc_when_dateField_selected",
+      "basis": "REQUESTED_RANGE_ONLY"
+    },
+    "observedDataRange": null,
+    "lastSyncedAt": "2026-11-06T19:31:55.166Z",
+    "coverageStatus": "HISTORY_INCOMPLETE",
+    "missingFields": null,
+    "evidenceRefs": [
+      {
+        "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+        "syncRunId": "266118a2-dba3-44a8-bc40-03260b827a34"
+      }
+    ],
+    "dataCompleteness": {
+      "status": "HISTORY_INCOMPLETE",
+      "fieldValuesChecked": false,
+      "fieldCheckBasis": null,
+      "fieldStatus": null,
+      "historicalUniverseComplete": false,
+      "emptyMeansNoBusinessEvents": false
+    }
+  },
+  "freshOrderItems": {
+    "data": {
+      "items": [
+        {
+          "amazonOrderId": "112-9967754-3349068",
+          "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+          "sourceRunId": "266118a2-dba3-44a8-bc40-03260b827a34",
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+          "marketplaceId": "ATVPDKIKX0DER",
+          "createdTime": "2024-11-08T01:43:19.505Z",
+          "sourceUpdatedAt": "2024-11-10T08:08:28.345Z",
+          "rawStatus": null,
+          "normalizedStatus": null,
+          "capturedAt": "2026-11-09T11:11:32.976Z",
+          "detailsUpdatedAt": "2024-11-10T08:08:28.345Z",
+          "fulfilledBy": null,
+          "fulfillmentServiceLevel": null,
+          "orderItemId": "113908366965801",
+          "asin": "B0B1CHBDKY",
+          "sellerSku": "53-2X0C-IZU9",
+          "quantityOrdered": 1,
+          "proceedsOriginal": null,
+          "currencyCode": null,
+          "detailsCurrent": true
+        }
+      ],
+      "total": 1
+    },
+    "meta": {
+      "source": "AmazonOrderItemRecord",
+      "isSandbox": false,
+      "lastSyncAt": "2026-11-06T19:31:55.166Z",
+      "freshness": "stale",
+      "grain": [
+        "sellerAccountId",
+        "marketplaceId",
+        "amazonOrderId",
+        "orderItemId"
+      ],
+      "currency": null,
+      "attributionWindow": null,
+      "warnings": [
+        "按订单商品行分页；仅含已采集商品，空结果不代表没有订单或销量。",
+        "商品金额保留原始字符串与币种；过期明细不可作为完整销售统计。",
+        "当前订单详情策略未请求 PROCEEDS；不能据此判定 Amazon 未提供金额或账号缺少权限，收入补采需先核实并批准相应数据范围。",
+        "当前页存在金额或币种缺失；明细有效不代表收入数据完整，缺失不能解释为零。",
+        "当前订单同步窗口尚未完成；可查询已提交数据，不代表完整历史。"
+      ],
+      "page": {
+        "page": 1,
+        "pageSize": 3,
+        "hasNext": false
+      },
+      "sources": [
+        {
+          "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+          "marketplaceId": "ATVPDKIKX0DER",
+          "syncRunId": "e84f5ab4-a1ba-43e1-bfac-65fa9ea98ba6",
+          "lastSyncAt": "2026-11-06T19:31:55.166Z"
+        }
+      ],
+      "completeness": "PAGE_COMMITTED",
+      "orderCoverage": {
+        "detailsEnabled": true,
+        "recoveryTask": {
+          "id": "266118a2-dba3-44a8-bc40-03260b827a34",
+          "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+          "status": "WAITING",
+          "stage": "FETCHING_DETAILS",
+          "pagesCompleted": 0,
+          "detailsCompletedCount": 507,
+          "attempts": 3,
+          "maxAttempts": 6,
+          "apiRequests": 509,
+          "throttles": 0,
+          "nextAttemptAt": "2026-11-09T11:13:02.831Z",
+          "progress": {
+            "state": "READY",
+            "message": "任务等待队列调度，尚未超过进度观察阈值。",
+            "needsAttention": false,
+            "checkedAt": "2026-11-09T11:13:03.361Z",
+            "lastProgressAt": "2026-11-09T11:12:58.210Z",
+            "progressBasis": "COMMITTED_PAGE_OR_DETAIL",
+            "graceSeconds": 900
+          },
+          "recoveryOutcome": {
+            "state": "ADVANCED",
+            "appliedAt": "2026-11-09T11:11:12.378Z",
+            "baselinePages": 0,
+            "baselineDetails": 491,
+            "baselinePendingDetails": 1249,
+            "pagesAdvanced": 0,
+            "detailsAdvanced": 16,
+            "pendingDetails": 1233,
+            "basis": "APPLIED_APPROVAL_AND_CURRENT_WINDOW_WORK",
+            "historicalUniverseComplete": false
+          },
+          "lastHttpErrorStatus": null,
+          "operatorAction": null,
+          "canRequestRetry": false,
+          "failureReason": null
+        },
+        "historicalBackfill": null,
+        "historicalBackfillEnabled": true,
+        "historicalBackfillWindow": null,
+        "historicalBackfillBasis": "LAST_PUBLISHED_WINDOW",
+        "moneyRequest": {
+          "proceedsRequested": false,
+          "basis": "CURRENT_SOURCE_POLICY"
+        },
+        "money": {
+          "field": "proceedsOriginal",
+          "returned": 1,
+          "present": 0,
+          "missing": 1
+        },
+        "window": {
+          "from": "2024-11-20T09:25:07.189Z",
+          "to": "2024-11-21T09:25:07.189Z",
+          "status": "RUNNING",
+          "listComplete": false,
+          "detailsComplete": false,
+          "lastSuccessAt": "2026-11-06T19:31:55.166Z",
+          "updatedAt": "2026-11-09T11:12:58.847Z"
+        },
+        "page": {
+          "returned": 1,
+          "detailsCurrent": 1,
+          "detailsMissingOrStale": 0
+        }
+      },
+      "requestId": "a03dae69-6ab8-4b77-9bcd-873cd48939ee",
+      "toolVersion": "2.0.0",
+      "evidenceRefScope": "RETURNED_PAGE_COMMITTED_RECORDS",
+      "dataset": {
+        "id": "order_items",
+        "module": "amazon_sync",
+        "dataType": "order_items",
+        "legacyTable": "order_items"
+      },
+      "scope": {
+        "pairs": [
+          {
+            "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+            "marketplaceId": "ATVPDKIKX0DER"
+          }
+        ]
+      },
+      "dateSemantics": "created_time_utc_default; source_updated_at_utc_when_dateField_selected",
+      "dateRange": {
+        "from": "2024-11-08",
+        "to": "2024-11-08"
+      },
+      "sort": {
+        "field": "createdTime",
+        "direction": "desc"
+      },
+      "schemaStatus": "application_schema_confirmed_source_sample_pending",
+      "resultStatus": "AVAILABLE",
+      "publicationPolicy": "page_committed_current_facts",
+      "timezone": null
+    },
+    "pagination": {
+      "page": 1,
+      "pageSize": 3,
+      "hasNext": false,
+      "total": 1,
+      "pageCount": 1
+    },
+    "warnings": [
+      "按订单商品行分页；仅含已采集商品，空结果不代表没有订单或销量。",
+      "商品金额保留原始字符串与币种；过期明细不可作为完整销售统计。",
+      "当前订单详情策略未请求 PROCEEDS；不能据此判定 Amazon 未提供金额或账号缺少权限，收入补采需先核实并批准相应数据范围。",
+      "当前页存在金额或币种缺失；明细有效不代表收入数据完整，缺失不能解释为零。",
+      "当前订单同步窗口尚未完成；可查询已提交数据，不代表完整历史。"
+    ],
+    "records": [
+      {
+        "amazonOrderId": "112-9967754-3349068",
+        "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+        "sourceRunId": "266118a2-dba3-44a8-bc40-03260b827a34",
+        "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+        "marketplaceId": "ATVPDKIKX0DER",
+        "createdTime": "2024-11-08T01:43:19.505Z",
+        "sourceUpdatedAt": "2024-11-10T08:08:28.345Z",
+        "rawStatus": null,
+        "normalizedStatus": null,
+        "capturedAt": "2026-11-09T11:11:32.976Z",
+        "detailsUpdatedAt": "2024-11-10T08:08:28.345Z",
+        "fulfilledBy": null,
+        "fulfillmentServiceLevel": null,
+        "orderItemId": "113908366965801",
+        "asin": "B0B1CHBDKY",
+        "sellerSku": "53-2X0C-IZU9",
+        "quantityOrdered": 1,
+        "proceedsOriginal": null,
+        "currencyCode": null,
+        "detailsCurrent": true
+      }
+    ],
+    "total": 1,
+    "hasMore": false,
+    "source": "AmazonOrderItemRecord",
+    "dataRange": {
+      "from": "2024-11-08",
+      "to": "2024-11-08",
+      "dateSemantics": "created_time_utc_default; source_updated_at_utc_when_dateField_selected",
+      "basis": "REQUESTED_RANGE_ONLY"
+    },
+    "observedDataRange": null,
+    "lastSyncedAt": "2026-11-06T19:31:55.166Z",
+    "coverageStatus": "HISTORY_INCOMPLETE",
+    "missingFields": null,
+    "evidenceRefs": [
+      {
+        "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+        "syncRunId": "266118a2-dba3-44a8-bc40-03260b827a34"
+      }
+    ],
+    "dataCompleteness": {
+      "status": "HISTORY_INCOMPLETE",
+      "fieldValuesChecked": false,
+      "fieldCheckBasis": null,
+      "fieldStatus": null,
+      "historicalUniverseComplete": false,
+      "emptyMeansNoBusinessEvents": false
+    }
+  },
+  "dateExclusion": {
+    "data": {
+      "items": [],
+      "total": 0
+    },
+    "meta": {
+      "source": "AmazonOrderItemRecord",
+      "isSandbox": false,
+      "lastSyncAt": "2026-11-06T19:31:55.166Z",
+      "freshness": "stale",
+      "grain": [
+        "sellerAccountId",
+        "marketplaceId",
+        "amazonOrderId",
+        "orderItemId"
+      ],
+      "currency": null,
+      "attributionWindow": null,
+      "warnings": [
+        "按订单商品行分页；仅含已采集商品，空结果不代表没有订单或销量。",
+        "商品金额保留原始字符串与币种；过期明细不可作为完整销售统计。",
+        "当前订单详情策略未请求 PROCEEDS；不能据此判定 Amazon 未提供金额或账号缺少权限，收入补采需先核实并批准相应数据范围。",
+        "当前订单同步窗口尚未完成；可查询已提交数据，不代表完整历史。"
+      ],
+      "page": {
+        "page": 1,
+        "pageSize": 3,
+        "hasNext": false
+      },
+      "sources": [
+        {
+          "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+          "marketplaceId": "ATVPDKIKX0DER",
+          "syncRunId": "e84f5ab4-a1ba-43e1-bfac-65fa9ea98ba6",
+          "lastSyncAt": "2026-11-06T19:31:55.166Z"
+        }
+      ],
+      "completeness": "PAGE_COMMITTED",
+      "orderCoverage": {
+        "detailsEnabled": true,
+        "recoveryTask": {
+          "id": "266118a2-dba3-44a8-bc40-03260b827a34",
+          "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+          "status": "WAITING",
+          "stage": "FETCHING_DETAILS",
+          "pagesCompleted": 0,
+          "detailsCompletedCount": 541,
+          "attempts": 3,
+          "maxAttempts": 6,
+          "apiRequests": 543,
+          "throttles": 0,
+          "nextAttemptAt": "2026-11-09T11:16:25.515Z",
+          "progress": {
+            "state": "SCHEDULED_WAIT",
+            "message": "尚未到下次执行时间，可能处于持久限流或重试退避。",
+            "needsAttention": false,
+            "checkedAt": "2026-11-09T11:16:24.242Z",
+            "lastProgressAt": "2026-11-09T11:16:20.871Z",
+            "progressBasis": "COMMITTED_PAGE_OR_DETAIL",
+            "graceSeconds": 900
+          },
+          "recoveryOutcome": {
+            "state": "ADVANCED",
+            "appliedAt": "2026-11-09T11:11:12.378Z",
+            "baselinePages": 0,
+            "baselineDetails": 491,
+            "baselinePendingDetails": 1249,
+            "pagesAdvanced": 0,
+            "detailsAdvanced": 50,
+            "pendingDetails": 1199,
+            "basis": "APPLIED_APPROVAL_AND_CURRENT_WINDOW_WORK",
+            "historicalUniverseComplete": false
+          },
+          "lastHttpErrorStatus": null,
+          "operatorAction": null,
+          "canRequestRetry": false,
+          "failureReason": null
+        },
+        "historicalBackfill": null,
+        "historicalBackfillEnabled": true,
+        "historicalBackfillWindow": null,
+        "historicalBackfillBasis": "LAST_PUBLISHED_WINDOW",
+        "moneyRequest": {
+          "proceedsRequested": false,
+          "basis": "CURRENT_SOURCE_POLICY"
+        },
+        "money": {
+          "field": "proceedsOriginal",
+          "returned": 0,
+          "present": 0,
+          "missing": 0
+        },
+        "window": {
+          "from": "2024-11-20T09:25:07.189Z",
+          "to": "2024-11-21T09:25:07.189Z",
+          "status": "RUNNING",
+          "listComplete": false,
+          "detailsComplete": false,
+          "lastSuccessAt": "2026-11-06T19:31:55.166Z",
+          "updatedAt": "2026-11-09T11:16:21.213Z"
+        },
+        "page": {
+          "returned": 0,
+          "detailsCurrent": 0,
+          "detailsMissingOrStale": 0
+        }
+      },
+      "requestId": "47ce7582-724a-47c0-a048-497272cb1e8b",
+      "toolVersion": "2.0.0",
+      "evidenceRefScope": "RETURNED_PAGE_COMMITTED_RECORDS",
+      "dataset": {
+        "id": "order_items",
+        "module": "amazon_sync",
+        "dataType": "order_items",
+        "legacyTable": "order_items"
+      },
+      "scope": {
+        "pairs": [
+          {
+            "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+            "marketplaceId": "ATVPDKIKX0DER"
+          }
+        ]
+      },
+      "dateSemantics": "created_time_utc_default; source_updated_at_utc_when_dateField_selected",
+      "dateRange": {
+        "from": "2024-11-09",
+        "to": "2024-11-09"
+      },
+      "sort": {
+        "field": "createdTime",
+        "direction": "desc"
+      },
+      "schemaStatus": "application_schema_confirmed_source_sample_pending",
+      "resultStatus": "EMPTY_RESULT",
+      "publicationPolicy": "page_committed_current_facts",
+      "timezone": null
+    },
+    "pagination": {
+      "page": 1,
+      "pageSize": 3,
+      "hasNext": false,
+      "total": 0,
+      "pageCount": 0
+    },
+    "warnings": [
+      "按订单商品行分页；仅含已采集商品，空结果不代表没有订单或销量。",
+      "商品金额保留原始字符串与币种；过期明细不可作为完整销售统计。",
+      "当前订单详情策略未请求 PROCEEDS；不能据此判定 Amazon 未提供金额或账号缺少权限，收入补采需先核实并批准相应数据范围。",
+      "当前订单同步窗口尚未完成；可查询已提交数据，不代表完整历史。"
+    ],
+    "records": [],
+    "total": 0,
+    "hasMore": false,
+    "source": "AmazonOrderItemRecord",
+    "dataRange": {
+      "from": "2024-11-09",
+      "to": "2024-11-09",
+      "dateSemantics": "created_time_utc_default; source_updated_at_utc_when_dateField_selected",
+      "basis": "REQUESTED_RANGE_ONLY"
+    },
+    "observedDataRange": null,
+    "lastSyncedAt": "2026-11-06T19:31:55.166Z",
+    "coverageStatus": "HISTORY_INCOMPLETE",
+    "missingFields": null,
+    "evidenceRefs": [],
+    "dataCompleteness": {
+      "status": "HISTORY_INCOMPLETE",
+      "fieldValuesChecked": false,
+      "fieldCheckBasis": null,
+      "fieldStatus": null,
+      "historicalUniverseComplete": false,
+      "emptyMeansNoBusinessEvents": false
+    }
+  },
+  "endPage": {
+    "data": {
+      "items": [],
+      "total": 1
+    },
+    "meta": {
+      "source": "AmazonOrderItemRecord",
+      "isSandbox": false,
+      "lastSyncAt": "2026-11-06T19:31:55.166Z",
+      "freshness": "stale",
+      "grain": [
+        "sellerAccountId",
+        "marketplaceId",
+        "amazonOrderId",
+        "orderItemId"
+      ],
+      "currency": null,
+      "attributionWindow": null,
+      "warnings": [
+        "按订单商品行分页；仅含已采集商品，空结果不代表没有订单或销量。",
+        "商品金额保留原始字符串与币种；过期明细不可作为完整销售统计。",
+        "当前订单详情策略未请求 PROCEEDS；不能据此判定 Amazon 未提供金额或账号缺少权限，收入补采需先核实并批准相应数据范围。",
+        "当前订单同步窗口尚未完成；可查询已提交数据，不代表完整历史。"
+      ],
+      "page": {
+        "page": 2,
+        "pageSize": 3,
+        "hasNext": false
+      },
+      "sources": [
+        {
+          "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+          "marketplaceId": "ATVPDKIKX0DER",
+          "syncRunId": "e84f5ab4-a1ba-43e1-bfac-65fa9ea98ba6",
+          "lastSyncAt": "2026-11-06T19:31:55.166Z"
+        }
+      ],
+      "completeness": "PAGE_COMMITTED",
+      "orderCoverage": {
+        "detailsEnabled": true,
+        "recoveryTask": {
+          "id": "266118a2-dba3-44a8-bc40-03260b827a34",
+          "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+          "status": "WAITING",
+          "stage": "FETCHING_DETAILS",
+          "pagesCompleted": 0,
+          "detailsCompletedCount": 541,
+          "attempts": 3,
+          "maxAttempts": 6,
+          "apiRequests": 543,
+          "throttles": 0,
+          "nextAttemptAt": "2026-11-09T11:16:25.515Z",
+          "progress": {
+            "state": "SCHEDULED_WAIT",
+            "message": "尚未到下次执行时间，可能处于持久限流或重试退避。",
+            "needsAttention": false,
+            "checkedAt": "2026-11-09T11:16:24.574Z",
+            "lastProgressAt": "2026-11-09T11:16:20.871Z",
+            "progressBasis": "COMMITTED_PAGE_OR_DETAIL",
+            "graceSeconds": 900
+          },
+          "recoveryOutcome": {
+            "state": "ADVANCED",
+            "appliedAt": "2026-11-09T11:11:12.378Z",
+            "baselinePages": 0,
+            "baselineDetails": 491,
+            "baselinePendingDetails": 1249,
+            "pagesAdvanced": 0,
+            "detailsAdvanced": 50,
+            "pendingDetails": 1199,
+            "basis": "APPLIED_APPROVAL_AND_CURRENT_WINDOW_WORK",
+            "historicalUniverseComplete": false
+          },
+          "lastHttpErrorStatus": null,
+          "operatorAction": null,
+          "canRequestRetry": false,
+          "failureReason": null
+        },
+        "historicalBackfill": null,
+        "historicalBackfillEnabled": true,
+        "historicalBackfillWindow": null,
+        "historicalBackfillBasis": "LAST_PUBLISHED_WINDOW",
+        "moneyRequest": {
+          "proceedsRequested": false,
+          "basis": "CURRENT_SOURCE_POLICY"
+        },
+        "money": {
+          "field": "proceedsOriginal",
+          "returned": 0,
+          "present": 0,
+          "missing": 0
+        },
+        "window": {
+          "from": "2024-11-20T09:25:07.189Z",
+          "to": "2024-11-21T09:25:07.189Z",
+          "status": "RUNNING",
+          "listComplete": false,
+          "detailsComplete": false,
+          "lastSuccessAt": "2026-11-06T19:31:55.166Z",
+          "updatedAt": "2026-11-09T11:16:21.213Z"
+        },
+        "page": {
+          "returned": 0,
+          "detailsCurrent": 0,
+          "detailsMissingOrStale": 0
+        }
+      },
+      "requestId": "941fdc72-f661-42a5-b838-3459e05eaad5",
+      "toolVersion": "2.0.0",
+      "evidenceRefScope": "RETURNED_PAGE_COMMITTED_RECORDS",
+      "dataset": {
+        "id": "order_items",
+        "module": "amazon_sync",
+        "dataType": "order_items",
+        "legacyTable": "order_items"
+      },
+      "scope": {
+        "pairs": [
+          {
+            "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+            "marketplaceId": "ATVPDKIKX0DER"
+          }
+        ]
+      },
+      "dateSemantics": "created_time_utc_default; source_updated_at_utc_when_dateField_selected",
+      "dateRange": {
+        "from": "2024-11-08",
+        "to": "2024-11-08"
+      },
+      "sort": {
+        "field": "createdTime",
+        "direction": "desc"
+      },
+      "schemaStatus": "application_schema_confirmed_source_sample_pending",
+      "resultStatus": "AVAILABLE",
+      "publicationPolicy": "page_committed_current_facts",
+      "timezone": null
+    },
+    "pagination": {
+      "page": 2,
+      "pageSize": 3,
+      "hasNext": false,
+      "total": 1,
+      "pageCount": 1
+    },
+    "warnings": [
+      "按订单商品行分页；仅含已采集商品，空结果不代表没有订单或销量。",
+      "商品金额保留原始字符串与币种；过期明细不可作为完整销售统计。",
+      "当前订单详情策略未请求 PROCEEDS；不能据此判定 Amazon 未提供金额或账号缺少权限，收入补采需先核实并批准相应数据范围。",
+      "当前订单同步窗口尚未完成；可查询已提交数据，不代表完整历史。"
+    ],
+    "records": [],
+    "total": 1,
+    "hasMore": false,
+    "source": "AmazonOrderItemRecord",
+    "dataRange": {
+      "from": "2024-11-08",
+      "to": "2024-11-08",
+      "dateSemantics": "created_time_utc_default; source_updated_at_utc_when_dateField_selected",
+      "basis": "REQUESTED_RANGE_ONLY"
+    },
+    "observedDataRange": null,
+    "lastSyncedAt": "2026-11-06T19:31:55.166Z",
+    "coverageStatus": "HISTORY_INCOMPLETE",
+    "missingFields": null,
+    "evidenceRefs": [],
+    "dataCompleteness": {
+      "status": "HISTORY_INCOMPLETE",
+      "fieldValuesChecked": false,
+      "fieldCheckBasis": null,
+      "fieldStatus": null,
+      "historicalUniverseComplete": false,
+      "emptyMeansNoBusinessEvents": false
+    }
+  },
+  "crossMarketplaceDenied": {
+    "content": [
+      {
+        "type": "text",
+        "text": "tool call error: tool call failed for `erp/data_query`\n\nCaused by:\n    Mcp error: -32003: 数据范围不可访问。({\"requestId\":\"2cc1a326-d6e0-4b2e-b77a-4d7d2e91e2a3\",\"toolVersion\":\"2.0.0\",\"businessCode\":\"FORBIDDEN\"})"
+      }
+    ],
+    "isError": true
+  },
+  "rawProof": {
+    "taskId": "266118a2-dba3-44a8-bc40-03260b827a34",
+    "page": 1492,
+    "bodySha256": "df5e5c8077d627b301a561b7544ee2b2688ebf7e36758f70953b2af272aec84d",
+    "sha256RecomputedMatches": true,
+    "amazonRequestId": "1172abab-8451-4dff-b370-2da3fa0dcba0",
+    "operation": "getOrder",
+    "apiVersion": "2026-01-01"
+  },
+  "limits": [
+    "Window not complete",
+    "PROCEEDS not requested, amounts remain null",
+    "Full-dataset pagination not verified",
+    "No application changes or new isolated tests this round",
+    "Worker restart awaiting explicit approval"
+  ]
+}

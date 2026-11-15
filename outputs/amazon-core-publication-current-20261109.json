@@ -1,0 +1,207 @@
+{
+  "at": "2026-11-09T15:34:20.916Z",
+  "sources": [
+    {
+      "id": "7367dd0a-b896-4db9-baef-7e2c600dd85f",
+      "resource": "fulfillment",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "rowCount": 0,
+      "activeRunId": null,
+      "lastSuccessAt": null,
+      "runs": [
+        {
+          "id": "010c5403-7e2f-4ae7-8d5a-08d5a7b7cba9",
+          "status": "QUEUED",
+          "pagesCompleted": 366,
+          "processedCount": 1128,
+          "insertedCount": 1128,
+          "updatedCount": 0,
+          "skippedCount": 0,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "0f4918c4-8fc4-4e17-a696-4bb6a13d4a76",
+      "resource": "inventory_events",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "rowCount": 0,
+      "activeRunId": null,
+      "lastSuccessAt": null,
+      "runs": [
+        {
+          "id": "7dd47b7d-9d25-4d9f-96b1-0290005d8e08",
+          "status": "SUCCEEDED",
+          "pagesCompleted": 2,
+          "processedCount": 217,
+          "insertedCount": 217,
+          "updatedCount": 0,
+          "skippedCount": 0,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "8b82d84b-17f5-4245-8d8f-6b3e12a9d359",
+      "resource": "listing_details",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "rowCount": 230,
+      "activeRunId": "39f4e9dc-56d3-429d-9fb2-54f8a8b527ba",
+      "lastSuccessAt": "2026-11-09T11:32:12.899Z",
+      "runs": [
+        {
+          "id": "39f4e9dc-56d3-429d-9fb2-54f8a8b527ba",
+          "status": "SUCCEEDED",
+          "pagesCompleted": 230,
+          "processedCount": 230,
+          "insertedCount": 230,
+          "updatedCount": 0,
+          "skippedCount": 0,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "9cff8618-c1af-4116-9de7-f8faecb98f6f",
+      "resource": "catalog_items",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "rowCount": 0,
+      "activeRunId": null,
+      "lastSuccessAt": null,
+      "runs": [
+        {
+          "id": "e7571aca-1c91-421a-8c55-04bee66edb0d",
+          "status": "RUNNING",
+          "pagesCompleted": 177,
+          "processedCount": 177,
+          "insertedCount": 177,
+          "updatedCount": 0,
+          "skippedCount": 0,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c7f48221-c28d-47a9-b0c5-da2db1192d33",
+      "resource": "sales_traffic",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "rowCount": 1,
+      "activeRunId": "17ab4e5e-8f73-4648-9f6b-7b26678c5aea",
+      "lastSuccessAt": "2026-11-09T14:25:42.235Z",
+      "runs": [
+        {
+          "id": "17ab4e5e-8f73-4648-9f6b-7b26678c5aea",
+          "status": "SUCCEEDED",
+          "pagesCompleted": 1,
+          "processedCount": 1,
+          "insertedCount": 1,
+          "updatedCount": 0,
+          "skippedCount": 0,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "636d327e-8da0-499a-9322-d6c375475ca5",
+      "resource": "settlements",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "rowCount": 64217,
+      "activeRunId": "a321796a-bd91-4c45-bc04-b08e4119ce21",
+      "lastSuccessAt": "2026-11-09T11:36:29.664Z",
+      "runs": [
+        {
+          "id": "a321796a-bd91-4c45-bc04-b08e4119ce21",
+          "status": "SUCCEEDED",
+          "pagesCompleted": 138,
+          "processedCount": 61280,
+          "insertedCount": 0,
+          "updatedCount": 0,
+          "skippedCount": 0,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "7ec967f0-d1d2-49fc-b264-6b64d8980e94",
+      "resource": "reimbursements",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "rowCount": 10,
+      "activeRunId": "4ebcd7f5-aedf-436a-a53e-18797943234f",
+      "lastSuccessAt": "2026-11-06T13:19:49.164Z",
+      "runs": [
+        {
+          "id": "6299d02e-15dc-4970-8667-71e5cc8824bd",
+          "status": "SUCCEEDED",
+          "pagesCompleted": 1,
+          "processedCount": 1,
+          "insertedCount": 0,
+          "updatedCount": 0,
+          "skippedCount": 0,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "9cbf4a37-280a-4aef-842d-a848761f86ce",
+      "resource": "returns",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "rowCount": 1,
+      "activeRunId": "51272cb2-3831-4d9f-8554-adb4265e9127",
+      "lastSuccessAt": "2026-11-09T12:29:25.810Z",
+      "runs": [
+        {
+          "id": "51272cb2-3831-4d9f-8554-adb4265e9127",
+          "status": "SUCCEEDED",
+          "pagesCompleted": 1,
+          "processedCount": 1,
+          "insertedCount": 1,
+          "updatedCount": 0,
+          "skippedCount": 0,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+      "resource": "orders",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "rowCount": 2423,
+      "activeRunId": "ea3dff12-be66-4f1c-8c87-1ca679400888",
+      "lastSuccessAt": "2026-11-09T15:13:17.438Z",
+      "runs": [
+        {
+          "id": "84fcf987-2895-4576-ba7e-967b41c882e7",
+          "status": "FAILED",
+          "pagesCompleted": 0,
+          "processedCount": 0,
+          "insertedCount": 0,
+          "updatedCount": 0,
+          "skippedCount": 0,
+          "error": "同一订单版本出现冲突数据，已保留游标并阻止提交。"
+        }
+      ]
+    },
+    {
+      "id": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+      "resource": "finance",
+      "marketplaceId": "A1AM78C64UM0Y8",
+      "rowCount": 77972,
+      "activeRunId": "f9fbc67f-2171-4690-b1a3-1eed65ee3f9f",
+      "lastSuccessAt": "2026-11-09T14:48:35.293Z",
+      "runs": [
+        {
+          "id": "321b4634-380b-4482-b557-84998e5383ab",
+          "status": "FAILED",
+          "pagesCompleted": 20,
+          "processedCount": 10000,
+          "insertedCount": 7000,
+          "updatedCount": 0,
+          "skippedCount": 3000,
+          "error": "财务响应不是安全、有效的 JSON。"
+        }
+      ]
+    }
+  ],
+  "nativeMcpAvailable": false,
+  "businessWrites": 0
+}

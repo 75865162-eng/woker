@@ -1,0 +1,219 @@
+{
+  "checkedAt": "2026-11-09T13:14:39.057Z",
+  "scope": {
+    "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+    "marketplaceId": "ATVPDKIKX0DER"
+  },
+  "approvalId": "d2a68249-64c3-4142-a570-a875550ef868",
+  "verifiedPublished": 10,
+  "additionalPublished": 3,
+  "reparsed": 2163,
+  "quarantined": 2153,
+  "businessRecordsInsertedByAttributionRecovery": 0,
+  "sourceConfigurationChanged": false,
+  "historicalComplete": false,
+  "mcp": {
+    "total": 10,
+    "requestId": "56badefb-49b8-4df6-a321-b422732e21ed",
+    "pagination": {
+      "page": 1,
+      "pageSize": 50,
+      "hasNext": false,
+      "total": 10,
+      "pageCount": 1
+    },
+    "records": [
+      {
+        "id": "496808d1b62f650ac61f78ad918770b605b2cc9a03ce3acb0c2149b8bfb693c1",
+        "reportId": "452811020763",
+        "rowNumber": 17,
+        "businessDate": "2025-01-31",
+        "amountOriginal": "4.71",
+        "currencyCode": "USD",
+        "reimbursementId": "17022515941",
+        "document": {
+          "id": "4617593606d691255d78df363a2cc2992561d75e71dca70f47a27e405e6165d2",
+          "sourceRunId": "f2ae5517-ca43-42a8-ac83-f6b4b35133b7",
+          "capturedAt": "2026-11-06T16:04:40.409Z",
+          "publishedAt": "2026-11-09T12:42:59.011Z",
+          "reportCreatedAt": "2026-11-06T15:20:06.000Z",
+          "businessDateField": "approval-date"
+        }
+      },
+      {
+        "id": "71ace221406701f0206cc1e424f14b9d2eaf2674bbff31be2c10a3478bf2aab4",
+        "reportId": "452811020763",
+        "rowNumber": 19,
+        "businessDate": "2025-01-30",
+        "amountOriginal": "4.71",
+        "currencyCode": "USD",
+        "reimbursementId": "17013944841",
+        "document": {
+          "id": "4617593606d691255d78df363a2cc2992561d75e71dca70f47a27e405e6165d2",
+          "sourceRunId": "f2ae5517-ca43-42a8-ac83-f6b4b35133b7",
+          "capturedAt": "2026-11-06T16:04:40.409Z",
+          "publishedAt": "2026-11-09T12:42:59.011Z",
+          "reportCreatedAt": "2026-11-06T15:20:06.000Z",
+          "businessDateField": "approval-date"
+        }
+      },
+      {
+        "id": "e0fd7b81af35332771096a2805fb6749a1509c15a561638fd1edcb7085679cbc",
+        "reportId": "452811020763",
+        "rowNumber": 20,
+        "businessDate": "2025-01-30",
+        "amountOriginal": "4.71",
+        "currencyCode": "USD",
+        "reimbursementId": "17013730441",
+        "document": {
+          "id": "4617593606d691255d78df363a2cc2992561d75e71dca70f47a27e405e6165d2",
+          "sourceRunId": "f2ae5517-ca43-42a8-ac83-f6b4b35133b7",
+          "capturedAt": "2026-11-06T16:04:40.409Z",
+          "publishedAt": "2026-11-09T12:42:59.011Z",
+          "reportCreatedAt": "2026-11-06T15:20:06.000Z",
+          "businessDateField": "approval-date"
+        }
+      },
+      {
+        "id": "18dec553f63ea5300f5a30b1534ddab8c66e348261f6fd85f6b13c648a32dcf8",
+        "reportId": "452811020763",
+        "rowNumber": 33,
+        "businessDate": "2025-01-23",
+        "amountOriginal": "5.07",
+        "currencyCode": "USD",
+        "reimbursementId": "16942945411",
+        "document": {
+          "id": "4617593606d691255d78df363a2cc2992561d75e71dca70f47a27e405e6165d2",
+          "sourceRunId": "f2ae5517-ca43-42a8-ac83-f6b4b35133b7",
+          "capturedAt": "2026-11-06T16:04:40.409Z",
+          "publishedAt": "2026-11-09T12:42:59.011Z",
+          "reportCreatedAt": "2026-11-06T15:20:06.000Z",
+          "businessDateField": "approval-date"
+        }
+      },
+      {
+        "id": "40fe4b8a090aaaffb8de9927bd2114ad8397c26878bafbe4cd4d8cb639b317c9",
+        "reportId": "452811020763",
+        "rowNumber": 44,
+        "businessDate": "2025-01-20",
+        "amountOriginal": "7.27",
+        "currencyCode": "USD",
+        "reimbursementId": "16919778391",
+        "document": {
+          "id": "4617593606d691255d78df363a2cc2992561d75e71dca70f47a27e405e6165d2",
+          "sourceRunId": "f2ae5517-ca43-42a8-ac83-f6b4b35133b7",
+          "capturedAt": "2026-11-06T16:04:40.409Z",
+          "publishedAt": "2026-11-09T12:42:59.011Z",
+          "reportCreatedAt": "2026-11-06T15:20:06.000Z",
+          "businessDateField": "approval-date"
+        }
+      },
+      {
+        "id": "4e4a853ea6e5aeadc8d27fdfa4f5b5cc332c24790016796302a37aafe85ba221",
+        "reportId": "452811020763",
+        "rowNumber": 51,
+        "businessDate": "2025-01-16",
+        "amountOriginal": "5.26",
+        "currencyCode": "USD",
+        "reimbursementId": "16874902171",
+        "document": {
+          "id": "4617593606d691255d78df363a2cc2992561d75e71dca70f47a27e405e6165d2",
+          "sourceRunId": "f2ae5517-ca43-42a8-ac83-f6b4b35133b7",
+          "capturedAt": "2026-11-06T16:04:40.409Z",
+          "publishedAt": "2026-11-09T12:42:59.011Z",
+          "reportCreatedAt": "2026-11-06T15:20:06.000Z",
+          "businessDateField": "approval-date"
+        }
+      },
+      {
+        "id": "61c02f47a9d1d843eda64a99878f52f6524133ad94d7b6227d9bc55aea41d4d1",
+        "reportId": "452811020763",
+        "rowNumber": 52,
+        "businessDate": "2025-01-15",
+        "amountOriginal": "7.27",
+        "currencyCode": "USD",
+        "reimbursementId": "16868446241",
+        "document": {
+          "id": "4617593606d691255d78df363a2cc2992561d75e71dca70f47a27e405e6165d2",
+          "sourceRunId": "f2ae5517-ca43-42a8-ac83-f6b4b35133b7",
+          "capturedAt": "2026-11-06T16:04:40.409Z",
+          "publishedAt": "2026-11-09T12:42:59.011Z",
+          "reportCreatedAt": "2026-11-06T15:20:06.000Z",
+          "businessDateField": "approval-date"
+        }
+      },
+      {
+        "id": "8f028e1ca7c7d8975a71341989e0923ca73b5e9e4f2aea002d428680122cd96e",
+        "reportId": "452811020763",
+        "rowNumber": 60,
+        "businessDate": "2025-01-11",
+        "amountOriginal": "14.70",
+        "currencyCode": "USD",
+        "reimbursementId": "16828562201",
+        "document": {
+          "id": "4617593606d691255d78df363a2cc2992561d75e71dca70f47a27e405e6165d2",
+          "sourceRunId": "f2ae5517-ca43-42a8-ac83-f6b4b35133b7",
+          "capturedAt": "2026-11-06T16:04:40.409Z",
+          "publishedAt": "2026-11-09T12:42:59.011Z",
+          "reportCreatedAt": "2026-11-06T15:20:06.000Z",
+          "businessDateField": "approval-date"
+        }
+      },
+      {
+        "id": "5e8ac035d17c4f4f540e3d4e0b62a418fe8372320ac96f80ad11cf08ea54834f",
+        "reportId": "452811020763",
+        "rowNumber": 61,
+        "businessDate": "2025-01-11",
+        "amountOriginal": "27.38",
+        "currencyCode": "USD",
+        "reimbursementId": "16827279671",
+        "document": {
+          "id": "4617593606d691255d78df363a2cc2992561d75e71dca70f47a27e405e6165d2",
+          "sourceRunId": "f2ae5517-ca43-42a8-ac83-f6b4b35133b7",
+          "capturedAt": "2026-11-06T16:04:40.409Z",
+          "publishedAt": "2026-11-09T12:42:59.011Z",
+          "reportCreatedAt": "2026-11-06T15:20:06.000Z",
+          "businessDateField": "approval-date"
+        }
+      },
+      {
+        "id": "585dc823cdbab489789decdd647d073aa28216af6cc3ede94e77ba4dbdad3762",
+        "reportId": "452811020763",
+        "rowNumber": 67,
+        "businessDate": "2025-01-09",
+        "amountOriginal": "8.73",
+        "currencyCode": "USD",
+        "reimbursementId": "16808841531",
+        "document": {
+          "id": "4617593606d691255d78df363a2cc2992561d75e71dca70f47a27e405e6165d2",
+          "sourceRunId": "f2ae5517-ca43-42a8-ac83-f6b4b35133b7",
+          "capturedAt": "2026-11-06T16:04:40.409Z",
+          "publishedAt": "2026-11-09T12:42:59.011Z",
+          "reportCreatedAt": "2026-11-06T15:20:06.000Z",
+          "businessDateField": "approval-date"
+        }
+      }
+    ],
+    "evidenceRefs": [
+      {
+        "sourceId": "7ec967f0-d1d2-49fc-b264-6b64d8980e94",
+        "syncRunId": "4ebcd7f5-aedf-436a-a53e-18797943234f"
+      },
+      {
+        "sourceId": "7ec967f0-d1d2-49fc-b264-6b64d8980e94",
+        "syncRunId": "f2ae5517-ca43-42a8-ac83-f6b4b35133b7",
+        "reportId": "452811020763",
+        "reportDocumentId": "4617593606d691255d78df363a2cc2992561d75e71dca70f47a27e405e6165d2"
+      }
+    ]
+  },
+  "historicalSevenPreserved": true,
+  "validation": {
+    "unitTests": 192,
+    "integrationTests": 27,
+    "typecheck": true,
+    "lint": true,
+    "skillE2E": false,
+    "replication": false
+  }
+}

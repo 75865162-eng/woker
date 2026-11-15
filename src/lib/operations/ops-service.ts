@@ -68,21 +68,37 @@ async function readUnsalableInputs(tx: Prisma.TransactionClient, scope: WmsScope
     WHERE b."organizationId" = ${identity.organizationId} AND b."workspaceId" = ${identity.workspaceId} AND b."warehouseId" = ${warehouseId}
     GROUP BY p."id", p."sku"`);
   if (!stock.length) return [];
+  const identities = await tx.$queryRaw<Array<{ productRecordId: string; listingCount: number }>>(Prisma.sql`
+    SELECT p."id" AS "productRecordId", COUNT(DISTINCT jsonb_build_array(li->>'sellerAccountId', li->>'marketplaceId', li->>'sellerSku'))::int AS "listingCount"
+    FROM "ProductRecord" p
+    JOIN "WmsLot" l ON l."productRecordId" = p."id" AND l."organizationId" = p."organizationId" AND l."workspaceId" = p."workspaceId"
+    JOIN "WmsStockBalance" b ON b."lotId" = l."id" AND b."organizationId" = l."organizationId" AND b."workspaceId" = l."workspaceId"
+    LEFT JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(p.payload->'management'->'listingIdentifiers') = 'array' THEN p.payload->'management'->'listingIdentifiers' ELSE '[]'::jsonb END) li ON true
+    WHERE b."organizationId" = ${identity.organizationId} AND b."workspaceId" = ${identity.workspaceId} AND b."warehouseId" = ${warehouseId} AND b."onHand" > b."reserved"
+    GROUP BY p."id"`);
+  if (identities.some(row => Number(row.listingCount) !== 1)) throw new WmsError('库存商品缺少唯一 Amazon 刊登标识，无法安全匹配卖家/站点销量。请先完善商品管理中的刊登标识后重试。', 409);
   const windowStart = new Date(Date.now() - policy.salesWindowDays * 86400_000);
-  const sales = await tx.$queryRaw<Array<{ sku: string; qty: number }>>(Prisma.sql`
-    SELECT i."sellerSku" AS sku, SUM(i."quantityOrdered")::int AS qty
-    FROM "AmazonOrderItemRecord" i
-    JOIN "AmazonOrderRecord" o ON o."id" = i."orderRecordId" AND o."organizationId" = i."organizationId" AND o."workspaceId" = i."workspaceId" AND o."sourceId" = i."sourceId"
-    WHERE i."organizationId" = ${identity.organizationId} AND i."workspaceId" = ${identity.workspaceId}
-      AND o."createdTime" >= ${windowStart}
-      AND COALESCE(o."rawStatus", '') NOT IN ('Cancelled', 'Canceled')
-      AND i."sellerSku" IS NOT NULL
-    GROUP BY i."sellerSku"`);
-  const salesBySku = new Map(sales.map(row => [row.sku, Number(row.qty ?? 0)]));
+  const sales = await tx.$queryRaw<Array<{ productRecordId: string; qty: number }>>(Prisma.sql`
+    WITH stock_identity AS (
+      SELECT DISTINCT p."id" AS "productRecordId", li->>'sellerAccountId' AS "sellerAccountId", li->>'marketplaceId' AS "marketplaceId", li->>'sellerSku' AS "sellerSku"
+      FROM "WmsStockBalance" b
+      JOIN "WmsLot" l ON l."id" = b."lotId" AND l."organizationId" = b."organizationId" AND l."workspaceId" = b."workspaceId"
+      JOIN "ProductRecord" p ON p."id" = l."productRecordId" AND p."organizationId" = l."organizationId" AND p."workspaceId" = l."workspaceId"
+      CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(p.payload->'management'->'listingIdentifiers') = 'array' THEN p.payload->'management'->'listingIdentifiers' ELSE '[]'::jsonb END) li
+      WHERE b."organizationId" = ${identity.organizationId} AND b."workspaceId" = ${identity.workspaceId} AND b."warehouseId" = ${warehouseId} AND b."onHand" > b."reserved"
+    )
+    SELECT si."productRecordId", SUM(i."quantityOrdered")::int AS qty
+    FROM stock_identity si
+    JOIN "AmazonSellerBinding" sb ON sb."organizationId" = ${identity.organizationId} AND sb."workspaceId" = ${identity.workspaceId} AND sb."sellerAccountId" = si."sellerAccountId" AND sb."marketplaceId" = si."marketplaceId"
+    JOIN "AmazonOrderRecord" o ON o."organizationId" = ${identity.organizationId} AND o."workspaceId" = ${identity.workspaceId} AND o."sellerAccountId" = sb."sellerAccountId" AND o."marketplaceId" = sb."marketplaceId" AND o."amazonSellerId" = sb."amazonSellerId"
+    JOIN "AmazonOrderItemRecord" i ON i."organizationId" = o."organizationId" AND i."workspaceId" = o."workspaceId" AND i."sourceId" = o."sourceId" AND i."orderRecordId" = o."id" AND i."sellerSku" = si."sellerSku"
+    WHERE o."createdTime" >= ${windowStart} AND COALESCE(o."rawStatus", '') NOT IN ('Cancelled', 'Canceled')
+    GROUP BY si."productRecordId"`);
+  const salesByProduct = new Map(sales.map(row => [row.productRecordId, Number(row.qty ?? 0)]));
   return stock.map(row => ({
     productRecordId: row.productRecordId, sku: row.sku,
     onHand: Number(row.onHand ?? 0), ageDays: Number(row.ageDays ?? 0),
-    salesQty: salesBySku.get(row.sku) ?? 0,
+    salesQty: salesByProduct.get(row.productRecordId) ?? 0,
   }));
 }
 

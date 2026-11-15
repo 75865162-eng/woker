@@ -1,0 +1,32 @@
+[
+  {
+    "sheet": "Module counts",
+    "dataset": "module_counts",
+    "rows": 3,
+    "columns": 4
+  },
+  {
+    "sheet": "Module membership",
+    "dataset": "module_membership",
+    "rows": 78,
+    "columns": 4
+  },
+  {
+    "sheet": "Imports",
+    "dataset": "dependencies",
+    "rows": 9952,
+    "columns": 6
+  },
+  {
+    "sheet": "Entities",
+    "dataset": "entities",
+    "rows": 536,
+    "columns": 6
+  },
+  {
+    "sheet": "Pages",
+    "dataset": "pages",
+    "rows": 814,
+    "columns": 4
+  }
+]

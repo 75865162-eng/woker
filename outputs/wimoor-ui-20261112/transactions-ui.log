@@ -1,0 +1,20 @@
+
+Running 13 tests using 1 worker
+
+(node:69178) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 tests/browser/wimoor-port.spec.ts:46:5 › 装箱入口使用现有 API，详情与保存保留 revision，刷新及翻页沿用范围 (1.4s)
+  ✓   2 tests/browser/wimoor-port.spec.ts:75:5 › 只读与撤权时不出现假成功；工作区切换清除装箱详情 (394ms)
+  ✓   3 tests/browser/wimoor-port.spec.ts:87:5 › 菜单复用实际入口和权限过滤，可搜索、关闭并返回焦点 (378ms)
+  ✓   4 tests/browser/wimoor-port.spec.ts:127:5 › FBA 观察从计划逐级查看货件和商品，保留来源版本与精确原值 (612ms)
+  ✓   5 tests/browser/wimoor-port.spec.ts:158:5 › 商品观察详情保留实际属性，筛选和版本继续使用原接口 (345ms)
+  ✓   6 tests/browser/wimoor-port.spec.ts:171:5 › 结算报告选账期、读原始行、分页，撤权后清空旧报告 (517ms)
+  ✓   7 tests/browser/wimoor-port.spec.ts:198:5 › 库龄使用来源分桶而非财务列，缺失不补零且保留重叠桶 (158ms)
+  ✓   8 tests/browser/wimoor-port.spec.ts:208:5 › 库存事件显示事件、仓库和正负数量，不推断余额或已获赔 (140ms)
+  ✓   9 tests/browser/wimoor-port.spec.ts:216:5 › 赔偿明细区分现金与库存数量并保留精确原币金额 (178ms)
+  ✓  10 tests/browser/wimoor-port.spec.ts:252:5 › 财务详情保留原币和汇率依据，关联订单与商品跳转保持店铺站点并可刷新 (668ms)
+  ✓  11 tests/browser/wimoor-port.spec.ts:273:5 › 订单商品详情与来源、列设置、分页及撤权保持一致 (753ms)
+  ✓  12 tests/browser/wimoor-port.spec.ts:295:5 › 财务状态筛选与重置沿用查询，来源任务关闭详情，403 清空记录 (384ms)
+  ✓  13 tests/browser/wimoor-port.spec.ts:310:5 › 库存详情区分三个入库阶段，翻页、刷新失败和工作区切换清除旧记录 (381ms)
+
+  13 passed (7.5s)

@@ -1,0 +1,357 @@
+{
+  "published": {
+    "data": {
+      "items": [
+        {
+          "id": "fe2752a9f7d54669d6c56b78aaba0cf407c1ad12858c45f9003246507c1180b2",
+          "amazonOrderId": "114-8401275-9642646",
+          "asin": "B0CHY5T6BP",
+          "sellerSku": "DV-H87J-Z8NY",
+          "returnAt": "2026-11-07T05:59:18.000Z",
+          "quantity": 1,
+          "disposition": "CUSTOMER_DAMAGED",
+          "rawStatus": "IMMEDIATE_LIQUIDATION",
+          "marketplaceId": "ATVPDKIKX0DER",
+          "marketplaceTimeZone": "America/Los_Angeles",
+          "reason": {
+            "code": "POOR_FIT"
+          },
+          "orderMatched": false
+        }
+      ],
+      "total": 1
+    },
+    "meta": {
+      "source": "AmazonReturnRecord",
+      "isSandbox": false,
+      "lastSyncAt": "2026-11-09T12:29:25.810Z",
+      "freshness": "ok",
+      "grain": [
+        "sourceId",
+        "reportId",
+        "id"
+      ],
+      "currency": null,
+      "attributionWindow": null,
+      "warnings": [
+        "单份已发布 FBA 仓收退货报告；重叠报告不能直接相加。"
+      ],
+      "page": {
+        "page": 1,
+        "pageSize": 3,
+        "hasNext": false
+      },
+      "sources": [
+        {
+          "sourceId": "9cbf4a37-280a-4aef-842d-a848761f86ce",
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+          "marketplaceId": "ATVPDKIKX0DER",
+          "syncRunId": "51272cb2-3831-4d9f-8554-adb4265e9127",
+          "lastSyncAt": "2026-11-09T12:29:25.810Z"
+        }
+      ],
+      "completeness": "SINGLE_PUBLISHED_REPORT",
+      "requestId": "13b9fb12-cf6a-40b2-b2ee-bd55de0302c4",
+      "toolVersion": "2.0.0",
+      "dataset": {
+        "id": "returns",
+        "module": "amazon_sync",
+        "dataType": "returns",
+        "legacyTable": "returns"
+      },
+      "scope": {
+        "pairs": [
+          {
+            "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+            "marketplaceId": "ATVPDKIKX0DER"
+          }
+        ]
+      },
+      "dateSemantics": "fba_received_at_utc",
+      "dateRange": {
+        "from": "2026-11-06",
+        "to": "2026-11-07"
+      },
+      "sort": {
+        "field": "returnAt",
+        "direction": "desc"
+      },
+      "schemaStatus": "application_schema_confirmed_source_sample_pending",
+      "resultStatus": "AVAILABLE",
+      "publicationPolicy": "single_published_report",
+      "timezone": null
+    },
+    "pagination": {
+      "page": 1,
+      "pageSize": 3,
+      "hasNext": false,
+      "total": 1,
+      "pageCount": 1
+    },
+    "warnings": [
+      "单份已发布 FBA 仓收退货报告；重叠报告不能直接相加。"
+    ],
+    "records": [
+      {
+        "id": "fe2752a9f7d54669d6c56b78aaba0cf407c1ad12858c45f9003246507c1180b2",
+        "amazonOrderId": "114-8401275-9642646",
+        "asin": "B0CHY5T6BP",
+        "sellerSku": "DV-H87J-Z8NY",
+        "returnAt": "2026-11-07T05:59:18.000Z",
+        "quantity": 1,
+        "disposition": "CUSTOMER_DAMAGED",
+        "rawStatus": "IMMEDIATE_LIQUIDATION",
+        "marketplaceId": "ATVPDKIKX0DER",
+        "marketplaceTimeZone": "America/Los_Angeles",
+        "reason": {
+          "code": "POOR_FIT"
+        },
+        "orderMatched": false
+      }
+    ],
+    "total": 1,
+    "hasMore": false,
+    "source": "AmazonReturnRecord",
+    "dataRange": {
+      "from": "2026-11-06",
+      "to": "2026-11-07",
+      "dateSemantics": "fba_received_at_utc",
+      "basis": "REQUESTED_RANGE_ONLY"
+    },
+    "observedDataRange": null,
+    "lastSyncedAt": "2026-11-09T12:29:25.810Z",
+    "coverageStatus": "HISTORY_INCOMPLETE",
+    "missingFields": null,
+    "evidenceRefs": [
+      {
+        "sourceId": "9cbf4a37-280a-4aef-842d-a848761f86ce",
+        "syncRunId": "51272cb2-3831-4d9f-8554-adb4265e9127"
+      }
+    ],
+    "dataCompleteness": {
+      "status": "HISTORY_INCOMPLETE",
+      "fieldValuesChecked": false,
+      "fieldCheckBasis": null,
+      "fieldStatus": null,
+      "historicalUniverseComplete": false,
+      "emptyMeansNoBusinessEvents": false
+    }
+  },
+  "endPage": {
+    "data": {
+      "items": [],
+      "total": 1
+    },
+    "meta": {
+      "source": "AmazonReturnRecord",
+      "isSandbox": false,
+      "lastSyncAt": "2026-11-09T12:29:25.810Z",
+      "freshness": "ok",
+      "grain": [
+        "sourceId",
+        "reportId",
+        "id"
+      ],
+      "currency": null,
+      "attributionWindow": null,
+      "warnings": [
+        "单份已发布 FBA 仓收退货报告；重叠报告不能直接相加。"
+      ],
+      "page": {
+        "page": 2,
+        "pageSize": 3,
+        "hasNext": false
+      },
+      "sources": [
+        {
+          "sourceId": "9cbf4a37-280a-4aef-842d-a848761f86ce",
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+          "marketplaceId": "ATVPDKIKX0DER",
+          "syncRunId": "51272cb2-3831-4d9f-8554-adb4265e9127",
+          "lastSyncAt": "2026-11-09T12:29:25.810Z"
+        }
+      ],
+      "completeness": "SINGLE_PUBLISHED_REPORT",
+      "requestId": "e0e35b19-83f2-410c-842d-bb0c23bce12c",
+      "toolVersion": "2.0.0",
+      "dataset": {
+        "id": "returns",
+        "module": "amazon_sync",
+        "dataType": "returns",
+        "legacyTable": "returns"
+      },
+      "scope": {
+        "pairs": [
+          {
+            "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+            "marketplaceId": "ATVPDKIKX0DER"
+          }
+        ]
+      },
+      "dateSemantics": "fba_received_at_utc",
+      "dateRange": {
+        "from": "2026-11-06",
+        "to": "2026-11-07"
+      },
+      "sort": {
+        "field": "returnAt",
+        "direction": "desc"
+      },
+      "schemaStatus": "application_schema_confirmed_source_sample_pending",
+      "resultStatus": "AVAILABLE",
+      "publicationPolicy": "single_published_report",
+      "timezone": null
+    },
+    "pagination": {
+      "page": 2,
+      "pageSize": 3,
+      "hasNext": false,
+      "total": 1,
+      "pageCount": 1
+    },
+    "warnings": [
+      "单份已发布 FBA 仓收退货报告；重叠报告不能直接相加。"
+    ],
+    "records": [],
+    "total": 1,
+    "hasMore": false,
+    "source": "AmazonReturnRecord",
+    "dataRange": {
+      "from": "2026-11-06",
+      "to": "2026-11-07",
+      "dateSemantics": "fba_received_at_utc",
+      "basis": "REQUESTED_RANGE_ONLY"
+    },
+    "observedDataRange": null,
+    "lastSyncedAt": "2026-11-09T12:29:25.810Z",
+    "coverageStatus": "HISTORY_INCOMPLETE",
+    "missingFields": null,
+    "evidenceRefs": [
+      {
+        "sourceId": "9cbf4a37-280a-4aef-842d-a848761f86ce",
+        "syncRunId": "51272cb2-3831-4d9f-8554-adb4265e9127"
+      }
+    ],
+    "dataCompleteness": {
+      "status": "HISTORY_INCOMPLETE",
+      "fieldValuesChecked": false,
+      "fieldCheckBasis": null,
+      "fieldStatus": null,
+      "historicalUniverseComplete": false,
+      "emptyMeansNoBusinessEvents": false
+    }
+  },
+  "excludedDate": {
+    "data": {
+      "items": [],
+      "total": 0
+    },
+    "meta": {
+      "source": "AmazonReturnRecord",
+      "isSandbox": false,
+      "lastSyncAt": "2026-11-09T12:29:25.810Z",
+      "freshness": "ok",
+      "grain": [
+        "sourceId",
+        "reportId",
+        "id"
+      ],
+      "currency": null,
+      "attributionWindow": null,
+      "warnings": [
+        "单份已发布 FBA 仓收退货报告；重叠报告不能直接相加。"
+      ],
+      "page": {
+        "page": 1,
+        "pageSize": 3,
+        "hasNext": false
+      },
+      "sources": [
+        {
+          "sourceId": "9cbf4a37-280a-4aef-842d-a848761f86ce",
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+          "marketplaceId": "ATVPDKIKX0DER",
+          "syncRunId": "51272cb2-3831-4d9f-8554-adb4265e9127",
+          "lastSyncAt": "2026-11-09T12:29:25.810Z"
+        }
+      ],
+      "completeness": "SINGLE_PUBLISHED_REPORT",
+      "requestId": "1ed904c7-cbc7-47fe-b8ec-6d414938583c",
+      "toolVersion": "2.0.0",
+      "dataset": {
+        "id": "returns",
+        "module": "amazon_sync",
+        "dataType": "returns",
+        "legacyTable": "returns"
+      },
+      "scope": {
+        "pairs": [
+          {
+            "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+            "marketplaceId": "ATVPDKIKX0DER"
+          }
+        ]
+      },
+      "dateSemantics": "fba_received_at_utc",
+      "dateRange": {
+        "from": "2026-11-08",
+        "to": "2026-11-08"
+      },
+      "sort": {
+        "field": "returnAt",
+        "direction": "desc"
+      },
+      "schemaStatus": "application_schema_confirmed_source_sample_pending",
+      "resultStatus": "EMPTY_RESULT",
+      "publicationPolicy": "single_published_report",
+      "timezone": null
+    },
+    "pagination": {
+      "page": 1,
+      "pageSize": 3,
+      "hasNext": false,
+      "total": 0,
+      "pageCount": 0
+    },
+    "warnings": [
+      "单份已发布 FBA 仓收退货报告；重叠报告不能直接相加。"
+    ],
+    "records": [],
+    "total": 0,
+    "hasMore": false,
+    "source": "AmazonReturnRecord",
+    "dataRange": {
+      "from": "2026-11-08",
+      "to": "2026-11-08",
+      "dateSemantics": "fba_received_at_utc",
+      "basis": "REQUESTED_RANGE_ONLY"
+    },
+    "observedDataRange": null,
+    "lastSyncedAt": "2026-11-09T12:29:25.810Z",
+    "coverageStatus": "HISTORY_INCOMPLETE",
+    "missingFields": null,
+    "evidenceRefs": [
+      {
+        "sourceId": "9cbf4a37-280a-4aef-842d-a848761f86ce",
+        "syncRunId": "51272cb2-3831-4d9f-8554-adb4265e9127"
+      }
+    ],
+    "dataCompleteness": {
+      "status": "HISTORY_INCOMPLETE",
+      "fieldValuesChecked": false,
+      "fieldCheckBasis": null,
+      "fieldStatus": null,
+      "historicalUniverseComplete": false,
+      "emptyMeansNoBusinessEvents": false
+    }
+  },
+  "crossSiteAttempt": {
+    "content": [
+      {
+        "type": "text",
+        "text": "tool call error: tool call failed for `erp/data_query`\n\nCaused by:\n    Mcp error: -32003: 数据范围不可访问。({\"requestId\":\"d43da36b-0ad4-40e9-9a48-4f24e974cea5\",\"toolVersion\":\"2.0.0\",\"businessCode\":\"FORBIDDEN\"})"
+      }
+    ],
+    "isError": true
+  }
+}

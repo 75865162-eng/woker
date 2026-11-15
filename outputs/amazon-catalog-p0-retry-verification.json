@@ -1,0 +1,44 @@
+{
+  "at": "2026-11-09T16:24:37.202Z",
+  "taskId": "e7571aca-1c91-421a-8c55-04bee66edb0d",
+  "status": "PARTIAL_SUCCESS",
+  "requests": 230,
+  "apiResponses": [
+    {
+      "_count": {
+        "_all": 227
+      },
+      "statusCode": 200,
+      "code": null
+    },
+    {
+      "_count": {
+        "_all": 3
+      },
+      "statusCode": 404,
+      "code": null
+    }
+  ],
+  "rawPages": 229,
+  "successfulRawPages": 227,
+  "errorRawPages": 2,
+  "records_received": 227,
+  "records_parsed": 227,
+  "records_inserted": 227,
+  "records_reused": 0,
+  "records_updated": 0,
+  "records_quarantined": 0,
+  "records_rejected": 0,
+  "unavailableObjects": 1,
+  "databaseRows": 227,
+  "records_published": 0,
+  "retry": {
+    "requests": 1,
+    "status": 404,
+    "onlyMissingOrdinal": 47,
+    "successfulObjectsRequestedAgain": 0
+  },
+  "originalManifestDigest": "7a102b77b96baa75de509ce99cd0f5252a6417c474759f8375d27edc31f18b4c",
+  "remainingBlocker": "AMAZON_OBJECT_404",
+  "mcpStatus": "NOT_RUN_CONNECTOR_UNAVAILABLE"
+}

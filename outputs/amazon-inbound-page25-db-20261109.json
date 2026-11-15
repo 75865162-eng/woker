@@ -1,0 +1,56 @@
+{
+  "at": "2026-11-09T13:29:49.273Z",
+  "taskId": "010c5403-7e2f-4ae7-8d5a-08d5a7b7cba9",
+  "rawPage": 25,
+  "sha256": "9412a73e3758943f65b61267ab33787ae1d2e1ed3d5ce1d90d1d1fefb9424df5",
+  "hashVerified": true,
+  "received": 10,
+  "parsed": 10,
+  "persisted": 10,
+  "published": 0,
+  "allFieldsMatch": true,
+  "quantities": [
+    {
+      "row": 1,
+      "declaredQuantity": 60
+    },
+    {
+      "row": 2,
+      "declaredQuantity": 8
+    },
+    {
+      "row": 3,
+      "declaredQuantity": 40
+    },
+    {
+      "row": 4,
+      "declaredQuantity": 20
+    },
+    {
+      "row": 5,
+      "declaredQuantity": 20
+    },
+    {
+      "row": 6,
+      "declaredQuantity": 20
+    },
+    {
+      "row": 7,
+      "declaredQuantity": 40
+    },
+    {
+      "row": 8,
+      "declaredQuantity": 38
+    },
+    {
+      "row": 9,
+      "declaredQuantity": 30
+    },
+    {
+      "row": 10,
+      "declaredQuantity": 8
+    }
+  ],
+  "amazonRequests": 0,
+  "physicalInTransitQuantityKnown": false
+}

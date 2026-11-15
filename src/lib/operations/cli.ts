@@ -96,14 +96,25 @@ async function readOpsCommand(db: Prisma.TransactionClient, identity: OpsIdentit
     const dataset = await readPpcDataset(db, identity);
     return command === "ppc suggest" ? suggestPpc(db, identity, dataset, now) : summarizePpc(dataset, now);
   }
-  const heads = await amazonPublishedReadScope(db, scope, identity.actorUserId, params);
+  const heads = await amazonPublishedReadScope(db, scope, identity.actorUserId, params, ["inventory", "catalog", "orders", "finance", "fulfillment"]);
   const latest = (resource: string) => db.amazonSyncRun.findFirst({ where: { ...scope, resource, status: "SUCCEEDED", executionVersion: 2, OR: heads.filter(h => h.resource === resource).map(h => ({ id: h.activeRunId!, sourceId: h.id })) }, orderBy: [{ finishedAt: "asc" }, { id: "asc" }] });
   if (command === "freshness") {
     const rows = await Promise.all(["inventory", "catalog", "ads", "orders", "finance", "fulfillment"].map(async (resource) => {
-      if (!["inventory", "catalog"].includes(resource)) return { resource, status: "BLOCKED", lastSuccessAt: null, note: resource === "ads" ? "Use ppc report-summary; daily mapping unavailable." : "Executor not implemented." };
-      const run = await latest(resource);
-      const status = resource === "inventory" ? inventorySnapshotStatus(run?.finishedAt ?? null, now) : !run?.finishedAt ? "NOT_SYNCED" : now.getTime() - run.finishedAt.getTime() > 48 * 3600000 ? "STALE" : "FRESH";
-      return { resource, status, runId: run?.id ?? null, lastSuccessAt: run?.finishedAt ?? null };
+      if (resource === "ads") return { resource, status: "NOT_SYNCED", lastSuccessAt: null, note: "Ads 报表使用 PPC/Ads 报表专用查询口径；此命令不将其映射为日粒度 freshness。" };
+      if (!["inventory", "catalog", "orders", "finance", "fulfillment"].includes(resource)) return { resource, status: "NOT_SYNCED", lastSuccessAt: null, note: "该数据域未开放同步。" };
+      const resourceHeads = heads.filter(head => head.resource === resource);
+      if (!resourceHeads.length) return { resource, status: "NOT_SYNCED", lastSuccessAt: null, note: "当前用户授权范围内没有已发布的数据源。" };
+      const publishedRuns = resourceHeads.map(head => ({ id: head.activeRunId!, sourceId: head.id }));
+      const [successes, attempts] = await Promise.all([
+        db.amazonSyncRun.findMany({ where: { ...scope, resource, status: "SUCCEEDED", executionVersion: 2, finishedAt: { not: null }, OR: publishedRuns }, select: { id: true, sourceId: true, finishedAt: true }, orderBy: [{ finishedAt: "desc" }, { id: "desc" }], take: 200 }),
+        db.amazonSyncRun.findMany({ where: { ...scope, resource, executionVersion: 2, OR: resourceHeads.map(head => ({ sourceId: head.id })) }, select: { id: true, sourceId: true, status: true, startedAt: true, error: true }, orderBy: [{ startedAt: "desc" }, { id: "desc" }], take: 200 }),
+      ]);
+      const successBySource = new Map(successes.map(run => [run.sourceId, run]));
+      const latestSuccess = resourceHeads.map(head => successBySource.get(head.id)).filter((run): run is NonNullable<typeof run> => Boolean(run)).sort((a, b) => b.finishedAt!.getTime() - a.finishedAt!.getTime())[0];
+      const latestAttempt = attempts[0];
+      const failed = latestAttempt && ["FAILED", "BLOCKED"].includes(latestAttempt.status) && (!latestSuccess || latestAttempt.startedAt >= latestSuccess.finishedAt!);
+      const status = !latestSuccess ? failed ? latestAttempt.status : "NOT_SYNCED" : failed ? latestAttempt.status : resource === "inventory" ? inventorySnapshotStatus(latestSuccess.finishedAt, now) : now.getTime() - latestSuccess.finishedAt!.getTime() > 48 * 3600000 ? "STALE" : "FRESH";
+      return { resource, status, runId: latestSuccess?.id ?? null, lastSuccessAt: latestSuccess?.finishedAt ?? null, lastAttemptAt: latestAttempt?.startedAt ?? null, lastAttemptStatus: latestAttempt?.status ?? null, note: failed ? latestAttempt.error ?? "最近一次同步失败。" : null };
     }));
     return { scope, generatedAt: now, rows };
   }

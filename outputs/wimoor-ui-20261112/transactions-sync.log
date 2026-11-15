@@ -1,0 +1,13 @@
+
+Running 6 tests using 1 worker
+
+(node:69394) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/browser/sync-center.spec.ts:132:5 › inventory event page submits a bounded report request through approval (393ms)
+  ✓  2 tests/browser/sync-center.spec.ts:311:5 › business pages use one navigation, load only their own data and inventory creates new center tasks (874ms)
+  ✓  3 tests/browser/sync-center.spec.ts:589:5 › observation domains expose inbound layers, own prices, brand analyses and history without snapshot fallback (907ms)
+  ✓  4 tests/browser/sync-center.spec.ts:624:5 › observation read errors show retryable UI and clear stale records (429ms)
+  ✓  5 tests/browser/sync-center.spec.ts:701:5 › Listing and Catalog navigation use the existing sources contract alongside observation queries (383ms)
+  ✓  6 tests/browser/sync-center.spec.ts:731:5 › Order items distinguishes disabled detail collection from pending collection (429ms)
+
+  6 passed (4.2s)

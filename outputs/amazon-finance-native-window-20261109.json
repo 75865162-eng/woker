@@ -1,0 +1,1561 @@
+{
+  "checkedAt": "2026-11-09T14:53:45.894Z",
+  "scope": {
+    "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+    "marketplaceId": "ATVPDKIKX0DER"
+  },
+  "dateSemantics": "posted_at_utc",
+  "from": "2025-06-04",
+  "to": "2025-07-04",
+  "total": 12448,
+  "pages": 249,
+  "paginationUnique": true,
+  "allReturnedFieldsMatchDatabase": true,
+  "originalMoneyAndCurrencyPreserved": true,
+  "sourceRunTraceable": true,
+  "newRecoveryRecords": 8342,
+  "recordsDigest": "67351c78a7fb9676e70fe1bb6cc90492bc635c99edff107c62f2a1176d7e8441",
+  "requests": [
+    {
+      "page": 1,
+      "requestId": "5fcf6a78-7c82-4e05-adcc-7281d580afc4",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 2,
+      "requestId": "ee4ac8b6-d3a8-463a-b357-db99e8a31b3f",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 3,
+      "requestId": "cbdf9ebd-ac7e-4b0d-b4e4-80f9b0284c2d",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 4,
+      "requestId": "854d49f2-652d-45bb-8740-379293da8ab4",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 5,
+      "requestId": "67a3e5d3-46f7-431e-a6da-cfa75ed80105",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 6,
+      "requestId": "ab80b59b-63ea-4b38-9b93-2a68f4e680d0",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 7,
+      "requestId": "374e9b69-e5b3-441a-88fe-17d8c27f4e61",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 8,
+      "requestId": "f51db746-417d-440f-82b1-233d300fcd16",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 9,
+      "requestId": "894edb9f-dc80-4879-be0e-a9417fd80250",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 10,
+      "requestId": "a1aebe69-2982-420f-bc93-396762d91bd1",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 11,
+      "requestId": "5542317e-4f25-4a97-9449-bd9c84000cd9",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 12,
+      "requestId": "fc053aaf-57eb-409c-bc89-14809ebe450c",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 13,
+      "requestId": "caa10c0b-541e-4be5-8efc-5f6027109fe3",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 14,
+      "requestId": "9a273c2f-6db3-406c-8932-be73e1730bda",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 15,
+      "requestId": "db56a0a4-3850-4022-a0ce-c88acbb08183",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 16,
+      "requestId": "aba05a74-8da6-40d3-b445-c990d0f8de58",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 17,
+      "requestId": "8642687a-8001-474d-8dcd-33c9e4527ad0",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 18,
+      "requestId": "c7cf0532-8505-4c8b-b309-fe1cb380198e",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 19,
+      "requestId": "50613c66-295a-48f8-8fc2-f7ee19198ebb",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 20,
+      "requestId": "61c5c42f-4133-4500-aaed-2fd84b5e13e2",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 21,
+      "requestId": "14449b5a-1fe1-4bd8-a1ae-2e91cf509074",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 22,
+      "requestId": "4baeb961-d43c-4ec8-9b15-cc809309e43b",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 23,
+      "requestId": "9f0d8a7b-1ec9-4cb7-8401-81d2cb4d9ad5",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 24,
+      "requestId": "4ba42f4b-4994-4ba0-bd62-67dd8a02a566",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 25,
+      "requestId": "bd5589b3-d488-4d2e-b84f-4896374a3e05",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 26,
+      "requestId": "9de7c3b9-b0a9-41d9-84d6-b7cb9b7e1c5a",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 27,
+      "requestId": "a4c9d9b0-260d-4aa7-bd9b-20ed249927cb",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 28,
+      "requestId": "58494473-4649-456a-8c9e-11afb4828a81",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 29,
+      "requestId": "9027567b-86ee-4376-9677-169526a92154",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 30,
+      "requestId": "bac39743-9d93-449a-8b1f-d8470593605d",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 31,
+      "requestId": "4679a4e1-d978-4d62-a663-f5b32e29bcbf",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 32,
+      "requestId": "de1cc704-54b7-4e62-8c80-9ba44a935525",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 33,
+      "requestId": "e252acfe-64b4-4539-a75b-4c79c7e42012",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 34,
+      "requestId": "1cd198d3-15f7-4e95-bd4a-029ab8e4850d",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 35,
+      "requestId": "3c45a582-f4ec-42ae-86ad-256ec8fad4dc",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 36,
+      "requestId": "7fdaabb8-b41f-45b4-b1f4-188917aa35c9",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 37,
+      "requestId": "e7bcca35-88d0-4aae-8d65-7d2810739bb2",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 38,
+      "requestId": "88909c09-b815-4aef-9afd-9ddce7ce361d",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 39,
+      "requestId": "01a152bd-44ed-48d8-957c-2e56575b52ad",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 40,
+      "requestId": "54b24e35-b594-4a4e-ba83-bdbd4abb6f35",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 41,
+      "requestId": "3728ef14-d751-435f-a73c-cc1ef7207f14",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 42,
+      "requestId": "e884f953-9337-411c-b69e-14c0066319ff",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 43,
+      "requestId": "ff67d692-7f32-493a-8f1e-2097864ba747",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 44,
+      "requestId": "4c712790-6cb5-4733-b622-c56e12b49d04",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 45,
+      "requestId": "da97c785-783a-4104-a93d-1867a3c8a2e2",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 46,
+      "requestId": "6b6ffc66-6e04-4cbf-80a7-9cfdbdd1ffbe",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 47,
+      "requestId": "a3fb1739-20b3-406b-9fe6-4aa77f1449bb",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 48,
+      "requestId": "e5bd7bd5-5b8a-4cec-b9ed-10ee19753c44",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 49,
+      "requestId": "9c4dff47-dd66-4391-a053-e74f7bb533b7",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 50,
+      "requestId": "19d0bec3-7f68-4115-ace1-eb8deacc8ff5",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 51,
+      "requestId": "ea3e9e0b-d32f-4958-9f43-89b218e0ea7f",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 52,
+      "requestId": "38b13368-7b4b-4f9d-867e-282a5b9475fa",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 53,
+      "requestId": "2c47db30-6279-4527-bf17-91c2387a2db4",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 54,
+      "requestId": "6054fb06-5816-4f86-9b2c-5707211d1b52",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 55,
+      "requestId": "1832446a-f428-4ccf-96d4-d45f187c30af",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 56,
+      "requestId": "6341b6a8-e663-46d6-9bf2-de4ae7acee77",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 57,
+      "requestId": "42a1cf58-3162-4079-aeeb-3ee4e0ac54ca",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 58,
+      "requestId": "2ea680df-2066-42ee-9f52-e43f54aa8308",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 59,
+      "requestId": "566e7783-49b3-4099-bf66-a3876286ea08",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 60,
+      "requestId": "7b843437-1a18-49b0-ae39-87e6b4ce790e",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 61,
+      "requestId": "325dae08-3518-44ab-a8ac-e7216b0625e0",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 62,
+      "requestId": "11cd8f15-ad94-499c-b74d-5971cddd5239",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 63,
+      "requestId": "b3c47b35-ec36-44ff-be86-e5c731f6e152",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 64,
+      "requestId": "da98ee19-a271-4b6f-8648-6db830f9405a",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 65,
+      "requestId": "87b75b9c-068d-4e4b-a5a9-f0bea65e71ee",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 66,
+      "requestId": "efa2c277-c521-4c45-a190-52cbabacaeee",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 67,
+      "requestId": "a57296be-38dd-4500-a9c0-8cd5428a5dc5",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 68,
+      "requestId": "1ccb3b6f-9cba-40e0-b146-e7c87425baf4",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 69,
+      "requestId": "a9fedc7b-bbab-429c-a24f-5fd8d5b7f2e5",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 70,
+      "requestId": "82712d4c-51c5-4cb4-bbd1-80c7f8649496",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 71,
+      "requestId": "e66b1dcd-e08a-404d-bcce-b4daa752c5fb",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 72,
+      "requestId": "b5029a4c-57ee-476f-9c01-df7ef8021e49",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 73,
+      "requestId": "d6408133-5133-44a1-8ed4-86b54d37e671",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 74,
+      "requestId": "66999993-7e5c-40ad-9e4c-fe50c8cad750",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 75,
+      "requestId": "ae8f2f86-4368-43f1-b6b3-2a2f9a7b2c9c",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 76,
+      "requestId": "159e1812-e658-4817-8a72-850e23c2b24a",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 77,
+      "requestId": "4d8c17f2-5443-493b-9bfc-3b73c20411f6",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 78,
+      "requestId": "801fec9c-913e-4a1c-8745-0cce49301e69",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 79,
+      "requestId": "8f8124d3-c6a8-4673-9ec9-0017c92c114a",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 80,
+      "requestId": "c4b67ee9-86c3-4a7c-b654-465d4d664776",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 81,
+      "requestId": "a1ae3804-b796-47c2-a8cd-fefc2aa6908a",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 82,
+      "requestId": "fd9c1391-3440-4b13-95a1-c2e63c65723d",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 83,
+      "requestId": "26dbca8c-18bf-417f-b343-13e0d681ca01",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 84,
+      "requestId": "836f42cf-24f1-429d-a268-654716ece55e",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 85,
+      "requestId": "daba3265-72a1-4a8f-9cb7-064f0e424635",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 86,
+      "requestId": "d1ef8dd3-8ec1-43cb-ae89-e679038a59c9",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 87,
+      "requestId": "19d15e8f-699f-4397-814c-c912bacfabb3",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 88,
+      "requestId": "95dbcf40-79e3-4f5c-804d-d47fa13a28b4",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 89,
+      "requestId": "4589e1e5-01fe-46fb-b02c-7978481b6872",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 90,
+      "requestId": "312e107a-334c-4fe0-a8da-51e23be2ed7c",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 91,
+      "requestId": "f31177be-0c41-496d-87d3-8709fce5785c",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 92,
+      "requestId": "e59c5800-bf42-44a1-8174-c7cbd72b28b5",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 93,
+      "requestId": "e0b0d1d2-dbd0-4405-b5f5-bba5c8f11f88",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 94,
+      "requestId": "d277d451-6ffa-4cb2-9944-b93a1377955c",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 95,
+      "requestId": "05fd1e24-26f2-4c94-938d-fd528c8f1e72",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 96,
+      "requestId": "981d3b38-8473-46f6-a62c-029a97427994",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 97,
+      "requestId": "891545b7-ec8a-4fd0-9142-5a5528b03be6",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 98,
+      "requestId": "d625fc7d-d214-4b1e-b9ee-7dc927c0a62a",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 99,
+      "requestId": "08eb9944-c0bf-4e7e-9652-413efda303d9",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 100,
+      "requestId": "d9de0368-52da-4021-8c6f-9675fb808950",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 101,
+      "requestId": "9f48c6d7-4a80-4c1b-82d7-6a3cdc271066",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 102,
+      "requestId": "d0426613-079d-4486-8a03-7d554b904fdd",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 103,
+      "requestId": "6c121bce-3804-42ec-bd6e-a539256c1073",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 104,
+      "requestId": "971450f8-7712-4343-ad5e-beb6139456ad",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 105,
+      "requestId": "b2b53137-026c-4fb7-ab41-26289a5a7f49",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 106,
+      "requestId": "f8682fdb-2d15-47b2-b6bf-f72fb5e8ba0c",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 107,
+      "requestId": "6781bbd0-8c0c-4eeb-9102-0cc5242edd10",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 108,
+      "requestId": "1497c03b-41e3-46c7-9b60-dc12b5fe1ece",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 109,
+      "requestId": "776aea79-77e8-49a0-8c08-19ff2c7a5800",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 110,
+      "requestId": "38627db8-d60d-4f44-91d8-a6925b13faa9",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 111,
+      "requestId": "3000c20a-9d7b-419b-84d6-b7faa29d4878",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 112,
+      "requestId": "6fd34832-6ebb-41ca-9d4b-1ff66db6b83c",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 113,
+      "requestId": "154ef113-28b8-4921-a61f-58297db37acd",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 114,
+      "requestId": "3503ca71-653b-42d6-8d72-fd69e4f8454b",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 115,
+      "requestId": "59b455ef-0ce3-49f8-9cd7-1c1a9b399c59",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 116,
+      "requestId": "9820d33a-2537-4757-a29e-756f88d95b97",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 117,
+      "requestId": "9316a950-5f48-4a97-9357-dff54722d516",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 118,
+      "requestId": "eab4ebee-86f2-4089-861e-3e7524aecb08",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 119,
+      "requestId": "6cd5fc2c-f87c-409e-af7c-1f9632acd704",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 120,
+      "requestId": "14f114b5-deb4-43a9-8f2f-a84618e931d0",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 121,
+      "requestId": "79d737e4-d7f6-4259-8c06-fb53f11515b5",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 122,
+      "requestId": "4a4fe104-2424-469a-bf42-dc8109453b1b",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 123,
+      "requestId": "3835630c-924a-48d9-835b-e47f58b05f82",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 124,
+      "requestId": "9f2fb21f-c171-4224-8e19-8fa3d153ea38",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 125,
+      "requestId": "f881e560-0b4a-4a1a-b01d-19cfb62e2e89",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 126,
+      "requestId": "40157bbf-60af-45d1-b02b-d17f5b2439df",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 127,
+      "requestId": "9e355b34-c494-4c10-b7f5-4b167429daed",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 128,
+      "requestId": "c50147c1-a479-4a66-8ef0-b6e495a41ddc",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 129,
+      "requestId": "9210b879-e2c0-46da-b737-f6bfcc902780",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 130,
+      "requestId": "4d8827ee-b6a4-49b3-ab2d-2ebbfbc98fdd",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 131,
+      "requestId": "040a65c8-f98a-421c-bef4-2b161c843107",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 132,
+      "requestId": "ae5360f9-ab7e-4506-bd13-ab5222c5367f",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 133,
+      "requestId": "1f8b46ce-e791-4753-baa4-9368748f4d91",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 134,
+      "requestId": "3f4ec4f2-efc3-4bb7-b060-40c7de668459",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 135,
+      "requestId": "c44c9c48-48de-4edc-b6f2-689b1366082e",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 136,
+      "requestId": "e8c53e97-2bec-47db-9e38-004bf70924dd",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 137,
+      "requestId": "015ab0ef-7930-4de5-ba1b-0eac85c63f56",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 138,
+      "requestId": "543b6bec-f8ae-4005-a5c4-db2bb39e1f5d",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 139,
+      "requestId": "20361538-c883-445f-a7fe-eba0d1b315d8",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 140,
+      "requestId": "8946e1aa-3969-4367-8593-60828f9942e3",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 141,
+      "requestId": "ba7c5981-998a-49aa-9ffa-f3c8fef38ad2",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 142,
+      "requestId": "934172d0-5905-4484-ac94-22d8eef90431",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 143,
+      "requestId": "aeab33a5-ccb7-4bc6-a714-7755485aeae8",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 144,
+      "requestId": "8607a5f9-ce21-4218-988a-4b00515e544d",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 145,
+      "requestId": "d5698221-9806-41cf-a204-0bbe2b983c69",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 146,
+      "requestId": "feb9ce0d-1394-49f8-b4eb-3430318f5a0f",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 147,
+      "requestId": "768f50a8-297e-4978-b3f8-bba70e0525bf",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 148,
+      "requestId": "9680ac12-c6d5-4484-bc34-8871468b854d",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 149,
+      "requestId": "6a92015f-959d-4a3f-a57a-413671f3a780",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 150,
+      "requestId": "950b83e8-3a3e-4176-8864-19a3f6f09a96",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 151,
+      "requestId": "0d83eafa-069e-4fb3-8e50-a266f4d9c704",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 152,
+      "requestId": "840db8a0-88e3-49f4-9681-3c12ef5018d6",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 153,
+      "requestId": "3a0e66f7-af1c-44b7-b53a-ba11fb86e107",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 154,
+      "requestId": "5d913144-efad-47ae-b948-bff35c8b391e",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 155,
+      "requestId": "2463702c-8d9b-45a7-a9fc-ef28b2bced02",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 156,
+      "requestId": "6dfbd1e1-8b3b-4b84-9731-7df67a667f05",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 157,
+      "requestId": "39c8a148-716e-43fa-84eb-c9a3de396706",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 158,
+      "requestId": "569081f3-0363-4dd8-94c1-636cb0d008a1",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 159,
+      "requestId": "8f827664-13c1-40a5-b15c-d38d5fdf5873",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 160,
+      "requestId": "41645fc4-e850-452b-9b82-575ef3cb8a0b",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 161,
+      "requestId": "615c8042-76b1-4240-a379-b2a973ee12d6",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 162,
+      "requestId": "b5a1e693-ae2f-4895-abb0-f7458051eac6",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 163,
+      "requestId": "575b0cca-5287-44c6-8cd5-8e0da3c96ac6",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 164,
+      "requestId": "c4e4dba0-efc6-4863-81fb-be9685237f28",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 165,
+      "requestId": "d5bd3462-ca13-4221-8f9a-cd00577fb33c",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 166,
+      "requestId": "178c2953-3018-425b-8015-ba4b5369b264",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 167,
+      "requestId": "2102321e-b35f-4432-b78f-6d999c1c7f7d",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 168,
+      "requestId": "a5088947-f18c-483a-bd6e-66063872fb91",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 169,
+      "requestId": "73c941c4-2ac4-4b9e-85a8-66a3abc797ce",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 170,
+      "requestId": "329364ee-efdf-438d-9ad4-606a65eb57bc",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 171,
+      "requestId": "5c5ac3ff-d3e9-41ee-b12f-93eacced7b41",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 172,
+      "requestId": "1e7fa29a-a7cd-4fc4-8fbc-b087191ad1de",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 173,
+      "requestId": "4035a679-90a0-4967-84e0-95b5fe2f76da",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 174,
+      "requestId": "8fc99408-a6b6-4e56-9259-1187eac26b11",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 175,
+      "requestId": "72db7856-aab6-4f1c-907d-ad3f27ff9e62",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 176,
+      "requestId": "f4754232-e1cc-4fc4-8b59-7d25cd312319",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 177,
+      "requestId": "66ce443c-354f-45cb-a3ab-01b6e2ee597b",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 178,
+      "requestId": "f6c65eef-a88a-43c9-a3ac-9ea087728608",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 179,
+      "requestId": "83a44723-26fb-4ea3-92eb-ed9dd4eb5c3a",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 180,
+      "requestId": "2c4a07e2-64a5-4da6-8b84-27e5324e5807",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 181,
+      "requestId": "faf1fab9-dccc-43a6-8187-7152f6e1f9f1",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 182,
+      "requestId": "8d546b2b-59cc-4bcb-846a-f0da0e8c2034",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 183,
+      "requestId": "7ead285e-38b5-4f50-b4fe-8e33a5fce0a3",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 184,
+      "requestId": "3f520596-a26a-44b2-a05f-0e2d651ed4a2",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 185,
+      "requestId": "faca7300-7460-4171-a5d6-352ef4e2189d",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 186,
+      "requestId": "d7cba197-adb7-435c-906c-cde32fcb8695",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 187,
+      "requestId": "4d3480d6-1aae-48e7-b240-0590bf5e3f29",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 188,
+      "requestId": "60e228a1-7635-4d42-a5bd-619ae11cd66f",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 189,
+      "requestId": "c21e8c56-5a27-4483-9e9a-eac0304d4653",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 190,
+      "requestId": "bfe7f5f8-bcdd-499b-9070-f69b11f9d63b",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 191,
+      "requestId": "f771faf0-0929-4730-8efa-3f2b479ceaa7",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 192,
+      "requestId": "17f9ffba-376d-4649-bc32-002054b211a4",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 193,
+      "requestId": "0f2fe833-43f3-4a18-80c2-c5ac55d0ce43",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 194,
+      "requestId": "8f745c3f-c3d0-43ab-90cc-a32f9e7ae377",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 195,
+      "requestId": "081a8a22-d92b-4a84-b742-f22c1f217467",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 196,
+      "requestId": "f0727502-f122-4015-9173-f07b7e0a06dc",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 197,
+      "requestId": "712d300f-da75-4b24-9c1d-1c88f52e8dea",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 198,
+      "requestId": "b0c26d69-3dd1-49b8-91b7-3db434547dcd",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 199,
+      "requestId": "9ea0e4cf-60e2-4c91-bed0-c011a10b68b0",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 200,
+      "requestId": "11ce417c-f60e-445a-a39e-97a30916cc10",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 201,
+      "requestId": "8bd11008-458a-438b-8bd3-a1a13301282c",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 202,
+      "requestId": "4fe478d0-d30c-4525-af03-d2fae495c5f6",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 203,
+      "requestId": "7376fb67-982e-495f-bc9e-01cef5fa1021",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 204,
+      "requestId": "6db5ebb2-b96c-4d74-8afe-339614edab44",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 205,
+      "requestId": "88182201-1dc0-4034-b61e-14f4e7575bb1",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 206,
+      "requestId": "813e6b78-df5e-481a-8f4f-c0d708fedfc6",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 207,
+      "requestId": "c5ed468f-60eb-4b19-9e44-6617fc82783a",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 208,
+      "requestId": "2113ee02-54ba-41d4-8850-ecc9ec003d1d",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 209,
+      "requestId": "38ed8208-cb2f-4ca7-bb3a-744bf4cce3ef",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 210,
+      "requestId": "a5e7fe57-75c9-446c-a733-2f1bb60255f9",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 211,
+      "requestId": "5c5015da-85b6-481b-9102-a7647a9de6ab",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 212,
+      "requestId": "02667aea-5895-4931-99f6-9e8a2380ee83",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 213,
+      "requestId": "66e772c8-6a04-4966-be4e-ddef8b204ee0",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 214,
+      "requestId": "62c74e2f-604e-4214-93ff-f66f22985fc2",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 215,
+      "requestId": "26e563ec-4e3b-4463-8499-9de1f208256c",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 216,
+      "requestId": "c987a665-b157-4fff-9ed0-1e09417c88da",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 217,
+      "requestId": "adc8f17a-d0d6-47e3-9895-bbabbcdb8e41",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 218,
+      "requestId": "e03f7be9-86fd-4652-bc1e-657b14615f07",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 219,
+      "requestId": "08a828bc-f616-4ca0-b7e1-58ed66126241",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 220,
+      "requestId": "ff5d9554-18f0-422f-91e6-318203a0a453",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 221,
+      "requestId": "a198613b-db61-4094-a2b7-6f4332ab8c2f",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 222,
+      "requestId": "663d7046-e641-40fa-bbbe-87f1547d49ef",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 223,
+      "requestId": "b6fc479c-12fd-4374-8dff-7b00889a2b67",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 224,
+      "requestId": "41a3ea44-3c1c-4afd-b964-83fa07c54a8c",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 225,
+      "requestId": "62b67281-9cfa-4859-8583-7070e4719ddc",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 226,
+      "requestId": "80f68916-e78b-45fe-a9db-44e9b016f6dc",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 227,
+      "requestId": "07e0e7e7-f620-4326-957c-631c7dc59df2",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 228,
+      "requestId": "972351c3-fd0d-436d-ac9c-4977701ee711",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 229,
+      "requestId": "5e532a17-20f3-4651-8beb-9872cdc58d0b",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 230,
+      "requestId": "62e8c71b-40e9-432a-a741-6bbc12f2e52a",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 231,
+      "requestId": "f15b6579-9e34-41fe-b8ef-585ca190504b",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 232,
+      "requestId": "4df631d2-fa85-49f5-a67c-98c4cd4e61e9",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 233,
+      "requestId": "68ec4f68-ab7d-41b2-baa2-7021061fa857",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 234,
+      "requestId": "1c6c1c5c-0465-446a-a256-1e9d796b457d",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 235,
+      "requestId": "6d550571-94da-4e05-84d7-2bc634682f19",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 236,
+      "requestId": "d9b0b4ce-4ca2-4183-98b4-9bb8d05cdbd5",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 237,
+      "requestId": "cf417f69-82aa-4973-b127-5dd1cb1d1c84",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 238,
+      "requestId": "f598c08f-b4c9-4984-834f-bb7574a888a0",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 239,
+      "requestId": "9fcd4154-0da5-4ca4-a08f-ffc6720615be",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 240,
+      "requestId": "3b46f629-2bff-42cb-bd12-bb33c826c7dc",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 241,
+      "requestId": "f23db247-5ed1-494e-846f-84ea8d0340d4",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 242,
+      "requestId": "007fe956-0db0-4b79-8d15-bfaeb1eb6256",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 243,
+      "requestId": "f5c4b13c-e2a4-44b1-9f07-b3ebc533921e",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 244,
+      "requestId": "dfcdf763-7c32-4d36-836b-56002701fd62",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 245,
+      "requestId": "f5cd7969-7664-45ae-8aa3-66c3f1dc1be8",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 246,
+      "requestId": "7ce7f6a8-4917-4ecf-af46-85744c335fb9",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 247,
+      "requestId": "e93484a3-8ef1-4da5-846f-89304fb12438",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 248,
+      "requestId": "c19c20f0-f9aa-4172-a269-d2eeb89bd5c2",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 249,
+      "requestId": "57927db0-0383-4854-8c07-a7ed40826ac3",
+      "returned": 48,
+      "hasNext": false
+    }
+  ],
+  "endPage": {
+    "page": 250,
+    "returned": 0,
+    "requestId": "10254202-d572-49eb-8056-496da7c18346"
+  },
+  "directory": {
+    "checkedAt": "2026-11-09T14:50:53.262Z",
+    "tableNames": [
+      "orders",
+      "order_items",
+      "finance_transactions",
+      "returns",
+      "settlements_v2",
+      "reimbursements",
+      "inventory_age",
+      "listing_details",
+      "pricing",
+      "buy_box_history",
+      "brand_analytics",
+      "inventory",
+      "listings",
+      "sales_traffic_daily"
+    ],
+    "meta": {
+      "source": "AmazonSyncDataSource",
+      "isSandbox": false,
+      "lastSyncAt": "2026-11-06T13:19:49.164Z",
+      "freshness": "stale",
+      "grain": [
+        "sellerAccountId",
+        "marketplaceId",
+        "resource"
+      ],
+      "currency": null,
+      "attributionWindow": null,
+      "warnings": [],
+      "page": {
+        "page": 1,
+        "pageSize": 13,
+        "hasNext": false
+      }
+    }
+  },
+  "publicationPolicy": "page_committed_current_facts",
+  "historicalComplete": false,
+  "verificationAmazonRequests": 0,
+  "verificationBusinessWrites": 0
+}

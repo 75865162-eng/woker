@@ -1,0 +1,134 @@
+{
+  "target": {
+    "environment": "EXISTING_LOCAL_DATABASE",
+    "container": "amazon-sync-live-postgres",
+    "host": "127.0.0.1",
+    "port": 55439,
+    "database": "amazon_sync_live_local"
+  },
+  "observedAt": "2026-11-09T08:35:41.220Z",
+  "status": "AWAITING_SPECIFIC_LIVE_OPERATION_APPROVAL",
+  "scope": "FOUR_CONFIGURED_SETTLEMENT_SOURCES_EIGHT_SITE_DOCUMENTS_OVERLAPPING_2026-10-10_TO_2026-11-08",
+  "migration": "prisma/migrations/20261109020000_amazon_field_registry/migration.sql",
+  "sources": [
+    {
+      "sourceId": "4d1ff1ca-bd06-4a00-926e-d0f1f0d6fd7b",
+      "revision": 2,
+      "authorizationId": "3895911f-89c4-4ebd-8212-dc58bede447e",
+      "authorizationRevision": 3,
+      "authorizationStatus": "CONFIGURED",
+      "enabledSchedules": 1,
+      "activeTasks": 0,
+      "reportDocumentIds": [
+        "951a4b11ca19eeeedb84b42a4ea052d23df6f5b03124ddc992bd6c78268090a7"
+      ]
+    },
+    {
+      "sourceId": "6f93830f-77a7-4ef1-a327-ff6e93603fcf",
+      "revision": 2,
+      "authorizationId": "3895911f-89c4-4ebd-8212-dc58bede447e",
+      "authorizationRevision": 3,
+      "authorizationStatus": "CONFIGURED",
+      "enabledSchedules": 1,
+      "activeTasks": 0,
+      "reportDocumentIds": [
+        "07a267fbe186f6f93184a0c364ef420fce28924eefbe69d6efe9c76b5a3161ea"
+      ]
+    },
+    {
+      "sourceId": "636d327e-8da0-499a-9322-d6c375475ca5",
+      "revision": 2,
+      "authorizationId": "3895911f-89c4-4ebd-8212-dc58bede447e",
+      "authorizationRevision": 3,
+      "authorizationStatus": "CONFIGURED",
+      "enabledSchedules": 1,
+      "activeTasks": 0,
+      "reportDocumentIds": [
+        "9586e12a5abf5239a7f336b786ec580199bb7511601d4eec8d937ec7db0a7bf7",
+        "46a66e74a5e7eeeb7968e93fc68c0afe2070905f16231e222ef824694c864359",
+        "7824bba10f87f0d6f74532839737a0b64e97b10f85a3a80102fb8c156fea223c",
+        "9604a0bad54a4a1221a27e6a2d0c0e5218c1419625ebd1360b9227fcbea43f2b"
+      ]
+    },
+    {
+      "sourceId": "2f4f1145-45dd-4454-aea6-2ad01aa0f2d4",
+      "revision": 2,
+      "authorizationId": "3895911f-89c4-4ebd-8212-dc58bede447e",
+      "authorizationRevision": 3,
+      "authorizationStatus": "CONFIGURED",
+      "enabledSchedules": 1,
+      "activeTasks": 0,
+      "reportDocumentIds": [
+        "043faa6fdcf486b4ed31a30df5cc27c7735be1e35058fdc00894e82507d89731",
+        "a872a562eb93c42ce8ae07ac58786afce3902727a7dc24b6a9aaec0b85317071"
+      ]
+    }
+  ],
+  "expectedRecoverableSiteRows": 16757,
+  "steps": [
+    "Revalidate target identity and current revisions before any mutation",
+    "Pause only plans targeting the listed sources through existing approval workflow; wait for active tasks to clear",
+    "Apply only the named additive migration through the existing approved migration process",
+    "Recompute read-only preview digests for the exact listed documents; fail if raw hash/row identities/amounts changed",
+    "Request, approve and apply currencyOnly recovery per source using the current authorized ERP administrator",
+    "Compare before/after row identity hashes, amounts, raw hashes and report heads; read repaired currencies through the existing business query; record actual coverage",
+    "Restore only plans changed by this run to their prior state after successful validation; on failure keep affected plans paused and report"
+  ],
+  "limits": {
+    "amazonRequests": 0,
+    "deleteOrReinsertFacts": false,
+    "guessCurrency": false,
+    "serverDeployment": false,
+    "workerRestart": false,
+    "otherDomainBackfill": false
+  },
+  "rollback": "Abort each repair transaction on conflict. Retain additive schema and audit; never auto-drop tables or restore currencies blindly. Resume prior plans only after validation. Existing DB migration and schedule changes require specific approval.",
+  "relatedPlans": [
+    {
+      "id": "amazon-sync-auto-a17e96fa124a483a22b0f26288f0d7eb",
+      "revision": 6,
+      "enabled": true,
+      "resource": "settlements",
+      "targets": [
+        {
+          "sourceId": "6f93830f-77a7-4ef1-a327-ff6e93603fcf"
+        }
+      ]
+    },
+    {
+      "id": "amazon-sync-auto-215c3eb2748b0acc65d52bec0aa505a3",
+      "revision": 6,
+      "enabled": true,
+      "resource": "settlements",
+      "targets": [
+        {
+          "sourceId": "636d327e-8da0-499a-9322-d6c375475ca5"
+        }
+      ]
+    },
+    {
+      "id": "amazon-sync-auto-5af004cb399e4b26fd0ac61af5acfb9f",
+      "revision": 6,
+      "enabled": true,
+      "resource": "settlements",
+      "targets": [
+        {
+          "sourceId": "2f4f1145-45dd-4454-aea6-2ad01aa0f2d4"
+        }
+      ]
+    },
+    {
+      "id": "amazon-sync-auto-683fdc65b769969c1d83569e86e512d2",
+      "revision": 6,
+      "enabled": true,
+      "resource": "settlements",
+      "targets": [
+        {
+          "sourceId": "4d1ff1ca-bd06-4a00-926e-d0f1f0d6fd7b"
+        }
+      ]
+    }
+  ],
+  "targetBusinessDateRecoverableRows": 13266,
+  "allPlanTargetsWithinListedSources": true
+}

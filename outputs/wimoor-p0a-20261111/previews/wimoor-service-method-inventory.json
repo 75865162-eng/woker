@@ -1,0 +1,19 @@
+[
+  {
+    "sheet": "Services",
+    "dataset": "services",
+    "rows": 1055,
+    "columns": 7
+  },
+  {
+    "sheet": "Methods",
+    "dataset": "methods",
+    "rows": 9018,
+    "columns": 10
+  },
+  {
+    "sheet": "Duplicate files",
+    "dataset": "service_duplicates",
+    "rows": 0
+  }
+]

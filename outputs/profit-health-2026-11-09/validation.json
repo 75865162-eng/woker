@@ -1,0 +1,14 @@
+{
+  "settlementRows": 12066,
+  "uniqueIds": 12066,
+  "settlementPages": 242,
+  "salesSkuCount": 71,
+  "highFeeSkuCount": 13,
+  "ageRiskSkuCount": 16,
+  "returnsObserved": 6,
+  "evidenceSha256": "c777bc4664f5d363dc4208d6663301f2a5749c8bccd9c0fc7ae92db567bf62fa",
+  "currencyConfirmed": false,
+  "monthlyRankingComplete": false,
+  "profitComplete": false,
+  "externalWritesExecuted": false
+}

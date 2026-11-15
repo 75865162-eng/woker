@@ -1,0 +1,50 @@
+{
+  "at": "2026-11-09T16:57:35.071Z",
+  "taskId": "000537c3-94a4-4cd3-9cca-ade78ed48197",
+  "status": "SUCCEEDED",
+  "window": {
+    "from": "2025-12-01T09:26:07.189Z",
+    "to": "2025-12-31T09:26:07.189Z"
+  },
+  "pagesCompleted": 14,
+  "apiResponses": [
+    {
+      "_count": {
+        "_all": 14
+      },
+      "statusCode": 200
+    }
+  ],
+  "originalPages": 14,
+  "records_received": 6686,
+  "records_parsed": 6686,
+  "records_inserted": 6686,
+  "records_reused": 0,
+  "records_updated": 0,
+  "records_quarantined": 0,
+  "quarantinedOccurrences": 0,
+  "records_rejected": 0,
+  "databaseUniqueRows": 6686,
+  "records_published": 6686,
+  "windowPublished": true,
+  "rawAndStructuredHashesMatch": true,
+  "erp": {
+    "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+    "marketplaceId": "ATVPDKIKX0DER",
+    "from": "2025-12-01T09:26:07.189Z",
+    "to": "2025-12-31T09:26:07.189Z",
+    "exactWindowRows": 5518,
+    "dateFilteredTotal": 5518,
+    "batches": [
+      {
+        "sourceRunId": "000537c3-94a4-4cd3-9cca-ade78ed48197",
+        "verified": 5518,
+        "exactWindowRows": 5518,
+        "nonemptyPages": 111,
+        "emptyPage": 112
+      }
+    ],
+    "sourceRunIdMeaning": "Original insert or last business update; idempotently reused records retain their original provenance"
+  },
+  "mcpStatus": "NOT_RUN_CONNECTOR_UNAVAILABLE"
+}

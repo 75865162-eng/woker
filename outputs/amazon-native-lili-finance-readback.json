@@ -1,0 +1,1100 @@
+{
+  "client": "Codex app-server native MCP",
+  "targetChatToolsVerified": false,
+  "servers": {
+    "erp": {
+      "runtimeStatus": "connected",
+      "tools": [
+        "amazon.stores.list",
+        "data_describe_table",
+        "data_list_tables",
+        "data_query",
+        "data_sync_status"
+      ],
+      "authStatus": "bearerToken"
+    },
+    "lili": {
+      "runtimeStatus": "connected",
+      "tools": [
+        "ads_get_campaign_structure",
+        "ads_get_connection_status",
+        "ads_get_data_health",
+        "ads_get_settings",
+        "ads_get_sync_status",
+        "ads_list_entities",
+        "amazon.ads.entities.list",
+        "amazon.ads.reports.list",
+        "amazon.catalog.list",
+        "amazon.fields.catalog",
+        "amazon.fields.coverage",
+        "amazon.history.read",
+        "amazon.inventory.list",
+        "amazon.inventory.summary",
+        "amazon.sales.list",
+        "amazon.stores.list",
+        "amazon.sync.status",
+        "data_describe_table",
+        "data_list_tables",
+        "data_query",
+        "data_sync_status",
+        "finance_get_settlements",
+        "finance_get_transactions",
+        "get_inventory",
+        "get_listings",
+        "get_order_items",
+        "get_orders",
+        "get_sales",
+        "inventory_get_age",
+        "inventory_get_events",
+        "inventory_get_snapshot",
+        "lili_ping",
+        "meta_get_market_access",
+        "meta_get_skill_manifest",
+        "meta_list_workflows",
+        "meta_load_skill",
+        "meta_search_skills",
+        "orders_get_items",
+        "orders_search",
+        "reimbursement_analyze",
+        "reimbursement_get_events",
+        "reimbursement_get_payments",
+        "research_cancel",
+        "research_confirm",
+        "research_evidence",
+        "research_export",
+        "research_list",
+        "research_pause",
+        "research_prepare",
+        "research_read",
+        "research_record_charge",
+        "research_recover",
+        "research_resume",
+        "research_start",
+        "research_step",
+        "returns_get_items",
+        "workflow_sync_confirm",
+        "workflow_sync_review"
+      ],
+      "authStatus": "oAuth"
+    }
+  },
+  "calls": [
+    {
+      "server": "lili",
+      "tool": "lili_ping",
+      "isError": false,
+      "requestId": null
+    },
+    {
+      "server": "erp",
+      "tool": "amazon.stores.list",
+      "isError": false,
+      "requestId": null
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "d480465a-6b45-45d7-ab7c-582ba62b2b7b"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "4d33bd91-a12a-4c1a-b2f8-3655b93b9716"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "7ce138d6-f70a-44ff-a74b-d9fc2e4abf70"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "928a55a4-fa15-479c-ada5-f578c18070aa"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "e93a93aa-72ab-43bd-9906-f7d1246f6faf"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "9c2db015-83db-47e6-b135-c89274ad6505"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "c1e366cb-a8e0-4b7f-806d-10bbdfb2a797"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "79a8d5c8-0110-4d57-9ae1-3b1808096b9f"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "5dc52a3e-a834-401b-a012-7a013e186b9c"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "7c95549d-c49c-45fe-975d-1ba2b2b06301"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "6528151c-80f6-472e-a975-e4c603105ce9"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "72ed22d9-c49b-4287-a74c-eb0231a15e7f"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "dfc2c99f-fcd3-4311-a164-9c65d3b6b522"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "00afad30-1c2d-4f67-bde1-d3e8a42be888"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "3ed4786b-07cc-4c53-bd7c-5ea1e6a8b204"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "2befdbcd-0e19-46d4-b96a-257792164154"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "d958aff4-0493-4fa3-b9ad-c97fb5da0e54"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "928aa608-487a-44d6-b11f-9afa270a72fc"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "d900c0d9-3ff4-40cd-8170-8eed556743d6"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "f76244db-69ae-4ec9-97ab-dfae0e4b84ba"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "f44f8620-7a72-4bae-80ce-e0b063ec4741"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "6156e19e-d185-4f0a-b0c2-8bac1d9ef7bc"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "0fd41c07-a545-4b89-be9d-f31594cff1a3"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "4fe12fbc-9415-4205-a66b-e8ba373ed17f"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "f58064a4-fa24-4466-b235-28627f0e8f96"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "cfc1227b-60e3-4994-80a3-634fd1629a51"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "0b394877-fffc-49b8-b70e-456496e4cf56"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "62e9246a-3ac2-4ce6-97b2-09c79810338b"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "9fb93108-7e0e-4d6a-9171-bb71cbfc2a26"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "d58fb601-11ca-4c17-80ac-6c244cc26cbb"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "cb2e57df-970c-4c71-81cb-47f3a1e1006e"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "67bff047-6eba-4eca-87bc-69bf34c993db"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "8647cf63-cd81-457c-9d62-28a6522d0999"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "23d5a153-e3ee-41e0-a117-9f53c10f28b3"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "8359f2ba-e774-4f43-b641-d93c4d695ecd"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "c6279b77-d7f3-4fa1-b359-74817b8b9331"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "5b29c7c7-34a3-49c3-8f4d-30da6ea47775"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "c0c4e875-5a3b-4f0c-bb19-4977a2101ea9"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "83847259-e3ee-441c-849b-6755ed525cd2"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "bad0e152-1257-4980-967c-60d9b799a2f6"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "0e4208e0-b6cc-4bf8-b175-d308f989ed41"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "867d32a3-4af0-4fee-9edd-7e08e3052219"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "1599458d-08fd-448c-89c8-9f0d1356ac02"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "61574620-4a68-4269-8753-62df2027cd95"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "149c3db5-f713-497b-bc74-3ac04ae4514b"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "ded66c00-b9b1-4a7d-8714-9a1c94742f20"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "6c3a332a-6d5e-4353-b95c-3deb26344f22"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "300c32ef-b430-4952-8e83-23d7decd4ade"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "e80c120d-a957-492d-9bb0-7157315c7228"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "77dfa049-63ad-4ce7-b56e-5b756a48a620"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "50563f22-1285-4779-a593-1d0812bb4f59"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "8ba59600-96b8-41c5-b63f-6e420dac6e45"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "b62a9ee0-ffc8-4d09-aadc-cefdb3a207d7"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "a4cc0510-49a9-4096-9ec5-cb75d6faa169"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "be122e7a-2693-4018-a9a7-72152bdf12e9"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "2e9470b5-c9d6-4bd5-817b-085ff29e591e"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "8e46a337-44a7-4d10-94d1-579c22938fd9"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "fef7a71f-f7cc-4c7a-adb5-fd00e63333b9"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "4c2c72bc-23ce-433c-831f-307c26c519a8"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "39410e0a-fdbc-468f-983b-354be6f1dd83"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "64dfadba-b47c-403f-90d8-047b0769e082"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "aeaba8e7-d322-4df0-9961-8f702cd2302b"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "9754f16b-ef94-49e2-b149-ad1752847fc8"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "8f0b36b0-489d-4ad3-a275-121b8146c7e4"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "c6e5e3d7-bb1f-42bd-be3c-3e407fc12399"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "e0a7bd01-2ce1-4cc7-9dff-ec705f9d6c91"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "00a08e9d-57e6-40d6-952d-7a022c95d6a0"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "9cfaf3b1-eac0-438b-a0c0-602f04cc0a33"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "dc43c383-182b-40fd-a48e-a6cd789f1d76"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "170cfa43-cd5a-408d-b2c2-6a41329506cb"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "f42c6129-9753-4ce7-8617-8a5ad077b1d7"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "51f1b5a9-e7c1-4afc-b5c3-bf7476616f57"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "1b5c5346-fae0-4b33-800a-53b4edd9b1f7"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "09ea2d5b-e93e-4b01-a2a6-ab24f279159b"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "e66eafcf-b966-4d47-a828-b680857d6bdd"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "a1b6360f-dfe1-4f51-8394-9ece4620900c"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "4cb48a9c-f3e3-48e5-b9ca-a007119bc2f8"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "72711a49-44d3-4ff2-aeb2-21c02211c80b"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "130cd710-db03-4a70-bc23-795cb209921f"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "3e217a29-033d-4d76-8abf-545645d66bf4"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "7cde1de3-7b2a-4211-a3ff-961a552dde7f"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "e862f7dd-66b2-452a-8241-5d604f9b3776"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "10941e5e-7ec4-4b57-a1a7-307dc60c313b"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "426dac20-06d1-4fa1-b861-6dcdf4906bf0"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "efb3e0b3-a79d-48dd-885e-6ab0b91d2e8b"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "a6335c7d-5931-4770-ab3b-553467de7582"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "20e9d719-e2ee-4eef-9cec-4c485b133893"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "410a2ca4-bd66-47ac-940b-564967126604"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "cfaac2d3-d1a7-40a6-b739-ca20c9c702f1"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "6f20ff3a-1dd8-4c48-b716-d691561fc7e3"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "b834a449-6b93-4ade-b255-a1d591322c14"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "dbd2a54e-60aa-4f4b-a2eb-853afc6087e5"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "97baa845-fb21-449c-a391-d2982d8c64e5"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "04d8af88-4084-4411-a011-4d5acb0a48ad"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "659c80c7-1f35-4733-95b1-7b5566516cbe"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "3621ed0d-117f-44e0-8d7f-10ea9123c730"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "a10d96a1-8179-472a-a2d4-2f3d8b51dd01"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "2d6efaa7-96a6-4c9c-9550-c70e87782e6a"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "bec0896c-99c4-44ae-8046-72157e4b9f46"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "d4218b99-ec1c-4a93-94e5-6e31dc220428"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "c50be5bc-4451-44df-b95c-a78e2e8153b3"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "77dd1896-dc52-4b73-ab52-cac8f80fdcc9"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "492babd9-ad72-487c-844e-47894e591813"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "9d227c0d-6c22-4bf5-80b9-dfad54ba0ca2"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "2f75a2e9-e024-4e6f-87fb-d6d9fd1054e4"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "c92a5890-67d8-4d59-b00a-c895bb49bdf8"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "3032be00-fef6-41d8-8b00-d860670a7a43"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "8b6cd51d-1bd1-4a54-a968-53e1fd0791ab"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "0445903d-6569-462c-9744-fdcfdde0c482"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "1bd42551-a74c-4e2f-964b-5ba47016da1b"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "b4dda9e0-6eec-4325-b3f9-dbc4f40714f5"
+    },
+    {
+      "server": "lili",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "05a88f46-8ddd-4b40-82e5-def4592568f2"
+    }
+  ],
+  "results": [
+    {
+      "table": "finance_transactions",
+      "sourceRunId": "000537c3-94a4-4cd3-9cca-ade78ed48197",
+      "recordsVerified": 5518,
+      "nonemptyPages": 111,
+      "emptyPage": 112,
+      "allFieldsMatchDatabase": true,
+      "requestIds": [
+        "d480465a-6b45-45d7-ab7c-582ba62b2b7b",
+        "4d33bd91-a12a-4c1a-b2f8-3655b93b9716",
+        "7ce138d6-f70a-44ff-a74b-d9fc2e4abf70",
+        "928a55a4-fa15-479c-ada5-f578c18070aa",
+        "e93a93aa-72ab-43bd-9906-f7d1246f6faf",
+        "9c2db015-83db-47e6-b135-c89274ad6505",
+        "c1e366cb-a8e0-4b7f-806d-10bbdfb2a797",
+        "79a8d5c8-0110-4d57-9ae1-3b1808096b9f",
+        "5dc52a3e-a834-401b-a012-7a013e186b9c",
+        "7c95549d-c49c-45fe-975d-1ba2b2b06301",
+        "6528151c-80f6-472e-a975-e4c603105ce9",
+        "72ed22d9-c49b-4287-a74c-eb0231a15e7f",
+        "dfc2c99f-fcd3-4311-a164-9c65d3b6b522",
+        "00afad30-1c2d-4f67-bde1-d3e8a42be888",
+        "3ed4786b-07cc-4c53-bd7c-5ea1e6a8b204",
+        "2befdbcd-0e19-46d4-b96a-257792164154",
+        "d958aff4-0493-4fa3-b9ad-c97fb5da0e54",
+        "928aa608-487a-44d6-b11f-9afa270a72fc",
+        "d900c0d9-3ff4-40cd-8170-8eed556743d6",
+        "f76244db-69ae-4ec9-97ab-dfae0e4b84ba",
+        "f44f8620-7a72-4bae-80ce-e0b063ec4741",
+        "6156e19e-d185-4f0a-b0c2-8bac1d9ef7bc",
+        "0fd41c07-a545-4b89-be9d-f31594cff1a3",
+        "4fe12fbc-9415-4205-a66b-e8ba373ed17f",
+        "f58064a4-fa24-4466-b235-28627f0e8f96",
+        "cfc1227b-60e3-4994-80a3-634fd1629a51",
+        "0b394877-fffc-49b8-b70e-456496e4cf56",
+        "62e9246a-3ac2-4ce6-97b2-09c79810338b",
+        "9fb93108-7e0e-4d6a-9171-bb71cbfc2a26",
+        "d58fb601-11ca-4c17-80ac-6c244cc26cbb",
+        "cb2e57df-970c-4c71-81cb-47f3a1e1006e",
+        "67bff047-6eba-4eca-87bc-69bf34c993db",
+        "8647cf63-cd81-457c-9d62-28a6522d0999",
+        "23d5a153-e3ee-41e0-a117-9f53c10f28b3",
+        "8359f2ba-e774-4f43-b641-d93c4d695ecd",
+        "c6279b77-d7f3-4fa1-b359-74817b8b9331",
+        "5b29c7c7-34a3-49c3-8f4d-30da6ea47775",
+        "c0c4e875-5a3b-4f0c-bb19-4977a2101ea9",
+        "83847259-e3ee-441c-849b-6755ed525cd2",
+        "bad0e152-1257-4980-967c-60d9b799a2f6",
+        "0e4208e0-b6cc-4bf8-b175-d308f989ed41",
+        "867d32a3-4af0-4fee-9edd-7e08e3052219",
+        "1599458d-08fd-448c-89c8-9f0d1356ac02",
+        "61574620-4a68-4269-8753-62df2027cd95",
+        "149c3db5-f713-497b-bc74-3ac04ae4514b",
+        "ded66c00-b9b1-4a7d-8714-9a1c94742f20",
+        "6c3a332a-6d5e-4353-b95c-3deb26344f22",
+        "300c32ef-b430-4952-8e83-23d7decd4ade",
+        "e80c120d-a957-492d-9bb0-7157315c7228",
+        "77dfa049-63ad-4ce7-b56e-5b756a48a620",
+        "50563f22-1285-4779-a593-1d0812bb4f59",
+        "8ba59600-96b8-41c5-b63f-6e420dac6e45",
+        "b62a9ee0-ffc8-4d09-aadc-cefdb3a207d7",
+        "a4cc0510-49a9-4096-9ec5-cb75d6faa169",
+        "be122e7a-2693-4018-a9a7-72152bdf12e9",
+        "2e9470b5-c9d6-4bd5-817b-085ff29e591e",
+        "8e46a337-44a7-4d10-94d1-579c22938fd9",
+        "fef7a71f-f7cc-4c7a-adb5-fd00e63333b9",
+        "4c2c72bc-23ce-433c-831f-307c26c519a8",
+        "39410e0a-fdbc-468f-983b-354be6f1dd83",
+        "64dfadba-b47c-403f-90d8-047b0769e082",
+        "aeaba8e7-d322-4df0-9961-8f702cd2302b",
+        "9754f16b-ef94-49e2-b149-ad1752847fc8",
+        "8f0b36b0-489d-4ad3-a275-121b8146c7e4",
+        "c6e5e3d7-bb1f-42bd-be3c-3e407fc12399",
+        "e0a7bd01-2ce1-4cc7-9dff-ec705f9d6c91",
+        "00a08e9d-57e6-40d6-952d-7a022c95d6a0",
+        "9cfaf3b1-eac0-438b-a0c0-602f04cc0a33",
+        "dc43c383-182b-40fd-a48e-a6cd789f1d76",
+        "170cfa43-cd5a-408d-b2c2-6a41329506cb",
+        "f42c6129-9753-4ce7-8617-8a5ad077b1d7",
+        "51f1b5a9-e7c1-4afc-b5c3-bf7476616f57",
+        "1b5c5346-fae0-4b33-800a-53b4edd9b1f7",
+        "09ea2d5b-e93e-4b01-a2a6-ab24f279159b",
+        "e66eafcf-b966-4d47-a828-b680857d6bdd",
+        "a1b6360f-dfe1-4f51-8394-9ece4620900c",
+        "4cb48a9c-f3e3-48e5-b9ca-a007119bc2f8",
+        "72711a49-44d3-4ff2-aeb2-21c02211c80b",
+        "130cd710-db03-4a70-bc23-795cb209921f",
+        "3e217a29-033d-4d76-8abf-545645d66bf4",
+        "7cde1de3-7b2a-4211-a3ff-961a552dde7f",
+        "e862f7dd-66b2-452a-8241-5d604f9b3776",
+        "10941e5e-7ec4-4b57-a1a7-307dc60c313b",
+        "426dac20-06d1-4fa1-b861-6dcdf4906bf0",
+        "efb3e0b3-a79d-48dd-885e-6ab0b91d2e8b",
+        "a6335c7d-5931-4770-ab3b-553467de7582",
+        "20e9d719-e2ee-4eef-9cec-4c485b133893",
+        "410a2ca4-bd66-47ac-940b-564967126604",
+        "cfaac2d3-d1a7-40a6-b739-ca20c9c702f1",
+        "6f20ff3a-1dd8-4c48-b716-d691561fc7e3",
+        "b834a449-6b93-4ade-b255-a1d591322c14",
+        "dbd2a54e-60aa-4f4b-a2eb-853afc6087e5",
+        "97baa845-fb21-449c-a391-d2982d8c64e5",
+        "04d8af88-4084-4411-a011-4d5acb0a48ad",
+        "659c80c7-1f35-4733-95b1-7b5566516cbe",
+        "3621ed0d-117f-44e0-8d7f-10ea9123c730",
+        "a10d96a1-8179-472a-a2d4-2f3d8b51dd01",
+        "2d6efaa7-96a6-4c9c-9550-c70e87782e6a",
+        "bec0896c-99c4-44ae-8046-72157e4b9f46",
+        "d4218b99-ec1c-4a93-94e5-6e31dc220428",
+        "c50be5bc-4451-44df-b95c-a78e2e8153b3",
+        "77dd1896-dc52-4b73-ab52-cac8f80fdcc9",
+        "492babd9-ad72-487c-844e-47894e591813",
+        "9d227c0d-6c22-4bf5-80b9-dfad54ba0ca2",
+        "2f75a2e9-e024-4e6f-87fb-d6d9fd1054e4",
+        "c92a5890-67d8-4d59-b00a-c895bb49bdf8",
+        "3032be00-fef6-41d8-8b00-d860670a7a43",
+        "8b6cd51d-1bd1-4a54-a968-53e1fd0791ab",
+        "0445903d-6569-462c-9744-fdcfdde0c482",
+        "1bd42551-a74c-4e2f-964b-5ba47016da1b",
+        "b4dda9e0-6eec-4325-b3f9-dbc4f40714f5",
+        "05a88f46-8ddd-4b40-82e5-def4592568f2"
+      ],
+      "completeness": "PAGE_COMMITTED"
+    }
+  ],
+  "ping": {
+    "ok": true,
+    "server": "lili-mcp",
+    "version": "1.4.0",
+    "protocols": [
+      "2024-11-05",
+      "2025-03-26",
+      "2025-06-18"
+    ],
+    "authenticated": true
+  },
+  "stores": [
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "inventory_events",
+      "enabled": true,
+      "lastSyncedAt": null,
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": null,
+      "rowCount": 0
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "orders",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-09T15:13:17.438Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "ea3dff12-be66-4f1c-8c87-1ca679400888",
+      "rowCount": 2423
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "inventory_age",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-09T13:34:42.716Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "9109cfbf-b3ab-400a-8291-71d31edbbc5e",
+      "rowCount": 600
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "settlements",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-09T11:36:29.664Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "a321796a-bd91-4c45-bc04-b08e4119ce21",
+      "rowCount": 64217
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "fulfillment",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-09T17:01:51.236Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "010c5403-7e2f-4ae7-8d5a-08d5a7b7cba9",
+      "rowCount": 3229
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "reimbursements",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-06T13:19:49.164Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "4ebcd7f5-aedf-436a-a53e-18797943234f",
+      "rowCount": 16
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "brand_analytics",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-07T17:16:24.509Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "ad732ce8-d484-420c-9509-f546aa845537",
+      "rowCount": 100
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "pricing",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-09T17:18:04.478Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "db93e958-8703-45f3-8923-d40ce4e13b56",
+      "rowCount": 456
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "listing_details",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-09T11:32:12.899Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "39f4e9dc-56d3-429d-9fb2-54f8a8b527ba",
+      "rowCount": 230
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "returns",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-09T12:29:25.810Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "51272cb2-3831-4d9f-8554-adb4265e9127",
+      "rowCount": 1
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "catalog_items",
+      "enabled": true,
+      "lastSyncedAt": null,
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "e7571aca-1c91-421a-8c55-04bee66edb0d",
+      "rowCount": 227
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "buy_box_history",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-09T18:05:02.360Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "a5abba6d-251e-44f2-9e95-763b7643811b",
+      "rowCount": 57
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "sales_traffic",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-09T14:25:42.235Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "17ab4e5e-8f73-4648-9f6b-7b26678c5aea",
+      "rowCount": 1
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "catalog",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-09T13:28:35.780Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "cbb95e50-b531-4fa6-87ae-a02fd0c7c0c3",
+      "rowCount": 230
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "inventory",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-09T13:26:44.286Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "5da936ff-fadb-4e33-bc76-eb21e5df69f5",
+      "rowCount": 201
+    }
+  ]
+}

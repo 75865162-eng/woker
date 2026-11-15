@@ -1,0 +1,432 @@
+{
+  "scope": {
+    "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+    "marketplaceId": "ATVPDKIKX0DER"
+  },
+  "readStability": "NEXT_TASK_TEMPORARILY_PAUSED",
+  "completedRun": {
+    "taskId": "266118a2-dba3-44a8-bc40-03260b827a34",
+    "orders": 1861,
+    "items": 1903,
+    "from": "2024-11-20T09:25:07.189Z",
+    "to": "2024-11-21T09:25:07.189Z"
+  },
+  "currentFactsIncludeNextWindow": true,
+  "queries": {
+    "orders": {
+      "total": 1961,
+      "unique": 1961,
+      "pages": [
+        {
+          "page": 1,
+          "count": 50,
+          "requestId": "49a5d308-1bfb-4385-897e-2d4fd3488e46"
+        },
+        {
+          "page": 2,
+          "count": 50,
+          "requestId": "7ac8196d-4eeb-4cab-b9f5-d65f06f8a450"
+        },
+        {
+          "page": 3,
+          "count": 50,
+          "requestId": "4bbcd2bf-89cd-4ff6-838a-026619d67b18"
+        },
+        {
+          "page": 4,
+          "count": 50,
+          "requestId": "2896fd8a-587c-4ca6-955c-e5e6bd83124c"
+        },
+        {
+          "page": 5,
+          "count": 50,
+          "requestId": "df284a27-17cd-438d-ab35-faf704ab7fa6"
+        },
+        {
+          "page": 6,
+          "count": 50,
+          "requestId": "78b51171-f753-4579-9ffc-642fbe54aad8"
+        },
+        {
+          "page": 7,
+          "count": 50,
+          "requestId": "f1c6f211-63d6-4b77-8a78-0605d7d76552"
+        },
+        {
+          "page": 8,
+          "count": 50,
+          "requestId": "4be99548-afa9-487c-a093-7361ba331ea6"
+        },
+        {
+          "page": 9,
+          "count": 50,
+          "requestId": "f95ab0a9-1858-4581-ba71-a94127e05ce3"
+        },
+        {
+          "page": 10,
+          "count": 50,
+          "requestId": "927dae1f-f2fb-4995-a4a9-4f01ce797aed"
+        },
+        {
+          "page": 11,
+          "count": 50,
+          "requestId": "62f26102-2cf8-47fb-9827-504c7fbf2cbf"
+        },
+        {
+          "page": 12,
+          "count": 50,
+          "requestId": "7763e3bc-0e98-4919-87e5-a58f881b6fe6"
+        },
+        {
+          "page": 13,
+          "count": 50,
+          "requestId": "7a3331b4-da22-44f9-a14c-68923cf3c0d3"
+        },
+        {
+          "page": 14,
+          "count": 50,
+          "requestId": "3c39fc5b-ee60-4588-ac7c-cdce684d4e26"
+        },
+        {
+          "page": 15,
+          "count": 50,
+          "requestId": "06030260-296e-4add-a106-ecfb34cfdcea"
+        },
+        {
+          "page": 16,
+          "count": 50,
+          "requestId": "9e109255-fb86-4f3e-af21-da8ef7a98874"
+        },
+        {
+          "page": 17,
+          "count": 50,
+          "requestId": "bd1dcf2a-9017-49d6-bd5a-5e6758857bdf"
+        },
+        {
+          "page": 18,
+          "count": 50,
+          "requestId": "ced984b7-09af-416a-8346-1f07d1a89943"
+        },
+        {
+          "page": 19,
+          "count": 50,
+          "requestId": "1f86adbc-4da1-48ba-ae7c-f7de4a15a634"
+        },
+        {
+          "page": 20,
+          "count": 50,
+          "requestId": "30562de1-1e7d-46c1-b8c6-2579f5f4c265"
+        },
+        {
+          "page": 21,
+          "count": 50,
+          "requestId": "0317dec9-25f3-41c8-b134-3228745baf71"
+        },
+        {
+          "page": 22,
+          "count": 50,
+          "requestId": "6b150734-1161-48bd-b63c-8f9122a60276"
+        },
+        {
+          "page": 23,
+          "count": 50,
+          "requestId": "5e2fa93a-827e-42a3-bdf0-2420b75a336c"
+        },
+        {
+          "page": 24,
+          "count": 50,
+          "requestId": "ab88d989-8754-46ee-a7e9-26a25b622971"
+        },
+        {
+          "page": 25,
+          "count": 50,
+          "requestId": "95943023-71a7-402a-b151-e601e6d7081b"
+        },
+        {
+          "page": 26,
+          "count": 50,
+          "requestId": "12d47906-ee08-4922-9d0c-aa883c15e4f8"
+        },
+        {
+          "page": 27,
+          "count": 50,
+          "requestId": "ac7f0674-25b1-431b-90bd-ca28d93a646c"
+        },
+        {
+          "page": 28,
+          "count": 50,
+          "requestId": "42b33836-4d03-4e36-b625-03447a9f41cb"
+        },
+        {
+          "page": 29,
+          "count": 50,
+          "requestId": "fe8bc27c-c9b7-431b-83f3-b0eb267667af"
+        },
+        {
+          "page": 30,
+          "count": 50,
+          "requestId": "120e7a20-c954-447c-8b7e-6b36b0d3e21a"
+        },
+        {
+          "page": 31,
+          "count": 50,
+          "requestId": "6745f958-de37-4150-95bb-27c6248c2c69"
+        },
+        {
+          "page": 32,
+          "count": 50,
+          "requestId": "cb8ad204-319e-4806-87f3-e2fd59d9e09b"
+        },
+        {
+          "page": 33,
+          "count": 50,
+          "requestId": "f50aec8f-9ae1-4635-8908-45a490706dd5"
+        },
+        {
+          "page": 34,
+          "count": 50,
+          "requestId": "1c208ca1-3c6a-4b21-8414-442c863701a5"
+        },
+        {
+          "page": 35,
+          "count": 50,
+          "requestId": "31d2349a-4333-442f-b45e-6d429bc21cf8"
+        },
+        {
+          "page": 36,
+          "count": 50,
+          "requestId": "93d130c6-1e9d-43a0-ae41-71b87074efc8"
+        },
+        {
+          "page": 37,
+          "count": 50,
+          "requestId": "a543dc55-7df0-455a-97df-878ba70ae3a1"
+        },
+        {
+          "page": 38,
+          "count": 50,
+          "requestId": "72de1e05-af48-45e6-bcfe-789afa75e5a4"
+        },
+        {
+          "page": 39,
+          "count": 50,
+          "requestId": "4902a25d-4129-4353-af0b-fdd75238dc0c"
+        },
+        {
+          "page": 40,
+          "count": 11,
+          "requestId": "5fe53104-c3af-4fa0-a61a-550433640801"
+        }
+      ],
+      "moneyMissing": 1961,
+      "completedAt": "2026-11-09T13:58:18.890Z"
+    },
+    "order_items": {
+      "total": 1907,
+      "unique": 1907,
+      "pages": [
+        {
+          "page": 1,
+          "count": 50,
+          "requestId": "df5c5c7e-c1c7-4c86-8399-34e1d09ac064"
+        },
+        {
+          "page": 2,
+          "count": 50,
+          "requestId": "3f7ed76e-b26d-40d1-9f5a-8fa463be701b"
+        },
+        {
+          "page": 3,
+          "count": 50,
+          "requestId": "2a393317-6396-4344-9b19-6e9cc8ee61ca"
+        },
+        {
+          "page": 4,
+          "count": 50,
+          "requestId": "e5f845f5-c5c7-4283-be2e-640627f7e36c"
+        },
+        {
+          "page": 5,
+          "count": 50,
+          "requestId": "f8eb6798-25ad-42f9-8af8-ee73d40ea334"
+        },
+        {
+          "page": 6,
+          "count": 50,
+          "requestId": "8ce5babd-4ecf-4038-a940-ba2428aa00f4"
+        },
+        {
+          "page": 7,
+          "count": 50,
+          "requestId": "0913ab7b-17c8-46f2-8c00-4ab8d5cb535a"
+        },
+        {
+          "page": 8,
+          "count": 50,
+          "requestId": "a0beee64-1b4d-4f77-8dce-2c96651165f2"
+        },
+        {
+          "page": 9,
+          "count": 50,
+          "requestId": "d261c9d7-0b2c-412d-b630-9b9c8afc747b"
+        },
+        {
+          "page": 10,
+          "count": 50,
+          "requestId": "ca1bfce1-ec3d-4aa7-89de-2b85fa7e4f4e"
+        },
+        {
+          "page": 11,
+          "count": 50,
+          "requestId": "f105899b-3346-4067-9be6-4c9f34a3470d"
+        },
+        {
+          "page": 12,
+          "count": 50,
+          "requestId": "541ccbd0-ae00-4431-a34b-fcb74d31ae99"
+        },
+        {
+          "page": 13,
+          "count": 50,
+          "requestId": "6cbbf2f9-85e1-44b9-a13e-99d791b9b1ca"
+        },
+        {
+          "page": 14,
+          "count": 50,
+          "requestId": "e9b07913-bef1-4091-b4cb-3e40b0c16d77"
+        },
+        {
+          "page": 15,
+          "count": 50,
+          "requestId": "1ae4f39b-73be-422f-8654-2435bb24dd84"
+        },
+        {
+          "page": 16,
+          "count": 50,
+          "requestId": "cf2eb813-f4cb-4784-b2ae-6ff5e3f0a59c"
+        },
+        {
+          "page": 17,
+          "count": 50,
+          "requestId": "6e54a224-c8f2-425f-81d4-153de3602fd1"
+        },
+        {
+          "page": 18,
+          "count": 50,
+          "requestId": "26e5a122-fe67-43ee-89c8-9508fa6f5969"
+        },
+        {
+          "page": 19,
+          "count": 50,
+          "requestId": "7c9a487c-2152-4f48-a904-b7f40fdcab98"
+        },
+        {
+          "page": 20,
+          "count": 50,
+          "requestId": "e9f68b09-4e6c-45aa-9bbb-a8495f59d346"
+        },
+        {
+          "page": 21,
+          "count": 50,
+          "requestId": "dd3d2d9c-380d-4f09-b363-c1a274d6395c"
+        },
+        {
+          "page": 22,
+          "count": 50,
+          "requestId": "46683da8-fc3a-429a-9d71-665d17b79ccf"
+        },
+        {
+          "page": 23,
+          "count": 50,
+          "requestId": "12084c1b-e24a-4a7a-8c13-f5374ab129e4"
+        },
+        {
+          "page": 24,
+          "count": 50,
+          "requestId": "8140d3ae-c771-4963-b982-6b62d6444ff6"
+        },
+        {
+          "page": 25,
+          "count": 50,
+          "requestId": "7d832022-48c5-47b6-8704-8e86fb14a205"
+        },
+        {
+          "page": 26,
+          "count": 50,
+          "requestId": "e85f89bd-3329-49eb-83e6-f15d09091bb2"
+        },
+        {
+          "page": 27,
+          "count": 50,
+          "requestId": "fe154e37-d6e2-49ff-94db-58432645aad4"
+        },
+        {
+          "page": 28,
+          "count": 50,
+          "requestId": "4d1055d9-a32b-45d8-8db1-4482ce8f6c2e"
+        },
+        {
+          "page": 29,
+          "count": 50,
+          "requestId": "18cea8df-fffc-4056-b774-c6e9c3127864"
+        },
+        {
+          "page": 30,
+          "count": 50,
+          "requestId": "1e1d1a45-6e0c-4e3a-aa99-97d922b03651"
+        },
+        {
+          "page": 31,
+          "count": 50,
+          "requestId": "2cae3855-bd2d-41d6-b8b4-38784d029ba1"
+        },
+        {
+          "page": 32,
+          "count": 50,
+          "requestId": "609e434b-98bc-4bd5-acae-11416eee7a4f"
+        },
+        {
+          "page": 33,
+          "count": 50,
+          "requestId": "5db7e425-c4df-42eb-a5e0-1e2c6be40118"
+        },
+        {
+          "page": 34,
+          "count": 50,
+          "requestId": "cd2d91f1-43f7-4072-a22b-e1aa70cca645"
+        },
+        {
+          "page": 35,
+          "count": 50,
+          "requestId": "a7f62c8f-df6b-4c67-8ae3-9e1f0ed10ebb"
+        },
+        {
+          "page": 36,
+          "count": 50,
+          "requestId": "ef8a9e66-c592-45ed-a31f-464f9efc9669"
+        },
+        {
+          "page": 37,
+          "count": 50,
+          "requestId": "b3e5fe2f-8b8d-4257-baae-28332e3eadd8"
+        },
+        {
+          "page": 38,
+          "count": 50,
+          "requestId": "45a7f17d-a01d-4de2-b779-04c39e71f0ce"
+        },
+        {
+          "page": 39,
+          "count": 7,
+          "requestId": "27ebc891-240b-43c0-b23c-045bf7039b97"
+        }
+      ],
+      "moneyMissing": 1907,
+      "completedAt": "2026-11-09T13:58:32.166Z"
+    }
+  },
+  "proceedsRequested": false,
+  "missingAmountsAreUnknown": true,
+  "allHistoryComplete": false,
+  "checkedAt": "2026-11-09T13:58:53.385Z"
+}

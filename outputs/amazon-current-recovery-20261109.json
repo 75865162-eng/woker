@@ -1,0 +1,168 @@
+{
+  "at": "2026-11-09T14:19:22.126Z",
+  "mcpDbCompared": true,
+  "reimbursementVisibleRows": 10,
+  "sources": [
+    {
+      "id": "7367dd0a-b896-4db9-baef-7e2c600dd85f",
+      "resource": "fulfillment",
+      "rowCount": 0,
+      "activeRunId": null,
+      "runs": [
+        {
+          "id": "010c5403-7e2f-4ae7-8d5a-08d5a7b7cba9",
+          "status": "WAITING",
+          "stage": "FETCHING",
+          "processedCount": 549,
+          "insertedCount": 549,
+          "updatedCount": 0,
+          "skippedCount": 0,
+          "failedCount": 2,
+          "detailsCompletedCount": 0,
+          "pagesCompleted": 216,
+          "apiRequests": 432,
+          "nextAttemptAt": "2026-11-09T14:19:03.302Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "8b82d84b-17f5-4245-8d8f-6b3e12a9d359",
+      "resource": "listing_details",
+      "rowCount": 230,
+      "activeRunId": "39f4e9dc-56d3-429d-9fb2-54f8a8b527ba",
+      "runs": [
+        {
+          "id": "39f4e9dc-56d3-429d-9fb2-54f8a8b527ba",
+          "status": "SUCCEEDED",
+          "stage": "COMPLETED",
+          "processedCount": 230,
+          "insertedCount": 230,
+          "updatedCount": 0,
+          "skippedCount": 0,
+          "failedCount": 2,
+          "detailsCompletedCount": 0,
+          "pagesCompleted": 230,
+          "apiRequests": 463,
+          "nextAttemptAt": "2026-11-09T11:32:12.466Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "0f4918c4-8fc4-4e17-a696-4bb6a13d4a76",
+      "resource": "inventory_events",
+      "rowCount": 0,
+      "activeRunId": null,
+      "runs": [
+        {
+          "id": "7dd47b7d-9d25-4d9f-96b1-0290005d8e08",
+          "status": "SUCCEEDED",
+          "stage": "ARCHIVED_SITE_PENDING",
+          "processedCount": 217,
+          "insertedCount": 217,
+          "updatedCount": 0,
+          "skippedCount": 0,
+          "failedCount": 0,
+          "detailsCompletedCount": 0,
+          "pagesCompleted": 2,
+          "apiRequests": 6,
+          "nextAttemptAt": "2026-11-09T05:28:00.700Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "636d327e-8da0-499a-9322-d6c375475ca5",
+      "resource": "settlements",
+      "rowCount": 64217,
+      "activeRunId": "a321796a-bd91-4c45-bc04-b08e4119ce21",
+      "runs": [
+        {
+          "id": "a321796a-bd91-4c45-bc04-b08e4119ce21",
+          "status": "SUCCEEDED",
+          "stage": "COMPLETED",
+          "processedCount": 61280,
+          "insertedCount": 0,
+          "updatedCount": 0,
+          "skippedCount": 0,
+          "failedCount": 0,
+          "detailsCompletedCount": 0,
+          "pagesCompleted": 138,
+          "apiRequests": 30,
+          "nextAttemptAt": "2026-11-09T11:36:29.663Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "7ec967f0-d1d2-49fc-b264-6b64d8980e94",
+      "resource": "reimbursements",
+      "rowCount": 10,
+      "activeRunId": "4ebcd7f5-aedf-436a-a53e-18797943234f",
+      "runs": [
+        {
+          "id": "6299d02e-15dc-4970-8667-71e5cc8824bd",
+          "status": "SUCCEEDED",
+          "stage": "ARCHIVED_SITE_PENDING",
+          "processedCount": 1,
+          "insertedCount": 0,
+          "updatedCount": 0,
+          "skippedCount": 0,
+          "failedCount": 0,
+          "detailsCompletedCount": 0,
+          "pagesCompleted": 1,
+          "apiRequests": 0,
+          "nextAttemptAt": "2026-11-09T14:08:08.498Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+      "resource": "orders",
+      "rowCount": 1983,
+      "activeRunId": "54207597-7c90-4c91-804d-eb222ca4da30",
+      "runs": [
+        {
+          "id": "fea88029-b522-40af-922e-fbfd15b67c8a",
+          "status": "WAITING",
+          "stage": "FETCHING_DETAILS",
+          "processedCount": 100,
+          "insertedCount": 100,
+          "updatedCount": 0,
+          "skippedCount": 0,
+          "failedCount": 0,
+          "detailsCompletedCount": 44,
+          "pagesCompleted": 1,
+          "apiRequests": 45,
+          "nextAttemptAt": "2026-11-09T14:19:25.303Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "9cbf4a37-280a-4aef-842d-a848761f86ce",
+      "resource": "returns",
+      "rowCount": 1,
+      "activeRunId": "51272cb2-3831-4d9f-8554-adb4265e9127",
+      "runs": [
+        {
+          "id": "51272cb2-3831-4d9f-8554-adb4265e9127",
+          "status": "SUCCEEDED",
+          "stage": "RETURN_REPORT_COMPLETED",
+          "processedCount": 1,
+          "insertedCount": 1,
+          "updatedCount": 0,
+          "skippedCount": 0,
+          "failedCount": 3,
+          "detailsCompletedCount": 0,
+          "pagesCompleted": 1,
+          "apiRequests": 8,
+          "nextAttemptAt": "2026-11-09T12:29:25.791Z",
+          "error": null
+        }
+      ]
+    }
+  ]
+}

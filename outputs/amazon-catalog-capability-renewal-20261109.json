@@ -1,0 +1,16 @@
+{
+  "at": "2026-11-09T14:28:25.943Z",
+  "approvalId": "c12efe98-d6db-4a6f-b1e7-76ee7635bb31",
+  "retryApprovalId": "81a41a69-2904-4162-bbcb-fff30cd236c2",
+  "taskId": "e7571aca-1c91-421a-8c55-04bee66edb0d",
+  "requestId": "be462177-87b0-4228-a85a-27f6db00e956",
+  "statusCode": 200,
+  "apiVersion": "2022-04-01",
+  "rawSha256": "5880b8804dd9d2cceaa5c662bc126ba8c5ce5f99e2bb264cd1e32058291500a6",
+  "rawArchivedEncrypted": true,
+  "sourceRevisionPreserved": true,
+  "checkpointPreserved": true,
+  "beforeRows": 47,
+  "afterRows": 47,
+  "status": "WAITING"
+}

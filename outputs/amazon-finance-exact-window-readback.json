@@ -1,0 +1,71 @@
+{
+  "at": "2026-11-09T16:56:12.602Z",
+  "taskId": "04b420e5-f1a0-4d84-8156-0b2cfa8db910",
+  "status": "SUCCEEDED",
+  "window": {
+    "from": "2025-07-04T09:31:07.189Z",
+    "to": "2025-08-03T09:31:07.189Z"
+  },
+  "pagesCompleted": 23,
+  "apiResponses": [
+    {
+      "_count": {
+        "_all": 23
+      },
+      "statusCode": 200
+    }
+  ],
+  "originalPages": 23,
+  "records_received": 11298,
+  "records_parsed": 11298,
+  "records_inserted": 797,
+  "records_reused": 10501,
+  "records_updated": 0,
+  "records_quarantined": 3,
+  "quarantinedOccurrences": 3,
+  "records_rejected": 0,
+  "databaseUniqueRows": 11298,
+  "records_published": 11295,
+  "windowPublished": true,
+  "rawAndStructuredHashesMatch": true,
+  "erp": {
+    "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+    "marketplaceId": "ATVPDKIKX0DER",
+    "from": "2025-07-04T09:31:07.189Z",
+    "to": "2025-08-03T09:31:07.189Z",
+    "exactWindowRows": 9409,
+    "dateFilteredTotal": 9409,
+    "batches": [
+      {
+        "sourceRunId": "8c3bb776-1323-4854-9a04-19e565fe0535",
+        "verified": 1,
+        "exactWindowRows": 1,
+        "nonemptyPages": 1,
+        "emptyPage": 2
+      },
+      {
+        "sourceRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b",
+        "verified": 2456,
+        "exactWindowRows": 2456,
+        "nonemptyPages": 50,
+        "emptyPage": 51
+      },
+      {
+        "sourceRunId": "321b4634-380b-4482-b557-84998e5383ab",
+        "verified": 6279,
+        "exactWindowRows": 6279,
+        "nonemptyPages": 126,
+        "emptyPage": 127
+      },
+      {
+        "sourceRunId": "04b420e5-f1a0-4d84-8156-0b2cfa8db910",
+        "verified": 673,
+        "exactWindowRows": 673,
+        "nonemptyPages": 14,
+        "emptyPage": 15
+      }
+    ],
+    "sourceRunIdMeaning": "Original insert or last business update; idempotently reused records retain their original provenance"
+  },
+  "mcpStatus": "NOT_RUN_CONNECTOR_UNAVAILABLE"
+}

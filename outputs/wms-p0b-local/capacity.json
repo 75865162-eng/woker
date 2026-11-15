@@ -1,0 +1,55 @@
+{
+  "environment": "Disposable PostgreSQL 16 container: 1 CPU, 512 MiB; synthetic local service baseline; no HTTP/browser timings or production SLA",
+  "skuCount": 10000,
+  "initialMovementCount": 100000,
+  "concurrency": 30,
+  "timings": {
+    "balances": {
+      "samples": 60,
+      "p50Ms": 109.23,
+      "p95Ms": 253.12,
+      "maxMs": 255.27
+    },
+    "movements": {
+      "samples": 60,
+      "p50Ms": 30.3,
+      "p95Ms": 57.17,
+      "maxMs": 57.61
+    },
+    "reconciliation": {
+      "samples": 60,
+      "p50Ms": 31.77,
+      "p95Ms": 67.68,
+      "maxMs": 68.82
+    },
+    "barcode": {
+      "samples": 30,
+      "p50Ms": 18.78,
+      "p95Ms": 81,
+      "maxMs": 81.72
+    },
+    "independent_reserve": {
+      "samples": 30,
+      "p50Ms": 40.27,
+      "p95Ms": 63.61,
+      "maxMs": 63.74
+    },
+    "contended_reserve": {
+      "samples": 30,
+      "p50Ms": 30.36,
+      "p95Ms": 44.61,
+      "maxMs": 45.24
+    }
+  },
+  "lockWaitSampling": {
+    "intervalMs": 10,
+    "samples": 5,
+    "maxWaiting": 9,
+    "sampledWaiterMs": 99.39
+  },
+  "contention": {
+    "success": 1,
+    "expectedRevisionConflicts": 29,
+    "oversold": false
+  }
+}

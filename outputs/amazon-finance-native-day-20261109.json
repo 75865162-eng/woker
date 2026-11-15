@@ -1,0 +1,78 @@
+{
+  "checkedAt": "2026-11-09T14:46:36.452Z",
+  "scope": {
+    "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+    "marketplaceId": "ATVPDKIKX0DER"
+  },
+  "dateSemantics": "posted_at_utc",
+  "from": "2025-06-25",
+  "to": "2025-06-25",
+  "total": 444,
+  "pages": 9,
+  "paginationUnique": true,
+  "allReturnedFieldsMatchDatabase": true,
+  "originalMoneyAndCurrencyPreserved": true,
+  "sourceRunTraceable": true,
+  "newRecoveryRecords": 45,
+  "recordsDigest": "86e84748bef41501a791ef149688a45efcba5f18788b7aa96c5c3751125f595e",
+  "requests": [
+    {
+      "page": 1,
+      "requestId": "9125d57d-2e7c-4340-8fc3-161bc0857bee",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 2,
+      "requestId": "28e676a6-3ce4-41ee-b2d3-da4781853718",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 3,
+      "requestId": "5d05bba6-1f68-48f2-ad23-48774abf01a2",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 4,
+      "requestId": "1e86c82b-0bd9-4fbf-bea3-7a5f9f111954",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 5,
+      "requestId": "9245f337-95f3-478c-ae56-790e02361018",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 6,
+      "requestId": "3742f899-9e88-43d1-bbd3-a1ad4ae0c8df",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 7,
+      "requestId": "b68fe2a3-3031-41b5-ad71-2e380829fcac",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 8,
+      "requestId": "d760be97-4bcb-46f5-af54-b5e0b95ea659",
+      "returned": 50,
+      "hasNext": true
+    },
+    {
+      "page": 9,
+      "requestId": "2be3e2c8-81f1-4c49-a96c-e3428658e698",
+      "returned": 44,
+      "hasNext": false
+    }
+  ],
+  "publicationPolicy": "page_committed_current_facts",
+  "historicalComplete": false,
+  "verificationAmazonRequests": 0,
+  "verificationBusinessWrites": 0
+}

@@ -1,0 +1,46 @@
+{
+  "at": "2026-11-09T17:53:24.724Z",
+  "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+  "marketplaceId": "ATVPDKIKX0DER",
+  "results": [
+    {
+      "taskId": "010c5403-7e2f-4ae7-8d5a-08d5a7b7cba9",
+      "resource": "fulfillment",
+      "taskStatus": "SUCCEEDED",
+      "checkpointPresent": false,
+      "unavailableObjects": 0,
+      "stagingRows": 3229,
+      "publishedHead": "010c5403-7e2f-4ae7-8d5a-08d5a7b7cba9",
+      "recordsPublished": 3229,
+      "verifiedPublishedRows": 3229,
+      "sharedQueryVerifiedRows": 3229,
+      "nonemptyPages": 65,
+      "emptyPage": 66,
+      "currentStagingHidden": null,
+      "publishedFieldAndSourceMatch": true
+    },
+    {
+      "taskId": "e7571aca-1c91-421a-8c55-04bee66edb0d",
+      "resource": "catalog_items",
+      "taskStatus": "PARTIAL_SUCCESS",
+      "checkpointPresent": true,
+      "checkpointRequests": 230,
+      "completedObjects": 228,
+      "totalObjects": 228,
+      "unavailableObjects": 1,
+      "stagingRows": 227,
+      "publishedHead": "e7571aca-1c91-421a-8c55-04bee66edb0d",
+      "recordsPublished": 227,
+      "verifiedPublishedRows": 227,
+      "sharedQueryVerifiedRows": 227,
+      "nonemptyPages": 5,
+      "emptyPage": 6,
+      "currentStagingHidden": null,
+      "publishedFieldAndSourceMatch": true
+    }
+  ],
+  "interface": "ERP readObservations service; NOT native MCP",
+  "mcpStatus": "NOT_RUN_CONNECTOR_UNAVAILABLE",
+  "amazonRequests": 0,
+  "businessWrites": 0
+}

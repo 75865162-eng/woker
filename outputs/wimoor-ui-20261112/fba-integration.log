@@ -1,0 +1,23 @@
+PASS: full migration chain including additive FBA plan tables in an empty disposable database
+(node:62302) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS: packing validates exact line quantities, actor/account permissions, revision, replay, audit, persistence and cancelled-plan lock
+PASS: fees enforce live permissions, exact allocation, idempotency, immutable actual bills and revision conflicts
+[operations.wms] { name: 'PrismaClientKnownRequestError' }
+PASS: fee ledger and bill reconciliation persist immutable snapshots with exact differences, concurrent replay, live auth, revision checks and atomic rollback
+[operations.wms] { name: 'PrismaClientKnownRequestError' }
+PASS: transport orders and manual tracking enforce live access, physical-dispatch prerequisite, chronology, concurrency, atomic audit rollback, bill linkage and retained cancellation evidence
+[operations.wms] { name: 'PrismaClientKnownRequestError' }
+PASS: shared published observation query, exact duplicate-SKU row mapping, stale/staged/site/revoked rejection, source-version retention, 10-way idempotency, quantity cap and atomic audit rollback
+PASS: line deep link resolves only the exact scoped plan; forged account, site, plan and workspace are rejected
+PASS: real HTTP auth, scoped create/replay, two-person approval, revoked account, atomic rollback and 10 concurrent execution retries
+PASS: live release invalidates stock readiness; cancellation is idempotent and blocks old approval replay
+PASS: rejected and expired approvals can be reapplied without changing stock; reload exposes live approval controls
+PASS: multi-line execution stops at failure, preserves the first reservation and resumes with fresh revision without duplicates
+PASS: browser previews a published Amazon shipment and explicitly maps both source occurrences to local lots with persistent provenance
+PASS: browser fee estimate → actual forwarder bill → scoped reconciliation and adjustment handoff persists after reload
+PASS: business menu → packing App Router refresh → persisted box table/detail → existing plan page
+PASS: browser forwarder order links actual bill, then physical dispatch → manual departure → delivery persists and locks terminal transport
+PASS: multi-line bulk request/approve/execute refreshes revisions; two-session warehouse partial/full dispatch reconciles both lines
+PASS: unchanged total with changed SKU allocation retains a zero-net adjustment and both SKU cost differences
+PASS: two approved plans compete for the same stock without over-reservation; revoked approver cannot authorize replay; all quantity movements reconcile

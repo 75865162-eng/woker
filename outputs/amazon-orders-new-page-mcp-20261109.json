@@ -1,0 +1,46 @@
+{
+  "query": {
+    "amazonOrderId": "114-8857107-9633064"
+  },
+  "total": 1,
+  "requestId": "c32e1803-7bdb-4fab-a6b9-d8b57e694c7d",
+  "evidenceRefs": [
+    {
+      "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+      "syncRunId": "266118a2-dba3-44a8-bc40-03260b827a34"
+    }
+  ],
+  "records": [
+    {
+      "amazonOrderId": "114-8857107-9633064",
+      "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+      "sourceRunId": "266118a2-dba3-44a8-bc40-03260b827a34",
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "createdTime": "2024-11-20T01:11:51.736Z",
+      "sourceUpdatedAt": "2024-11-20T09:27:16.947Z",
+      "rawStatus": null,
+      "normalizedStatus": null,
+      "marketplaceTimeZone": "America/Los_Angeles",
+      "capturedAt": "2026-11-09T13:41:22.817Z",
+      "detailsUpdatedAt": "2024-11-20T09:27:16.947Z",
+      "fulfilledBy": null,
+      "fulfillmentServiceLevel": null,
+      "grandTotalOriginal": null,
+      "currencyCode": null,
+      "items": [
+        {
+          "orderItemId": "115146444938961",
+          "asin": "B0CG96B4BT",
+          "sellerSku": "S3-R2RW-I1ML",
+          "quantityOrdered": 1,
+          "proceedsOriginal": null,
+          "currencyCode": null
+        }
+      ],
+      "detailsCurrent": true
+    }
+  ],
+  "checkedAt": "2026-11-09T13:45:03.199Z",
+  "windowComplete": false
+}

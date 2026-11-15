@@ -1,0 +1,29 @@
+✔ page quality preserves zeros and isolates missing currency from historical coverage (2.176875ms)
+✔ empty pages never count as complete and present event fields do not verify eligibility (0.776834ms)
+✔ report filter schema accepts exact identities only for supported datasets (0.84425ms)
+✔ report field presence cannot certify malformed quantities as usable data (0.283916ms)
+✔ response replay accepts both saved archive generations but rejects altered source text (1.009375ms)
+✔ archive manifest measures original UTF-8 source rather than parsed JSON (11.05725ms)
+✔ parser checkpoints bind same-source raw evidence and retain earlier events (2.9105ms)
+✔ orders checkpoints identify API/schema/row grain and reject mismatched originals (0.341291ms)
+✔ report retries preserve identity without confusing catalog API pagination (0.639625ms)
+✔ old partial report summaries restore only a bounded saved report identity (0.727167ms)
+✔ FBA received-return report success does not count as complete return-universe history (0.815833ms)
+✔ complete bounded source windows remain eligible for history coverage (0.778666ms)
+✔ published inventory event and reimbursement reports persist complete quality evidence (0.27425ms)
+✔ filtered ledger events never count as complete all-event history (0.12125ms)
+✔ disjoint successful windows persist the actual historical hole (3.222875ms)
+✔ a later completed backfill cannot move the most advanced window backwards (0.225291ms)
+✔ partial transport retains the previous complete window and historical gap (0.185875ms)
+✔ archive-only and FBA returns remain transport evidence without full-universe history (0.128209ms)
+✔ quarantined or legacy unknown finance attribution cannot advance a complete checkpoint (0.203333ms)
+✔ truncated history never claims a maximum or complete historical coverage (0.107916ms)
+✔ revision changes invalidate persisted watermarks and readers exclude arbitrary metadata (0.314125ms)
+ℹ tests 21
+ℹ suites 0
+ℹ pass 21
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 536.313625

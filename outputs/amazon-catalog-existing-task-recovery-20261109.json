@@ -1,0 +1,25 @@
+{
+  "at": "2026-11-09T14:21:07.990Z",
+  "approvalId": "65bdc0f2-29bb-431b-a7a5-078cb9e08586",
+  "before": {
+    "taskId": "e7571aca-1c91-421a-8c55-04bee66edb0d",
+    "status": "BLOCKED",
+    "pages": 47,
+    "parsed": 47,
+    "inserted": 47,
+    "rawPages": 47,
+    "storedRows": 47
+  },
+  "result": {
+    "applied": true,
+    "changeRequestId": "65bdc0f2-29bb-431b-a7a5-078cb9e08586"
+  },
+  "after": {
+    "status": "WAITING",
+    "pages": 47,
+    "parsed": 47,
+    "inserted": 47,
+    "checkpointPreserved": true
+  },
+  "amazonRequestsFromRecovery": 0
+}

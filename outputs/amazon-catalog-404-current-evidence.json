@@ -1,0 +1,112 @@
+{
+  "checkedAt": "2026-11-09T17:59:52.343Z",
+  "taskId": "e7571aca-1c91-421a-8c55-04bee66edb0d",
+  "api": "Catalog Items getCatalogItem",
+  "apiVersion": "2022-04-01",
+  "requestMethod": "GET",
+  "requestPath": "/catalog/2022-04-01/items/B09BNS592R",
+  "requestPathBasis": "FROZEN_MANIFEST_AND_EXISTING_ADAPTER",
+  "marketplaceId": "ATVPDKIKX0DER",
+  "missing": [
+    {
+      "index": 47,
+      "asin": "B09BNS592R"
+    }
+  ],
+  "errors": [
+    {
+      "page": -1,
+      "capturedAt": "2026-11-09T14:28:32.521Z",
+      "metadata": {
+        "status": 404,
+        "evidence": "HTTP_ERROR",
+        "operation": "getCatalogItem",
+        "requestId": "48ede6fd-919c-4b6b-88aa-2e2c33c25c6c"
+      },
+      "sha256": "c2ad24e0d56bf2f09dcd1b269d5f6e68cc98a950fe5ed7b91743cbfef2e984e9",
+      "response": {
+        "errors": [
+          {
+            "code": "NOT_FOUND",
+            "message": "Requested item, B09BNS592R, not found in marketplace(s) ATVPDKIKX0DER."
+          }
+        ]
+      }
+    },
+    {
+      "page": -2,
+      "capturedAt": "2026-11-09T16:23:35.009Z",
+      "metadata": {
+        "status": 404,
+        "evidence": "HTTP_ERROR",
+        "operation": "getCatalogItem",
+        "requestId": "1be43a87-c4e5-473d-a2c7-2e5e90ab6e0c"
+      },
+      "sha256": "c2ad24e0d56bf2f09dcd1b269d5f6e68cc98a950fe5ed7b91743cbfef2e984e9",
+      "response": {
+        "errors": [
+          {
+            "code": "NOT_FOUND",
+            "message": "Requested item, B09BNS592R, not found in marketplace(s) ATVPDKIKX0DER."
+          }
+        ]
+      }
+    }
+  ],
+  "requests": [
+    {
+      "event": "getCatalogItem",
+      "statusCode": 404,
+      "requestId": "5745a17c-f541-48d9-a18f-5a26baa61417",
+      "createdAt": "2026-11-06T19:20:10.091Z",
+      "page": null,
+      "code": null
+    },
+    {
+      "event": "getCatalogItem",
+      "statusCode": 404,
+      "requestId": "48ede6fd-919c-4b6b-88aa-2e2c33c25c6c",
+      "createdAt": "2026-11-09T14:28:32.557Z",
+      "page": null,
+      "code": null
+    },
+    {
+      "event": "getCatalogItem",
+      "statusCode": 404,
+      "requestId": "1be43a87-c4e5-473d-a2c7-2e5e90ab6e0c",
+      "createdAt": "2026-11-09T16:23:35.050Z",
+      "page": null,
+      "code": null
+    }
+  ],
+  "checkpoint": {
+    "stage": "COMPLETE",
+    "planIndex": 228,
+    "requests": 230
+  },
+  "status": "PARTIAL_SUCCESS",
+  "stage": "PARTIAL_PUBLISHED",
+  "structuredRows": 227,
+  "publishedRows": 227,
+  "coverage": {
+    "type": "APPROVED_SCOPE_OBSERVATION",
+    "reason": "UPSTREAM_OBJECT_NOT_FOUND",
+    "complete": false,
+    "resource": "catalog_items",
+    "rowCount": 227,
+    "publication": "PARTIAL_VERIFIED_OBJECTS",
+    "publishedAt": "2026-11-09T17:52:38.728Z",
+    "requestedObjects": 228,
+    "unavailableObjects": 1,
+    "marketplaceVerified": true,
+    "unavailableObjectIds": [
+      "B09BNS592R"
+    ],
+    "accountUniverseComplete": false,
+    "unavailableObjectIndexes": [
+      47
+    ]
+  },
+  "checkpointSha256": "ac73e3658f6f753fa98a8c0b0c51228e0215c1d1e2a8470cb4d0f4c86b487aa8",
+  "newAmazonRequests": 0
+}

@@ -1,0 +1,47 @@
+{
+  "at": "2026-11-09T14:07:52.328Z",
+  "approvalId": "464e9337-a4da-4a68-9195-2e27bc81f22f",
+  "retryApprovalId": "0624b243-3943-4ff6-aca1-624b388a9c94",
+  "result": {
+    "taskId": "6299d02e-15dc-4970-8667-71e5cc8824bd",
+    "status": "SUCCEEDED",
+    "stage": "ARCHIVED_SITE_PENDING",
+    "received": 1,
+    "parsed": 1,
+    "inserted": 0,
+    "updated": 0,
+    "reused": 1,
+    "rejected": 0,
+    "published": 0,
+    "amazonRequests": 0,
+    "rawHashVerified": true,
+    "structuredRowsVerified": 1,
+    "reason": "SITE_ATTRIBUTION_PENDING",
+    "originalTaskRetained": true
+  },
+  "manifest": {
+    "sourceId": "7ec967f0-d1d2-49fc-b264-6b64d8980e94",
+    "taskId": "9dec857b-5ea4-481b-baab-2f3204f81b24",
+    "sourceRevision": 3,
+    "authorizationRevision": 3,
+    "originalCursorDigest": "467b4faf0e8fbc5d70884286fb056bb6542440145276d6f15b893484d7d07eca",
+    "originalCheckpointDigest": "467b4faf0e8fbc5d70884286fb056bb6542440145276d6f15b893484d7d07eca",
+    "failedReportId": "453981020766",
+    "reusedReportId": "453940020766",
+    "documentId": "3ad2d654a49508dc099191acf68ea09c872e9c44dccba53eca564c5355564945",
+    "rawTaskId": "099f2c4b-c170-4b88-b786-b70474f5d72c",
+    "rawPage": 1,
+    "rawSha256": "d9ef840639a15c0f4e1fccd05b8b7feb91ae9911169ee511d6b93638ceff2679",
+    "window": {
+      "from": "2026-11-08",
+      "to": "2026-11-08",
+      "dataStartTime": "2026-11-08T00:00:00Z",
+      "dataEndTime": "2026-11-08T23:59:59Z"
+    },
+    "rows": 1,
+    "documentStatus": "STAGED",
+    "amazonRequests": 0,
+    "published": false
+  },
+  "verifiedAt": "2026-11-09T14:11:16.271Z"
+}

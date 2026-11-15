@@ -1,0 +1,260 @@
+{
+  "observedAt": "2026-11-09T07:24:36.830Z",
+  "mode": "READ_ONLY_EXISTING_ARCHIVES",
+  "sourceCount": 4,
+  "legacyStructuredRows": 65513,
+  "legacyRowsMissingCurrency": 65513,
+  "reports": [
+    {
+      "reportReference": "af87577c3d8a060b17f320b15e03ac4b6b3225d25d95442e290dee4c7851cb99",
+      "reportType": "GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2",
+      "rawSha256": "6acd87550dfafd87aca6feb7199cf6c975abf37aeab11ba095432697a5f05509",
+      "status": "READ_ONLY_REPARSED",
+      "archivedRows": 134,
+      "storedRows": 133,
+      "rowHashMismatches": 0,
+      "absentFromSiteProjection": 1,
+      "amountChanges": 0,
+      "currencyRecoverable": 133,
+      "targetCurrencyRecoverable": 26,
+      "currencyStillMissing": 0,
+      "currencyReportScopeEvidence": {
+        "explicitCurrencyRows": 1,
+        "currencyRowsWithTransactionType": 0,
+        "currencyRowsWithSettlementId": 1,
+        "currencyRowsWithReportTotal": 1,
+        "rowsWithSettlementId": 134,
+        "distinctSettlementIds": 1,
+        "distinctExplicitCurrencies": 1
+      },
+      "observedFields": 24,
+      "fieldScanComplete": true,
+      "currencyHeaders": [
+        "currency"
+      ],
+      "actualFrom": "2026-09-30",
+      "actualTo": "2026-10-14"
+    },
+    {
+      "reportReference": "91f1edded0ac753df60dd4b6cf895e391355aaa6dcb3dac9f920c6100f789378",
+      "reportType": "GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2",
+      "rawSha256": "af38522fb59f19b825e416818e1bd9971d40e33053e4e6c9def23d826e18e39f",
+      "status": "READ_ONLY_REPARSED",
+      "archivedRows": 4,
+      "storedRows": 3,
+      "rowHashMismatches": 0,
+      "absentFromSiteProjection": 1,
+      "amountChanges": 0,
+      "currencyRecoverable": 3,
+      "targetCurrencyRecoverable": 3,
+      "currencyStillMissing": 0,
+      "currencyReportScopeEvidence": {
+        "explicitCurrencyRows": 1,
+        "currencyRowsWithTransactionType": 0,
+        "currencyRowsWithSettlementId": 1,
+        "currencyRowsWithReportTotal": 1,
+        "rowsWithSettlementId": 4,
+        "distinctSettlementIds": 1,
+        "distinctExplicitCurrencies": 1
+      },
+      "observedFields": 24,
+      "fieldScanComplete": true,
+      "currencyHeaders": [
+        "currency"
+      ],
+      "actualFrom": "2026-09-05",
+      "actualTo": "2026-10-13"
+    },
+    {
+      "reportReference": "26aec4168f66f084366ee1578a8ba8f3645c3c54828634c6ef28d9333b6d34c6",
+      "reportType": "GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2",
+      "rawSha256": "1218d4cd512403634d55419f47d4b92da83591d0ed6105040079a2e08e5512b4",
+      "status": "READ_ONLY_REPARSED",
+      "archivedRows": 30,
+      "storedRows": 28,
+      "rowHashMismatches": 0,
+      "absentFromSiteProjection": 2,
+      "amountChanges": 0,
+      "currencyRecoverable": 28,
+      "targetCurrencyRecoverable": 15,
+      "currencyStillMissing": 0,
+      "currencyReportScopeEvidence": {
+        "explicitCurrencyRows": 1,
+        "currencyRowsWithTransactionType": 0,
+        "currencyRowsWithSettlementId": 1,
+        "currencyRowsWithReportTotal": 1,
+        "rowsWithSettlementId": 30,
+        "distinctSettlementIds": 1,
+        "distinctExplicitCurrencies": 1
+      },
+      "observedFields": 24,
+      "fieldScanComplete": true,
+      "currencyHeaders": [
+        "currency"
+      ],
+      "actualFrom": "2026-10-04",
+      "actualTo": "2026-10-18"
+    },
+    {
+      "reportReference": "3e8bcd481b3d6054bdc228e5fd03e89b7684f54adfd09a9e4f2fee763b5bd44b",
+      "reportType": "GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2",
+      "rawSha256": "25eac7f16c08fa7fda9d27b02de675e70789d7635d1483402324f216bc7cec64",
+      "status": "READ_ONLY_REPARSED",
+      "archivedRows": 8445,
+      "storedRows": 8302,
+      "rowHashMismatches": 0,
+      "absentFromSiteProjection": 143,
+      "amountChanges": 0,
+      "currencyRecoverable": 8302,
+      "targetCurrencyRecoverable": 4931,
+      "currencyStillMissing": 0,
+      "currencyReportScopeEvidence": {
+        "explicitCurrencyRows": 1,
+        "currencyRowsWithTransactionType": 0,
+        "currencyRowsWithSettlementId": 1,
+        "currencyRowsWithReportTotal": 1,
+        "rowsWithSettlementId": 8445,
+        "distinctSettlementIds": 1,
+        "distinctExplicitCurrencies": 1
+      },
+      "observedFields": 24,
+      "fieldScanComplete": true,
+      "currencyHeaders": [
+        "currency"
+      ],
+      "actualFrom": "2026-10-04",
+      "actualTo": "2026-10-18"
+    },
+    {
+      "reportReference": "b3d6d077dbeaf3bd830df8c7ffca2908d4b9002eab64115fb104f816c45d1922",
+      "reportType": "GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2",
+      "rawSha256": "5ca9cbd34b8f7873e2c7ef44c57428bc7968b396701c845d1a71c05312c06350",
+      "status": "READ_ONLY_REPARSED",
+      "archivedRows": 276,
+      "storedRows": 275,
+      "rowHashMismatches": 0,
+      "absentFromSiteProjection": 1,
+      "amountChanges": 0,
+      "currencyRecoverable": 275,
+      "targetCurrencyRecoverable": 275,
+      "currencyStillMissing": 0,
+      "currencyReportScopeEvidence": {
+        "explicitCurrencyRows": 1,
+        "currencyRowsWithTransactionType": 0,
+        "currencyRowsWithSettlementId": 1,
+        "currencyRowsWithReportTotal": 1,
+        "rowsWithSettlementId": 276,
+        "distinctSettlementIds": 1,
+        "distinctExplicitCurrencies": 1
+      },
+      "observedFields": 24,
+      "fieldScanComplete": true,
+      "currencyHeaders": [
+        "currency"
+      ],
+      "actualFrom": "2026-10-14",
+      "actualTo": "2026-10-28"
+    },
+    {
+      "reportReference": "23e5531a0300301e9b726b23e0620d6b5468c025272d4aba6f2e14935de2fae0",
+      "reportType": "GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2",
+      "rawSha256": "533653a81e378f74ff1e19b227a7653acb10667a5833a0c8377354164a3c1f5f",
+      "status": "READ_ONLY_REPARSED",
+      "archivedRows": 6975,
+      "storedRows": 6834,
+      "rowHashMismatches": 0,
+      "absentFromSiteProjection": 141,
+      "amountChanges": 0,
+      "currencyRecoverable": 6834,
+      "targetCurrencyRecoverable": 6834,
+      "currencyStillMissing": 0,
+      "currencyReportScopeEvidence": {
+        "explicitCurrencyRows": 1,
+        "currencyRowsWithTransactionType": 0,
+        "currencyRowsWithSettlementId": 1,
+        "currencyRowsWithReportTotal": 1,
+        "rowsWithSettlementId": 6975,
+        "distinctSettlementIds": 1,
+        "distinctExplicitCurrencies": 1
+      },
+      "observedFields": 24,
+      "fieldScanComplete": true,
+      "currencyHeaders": [
+        "currency"
+      ],
+      "actualFrom": "2026-10-18",
+      "actualTo": "2026-11-01"
+    },
+    {
+      "reportReference": "ae5488456027a9181dc6ec608374edfb846cdb21e5a173493ceeec3452e74cda",
+      "reportType": "GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2",
+      "rawSha256": "90b00a3f026c5eee90c38fa90041d9a5d02fd955c1bda8c13e42cae828bad9d0",
+      "status": "READ_ONLY_REPARSED",
+      "archivedRows": 13,
+      "storedRows": 12,
+      "rowHashMismatches": 0,
+      "absentFromSiteProjection": 1,
+      "amountChanges": 0,
+      "currencyRecoverable": 12,
+      "targetCurrencyRecoverable": 12,
+      "currencyStillMissing": 0,
+      "currencyReportScopeEvidence": {
+        "explicitCurrencyRows": 1,
+        "currencyRowsWithTransactionType": 0,
+        "currencyRowsWithSettlementId": 1,
+        "currencyRowsWithReportTotal": 1,
+        "rowsWithSettlementId": 13,
+        "distinctSettlementIds": 1,
+        "distinctExplicitCurrencies": 1
+      },
+      "observedFields": 24,
+      "fieldScanComplete": true,
+      "currencyHeaders": [
+        "currency"
+      ],
+      "actualFrom": "2026-10-18",
+      "actualTo": "2026-10-31"
+    },
+    {
+      "reportReference": "651819133482c8c74412fee954b4813413b815650cfba8c507302148c0e7a7e4",
+      "reportType": "GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2",
+      "rawSha256": "e9ad1d28b345e11ed12c5212e54598cfeed334e0078e782cbd7263d2cb9ceda9",
+      "status": "READ_ONLY_REPARSED",
+      "archivedRows": 1176,
+      "storedRows": 1170,
+      "rowHashMismatches": 0,
+      "absentFromSiteProjection": 6,
+      "amountChanges": 0,
+      "currencyRecoverable": 1170,
+      "targetCurrencyRecoverable": 1170,
+      "currencyStillMissing": 0,
+      "currencyReportScopeEvidence": {
+        "explicitCurrencyRows": 1,
+        "currencyRowsWithTransactionType": 0,
+        "currencyRowsWithSettlementId": 1,
+        "currencyRowsWithReportTotal": 1,
+        "rowsWithSettlementId": 1176,
+        "distinctSettlementIds": 1,
+        "distinctExplicitCurrencies": 1
+      },
+      "observedFields": 24,
+      "fieldScanComplete": true,
+      "currencyHeaders": [
+        "currency"
+      ],
+      "actualFrom": "2026-10-18",
+      "actualTo": "2026-11-01"
+    }
+  ],
+  "documentsTruncated": false,
+  "targetBusinessDates": {
+    "from": "2026-10-10",
+    "to": "2026-11-08"
+  },
+  "scope": "LEGACY_SITE_REPORT_DOCUMENTS_ONLY",
+  "sellerLevelArchivesAudited": false,
+  "amazonRequests": 0,
+  "databaseWrites": 0,
+  "currenciesInferred": 0,
+  "liveApiAcceptance": "NOT_RUN"
+}

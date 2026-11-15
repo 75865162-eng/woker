@@ -1,0 +1,246 @@
+{
+  "capturedAt": "2026-11-15T18:00:52.777Z",
+  "gate": "deploy",
+  "envSource": "process",
+  "ready": false,
+  "passed": 11,
+  "skipped": 0,
+  "blockingFailures": [
+    {
+      "id": "config.env_source",
+      "label": "环境配置来源可用",
+      "ok": false,
+      "detail": "source=process",
+      "blocking": true,
+      "scope": "internal"
+    },
+    {
+      "id": "config.queue_driver",
+      "label": "QUEUE_DRIVER=redis",
+      "ok": false,
+      "detail": "当前 (空)；web 与 worker 必须共用持久队列",
+      "blocking": true,
+      "scope": "internal"
+    },
+    {
+      "id": "secret.auth",
+      "label": "AUTH_SECRET 强度",
+      "ok": false,
+      "detail": "0 字符",
+      "blocking": true,
+      "scope": "internal"
+    },
+    {
+      "id": "secret.amazon_sp_api_encryption_key",
+      "label": "AMAZON_SP_API_ENCRYPTION_KEY 为 32 字节",
+      "ok": false,
+      "detail": "0 字节",
+      "blocking": true,
+      "scope": "internal"
+    },
+    {
+      "id": "secret.amazon_ads_encryption_key",
+      "label": "AMAZON_ADS_ENCRYPTION_KEY 为 32 字节",
+      "ok": false,
+      "detail": "0 字节",
+      "blocking": true,
+      "scope": "internal"
+    },
+    {
+      "id": "gate.write_disabled",
+      "label": "Amazon 写执行门禁显式配置",
+      "ok": false,
+      "detail": "FBA=(空) Ads=(空)；按当前范围保持 false",
+      "blocking": true,
+      "scope": "internal"
+    },
+    {
+      "id": "build.standalone",
+      "label": "standalone 产物完整",
+      "ok": false,
+      "detail": ".next-build/standalone/server.js + BUILD_ID",
+      "blocking": true,
+      "scope": "internal"
+    },
+    {
+      "id": "build.static_assets",
+      "label": "standalone 静态资源齐全",
+      "ok": false,
+      "detail": "static=缺失 public=OK（start:standalone 会自动补齐）",
+      "blocking": true,
+      "scope": "internal"
+    }
+  ],
+  "warnings": [
+    {
+      "id": "config.storage",
+      "label": "生产文件存储为持久化驱动",
+      "ok": false,
+      "detail": "STORAGE_DRIVER=(默认 local)；local 需挂载持久卷或改用 s3/r2",
+      "blocking": false,
+      "scope": "internal"
+    }
+  ],
+  "checks": [
+    {
+      "id": "config.env_source",
+      "label": "环境配置来源可用",
+      "ok": false,
+      "detail": "source=process",
+      "blocking": true,
+      "scope": "internal"
+    },
+    {
+      "id": "config.queue_driver",
+      "label": "QUEUE_DRIVER=redis",
+      "ok": false,
+      "detail": "当前 (空)；web 与 worker 必须共用持久队列",
+      "blocking": true,
+      "scope": "internal"
+    },
+    {
+      "id": "config.placeholders",
+      "label": "EnvironmentFile 无未填写占位符",
+      "ok": true,
+      "detail": "无 REPLACE:/GENERATE: 残留",
+      "blocking": true,
+      "scope": "asset"
+    },
+    {
+      "id": "secret.auth",
+      "label": "AUTH_SECRET 强度",
+      "ok": false,
+      "detail": "0 字符",
+      "blocking": true,
+      "scope": "internal"
+    },
+    {
+      "id": "secret.amazon_sp_api_encryption_key",
+      "label": "AMAZON_SP_API_ENCRYPTION_KEY 为 32 字节",
+      "ok": false,
+      "detail": "0 字节",
+      "blocking": true,
+      "scope": "internal"
+    },
+    {
+      "id": "secret.amazon_ads_encryption_key",
+      "label": "AMAZON_ADS_ENCRYPTION_KEY 为 32 字节",
+      "ok": false,
+      "detail": "0 字节",
+      "blocking": true,
+      "scope": "internal"
+    },
+    {
+      "id": "gate.write_disabled",
+      "label": "Amazon 写执行门禁显式配置",
+      "ok": false,
+      "detail": "FBA=(空) Ads=(空)；按当前范围保持 false",
+      "blocking": true,
+      "scope": "internal"
+    },
+    {
+      "id": "config.storage",
+      "label": "生产文件存储为持久化驱动",
+      "ok": false,
+      "detail": "STORAGE_DRIVER=(默认 local)；local 需挂载持久卷或改用 s3/r2",
+      "blocking": false,
+      "scope": "internal"
+    },
+    {
+      "id": "build.standalone",
+      "label": "standalone 产物完整",
+      "ok": false,
+      "detail": ".next-build/standalone/server.js + BUILD_ID",
+      "blocking": true,
+      "scope": "internal"
+    },
+    {
+      "id": "build.static_assets",
+      "label": "standalone 静态资源齐全",
+      "ok": false,
+      "detail": "static=缺失 public=OK（start:standalone 会自动补齐）",
+      "blocking": true,
+      "scope": "internal"
+    },
+    {
+      "id": "deploy.env_template",
+      "label": "生产 EnvironmentFile 模板",
+      "ok": true,
+      "detail": "deploy/production.env.example",
+      "blocking": true,
+      "scope": "asset"
+    },
+    {
+      "id": "deploy.runbook",
+      "label": "生产部署与回滚手册",
+      "ok": true,
+      "detail": "deploy/README.md",
+      "blocking": true,
+      "scope": "asset"
+    },
+    {
+      "id": "deploy.systemd_units",
+      "label": "systemd 单元齐全（web + 5 worker）",
+      "ok": true,
+      "detail": "deploy/systemd/*.service 与 worker registry 对齐",
+      "blocking": true,
+      "scope": "asset"
+    },
+    {
+      "id": "deploy.backup",
+      "label": "定时备份与恢复资产",
+      "ok": true,
+      "detail": "backup.service + timer + backup-postgres.mjs",
+      "blocking": true,
+      "scope": "asset"
+    },
+    {
+      "id": "deploy.tls",
+      "label": "HTTPS 反向代理配置",
+      "ok": true,
+      "detail": "deploy/caddy/Caddyfile",
+      "blocking": true,
+      "scope": "asset"
+    },
+    {
+      "id": "deploy.env_init",
+      "label": "生产密钥生成脚本",
+      "ok": true,
+      "detail": "production-env-init.mjs",
+      "blocking": true,
+      "scope": "asset"
+    },
+    {
+      "id": "deploy.password_rotation",
+      "label": "管理员口令轮换脚本",
+      "ok": true,
+      "detail": "rotate-bootstrap-password.mjs",
+      "blocking": true,
+      "scope": "asset"
+    },
+    {
+      "id": "deploy.health_endpoint",
+      "label": "公开存活探针",
+      "ok": true,
+      "detail": "/api/health",
+      "blocking": true,
+      "scope": "asset"
+    },
+    {
+      "id": "deploy.csrf_guard",
+      "label": "浏览器 CSRF 防护",
+      "ok": true,
+      "detail": "src/lib/auth/csrf.ts",
+      "blocking": true,
+      "scope": "asset"
+    },
+    {
+      "id": "deploy.amazon_onboarding",
+      "label": "Amazon 凭据接入脚本",
+      "ok": true,
+      "detail": "scripts/onboard-amazon.mjs",
+      "blocking": true,
+      "scope": "asset"
+    }
+  ]
+}

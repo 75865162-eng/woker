@@ -1,0 +1,25 @@
+[
+  {
+    "sheet": "Tables",
+    "dataset": "table_review",
+    "rows": 748,
+    "columns": 14
+  },
+  {
+    "sheet": "Table references",
+    "dataset": "table_references",
+    "rows": 7143,
+    "columns": 5
+  },
+  {
+    "sheet": "Duplicates",
+    "dataset": "duplicates",
+    "rows": 7,
+    "columns": 3
+  },
+  {
+    "sheet": "Conflicts",
+    "dataset": "conflicts",
+    "rows": 0
+  }
+]

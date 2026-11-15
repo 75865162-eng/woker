@@ -1,0 +1,17 @@
+{
+  "checkedAt": "2026-11-09T13:57:01.085Z",
+  "taskId": "266118a2-dba3-44a8-bc40-03260b827a34",
+  "consistency": "REPEATABLE_READ_SNAPSHOT",
+  "detailsCheckpoint": 1861,
+  "committedOriginals": 1861,
+  "verifiedOrders": 1861,
+  "verifiedItems": 1903,
+  "failures": [],
+  "originalCountMatchesCheckpoint": true,
+  "taskStatus": "SUCCEEDED",
+  "taskStage": "COMPLETED",
+  "windowComplete": true,
+  "proceedsRequested": false,
+  "amazonRequests": 0,
+  "businessWrites": 0
+}

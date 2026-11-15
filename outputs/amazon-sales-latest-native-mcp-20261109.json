@@ -1,0 +1,54 @@
+{
+  "checkedAt": "2026-11-09T14:39:31.643Z",
+  "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+  "marketplaceId": "ATVPDKIKX0DER",
+  "requestId": "f1cb0f64-1acd-4f06-b143-47eb847302b4",
+  "records": [
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "businessDate": "2026-11-07",
+      "metrics": {
+        "sessions": 991,
+        "pageViews": 1340,
+        "unitsOrdered": 125,
+        "totalOrderItems": 120,
+        "orderedProductSales": {
+          "amount": 2323.91,
+          "currencyCode": "USD"
+        }
+      },
+      "exactMetrics": {
+        "sessions": "991",
+        "pageViews": "1340",
+        "unitsOrdered": "125",
+        "totalOrderItems": "120",
+        "orderedProductSales": {
+          "amount": "2323.91",
+          "currencyCode": "USD"
+        }
+      },
+      "quality": "VALID",
+      "capturedAt": "2026-11-09T14:25:42.235Z",
+      "syncRunId": "17ab4e5e-8f73-4648-9f6b-7b26678c5aea"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "pageSize": 3,
+    "hasNext": false,
+    "total": 1,
+    "pageCount": 1
+  },
+  "evidenceRefs": [
+    {
+      "sourceId": "c7f48221-c28d-47a9-b0c5-da2db1192d33",
+      "syncRunId": "17ab4e5e-8f73-4648-9f6b-7b26678c5aea"
+    }
+  ],
+  "warnings": [
+    "店铺逐日粒度，不含 ASIN/SKU 拆分。",
+    "金额按行保留原币种，不得跨币种合计。",
+    "exactMetrics 为数据库已保存 JSON 数值的精确字符串；旧 metrics 保持兼容，不证明采集前的精度。"
+  ]
+}

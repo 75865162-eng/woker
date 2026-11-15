@@ -1,0 +1,27 @@
+{
+  "at": "2026-11-09T14:34:15.171Z",
+  "approvalId": "4a5d391e-dd09-4492-9faf-31aa61dfb163",
+  "manifest": {
+    "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+    "sourceRevision": 4,
+    "authorizationRevision": 3,
+    "cursorId": "5d94d194-3ef3-4331-b207-4f5227f177eb",
+    "cursorUpdatedAt": "2026-11-06T15:55:48.590Z",
+    "captureSequence": 161,
+    "originalTaskId": "8c3bb776-1323-4854-9a04-19e565fe0535",
+    "taskUpdatedAt": "2026-11-06T15:55:48.593Z",
+    "rejectedLogId": "b9e4f21f-64b8-4608-bf2d-068b6d35198e",
+    "tokenDigest": "d75de95c589ab35f2badce082a99aa4ac935e1345662b0ce852e879b8cc7726f",
+    "window": {
+      "from": "2025-06-04T09:32:07.189Z",
+      "to": "2025-07-04T09:32:07.189Z"
+    },
+    "sameWindow": true,
+    "preservedPages": 9,
+    "preservedRows": 4500
+  },
+  "result": {
+    "applied": true,
+    "changeRequestId": "4a5d391e-dd09-4492-9faf-31aa61dfb163"
+  }
+}

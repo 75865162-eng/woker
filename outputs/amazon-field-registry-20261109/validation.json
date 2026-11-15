@@ -1,0 +1,201 @@
+{
+  "observedAt": "2026-11-09T07:42:24.054391+00:00",
+  "taskStatus": "PARTIAL_IMPLEMENTATION",
+  "checks": {
+    "prismaSchemaValidate": "PASSED",
+    "sourceTypecheck": "PASSED",
+    "targetedEslint": "PASSED",
+    "targetedUnitTests": {
+      "passed": 36,
+      "failed": 0
+    },
+    "offlineSuite": {
+      "unitTestsPassed": 184,
+      "integrationTestsPassed": 235,
+      "browserTestsPassed": 7,
+      "amazonResponses": "MOCKED",
+      "database": "DISPOSABLE_POSTGRESQL",
+      "redis": "DISPOSABLE_REDIS"
+    },
+    "finalMigrationConstraintsDomainRegression": {
+      "passed": 14,
+      "failed": 0
+    }
+  },
+  "liveActions": {
+    "existingDatabaseMode": "READ_ONLY",
+    "amazonAuthenticatedRequests": 0,
+    "existingDatabaseWrites": 0,
+    "existingDatabaseMigrationApplied": false,
+    "workersRestarted": false,
+    "deployed": false,
+    "committed": false,
+    "pushed": false
+  },
+  "knownLimitations": [
+    "P0-P2 not fully complete",
+    "Official universe incomplete",
+    "Historical mapping-version replay not implemented",
+    "Field-level structured/query acceptance not complete",
+    "Existing currency rows not repaired",
+    "Read-only currency audit covers legacy site documents overlapping target dates only"
+  ],
+  "ciProductionBuild": "NOT_RUN",
+  "archiveRecoveryIncrement": {
+    "observedAt": "2026-11-09T07:51:24.856117+00:00",
+    "sourceTypecheck": "PASSED",
+    "targetedEslint": "PASSED",
+    "diffCheck": "PASSED",
+    "targetedUnitTests": {
+      "passed": 21,
+      "failed": 0
+    },
+    "offlineDomainRunner": {
+      "unitTestsPassed": 185,
+      "integrationTestsPassed": 16,
+      "failed": 0,
+      "database": "DISPOSABLE_POSTGRESQL",
+      "redis": "DISPOSABLE_REDIS",
+      "amazonResponses": "FIXTURE"
+    },
+    "verified": [
+      "approved historical field rescan",
+      "archive hash tamper rejection",
+      "scope and page fences",
+      "stale manifest rejection",
+      "idempotent observations",
+      "immutable mapping version append",
+      "unchanged facts, raw archives, source revision and configuration versions",
+      "no added Amazon transport requests"
+    ],
+    "existingEnvironmentApplied": false,
+    "fullOfflineSuiteRerun": false,
+    "fullOfflineSuiteRerunReason": "This increment is limited to field registry, approval and historical scan; targeted domain integration exercises the changed transaction boundaries."
+  },
+  "settlementFieldPersistenceIncrement": {
+    "observedAt": "2026-11-09T07:58:53.175966+00:00",
+    "sourceTypecheck": "PASSED",
+    "targetedEslint": "PASSED",
+    "diffCheck": "PASSED",
+    "targetedUnitTests": {
+      "passed": 9,
+      "failed": 0
+    },
+    "offlineDomainRunner": {
+      "unitTestsPassed": 185,
+      "integrationTestsPassed": 17,
+      "failed": 0,
+      "database": "DISPOSABLE_POSTGRESQL",
+      "redis": "DISPOSABLE_REDIS",
+      "amazonResponses": "FIXTURE"
+    },
+    "verified": [
+      "exact attributed batch database readback",
+      "original row/hash and decimal-text comparisons",
+      "null vs empty distinction",
+      "immutable mapping binding",
+      "idempotent and transactional audit evidence",
+      "mismatch history visible in catalogue",
+      "quarantined rows receive no success evidence",
+      "no full-field acceptance promotion"
+    ],
+    "existingEnvironmentApplied": false,
+    "productionBuild": "NOT_RUN_CI_ONLY",
+    "fullOfflineSuiteRerun": false,
+    "testScopeReason": "Only settlement batch publication and the shared field reader changed; settlement integration exercises attribution, concurrent workers, raw reuse, approval and query boundaries. Full merge checks remain required before merge."
+  },
+  "domainReportPersistenceUpgrade": {
+    "observedAt": "2026-11-09T08:05:29.083798+00:00",
+    "resources": [
+      "inventory_events",
+      "reimbursements",
+      "inventory_age"
+    ],
+    "sourceTypecheck": "PASSED",
+    "targetedEslint": "PASSED",
+    "diffCheck": "PASSED",
+    "targetedUnitTests": {
+      "passed": 10,
+      "failed": 0
+    },
+    "offlineDomainRunner": {
+      "unitTestsPassed": 185,
+      "integrationTestsPassed": 24,
+      "failed": 0,
+      "database": "DISPOSABLE_POSTGRESQL",
+      "redis": "DISPOSABLE_REDIS",
+      "amazonResponses": "FIXTURE"
+    },
+    "verified": [
+      "three domain report field readback",
+      "explicit site qualification limits",
+      "unqualified rows excluded",
+      "multiple aliases deferred",
+      "single quantity column verified",
+      "incomplete scanner observations excluded",
+      "idempotent evidence",
+      "cross workspace rejected",
+      "database mismatch blocks publication and retains raw and failure checkpoint"
+    ],
+    "existingEnvironmentApplied": false,
+    "migrationAdded": false,
+    "authenticatedAmazonRequests": 0,
+    "committed": false,
+    "pushed": false,
+    "deployed": false,
+    "fullOfflineSuiteRerun": false,
+    "ciProductionBuild": "NOT_RUN",
+    "testScopeReason": "Domain report pipeline and mapping catalogue only; unit tests, temporary database integration, typecheck and targeted lint cover changed boundaries. Full checks and CI build remain required before merge/deployment."
+  },
+  "actualCoverageAndSettlementReplay": {
+    "observedAt": "2026-11-09T08:36:46.466930+00:00",
+    "sourceTypecheck": "PASSED",
+    "targetedEslint": "PASSED",
+    "diffCheck": "PASSED",
+    "targetedUnitTests": {
+      "passed": 12,
+      "failed": 0
+    },
+    "offlineDomainRunner": {
+      "unitTestsPassed": 185,
+      "integrationTestsPassed": 25,
+      "failed": 0,
+      "amazonResponses": "FIXTURE",
+      "database": "DISPOSABLE_POSTGRESQL",
+      "redis": "DISPOSABLE_REDIS"
+    },
+    "browserTests": {
+      "passed": 2,
+      "failed": 0,
+      "api": "MOCKED"
+    },
+    "verified": [
+      "coverage counts share actual business reader",
+      "MCP explicit tool/seller/site grant and revocation",
+      "header currency replay visible through business query",
+      "site and seller rows independently repaired",
+      "repeated recovery does not create a configuration revision conflict",
+      "facts and original identities preserved",
+      "no added Amazon requests",
+      "UI denial clears stale values",
+      "UI source switch discards delayed response"
+    ],
+    "existingDatabase": {
+      "mode": "READ_ONLY",
+      "structuredSettlementRows": 65513,
+      "missingCurrencyRows": 65513,
+      "registry": "MIGRATION_NOT_APPLIED",
+      "recoverableSiteRows": 16757,
+      "targetBusinessDateRecoverableRows": 13266,
+      "writes": 0,
+      "migrationsApplied": false,
+      "authenticatedAmazonRequests": 0
+    },
+    "fullOfflineSuiteRerun": false,
+    "ciProductionBuild": "NOT_RUN",
+    "mergeChecks": "REQUIRED_BEFORE_MERGE",
+    "commit": false,
+    "push": false,
+    "deployment": false
+  }
+}

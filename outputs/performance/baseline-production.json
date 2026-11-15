@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "mode": "production",
+  "bundler": "webpack",
+  "fixtureOnly": true,
+  "capturedAt": "2026-11-11T15:45:12.722Z",
+  "node": "v24.18.0",
+  "routes": [
+    "/listing-ai",
+    "/logistics",
+    "/workspace"
+  ],
+  "loginColdMs": 241.02487500000097,
+  "loginMs": {
+    "samples": [
+      34.63,
+      31.31,
+      30.07,
+      29.23,
+      29.51,
+      29.53,
+      33.57
+    ],
+    "median": 30.072000000000116,
+    "p95": 34.633333000001585
+  },
+  "coldPages": [
+    {
+      "path": "/listing-ai",
+      "totalMs": 174.64379199999894
+    },
+    {
+      "path": "/logistics",
+      "totalMs": 834.5489170000001
+    },
+    {
+      "path": "/workspace",
+      "totalMs": 361.0714169999992
+    }
+  ],
+  "warmNavigationMs": {
+    "samples": [
+      870.78,
+      802.43,
+      818.52,
+      54.24,
+      66.71,
+      815.36,
+      36.63,
+      53.72,
+      829.8
+    ],
+    "median": 802.4311250000028,
+    "p95": 870.7769999999982
+  },
+  "rsc": [
+    {
+      "ms": 13,
+      "ttfb": 3.700000047683716
+    },
+    {
+      "ms": 45.40000009536743,
+      "ttfb": 11.300000190734863
+    },
+    {
+      "ms": 16,
+      "ttfb": 4
+    },
+    {
+      "ms": 14.700000047683716,
+      "ttfb": 4.300000190734863
+    },
+    {
+      "ms": 15.099999904632568,
+      "ttfb": 2.9000000953674316
+    },
+    {
+      "ms": 14.699999809265137,
+      "ttfb": 3.3000001907348633
+    }
+  ],
+  "shellPersisted": true,
+  "publicRequests": [
+    "/api/workspaces",
+    "/api/workspaces",
+    "/api/notifications/wecom/settings",
+    "/api/notifications/user"
+  ],
+  "checks": [
+    "role revocation",
+    "cross-organization identity",
+    "disabled user"
+  ],
+  "limitations": [
+    "Disposable database and synthetic accounts; not production acceptance",
+    "External font loading excluded; CSS scan bounded to src in both measurements",
+    "Cold page navigation includes networkidle settle time",
+    "Selected real routes, not a full ERP benchmark"
+  ]
+}

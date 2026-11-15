@@ -1,0 +1,22 @@
+✔ a paused report before the first request remains recoverable without inventing a cursor (6.317833ms)
+✔ progress without a report cursor cannot silently restart collection (0.110916ms)
+✔ report cursor windows and seller identities must match the original approved request (0.780875ms)
+✔ reimbursement and ledger retries reuse the existing task through approval (1.657959ms)
+✔ retry rejects wrong resources and preserves orders partial-success boundary (0.227791ms)
+✔ first-batch checkpoint resources use existing approval controls and keep cancellations bounded (0.422792ms)
+✔ paused orders resume their original checkpoint while other resources keep their retry boundary (0.262458ms)
+✔ sync chat server pins actor/workspace/request and refuses missing grants or changed credential before domain writes (8.932167ms)
+✔ every shipped skill and workflow uses single-task Codex chat approval without rewriting SOP bodies (1.515833ms)
+✔ one chat confirmation approves and applies the bounded plan; reads and repeated submission never dispatch (1.374542ms)
+✔ interrupted approved plan can apply without a second decision; stale/expired/unsupported plans cannot (0.78875ms)
+✔ unmapped catalog execution explicitly stays in chat and never reports success (7.703459ms)
+✔ chat confirmation supports one scoped first-batch recovery, never other task controls (0.577125ms)
+✔ sync execution requires the intersection of explicit credential and current sync grants (0.133584ms)
+ℹ tests 14
+ℹ suites 0
+ℹ pass 14
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 471.610916

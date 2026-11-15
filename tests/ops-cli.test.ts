@@ -31,9 +31,23 @@ const readOnlyDb = new Proxy({}, { get: (_, table: string) => new Proxy({}, { ge
   if (table === "organizationMember") return { role: "owner", user: { status: "active" } };
   if (table === "workspaceScope") return { id: "ws" };
   if (table === "organizationRosterRole") return [{ id: "owner", permissions: {} }];
-  if (table === "amazonSyncDataSource") return [{ id: "source", activeRunId: "run-1", sellerAccountId: "seller", marketplaceId: "site", resource: "inventory", authorization: { status: "CONFIGURED", identityVerifiedAt: new Date() } }, { id: "catalog-source", activeRunId: "catalog-run", sellerAccountId: "seller", marketplaceId: "site", resource: "catalog", authorization: { status: "CONFIGURED", identityVerifiedAt: new Date() } }];
+  if (table === "amazonSyncDataSource") {
+    const where = args.where as { AND?: Array<{ OR?: Array<{ resource: string }> }> };
+    const resources = where.AND?.[0]?.OR?.map(row => row.resource);
+    return [
+      { id: "source", activeRunId: "run-1", sellerAccountId: "seller", marketplaceId: "site", resource: "inventory", authorization: { status: "CONFIGURED", identityVerifiedAt: new Date() } },
+      { id: "catalog-source", activeRunId: "catalog-run", sellerAccountId: "seller", marketplaceId: "site", resource: "catalog", authorization: { status: "CONFIGURED", identityVerifiedAt: new Date() } },
+      { id: "orders-source", activeRunId: "orders-run", sellerAccountId: "seller", marketplaceId: "site", resource: "orders", authorization: { status: "CONFIGURED", identityVerifiedAt: new Date() } },
+      { id: "finance-source", activeRunId: "finance-run", sellerAccountId: "seller", marketplaceId: "site", resource: "finance", authorization: { status: "CONFIGURED", identityVerifiedAt: new Date() } },
+      { id: "fulfillment-source", activeRunId: "fulfillment-run", sellerAccountId: "seller", marketplaceId: "site", resource: "fulfillment", authorization: { status: "CONFIGURED", identityVerifiedAt: new Date() } },
+    ].filter(row => !resources || resources.includes(row.resource));
+  }
   if (table === "workspaceDataset") return null;
   if (table === "amazonSyncRun" && method === "findFirst") return { id: "run-1", finishedAt: new Date("2026-10-24T00:00:00Z") };
+  if (table === "amazonSyncRun" && method === "findMany") {
+    const where = args.where as { resource?: string; status?: string };
+    return where.status === "SUCCEEDED" ? [{ id: `${where.resource}-run`, sourceId: `${where.resource}-source`, finishedAt: new Date("2026-10-24T00:00:00Z") }] : [];
+  }
   if (method === "aggregate") return { _sum: { fulfillableQuantity: 4 }, _count: { _all: 1 } };
   return method === "findMany" ? [] : null;
 } }) }) as Prisma.TransactionClient;
@@ -61,6 +75,15 @@ test("CLI rejects invalid commands, filters, dates and unbound identities", () =
   assert.throws(() => opsIdentity(parseOpsArgs(["freshness"]), {}), /Configure/);
   assert.throws(() => opsIdentity(parseOpsArgs(["freshness", "--workspace", "other"]), { OPS_CLI_ORGANIZATION_ID: "org", OPS_CLI_ACTOR_USER_ID: "actor", OPS_CLI_WORKSPACE_IDS: "ws" }));
   assert.deepEqual(opsIdentity(parseOpsArgs(["freshness", "--workspace=ws"]), { OPS_CLI_ORGANIZATION_ID: "org", OPS_CLI_ACTOR_USER_ID: "actor", OPS_CLI_WORKSPACE_IDS: "ws" }), identity);
+});
+test("freshness reports published domains and keeps unsupported Ads mapping explicit", async () => {
+  const result = await runOpsCommand(readOnlyDb, identity, parseOpsArgs(["freshness"]), new Date("2026-10-25T00:00:00Z")) as { rows: Array<{ resource: string; status: string; note: string | null }> };
+  const byResource = new Map(result.rows.map(row => [row.resource, row]));
+  assert.equal(byResource.get("orders")?.status, "FRESH");
+  assert.equal(byResource.get("finance")?.status, "FRESH");
+  assert.equal(byResource.get("fulfillment")?.status, "FRESH");
+  assert.equal(byResource.get("ads")?.status, "NOT_SYNCED");
+  assert.match(byResource.get("ads")?.note ?? "", /专用查询口径/);
 });
 test("CLI daily metrics keep missing facts null", async () => {
   const result = await runOpsCommand(readOnlyDb, identity, parseOpsArgs(["metrics", "daily"]));

@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "mode": "dev",
+  "bundler": "turbopack",
+  "fixtureOnly": true,
+  "capturedAt": "2026-11-11T15:57:00.135Z",
+  "node": "v24.18.0",
+  "routes": [
+    "/listing-ai",
+    "/logistics",
+    "/workspace"
+  ],
+  "loginColdMs": 617.2069159999992,
+  "loginMs": {
+    "samples": [
+      269.71,
+      254.36,
+      251.01,
+      253.46,
+      261.24,
+      253.23,
+      248.64
+    ],
+    "median": 253.45579200000066,
+    "p95": 269.70650000000023
+  },
+  "coldPages": [
+    {
+      "path": "/listing-ai",
+      "totalMs": 1989.0950000000012
+    },
+    {
+      "path": "/logistics",
+      "totalMs": 1056.6028750000005
+    },
+    {
+      "path": "/workspace",
+      "totalMs": 1258.694958
+    }
+  ],
+  "warmNavigationMs": {
+    "samples": [
+      241.34,
+      210.22,
+      214.45,
+      824.38,
+      209.86,
+      213.46,
+      218.92,
+      215.98,
+      213.19
+    ],
+    "median": 214.44887500000186,
+    "p95": 824.3842920000025
+  },
+  "rsc": [
+    {
+      "ms": 168.59999990463257,
+      "ttfb": 150.29999995231628
+    },
+    {
+      "ms": 118.19999980926514,
+      "ttfb": 106.89999985694885
+    },
+    {
+      "ms": 110.5,
+      "ttfb": 99.59999990463257
+    },
+    {
+      "ms": 116.5,
+      "ttfb": 101.89999985694885
+    },
+    {
+      "ms": 123.59999990463257,
+      "ttfb": 110
+    },
+    {
+      "ms": 118.20000004768372,
+      "ttfb": 105.90000009536743
+    },
+    {
+      "ms": 115.30000019073486,
+      "ttfb": 103.90000009536743
+    },
+    {
+      "ms": 109.09999990463257,
+      "ttfb": 96.90000009536743
+    },
+    {
+      "ms": 119.20000004768372,
+      "ttfb": 106.5
+    }
+  ],
+  "shellPersisted": true,
+  "publicRequests": [
+    "/api/workspaces",
+    "/api/workspaces",
+    "/api/notifications/wecom/settings",
+    "/api/notifications/user",
+    "/api/notifications/wecom/settings",
+    "/api/notifications/user",
+    "/api/workspaces",
+    "/api/notifications/wecom/settings",
+    "/api/notifications/user",
+    "/api/notifications/wecom/settings",
+    "/api/notifications/user"
+  ],
+  "checks": [
+    "role revocation",
+    "cross-organization identity",
+    "disabled user"
+  ],
+  "limitations": [
+    "Disposable database and synthetic accounts; not production acceptance",
+    "External font loading excluded; CSS scan bounded to src in both measurements",
+    "Cold page navigation includes networkidle settle time",
+    "Selected real routes, not a full ERP benchmark"
+  ]
+}

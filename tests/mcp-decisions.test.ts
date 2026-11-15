@@ -47,8 +47,9 @@ test("决策 4：ProductRecord 是上层共享主档，不属于任一承接池�
   assert.ok(!amazonLocalRawTables.some(table => !table.startsWith("Amazon")));
 });
 
-test("决策 5：原始字段 = 落库整行（含 payload），窄列只作为显式 summary 选项", () => {
-  assert.match(sellfoxMcp, /fields === "summary" \? `t\.\$\{dataset\.columns\.join\(", t\."\)\}` : "t\.\*"/);
+test("决策 5：MCP 查询只返回数据集显式登记的安全字段", () => {
+  assert.match(sellfoxMcp, /args\.fields === "all" \? \(dataset\.allColumns \?\? dataset\.columns\) : dataset\.columns/);
+  assert.doesNotMatch(sellfoxMcp, /: "t\.\*"/);
   assert.match(amazonRead, /amazonLocalVisibleColumns\(columns\)/, "Amazon 侧必须按真实物理列整行投影");
   assert.match(amazonRead, /SET TRANSACTION READ ONLY/);
 });

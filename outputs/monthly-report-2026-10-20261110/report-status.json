@@ -1,0 +1,24 @@
+{
+  "reportMonth": "2026-10",
+  "comparisonMonth": "2026-09",
+  "generatedDate": "2026-11-10",
+  "status": "正在汇总已发布数据；广告与促销接入存在缺口",
+  "scopes": [
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2EUQ1WTGCTBG2"
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "ATVPDKIKX0DER"
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A2Q3Y263D00KWC"
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "marketplaceId": "A1AM78C64UM0Y8"
+    }
+  ]
+}

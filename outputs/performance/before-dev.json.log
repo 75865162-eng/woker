@@ -1,0 +1,129 @@
+Loaded Prisma config from ../prisma.config.ts.
+
+Prisma schema loaded from ../../../prisma/schema.prisma.
+Datasource "db": PostgreSQL database "erp_performance_fixture", schema "public" at "127.0.0.1:53266"
+
+🚀  Your database is now in sync with your Prisma schema. Done in 1.79s
+
+   ▲ Next.js 15.5.28
+   - Local:        http://127.0.0.1:53280
+   - Network:      http://127.0.0.1:53280
+
+ ✓ Starting...
+
+   We detected TypeScript in your project and reconfigured your tsconfig.json file for you.
+   The following suggested values were added to your tsconfig.json. These values can be changed to fit your project's needs:
+
+   	- include was updated to add '.next-performance/types/**/*.ts'
+
+ ✓ Ready in 810ms
+ ✓ Compiled /middleware in 191ms (117 modules)
+ ○ Compiling /login ...
+ ✓ Compiled /login in 1381ms (632 modules)
+ GET /login 200 in 1593ms
+ ○ Compiling /api/auth/login ...
+ ✓ Compiled /api/auth/login in 630ms (674 modules)
+ POST /api/auth/login 200 in 1077ms
+ POST /api/auth/login 200 in 71ms
+ POST /api/auth/login 200 in 60ms
+ POST /api/auth/login 200 in 53ms
+ POST /api/auth/login 200 in 48ms
+ POST /api/auth/login 200 in 71ms
+ POST /api/auth/login 200 in 45ms
+ POST /api/auth/login 200 in 64ms
+ ○ Compiling /listing-ai ...
+ ✓ Compiled /listing-ai in 4.9s (1954 modules)
+ GET /listing-ai 200 in 5697ms
+ ○ Compiling /api/listing-ai/workspace ...
+ ✓ Compiled /api/listing-ai/workspace in 1207ms (1977 modules)
+ GET /api/workspaces 200 in 1424ms
+ GET /api/listing-ai/workspace 200 in 1126ms
+ GET /api/notifications/wecom/settings 200 in 1189ms
+ GET /api/notifications/wecom/settings 500 in 1196ms
+ GET /api/ai-settings 200 in 1198ms
+ GET /api/notifications/user?limit=50 200 in 1212ms
+ GET /api/listing-ai/workspace 200 in 25ms
+ GET /api/ai-settings 200 in 29ms
+ GET /api/notifications/user?limit=50 200 in 34ms
+ PUT /api/listing-ai/workspace 403 in 22ms
+ ✓ Compiled /logistics in 471ms (1982 modules)
+ GET /logistics 200 in 733ms
+ GET /api/workspaces 200 in 38ms
+ GET /api/notifications/wecom/settings 200 in 77ms
+ GET /api/notifications/wecom/settings 200 in 86ms
+ GET /api/notifications/user?limit=50 200 in 155ms
+ GET /api/notifications/user?limit=50 200 in 182ms
+ ○ Compiling /workspace ...
+ ✓ Compiled /workspace in 1023ms (1991 modules)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /workspace 200 in 1431ms
+ GET /api/workspaces 200 in 59ms
+ ○ Compiling /api/workspace/draft-runs ...
+ ✓ Compiled /api/workspace/draft-runs in 1495ms (1995 modules)
+ GET /api/workspace/snapshot 200 in 1701ms
+ GET /api/notifications/wecom/settings 200 in 1307ms
+ GET /api/notifications/wecom/settings 200 in 1310ms
+ GET /api/workspace/draft-runs?limit=100 200 in 1778ms
+ GET /api/notifications/user?limit=50 200 in 1400ms
+ GET /api/notifications/user?limit=50 200 in 1493ms
+ GET /listing-ai 200 in 896ms
+ GET /api/notifications/wecom/settings 200 in 280ms
+ GET /api/notifications/user?limit=50 200 in 367ms
+ GET /api/notifications/user?limit=50 200 in 369ms
+ GET /api/notifications/wecom/settings 200 in 372ms
+ GET /api/ai-settings 200 in 228ms
+ GET /logistics 200 in 329ms
+ GET /api/listing-ai/workspace 200 in 237ms
+ GET /api/ai-settings 200 in 229ms
+ GET /api/listing-ai/workspace 200 in 230ms
+ GET /api/workspaces 200 in 167ms
+ GET /api/notifications/user?limit=50 200 in 206ms
+ GET /api/notifications/user?limit=50 200 in 223ms
+ GET /api/notifications/wecom/settings 200 in 229ms
+ GET /api/notifications/wecom/settings 200 in 240ms
+ GET /workspace 200 in 152ms
+ GET /api/notifications/wecom/settings 200 in 111ms
+ GET /api/notifications/user?limit=50 200 in 117ms
+ GET /api/notifications/wecom/settings 200 in 119ms
+ GET /api/notifications/user?limit=50 200 in 124ms
+ GET /listing-ai 200 in 56ms
+ GET /api/ai-settings 200 in 61ms
+ GET /api/ai-settings 200 in 48ms
+ GET /api/listing-ai/workspace 200 in 58ms
+ GET /api/listing-ai/workspace 200 in 58ms
+ GET /api/notifications/user?limit=50 200 in 120ms
+ GET /api/notifications/wecom/settings 200 in 124ms
+ GET /api/notifications/user?limit=50 200 in 99ms
+ GET /api/notifications/wecom/settings 200 in 100ms
+ GET /logistics 200 in 29ms
+ GET /api/notifications/wecom/settings 200 in 40ms
+ GET /api/notifications/wecom/settings 200 in 48ms
+ GET /api/notifications/user?limit=50 200 in 50ms
+ GET /api/notifications/user?limit=50 200 in 51ms
+ GET /workspace 200 in 42ms
+ GET /api/notifications/wecom/settings 200 in 43ms
+ GET /api/notifications/user?limit=50 200 in 50ms
+ GET /api/notifications/user?limit=50 200 in 53ms
+ GET /api/notifications/wecom/settings 200 in 58ms
+ GET /listing-ai 200 in 105ms
+ GET /api/ai-settings 200 in 117ms
+ GET /api/ai-settings 200 in 125ms
+ GET /api/listing-ai/workspace 200 in 122ms
+ GET /api/listing-ai/workspace 200 in 140ms
+ GET /api/notifications/wecom/settings 200 in 88ms
+ GET /api/notifications/user?limit=50 200 in 93ms
+ GET /api/notifications/wecom/settings 200 in 28ms
+ GET /api/notifications/user?limit=50 200 in 29ms
+ GET /logistics 200 in 51ms
+ GET /api/notifications/wecom/settings 200 in 28ms
+ GET /api/notifications/wecom/settings 200 in 31ms
+ GET /api/notifications/user?limit=50 200 in 32ms
+ GET /api/notifications/user?limit=50 200 in 33ms
+ GET /workspace 200 in 31ms
+ GET /api/workspaces 200 in 27ms
+ GET /api/notifications/wecom/settings 200 in 41ms
+ GET /api/notifications/user?limit=50 200 in 45ms
+ GET /api/notifications/user?limit=50 200 in 47ms
+ GET /api/notifications/wecom/settings 200 in 51ms
+ GET /api/listing-ai/workspace 403 in 13ms
+ GET /listing-ai?performanceCheck=3d338d5f-ddf4-4472-b286-d6d6ab0df40a 200 in 106ms

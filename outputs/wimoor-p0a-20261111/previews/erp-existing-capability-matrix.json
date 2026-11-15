@@ -1,0 +1,14 @@
+[
+  {
+    "sheet": "Capabilities",
+    "dataset": "capabilities",
+    "rows": 11,
+    "columns": 12
+  },
+  {
+    "sheet": "ERP fingerprints",
+    "dataset": "erp_evidence",
+    "rows": 24,
+    "columns": 2
+  }
+]

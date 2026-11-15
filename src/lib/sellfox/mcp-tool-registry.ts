@@ -9,7 +9,7 @@
  * as aliases so existing client configs keep working, but aliases resolve to
  * the same canonical tool and carry the same credential check.
  */
-import { assertProviderDataset, assertProviderTable, McpIsolationError } from "@/lib/mcp/isolation";
+import { assertProviderDataset, assertProviderTable, McpIsolationError } from "../mcp/isolation";
 
 export type SellfoxScopeMode = "tenant_store" | "tenant_only" | "store_join";
 
@@ -55,7 +55,7 @@ export const sellfoxDatasets: Record<string, SellfoxDataset> = {
   },
   orders: {
     key: "orders", table: "SellfoxOrderSnapshot", label: "订单", dateField: "purchaseDate", storeColumn: "storeId",
-    columns: ["\"storeId\"", "\"orderId\"", "asin", "\"msku\"", "\"purchaseDate\"", "qty", "\"itemAmount\"", "orderStatus", "\"fulfillmentChannel\""], description: "订单行快照", defaultLimit: 50,
+    columns: ["\"storeId\"", "\"orderId\"", "asin", "\"msku\"", "\"purchaseDate\"", "qty", "\"itemAmount\"", "orderStatus", "\"fulfillmentChannel\"", "\"latestCapturedAt\""], description: "订单行快照", defaultLimit: 50,
     scopeMode: "tenant_store", dateIsText: true,
   },
   performance: {

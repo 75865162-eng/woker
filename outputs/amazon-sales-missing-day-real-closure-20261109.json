@@ -1,0 +1,62 @@
+{
+  "at": "2026-11-09T14:30:27.218Z",
+  "taskId": "17ab4e5e-8f73-4648-9f6b-7b26678c5aea",
+  "from": "2026-11-07",
+  "to": "2026-11-07",
+  "timeZone": "America/Los_Angeles",
+  "received": 1,
+  "parsed": 1,
+  "inserted": 1,
+  "updated": 0,
+  "rejected": 0,
+  "published": 1,
+  "rawSha256": "c88faead279583853ddeeb7cb9b6b549781d4e8ad7a03d660a6acebb7d7fe47e",
+  "allMetricsMatchOriginalDatabaseAndMcp": true,
+  "originalCurrency": "USD",
+  "mcpRequestId": "f884649c-d907-407f-9818-76d197b995fa",
+  "paginationEndVerified": true,
+  "requests": [
+    {
+      "event": "LWA",
+      "statusCode": 200,
+      "requestId": "41f88de4-f6a7-461e-b90b-c0444e9c1893",
+      "createdAt": "2026-11-09T14:23:36.809Z"
+    },
+    {
+      "event": "createReport",
+      "statusCode": 202,
+      "requestId": "6f0ea61c-7e31-4cd5-8d81-2cac868bb11c",
+      "createdAt": "2026-11-09T14:23:36.809Z"
+    },
+    {
+      "event": "LWA",
+      "statusCode": 200,
+      "requestId": "49da5122-4cb6-4d57-b79a-f28240096bb0",
+      "createdAt": "2026-11-09T14:25:03.992Z"
+    },
+    {
+      "event": "getReport",
+      "statusCode": 200,
+      "requestId": "b4ad56d9-a90e-4dd6-a9cd-a6f30e15d331",
+      "createdAt": "2026-11-09T14:25:03.992Z"
+    },
+    {
+      "event": "LWA",
+      "statusCode": 200,
+      "requestId": "d5e474d9-ab47-4e45-9355-a403e2c8e99e",
+      "createdAt": "2026-11-09T14:25:40.420Z"
+    },
+    {
+      "event": "getReportDocument",
+      "statusCode": 200,
+      "requestId": "0609297e-ba10-444b-8cea-0d8cdd77167c",
+      "createdAt": "2026-11-09T14:25:40.420Z"
+    },
+    {
+      "event": "downloadReportDocument",
+      "statusCode": 200,
+      "requestId": null,
+      "createdAt": "2026-11-09T14:25:42.066Z"
+    }
+  ]
+}

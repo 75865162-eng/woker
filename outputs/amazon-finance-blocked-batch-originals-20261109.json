@@ -1,0 +1,61 @@
+{
+  "at": "2026-11-09T15:02:28.163Z",
+  "taskId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b",
+  "window": {
+    "from": "2025-07-04T09:31:07.189Z",
+    "to": "2025-08-03T09:31:07.189Z"
+  },
+  "status": "FAILED",
+  "committedRawPages": 5,
+  "archivedRawPages": 6,
+  "records_received": 3000,
+  "records_parsed": 3000,
+  "records_committed": 2500,
+  "records_held_uncommitted": 500,
+  "records_inserted": 2500,
+  "records_updated": 0,
+  "records_reused": 0,
+  "records_rejected": 0,
+  "records_published": 0,
+  "uniqueRecordsVerified": 2500,
+  "allParsedFieldsMatchDatabase": true,
+  "rawHashVerified": true,
+  "originalMoneyPreserved": true,
+  "requests": [
+    {
+      "statusCode": 200,
+      "requestId": "bfbb8f4e-611c-49af-85f9-0c0cd890b74c",
+      "createdAt": "2026-11-09T14:49:11.439Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "a4c7b228-a068-487d-bd40-11e3ce44ab3e",
+      "createdAt": "2026-11-09T14:49:42.451Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "1702d90f-d132-439f-bd68-6bf9c01542c8",
+      "createdAt": "2026-11-09T14:50:20.161Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "03537fda-2827-4051-bbb4-597450164fa6",
+      "createdAt": "2026-11-09T14:50:43.592Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "2760d0fe-3065-4f4f-910f-eb7290fc38b9",
+      "createdAt": "2026-11-09T14:51:10.524Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "7785dea6-2ddb-4bac-b605-57c2396d7adc",
+      "createdAt": "2026-11-09T14:51:38.800Z"
+    }
+  ],
+  "verificationAmazonRequests": 0,
+  "verificationBusinessWrites": 0,
+  "mcpStatus": "VERIFIED_COMMITTED_BATCH_US",
+  "mcpEvidenceFile": "outputs/amazon-finance-blocked-batch-mcp-20261109.json",
+  "publicationNote": "records_published counts only a completed window head; committed attributed pages are queryable independently"
+}

@@ -1,0 +1,1648 @@
+{
+  "client": "Codex app-server native MCP",
+  "targetChatToolsVerified": false,
+  "servers": {
+    "erp": {
+      "runtimeStatus": "connected",
+      "tools": [
+        "amazon.stores.list",
+        "data_describe_table",
+        "data_list_tables",
+        "data_query",
+        "data_sync_status"
+      ],
+      "authStatus": "bearerToken"
+    },
+    "lili": {
+      "runtimeStatus": "connected",
+      "tools": [
+        "ads_get_campaign_structure",
+        "ads_get_connection_status",
+        "ads_get_data_health",
+        "ads_get_settings",
+        "ads_get_sync_status",
+        "ads_list_entities",
+        "amazon.ads.entities.list",
+        "amazon.ads.reports.list",
+        "amazon.catalog.list",
+        "amazon.fields.catalog",
+        "amazon.fields.coverage",
+        "amazon.history.read",
+        "amazon.inventory.list",
+        "amazon.inventory.summary",
+        "amazon.sales.list",
+        "amazon.stores.list",
+        "amazon.sync.status",
+        "data_describe_table",
+        "data_list_tables",
+        "data_query",
+        "data_sync_status",
+        "finance_get_settlements",
+        "finance_get_transactions",
+        "get_inventory",
+        "get_listings",
+        "get_order_items",
+        "get_orders",
+        "get_sales",
+        "inventory_get_age",
+        "inventory_get_events",
+        "inventory_get_snapshot",
+        "lili_ping",
+        "meta_get_market_access",
+        "meta_get_skill_manifest",
+        "meta_list_workflows",
+        "meta_load_skill",
+        "meta_search_skills",
+        "orders_get_items",
+        "orders_search",
+        "reimbursement_analyze",
+        "reimbursement_get_events",
+        "reimbursement_get_payments",
+        "research_cancel",
+        "research_confirm",
+        "research_evidence",
+        "research_export",
+        "research_list",
+        "research_pause",
+        "research_prepare",
+        "research_read",
+        "research_record_charge",
+        "research_recover",
+        "research_resume",
+        "research_start",
+        "research_step",
+        "returns_get_items",
+        "workflow_sync_confirm",
+        "workflow_sync_review"
+      ],
+      "authStatus": "oAuth"
+    }
+  },
+  "calls": [
+    {
+      "server": "lili",
+      "tool": "lili_ping",
+      "isError": false,
+      "requestId": null
+    },
+    {
+      "server": "erp",
+      "tool": "amazon.stores.list",
+      "isError": false,
+      "requestId": null
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "5a862a01-5799-49dd-b124-f95362c31d49"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "7448f16e-93fe-4651-ad53-e168b1382ef7"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "d5f0a580-18b5-485f-91d2-f6c8ab43fbe8"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "d88d4b1f-901d-4ff7-ac16-c994fe1249bd"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "48edcae5-7a2a-46a6-8fa3-97cfa4eb5fa7"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "bef8ea2b-ccae-495a-95f7-1def274c8471"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "f5955607-b600-46eb-a403-af8ab934d444"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "99f6094c-bfbc-4df6-bf63-cafd9a7b808e"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "b1a66020-d510-436a-b35b-ae25d90d4745"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "54132ffc-7ba3-40fc-9b36-cba4da441c39"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "9dc3271e-6308-40b0-9d8d-144bf9d6d98c"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "3ddb24e3-5e0e-49fc-ba02-b5869b754db5"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "6013e973-22c7-45bb-8463-3ee3e4b8046d"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "9b18467d-10b6-4b00-9092-74fbce37adab"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "d543b04b-96d5-4f79-8fbf-f6a2fa22893e"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "0a5abbd4-47a6-4a5b-a7d0-f0ef07a714a4"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "4c6f4916-f5e1-4616-840e-f7b9ff852574"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "4496ca6f-3c51-4c03-b179-069e2330efff"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "077c3dbd-8f11-42b3-9043-a106dcfbdb27"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "b63d8306-7d05-4ae2-8665-fcd48aabeab2"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "ec03d8b9-7cc0-4965-a73c-995b2fae4d5f"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "7a33b285-cec9-4231-8869-d86f3b239b91"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "156a832a-7e7f-4bd1-b18f-1aacc1a3f516"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "13e86db2-4673-4676-bb5e-48b68ca73ab0"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "581832a5-b43d-442a-ba94-2b712e5f8b1b"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "930ea6b9-335c-4122-ba8e-d041bee9d4f6"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "f40d48d7-8a10-4d7e-8427-0459ba67e6d9"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "3dee83e8-f329-4742-b1fa-8dab233fa83f"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "bd27843e-b2e6-4b73-956d-9a9dbb5132f4"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "d361971d-1334-4ed3-a7b9-f5076f49663d"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "0a907b47-589a-422f-9f97-2e22f7b9b533"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "a4dee254-e754-44b1-9b7e-6a29d590a453"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "bc0e386b-c295-40dd-981f-b1f631f36a5e"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "9117e86f-bd59-4705-99fa-1db07635d7b0"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "c2a9f062-33ee-4e51-81a0-06bfc8d74711"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "d26c9699-8d87-45e6-b549-8c21612e2375"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "ae34acc1-960e-444c-a232-fd6ca1380652"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "ac49842b-4365-4faa-917c-92c6dbb8be0c"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "6c6d4f4d-2efe-4852-99e2-a3823b71f9cb"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "83f3b336-0be4-4671-8a40-5f8b5c7cdca3"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "e468fb6d-aa4c-4528-8502-f82c9f19e62c"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "b901d714-b288-4c93-a764-27f0ece17a7a"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "ef2ac4aa-c7ec-47e1-bfe2-cfbae29822fc"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "9c20eeaf-2610-45e4-ab9f-1fe776107e3f"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "20d23ede-c5a3-4d45-bb0c-6a321137df6b"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "c69348cb-0f1d-484b-8e1c-bf8432196cf2"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "35f7b69f-d375-499a-a281-9815f823bf2a"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "50f9bdaf-6772-4b34-8df6-67dab6c4cae1"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "4c7b9185-cd88-48fe-a366-287e81c5b5ce"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "bd4a4639-acd3-4848-a2ee-148d4106485b"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "9bd36523-c34b-4d34-a7d9-dcbd1cadbcee"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "4957b992-c243-4e6a-b889-05514d7e40e0"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "dfcbc788-f8d2-46f5-ab95-8a0215ec9a03"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "d3d74379-ead5-47ad-b518-a60cfd25e94a"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "7e1b0a42-350c-4cad-a72b-c7a50cb1ad6e"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "78fd7ab7-367a-455c-b5ff-eedaa981ec5d"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "fdd75d23-2676-4dc0-9167-e0d5458731a8"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "d22a3490-b261-4414-bdd1-9ef40ac82c71"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "8b942ff6-f325-49e4-b4aa-535e17ff06cb"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "319e9421-c063-4812-9c44-d5e24a392d4c"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "ba9a2971-2e7f-4670-b370-c5d756158d94"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "7cec1e1e-0963-4821-86a5-0c16f3717efd"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "d7be811a-b263-47aa-ab7d-c36c50ef425c"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "54b500dd-4cd9-4e75-be8f-bc0138d31ee9"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "d0eccdd6-1374-45f4-abfb-bf7071067b5d"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "bcaf2c45-083f-405c-8e3f-4c102d28ea58"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "43f2db2b-4dfc-4172-bc20-ebbbc317fe2c"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "07aa0c62-4a5f-4fb2-868c-bb962c171a06"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "01ca1524-adbf-42ca-96aa-5235f4990b9a"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "bea9e895-d6fb-4d15-974b-63aa46a3b2ae"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "7b4274a4-b444-4ee8-8ef0-180d351a14b4"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "d656cd27-7e7f-4f6b-b5f0-72f1e600f1dc"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "1541e907-c60d-4236-8e56-bfcf408aaba6"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "84ca2c76-39c0-412a-b618-1efe477af440"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "977fb8e8-6285-475b-9fcf-9e168a2cef50"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "736bcf7e-b208-4f60-884a-03f5350a2868"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "d2763d88-49d2-415e-88c1-0c665e48e7d0"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "2c55611c-f8c7-41e9-a001-9014d5a84cfd"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "3a03658a-08b9-4545-abf1-3e910b980a8e"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "0e8e829c-6026-4984-a58a-aa7297114178"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "0e7f95ab-a7b6-4d8f-877d-fae16065ac4d"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "0bb7fc58-3ab4-4e56-89cd-71caec3153bb"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "97c83abc-a0ce-46dd-a1f3-c714731a3d17"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "82e727b0-3362-484c-b2ab-5e38c859da67"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "3203a09e-72b0-485e-8942-3721b0552d4c"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "d8e69617-25b6-483a-8231-ff0104b733e1"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "3e8f5e03-12a0-4c5e-a4a8-1ee107ecb8e0"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "f4d621cb-306a-4b91-ab7d-45ac4cdaf3d7"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "070c7b84-44b4-4f77-aab9-14f27458eef3"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "ccab1036-fbe4-435b-aa4b-f795601e975f"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "d23ca2d1-2074-477f-b1e7-da362d8b0697"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "3f830371-b27e-4775-b4f3-9a2fcef83ed3"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "faada1e7-6fbf-4802-bdc8-814862657f36"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "e4282865-2d1b-4e9c-a895-8eab8710eafc"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "817e660f-172f-4379-8303-6f0104066ee8"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "a93f4033-d13f-4a5e-ac64-48ca45700c82"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "d188f789-23f4-4eaf-973b-4e1d3c48ceed"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "56a65c40-718c-49da-85fa-77030cbcc39c"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "8d97f2c6-b401-4f18-98aa-6cabe746920a"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "32d15b8c-84fd-4b07-acd8-9d9c3df3f45f"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "581e7f8f-bb42-42d4-8f76-674c5a272d4c"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "f5c71f36-a222-4cdd-a481-415e7a25b1f5"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "dd3dd23d-a562-4eed-8051-5b32ec056968"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "f61f8524-0cf6-48df-a0b2-cd04f05f7eb5"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "00342aa5-9099-467b-9356-89780ca7ffa4"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "c66ab752-f80a-4ef4-810f-5b5fe30e9671"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "79cbeb1e-c735-43e0-9f03-b9490788456d"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "bea9c3b3-0e07-4b70-a489-2cb7de176c37"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "ad42176b-beb9-4785-af6e-4657449406ee"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "e6955282-930d-45ec-b876-62fb924037b7"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "c3db7fc3-e555-4f68-ac41-a53b6cc4bc2d"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "741ef5d3-21c7-41f7-9459-a2f478c0c6fd"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "18abd2eb-8451-4e57-b4e5-7de05f4d6d48"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "de2f1c13-50e8-4a3b-b6e9-2623ad573f3c"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "1917c41e-5804-4b3d-9d7d-68b26ff90373"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "e8fd6214-8940-4bf6-99fa-294667e80a89"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "5acb7ec0-dd93-409d-ba61-af2b558211e5"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "d0817470-f002-4349-b384-df3e0bc2e3e5"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "5e284fc5-da73-40b7-8880-875c028b810d"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "2061d0c6-b09d-4719-8d59-3f38efa74be6"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "dd689b4e-d209-4269-9f0b-96d1682c1c30"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "30b8dd8f-90fb-45ad-b881-2319364c065e"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "f0b6189a-3712-43a3-826e-4ce53e3245df"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "05307065-4e41-4735-8a68-102ef42777e8"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "f02fb0b5-ab24-4939-82dd-c225a21c5cb1"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "93692ea9-f434-447d-ba6c-0cec4553cf81"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "876031ad-702b-4115-9cee-9bce8e1c73b3"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "7301fd1d-ebef-4933-baad-53a51809f89e"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "e15b2c1d-e620-42b7-8497-70b60548f316"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "722de5f2-6648-4954-840d-932f6467f78a"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "988bb7a3-5ae6-4b2b-bbe8-8506a7b3dec1"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "10368918-fac5-49b9-872e-2635ec3d9e17"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "a57c2dac-34e0-4726-97c9-33b223dbfe4d"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "3e71c291-6b18-489d-839a-015a375e95c2"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "39e328c7-c460-4969-86a5-4c966a043cb2"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "489ad895-ed5f-4268-a6af-7145f7d37db4"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "73465057-5df9-488d-8ede-8f158739737b"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "39d13c9a-565d-4ed9-a427-a2bd9919f68a"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "68011d0b-d2e9-4f28-9bfd-6001e867ea3e"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "3f5e6184-1cf6-441a-acab-3db854aa66c2"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "9bd50ef7-2b51-4216-86d1-59b82fe94ada"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "04d91f69-1d40-41a9-94e6-a23038e9ff38"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "e3d6b513-6423-452c-9781-38a2405ccb48"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "4b8fb52f-4b3a-4e62-8a42-1f397c2116dd"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "56dca685-c707-4eed-8ded-743b62099ceb"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "44112147-4fde-4ea9-b988-445b0caf0916"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "84042384-6236-46f3-8a2d-f75877412d68"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "c57671b3-77d5-419c-8c73-0e640ce29823"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "18674523-009e-40b9-995b-78750894615c"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "3b7f2fd2-bb0a-4d0c-9375-7e6049d794cd"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "d4577847-9437-4817-95d7-10d9ec653c92"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "994ef846-7bb4-442b-89e5-24313ecf9cf7"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "d00efa75-2678-4fa3-bfff-0a983a618e9a"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "50193f2d-95d7-4b62-b50c-e30a50545abf"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "db182a7e-b0bc-406c-a078-e2c1f65e2ebb"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "1938bc8a-6e88-4cb4-8134-d0a5007a46aa"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "651ce3ae-0053-4149-9289-7f64b19308e3"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "f5e2fedc-9096-4598-8a0f-c3baea7e89fd"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "9a7d77be-423a-4c6c-9880-b936b9476e4f"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "89b0dbb7-abd4-4a95-83d5-2d0d8c89bf2d"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "7854e118-8fb1-426d-8089-a451438b3d78"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "df30a041-f816-456f-b30c-00e010e58d81"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "eecb4d5b-e1d9-47b9-9095-aa6a64821b9c"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "bc8944d5-207e-4f54-a329-251fa2d2d38d"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "06c6a7f4-a035-453b-8014-b9243e9cd1d3"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "9b8c9fa7-bcb3-4e8c-8f0f-f2452394d3a3"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "543a76f2-e621-4b0e-9d68-98db5ec17802"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "ac8b5ff6-92e2-4ec0-83bb-e1f7467c8b7d"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "3d50344d-b78c-4481-997c-00a0c1b33c60"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "e655b3eb-e6b0-4ad7-8875-de425a0afebf"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "bd62cad3-5bca-4a9a-8f09-5cbc64b5558c"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "d1b90a27-5bc4-4c58-a30c-d7bd0949c6dd"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "ad78fdde-e52e-47ab-b0f6-8af589bf2437"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "424fddac-59c0-46d5-a210-614eae7eb000"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "8709947b-ee66-404c-bc0a-26e1b99bf721"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "10a2737d-9569-4c81-b27a-2aa3285188e8"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "08a713b1-24fe-4d57-b5ab-07a51cc84157"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "496389ac-1c67-4c58-aad7-2371bd1d1df6"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "25a01273-cc02-4564-a680-c087447a345f"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "0accda66-acaa-4ade-8903-1c8bebdfbf54"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "dd6e1b5f-78e9-42cf-ae1e-2ca819bea2a0"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "c3aa871a-2ab8-4f5b-a5f4-b55ae5cece94"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "ff1f4467-11aa-4086-b5c1-590f61321dd2"
+    },
+    {
+      "server": "erp",
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "a73cd6ae-b82e-4f20-85da-bfb20f8a8836"
+    }
+  ],
+  "results": [
+    {
+      "table": "catalog_items",
+      "sourceRunId": "e7571aca-1c91-421a-8c55-04bee66edb0d",
+      "recordsVerified": 227,
+      "nonemptyPages": 5,
+      "emptyPage": 6,
+      "allFieldsMatchDatabase": true,
+      "requestIds": [
+        "5a862a01-5799-49dd-b124-f95362c31d49",
+        "7448f16e-93fe-4651-ad53-e168b1382ef7",
+        "d5f0a580-18b5-485f-91d2-f6c8ab43fbe8",
+        "d88d4b1f-901d-4ff7-ac16-c994fe1249bd",
+        "48edcae5-7a2a-46a6-8fa3-97cfa4eb5fa7",
+        "bef8ea2b-ccae-495a-95f7-1def274c8471"
+      ],
+      "completeness": {
+        "mode": "PARTIAL_PUBLISHED_VERSION",
+        "complete": false,
+        "coverage": {
+          "type": "APPROVED_SCOPE_OBSERVATION",
+          "reason": "UPSTREAM_OBJECT_NOT_FOUND",
+          "complete": false,
+          "resource": "catalog_items",
+          "rowCount": 227,
+          "publication": "PARTIAL_VERIFIED_OBJECTS",
+          "publishedAt": "2026-11-09T17:52:38.728Z",
+          "requestedObjects": 228,
+          "unavailableObjects": 1,
+          "marketplaceVerified": true,
+          "unavailableObjectIds": [
+            "B09BNS592R"
+          ],
+          "accountUniverseComplete": false,
+          "unavailableObjectIndexes": [
+            47
+          ]
+        }
+      }
+    },
+    {
+      "table": "fulfillment",
+      "sourceRunId": "010c5403-7e2f-4ae7-8d5a-08d5a7b7cba9",
+      "recordsVerified": 3229,
+      "nonemptyPages": 65,
+      "emptyPage": 66,
+      "allFieldsMatchDatabase": true,
+      "requestIds": [
+        "f5955607-b600-46eb-a403-af8ab934d444",
+        "99f6094c-bfbc-4df6-bf63-cafd9a7b808e",
+        "b1a66020-d510-436a-b35b-ae25d90d4745",
+        "54132ffc-7ba3-40fc-9b36-cba4da441c39",
+        "9dc3271e-6308-40b0-9d8d-144bf9d6d98c",
+        "3ddb24e3-5e0e-49fc-ba02-b5869b754db5",
+        "6013e973-22c7-45bb-8463-3ee3e4b8046d",
+        "9b18467d-10b6-4b00-9092-74fbce37adab",
+        "d543b04b-96d5-4f79-8fbf-f6a2fa22893e",
+        "0a5abbd4-47a6-4a5b-a7d0-f0ef07a714a4",
+        "4c6f4916-f5e1-4616-840e-f7b9ff852574",
+        "4496ca6f-3c51-4c03-b179-069e2330efff",
+        "077c3dbd-8f11-42b3-9043-a106dcfbdb27",
+        "b63d8306-7d05-4ae2-8665-fcd48aabeab2",
+        "ec03d8b9-7cc0-4965-a73c-995b2fae4d5f",
+        "7a33b285-cec9-4231-8869-d86f3b239b91",
+        "156a832a-7e7f-4bd1-b18f-1aacc1a3f516",
+        "13e86db2-4673-4676-bb5e-48b68ca73ab0",
+        "581832a5-b43d-442a-ba94-2b712e5f8b1b",
+        "930ea6b9-335c-4122-ba8e-d041bee9d4f6",
+        "f40d48d7-8a10-4d7e-8427-0459ba67e6d9",
+        "3dee83e8-f329-4742-b1fa-8dab233fa83f",
+        "bd27843e-b2e6-4b73-956d-9a9dbb5132f4",
+        "d361971d-1334-4ed3-a7b9-f5076f49663d",
+        "0a907b47-589a-422f-9f97-2e22f7b9b533",
+        "a4dee254-e754-44b1-9b7e-6a29d590a453",
+        "bc0e386b-c295-40dd-981f-b1f631f36a5e",
+        "9117e86f-bd59-4705-99fa-1db07635d7b0",
+        "c2a9f062-33ee-4e51-81a0-06bfc8d74711",
+        "d26c9699-8d87-45e6-b549-8c21612e2375",
+        "ae34acc1-960e-444c-a232-fd6ca1380652",
+        "ac49842b-4365-4faa-917c-92c6dbb8be0c",
+        "6c6d4f4d-2efe-4852-99e2-a3823b71f9cb",
+        "83f3b336-0be4-4671-8a40-5f8b5c7cdca3",
+        "e468fb6d-aa4c-4528-8502-f82c9f19e62c",
+        "b901d714-b288-4c93-a764-27f0ece17a7a",
+        "ef2ac4aa-c7ec-47e1-bfe2-cfbae29822fc",
+        "9c20eeaf-2610-45e4-ab9f-1fe776107e3f",
+        "20d23ede-c5a3-4d45-bb0c-6a321137df6b",
+        "c69348cb-0f1d-484b-8e1c-bf8432196cf2",
+        "35f7b69f-d375-499a-a281-9815f823bf2a",
+        "50f9bdaf-6772-4b34-8df6-67dab6c4cae1",
+        "4c7b9185-cd88-48fe-a366-287e81c5b5ce",
+        "bd4a4639-acd3-4848-a2ee-148d4106485b",
+        "9bd36523-c34b-4d34-a7d9-dcbd1cadbcee",
+        "4957b992-c243-4e6a-b889-05514d7e40e0",
+        "dfcbc788-f8d2-46f5-ab95-8a0215ec9a03",
+        "d3d74379-ead5-47ad-b518-a60cfd25e94a",
+        "7e1b0a42-350c-4cad-a72b-c7a50cb1ad6e",
+        "78fd7ab7-367a-455c-b5ff-eedaa981ec5d",
+        "fdd75d23-2676-4dc0-9167-e0d5458731a8",
+        "d22a3490-b261-4414-bdd1-9ef40ac82c71",
+        "8b942ff6-f325-49e4-b4aa-535e17ff06cb",
+        "319e9421-c063-4812-9c44-d5e24a392d4c",
+        "ba9a2971-2e7f-4670-b370-c5d756158d94",
+        "7cec1e1e-0963-4821-86a5-0c16f3717efd",
+        "d7be811a-b263-47aa-ab7d-c36c50ef425c",
+        "54b500dd-4cd9-4e75-be8f-bc0138d31ee9",
+        "d0eccdd6-1374-45f4-abfb-bf7071067b5d",
+        "bcaf2c45-083f-405c-8e3f-4c102d28ea58",
+        "43f2db2b-4dfc-4172-bc20-ebbbc317fe2c",
+        "07aa0c62-4a5f-4fb2-868c-bb962c171a06",
+        "01ca1524-adbf-42ca-96aa-5235f4990b9a",
+        "bea9e895-d6fb-4d15-974b-63aa46a3b2ae",
+        "7b4274a4-b444-4ee8-8ef0-180d351a14b4",
+        "d656cd27-7e7f-4f6b-b5f0-72f1e600f1dc"
+      ],
+      "completeness": "PUBLISHED_VERSION_ONLY"
+    },
+    {
+      "table": "finance_transactions",
+      "sourceRunId": "000537c3-94a4-4cd3-9cca-ade78ed48197",
+      "recordsVerified": 5518,
+      "nonemptyPages": 111,
+      "emptyPage": 112,
+      "allFieldsMatchDatabase": false,
+      "requestIds": [
+        "1541e907-c60d-4236-8e56-bfcf408aaba6",
+        "84ca2c76-39c0-412a-b618-1efe477af440",
+        "977fb8e8-6285-475b-9fcf-9e168a2cef50",
+        "736bcf7e-b208-4f60-884a-03f5350a2868",
+        "d2763d88-49d2-415e-88c1-0c665e48e7d0",
+        "2c55611c-f8c7-41e9-a001-9014d5a84cfd",
+        "3a03658a-08b9-4545-abf1-3e910b980a8e",
+        "0e8e829c-6026-4984-a58a-aa7297114178",
+        "0e7f95ab-a7b6-4d8f-877d-fae16065ac4d",
+        "0bb7fc58-3ab4-4e56-89cd-71caec3153bb",
+        "97c83abc-a0ce-46dd-a1f3-c714731a3d17",
+        "82e727b0-3362-484c-b2ab-5e38c859da67",
+        "3203a09e-72b0-485e-8942-3721b0552d4c",
+        "d8e69617-25b6-483a-8231-ff0104b733e1",
+        "3e8f5e03-12a0-4c5e-a4a8-1ee107ecb8e0",
+        "f4d621cb-306a-4b91-ab7d-45ac4cdaf3d7",
+        "070c7b84-44b4-4f77-aab9-14f27458eef3",
+        "ccab1036-fbe4-435b-aa4b-f795601e975f",
+        "d23ca2d1-2074-477f-b1e7-da362d8b0697",
+        "3f830371-b27e-4775-b4f3-9a2fcef83ed3",
+        "faada1e7-6fbf-4802-bdc8-814862657f36",
+        "e4282865-2d1b-4e9c-a895-8eab8710eafc",
+        "817e660f-172f-4379-8303-6f0104066ee8",
+        "a93f4033-d13f-4a5e-ac64-48ca45700c82",
+        "d188f789-23f4-4eaf-973b-4e1d3c48ceed",
+        "56a65c40-718c-49da-85fa-77030cbcc39c",
+        "8d97f2c6-b401-4f18-98aa-6cabe746920a",
+        "32d15b8c-84fd-4b07-acd8-9d9c3df3f45f",
+        "581e7f8f-bb42-42d4-8f76-674c5a272d4c",
+        "f5c71f36-a222-4cdd-a481-415e7a25b1f5",
+        "dd3dd23d-a562-4eed-8051-5b32ec056968",
+        "f61f8524-0cf6-48df-a0b2-cd04f05f7eb5",
+        "00342aa5-9099-467b-9356-89780ca7ffa4",
+        "c66ab752-f80a-4ef4-810f-5b5fe30e9671",
+        "79cbeb1e-c735-43e0-9f03-b9490788456d",
+        "bea9c3b3-0e07-4b70-a489-2cb7de176c37",
+        "ad42176b-beb9-4785-af6e-4657449406ee",
+        "e6955282-930d-45ec-b876-62fb924037b7",
+        "c3db7fc3-e555-4f68-ac41-a53b6cc4bc2d",
+        "741ef5d3-21c7-41f7-9459-a2f478c0c6fd",
+        "18abd2eb-8451-4e57-b4e5-7de05f4d6d48",
+        "de2f1c13-50e8-4a3b-b6e9-2623ad573f3c",
+        "1917c41e-5804-4b3d-9d7d-68b26ff90373",
+        "e8fd6214-8940-4bf6-99fa-294667e80a89",
+        "5acb7ec0-dd93-409d-ba61-af2b558211e5",
+        "d0817470-f002-4349-b384-df3e0bc2e3e5",
+        "5e284fc5-da73-40b7-8880-875c028b810d",
+        "2061d0c6-b09d-4719-8d59-3f38efa74be6",
+        "dd689b4e-d209-4269-9f0b-96d1682c1c30",
+        "30b8dd8f-90fb-45ad-b881-2319364c065e",
+        "f0b6189a-3712-43a3-826e-4ce53e3245df",
+        "05307065-4e41-4735-8a68-102ef42777e8",
+        "f02fb0b5-ab24-4939-82dd-c225a21c5cb1",
+        "93692ea9-f434-447d-ba6c-0cec4553cf81",
+        "876031ad-702b-4115-9cee-9bce8e1c73b3",
+        "7301fd1d-ebef-4933-baad-53a51809f89e",
+        "e15b2c1d-e620-42b7-8497-70b60548f316",
+        "722de5f2-6648-4954-840d-932f6467f78a",
+        "988bb7a3-5ae6-4b2b-bbe8-8506a7b3dec1",
+        "10368918-fac5-49b9-872e-2635ec3d9e17",
+        "a57c2dac-34e0-4726-97c9-33b223dbfe4d",
+        "3e71c291-6b18-489d-839a-015a375e95c2",
+        "39e328c7-c460-4969-86a5-4c966a043cb2",
+        "489ad895-ed5f-4268-a6af-7145f7d37db4",
+        "73465057-5df9-488d-8ede-8f158739737b",
+        "39d13c9a-565d-4ed9-a427-a2bd9919f68a",
+        "68011d0b-d2e9-4f28-9bfd-6001e867ea3e",
+        "3f5e6184-1cf6-441a-acab-3db854aa66c2",
+        "9bd50ef7-2b51-4216-86d1-59b82fe94ada",
+        "04d91f69-1d40-41a9-94e6-a23038e9ff38",
+        "e3d6b513-6423-452c-9781-38a2405ccb48",
+        "4b8fb52f-4b3a-4e62-8a42-1f397c2116dd",
+        "56dca685-c707-4eed-8ded-743b62099ceb",
+        "44112147-4fde-4ea9-b988-445b0caf0916",
+        "84042384-6236-46f3-8a2d-f75877412d68",
+        "c57671b3-77d5-419c-8c73-0e640ce29823",
+        "18674523-009e-40b9-995b-78750894615c",
+        "3b7f2fd2-bb0a-4d0c-9375-7e6049d794cd",
+        "d4577847-9437-4817-95d7-10d9ec653c92",
+        "994ef846-7bb4-442b-89e5-24313ecf9cf7",
+        "d00efa75-2678-4fa3-bfff-0a983a618e9a",
+        "50193f2d-95d7-4b62-b50c-e30a50545abf",
+        "db182a7e-b0bc-406c-a078-e2c1f65e2ebb",
+        "1938bc8a-6e88-4cb4-8134-d0a5007a46aa",
+        "651ce3ae-0053-4149-9289-7f64b19308e3",
+        "f5e2fedc-9096-4598-8a0f-c3baea7e89fd",
+        "9a7d77be-423a-4c6c-9880-b936b9476e4f",
+        "89b0dbb7-abd4-4a95-83d5-2d0d8c89bf2d",
+        "7854e118-8fb1-426d-8089-a451438b3d78",
+        "df30a041-f816-456f-b30c-00e010e58d81",
+        "eecb4d5b-e1d9-47b9-9095-aa6a64821b9c",
+        "bc8944d5-207e-4f54-a329-251fa2d2d38d",
+        "06c6a7f4-a035-453b-8014-b9243e9cd1d3",
+        "9b8c9fa7-bcb3-4e8c-8f0f-f2452394d3a3",
+        "543a76f2-e621-4b0e-9d68-98db5ec17802",
+        "ac8b5ff6-92e2-4ec0-83bb-e1f7467c8b7d",
+        "3d50344d-b78c-4481-997c-00a0c1b33c60",
+        "e655b3eb-e6b0-4ad7-8875-de425a0afebf",
+        "bd62cad3-5bca-4a9a-8f09-5cbc64b5558c",
+        "d1b90a27-5bc4-4c58-a30c-d7bd0949c6dd",
+        "ad78fdde-e52e-47ab-b0f6-8af589bf2437",
+        "424fddac-59c0-46d5-a210-614eae7eb000",
+        "8709947b-ee66-404c-bc0a-26e1b99bf721",
+        "10a2737d-9569-4c81-b27a-2aa3285188e8",
+        "08a713b1-24fe-4d57-b5ab-07a51cc84157",
+        "496389ac-1c67-4c58-aad7-2371bd1d1df6",
+        "25a01273-cc02-4564-a680-c087447a345f",
+        "0accda66-acaa-4ade-8903-1c8bebdfbf54",
+        "dd6e1b5f-78e9-42cf-ae1e-2ca819bea2a0",
+        "c3aa871a-2ab8-4f5b-a5f4-b55ae5cece94",
+        "ff1f4467-11aa-4086-b5c1-590f61321dd2",
+        "a73cd6ae-b82e-4f20-85da-bfb20f8a8836"
+      ],
+      "completeness": "PAGE_COMMITTED"
+    }
+  ],
+  "ping": {
+    "ok": true,
+    "server": "lili-mcp",
+    "version": "1.4.0",
+    "protocols": [
+      "2024-11-05",
+      "2025-03-26",
+      "2025-06-18"
+    ],
+    "authenticated": true
+  },
+  "stores": [
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "inventory_events",
+      "enabled": true,
+      "lastSyncedAt": null,
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": null,
+      "rowCount": 0
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "orders",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-09T15:13:17.438Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "ea3dff12-be66-4f1c-8c87-1ca679400888",
+      "rowCount": 2423
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "inventory_age",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-09T13:34:42.716Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "9109cfbf-b3ab-400a-8291-71d31edbbc5e",
+      "rowCount": 600
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "settlements",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-09T11:36:29.664Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "a321796a-bd91-4c45-bc04-b08e4119ce21",
+      "rowCount": 64217
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "fulfillment",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-09T17:01:51.236Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "010c5403-7e2f-4ae7-8d5a-08d5a7b7cba9",
+      "rowCount": 3229
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "reimbursements",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-06T13:19:49.164Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "4ebcd7f5-aedf-436a-a53e-18797943234f",
+      "rowCount": 16
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "brand_analytics",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-07T17:16:24.509Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "ad732ce8-d484-420c-9509-f546aa845537",
+      "rowCount": 100
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "pricing",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-09T17:18:04.478Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "db93e958-8703-45f3-8923-d40ce4e13b56",
+      "rowCount": 456
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "listing_details",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-09T11:32:12.899Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "39f4e9dc-56d3-429d-9fb2-54f8a8b527ba",
+      "rowCount": 230
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "returns",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-09T12:29:25.810Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "51272cb2-3831-4d9f-8554-adb4265e9127",
+      "rowCount": 1
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "catalog_items",
+      "enabled": true,
+      "lastSyncedAt": null,
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "e7571aca-1c91-421a-8c55-04bee66edb0d",
+      "rowCount": 227
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "buy_box_history",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-09T18:05:02.360Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "a5abba6d-251e-44f2-9e95-763b7643811b",
+      "rowCount": 57
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "sales_traffic",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-09T14:25:42.235Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "17ab4e5e-8f73-4648-9f6b-7b26678c5aea",
+      "rowCount": 1
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "catalog",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-09T13:28:35.780Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "cbb95e50-b531-4fa6-87ae-a02fd0c7c0c3",
+      "rowCount": 230
+    },
+    {
+      "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+      "displayName": "aoocy-us",
+      "amazonSellerId": "A1X2QDB8KLZE3A",
+      "marketplaceId": "ATVPDKIKX0DER",
+      "region": "us-east-1",
+      "resource": "inventory",
+      "enabled": true,
+      "lastSyncedAt": "2026-11-09T13:26:44.286Z",
+      "source": "amazon_sp_api_snapshot",
+      "syncRunId": "5da936ff-fadb-4e33-bc76-eb21e5df69f5",
+      "rowCount": 201
+    }
+  ]
+}

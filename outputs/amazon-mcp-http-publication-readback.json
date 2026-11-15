@@ -1,0 +1,131 @@
+{
+  "checkedAt": "2026-11-09T17:54:10.048195+00:00",
+  "transport": "EXISTING_CONFIGURED_MCP_HTTP_JSON_RPC",
+  "nativeCodexToolStatus": "UNAVAILABLE_INITIALIZE_HTTP_502",
+  "results": [
+    {
+      "resource": "catalog_items",
+      "sourceRunId": "e7571aca-1c91-421a-8c55-04bee66edb0d",
+      "recordsVerified": 227,
+      "nonemptyPages": 5,
+      "emptyPage": 6,
+      "allFieldsMatchDatabase": true,
+      "requestIds": [
+        "cdebd79d-968f-421a-b290-8f59ee4a8a42",
+        "6c30c23a-c3db-433a-9b2d-88b56f969c81",
+        "14dc981e-ac2a-42bf-b325-e64eda0076b6",
+        "18ca332a-64cc-44e4-81ec-b757bec0c189",
+        "ae399edf-dc44-4564-be4d-858b053e2c80",
+        "a648ee0d-e318-4d14-bc63-188833715269"
+      ],
+      "completeness": {
+        "mode": "PARTIAL_PUBLISHED_VERSION",
+        "complete": false,
+        "coverage": {
+          "type": "APPROVED_SCOPE_OBSERVATION",
+          "reason": "UPSTREAM_OBJECT_NOT_FOUND",
+          "complete": false,
+          "resource": "catalog_items",
+          "rowCount": 227,
+          "publication": "PARTIAL_VERIFIED_OBJECTS",
+          "publishedAt": "2026-11-09T17:52:38.728Z",
+          "requestedObjects": 228,
+          "unavailableObjects": 1,
+          "marketplaceVerified": true,
+          "unavailableObjectIds": [
+            "B09BNS592R"
+          ],
+          "accountUniverseComplete": false,
+          "unavailableObjectIndexes": [
+            47
+          ]
+        }
+      },
+      "warnings": [
+        "仅查询成功发布的观察版本；未返回实体不代表删除。",
+        "当前目录为显式批准的部分发布；Amazon 404 对象仍未取得，不能将当前记录解释为全量目录。缺口见 completeness.coverage。"
+      ]
+    },
+    {
+      "resource": "fulfillment",
+      "sourceRunId": "010c5403-7e2f-4ae7-8d5a-08d5a7b7cba9",
+      "recordsVerified": 3229,
+      "nonemptyPages": 65,
+      "emptyPage": 66,
+      "allFieldsMatchDatabase": true,
+      "requestIds": [
+        "000c0412-5a51-4cc6-b793-c3d48d129486",
+        "9469693a-ead3-43d1-88f6-215d36d66ee2",
+        "55b9028a-77b4-45e9-aaa5-c48eff50d7ac",
+        "abb0fb45-3d87-4b32-9cde-38cf4f3b1009",
+        "02852073-b7ad-4ff1-a4dc-cfdf8e357245",
+        "72e3a5db-6ffb-4a12-be4e-03e17e4f43f1",
+        "33ccbdf8-c0f5-4f9f-9adf-77f8e408c808",
+        "6ff6f94d-987e-4b9d-b3a4-ff9a81ba1527",
+        "325f868c-10cb-4396-b7b4-6566a77a6e89",
+        "d9d3f18f-f933-43a6-a43d-cd9f288d3883",
+        "5d7b2eb7-05a5-4a5b-9a84-7b6cd14d9eb1",
+        "e73457f2-a6e7-4645-a416-889756a1cc72",
+        "0ee3061e-18a5-4103-821e-93d07cf01aa0",
+        "198fad6a-0b1a-4013-ba09-1dc3e2062fa0",
+        "656ae243-e598-46bd-95cb-bc96556b8972",
+        "7689a639-e7bc-4863-a544-c2724473fe5f",
+        "5739c5b2-a94c-466c-84e4-edf9fef05573",
+        "461a0470-77b0-468b-890e-1fa983c8f188",
+        "6ef9a8c3-3e31-4aba-839c-54bfafd1c0b5",
+        "a6e1fe86-4dae-4216-a11a-fdc26c72c97c",
+        "31bbff89-bb9f-406c-8bb9-f4e95c21d436",
+        "7113f2a4-639b-422a-b713-24948303d5e9",
+        "f96beaa5-362a-4811-a28b-562696319f6f",
+        "abe10d3a-e792-4dff-a6e5-f19bb6e0ac56",
+        "6165a169-aad7-4a50-9a4a-fa6a8ba42dfd",
+        "414f956b-e38b-4cee-a716-88476ac11f9f",
+        "96de253b-5fdd-4b0e-afb7-18ceb5b8fd61",
+        "ed5f432e-d0e8-400b-80ed-4f7360e643ae",
+        "8307397b-2f0b-4661-95fb-f99795687607",
+        "6682fbc0-ff51-4305-bfb3-7c068d68c78b",
+        "b61d442e-b6b5-48f2-955c-34c023de1e32",
+        "b62a15fc-15f4-4a7e-a25b-6c297120fe22",
+        "ac1f7d8b-3504-4290-98e6-f6582a029367",
+        "78cd2616-1742-4939-8a69-b2c0ab4a0915",
+        "84be3930-38dd-4fee-b602-b14c3a7c430b",
+        "796da058-ae13-45c3-8317-731f45d9a6de",
+        "a93c1a38-4591-48b3-b3dc-3cc715e173f1",
+        "d62b7182-b97a-4767-8403-f7186f89d4aa",
+        "6270f91c-2601-4a81-9b91-29b48654fb07",
+        "09f5acdf-9cb2-423a-8c88-7a5f295583aa",
+        "43b0bb7c-e5eb-4967-b642-4c0f4b27bdb9",
+        "6490ba3f-285d-41c3-b214-4252284debfe",
+        "978456f4-ca04-4b25-a88e-ace3f260a6f2",
+        "24f517e9-5c42-42d6-ba5d-e0fc1389a89c",
+        "0e351222-83bf-4afd-8631-033cdfd2cc7c",
+        "e922e506-7b22-465b-b2da-d6ae8c507169",
+        "7ab7f478-39cf-439f-b923-cb072b6d6f2e",
+        "2d36d0aa-de62-40f1-91dd-ed7a87d64d94",
+        "a6abdcb6-bbe1-4db9-bb00-fca018e7612b",
+        "cd5a32de-1ada-4858-973a-c1edbe5842b9",
+        "36a7ba42-3ace-41e5-8b43-a9bd84cf6d49",
+        "df887413-0224-44d5-9eb3-26e942c896a4",
+        "bee6c5a8-484f-42ca-863a-9f869198ac9f",
+        "6bbeb9c9-74e9-475a-9284-37c2a6068067",
+        "f115cb9f-bb6a-4d6f-98b8-acd96dcab800",
+        "56e6554c-3d3a-48a4-a549-6e574663639f",
+        "71d5f955-f206-453e-aae2-b8b877961c6f",
+        "cd6c3400-b9ff-4502-ab11-45a9a869b139",
+        "b6710fb4-9ef3-4218-8430-9b4ef199c13c",
+        "aea1dea2-d64d-4129-a59e-e229aae55ff7",
+        "9ce0f46c-85cd-48dd-a0af-73e5933d0401",
+        "5be42f81-c285-45d0-b838-c8e64c634496",
+        "0b08d88f-7925-4b68-803d-d778a07189fc",
+        "faf6b9b4-873f-42c3-a6c5-50f912caf705",
+        "5b677218-1d6e-4bac-84e5-10442dd78d29",
+        "68136831-9249-42f4-b81f-53bd9d3383de"
+      ],
+      "completeness": "PUBLISHED_VERSION_ONLY",
+      "warnings": [
+        "仅查询成功发布的观察版本；未返回实体不代表删除。",
+        "商品观察保留原件页号和行号；同 SKU 可有多行，未确认可加性，不得直接累加为在途库存。数量是申报数量，不是实际发出或收到数量。"
+      ]
+    }
+  ]
+}

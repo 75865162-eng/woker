@@ -1,0 +1,946 @@
+{
+  "batch": 1,
+  "reportDate": "2026-11-10",
+  "userTimezone": "America/New_York",
+  "scope": {
+    "displayName": "aoocy-us",
+    "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+    "marketplaceId": "ATVPDKIKX0DER"
+  },
+  "status": "INCOMPLETE",
+  "evidenceTimeNote": "MCP observedAt values are retained verbatim (2026-11-09); the client report date is 2026-11-10. No new Amazon collection was executed in this turn.",
+  "statusObservedAt": "2026-11-09T17:46:21.971Z",
+  "source": "Connected ERP/Lili MCP responses; no direct SQL",
+  "newAmazonRequests": 0,
+  "newBusinessWrites": 0,
+  "domains": [
+    {
+      "resource": "finance",
+      "table": "finance_transactions",
+      "latestTask": null,
+      "metrics": {
+        "requestCount": null,
+        "requestCountScope": "Latest visible task; includes recorded transport requests, not report count",
+        "reportCount": null,
+        "reportCountByStatus": null,
+        "originalArchives": null,
+        "archiveScope": null,
+        "successfullyParsedRows": null,
+        "structuredStoredRows": null,
+        "latestTaskInserted": null,
+        "latestTaskUpdated": null,
+        "reusedRows": null,
+        "quarantinedRows": null,
+        "rejectedRows": null,
+        "latestTaskFailures": null,
+        "storedRowsInPublishedDocuments": null,
+        "mcpQueryTotal": 112485,
+        "mcpLastPage": {
+          "page": 2250,
+          "pageSize": 50,
+          "hasNext": false,
+          "total": 112485,
+          "pageCount": 2250
+        },
+        "erpQueryTotal": null,
+        "erpLastPage": null
+      },
+      "history": null,
+      "queryEvidence": {
+        "requestId": "1ed5b1f2-c5ef-4945-9c7b-f545b40ce7f2",
+        "source": "AmazonFinanceRecord",
+        "lastSyncAt": "2026-11-09T16:57:02.819Z",
+        "freshness": "ok",
+        "publicationPolicy": "page_committed_current_facts",
+        "coverageStatus": "HISTORY_INCOMPLETE",
+        "warnings": [
+          "保留现有财务管理员权限；站点级 MCP 凭证不能取得卖家级财务证据或隔离数据。",
+          "原币种金额；不跨币种汇总，不代表最终结算。",
+          "财务按页提交；sourceRunId 追溯记录采集批次，来源 syncRunId 仅表示最近完成窗口，当前查询不证明历史完整。"
+        ],
+        "firstPage": {
+          "page": 1,
+          "pageSize": 3,
+          "hasNext": true,
+          "total": 112485,
+          "pageCount": 37495
+        },
+        "lastPageRequestId": "872eac86-a6bc-4040-a84f-4c72521cebac"
+      },
+      "errors": {
+        "query": null,
+        "fieldCoverage": null
+      },
+      "verification": {
+        "CODE_IMPLEMENTED": "Existing implementation; not newly implemented in this turn",
+        "TEST_VERIFIED": "31 isolated Finance integration cases",
+        "REAL_DATA_VERIFIED": "NOT_VERIFIED_NEW_COLLECTION",
+        "ERP_QUERY_VERIFIED": "NOT_VERIFIED",
+        "MCP_QUERY_VERIFIED": "CURRENT_VISIBLE_DATA_ONLY",
+        "SKILL_E2E_VERIFIED": "READ_ONLY_SKILL_ERP_QUERY_FLOW; NOT_RECOVERY_OR_COLLECTION"
+      },
+      "remaining": "Finance data query succeeded while status omitted finance as ACCESS_RESTRICTED; historical gap evidence unavailable through that status response."
+    },
+    {
+      "resource": "fulfillment",
+      "table": "fulfillment",
+      "latestTask": {
+        "id": "fcebdb91-7f06-4a21-8129-d33ab1c33ecf",
+        "status": "WAITING",
+        "stage": "FETCHING",
+        "processedCount": 157,
+        "pagesCompleted": 74,
+        "nextAttemptAt": "2026-11-09T17:46:02.476Z",
+        "attempts": 1,
+        "maxAttempts": 3,
+        "apiRequests": 148,
+        "throttles": 0,
+        "insertedCount": 157,
+        "updatedCount": 0,
+        "failedCount": 0,
+        "detailsCompletedCount": 0,
+        "executionStartedAt": "2026-11-09T17:02:09.985Z",
+        "finishedAt": null,
+        "operatorAction": null
+      },
+      "metrics": {
+        "requestCount": 148,
+        "requestCountScope": "Latest visible task; includes recorded transport requests, not report count",
+        "reportCount": null,
+        "reportCountByStatus": null,
+        "originalArchives": null,
+        "archiveScope": null,
+        "successfullyParsedRows": null,
+        "structuredStoredRows": null,
+        "latestTaskInserted": 157,
+        "latestTaskUpdated": 0,
+        "reusedRows": null,
+        "quarantinedRows": null,
+        "rejectedRows": null,
+        "latestTaskFailures": 0,
+        "storedRowsInPublishedDocuments": null,
+        "mcpQueryTotal": 3229,
+        "mcpLastPage": {
+          "page": 65,
+          "pageSize": 50,
+          "hasNext": false,
+          "total": 3229,
+          "pageCount": 65
+        },
+        "erpQueryTotal": null,
+        "erpLastPage": null
+      },
+      "history": {
+        "applicable": false,
+        "complete": false,
+        "percent": null,
+        "target": null,
+        "coveredMilliseconds": null,
+        "expectedMilliseconds": null,
+        "gapCount": null,
+        "gaps": [],
+        "gapsTruncated": false,
+        "brand": null
+      },
+      "queryEvidence": {
+        "requestId": "05586438-a360-4bbe-96ad-53d0a980a39c",
+        "source": "AmazonDomainObservation",
+        "lastSyncAt": "2026-11-09T17:01:51.236Z",
+        "freshness": "ok",
+        "publicationPolicy": "successful_source_snapshot_head",
+        "coverageStatus": "HISTORY_INCOMPLETE",
+        "warnings": [
+          "仅查询成功发布的观察版本；未返回实体不代表删除。",
+          "商品观察保留原件页号和行号；同 SKU 可有多行，未确认可加性，不得直接累加为在途库存。数量是申报数量，不是实际发出或收到数量。"
+        ],
+        "firstPage": {
+          "page": 1,
+          "pageSize": 3,
+          "hasNext": true,
+          "total": 3229,
+          "pageCount": 1077
+        },
+        "lastPageRequestId": "db9a180e-6f79-4ce9-8060-7ccad455a9fb"
+      },
+      "errors": {
+        "query": null,
+        "fieldCoverage": "tool call error: tool call failed for `lili/amazon.fields.coverage`\n\nCaused by:\n    Mcp error: -32603: Research request failed."
+      },
+      "verification": {
+        "CODE_IMPLEMENTED": "Existing implementation; not newly implemented in this turn",
+        "TEST_VERIFIED": "42 isolated observations integration cases",
+        "REAL_DATA_VERIFIED": "NOT_VERIFIED_NEW_COLLECTION",
+        "ERP_QUERY_VERIFIED": "NOT_VERIFIED",
+        "MCP_QUERY_VERIFIED": "CURRENT_VISIBLE_DATA_ONLY",
+        "SKILL_E2E_VERIFIED": "READ_ONLY_SKILL_ERP_QUERY_FLOW; NOT_RECOVERY_OR_COLLECTION"
+      },
+      "remaining": "Newer in-progress task does not replace published observation head; no live recovery executed."
+    },
+    {
+      "resource": "catalog_items",
+      "table": "catalog_items",
+      "latestTask": {
+        "id": "a3728901-0044-4b3e-a403-747d8ced60a5",
+        "status": "CANCELLED",
+        "stage": "FETCHING",
+        "processedCount": 47,
+        "pagesCompleted": 47,
+        "nextAttemptAt": "2026-11-09T16:22:33.709Z",
+        "attempts": 1,
+        "maxAttempts": 3,
+        "apiRequests": 96,
+        "throttles": 0,
+        "insertedCount": 47,
+        "updatedCount": 0,
+        "failedCount": 1,
+        "detailsCompletedCount": 0,
+        "executionStartedAt": "2026-11-09T15:59:25.009Z",
+        "finishedAt": "2026-11-09T16:23:06.597Z",
+        "operatorAction": null
+      },
+      "metrics": {
+        "requestCount": 96,
+        "requestCountScope": "Latest visible task; includes recorded transport requests, not report count",
+        "reportCount": null,
+        "reportCountByStatus": null,
+        "originalArchives": null,
+        "archiveScope": null,
+        "successfullyParsedRows": null,
+        "structuredStoredRows": null,
+        "latestTaskInserted": 47,
+        "latestTaskUpdated": 0,
+        "reusedRows": null,
+        "quarantinedRows": null,
+        "rejectedRows": null,
+        "latestTaskFailures": 1,
+        "storedRowsInPublishedDocuments": null,
+        "mcpQueryTotal": null,
+        "mcpLastPage": null,
+        "erpQueryTotal": null,
+        "erpLastPage": null
+      },
+      "history": {
+        "applicable": false,
+        "complete": false,
+        "percent": null,
+        "target": null,
+        "coveredMilliseconds": null,
+        "expectedMilliseconds": null,
+        "gapCount": null,
+        "gaps": [],
+        "gapsTruncated": false,
+        "brand": null
+      },
+      "queryEvidence": null,
+      "errors": {
+        "query": {
+          "content": [
+            {
+              "type": "text",
+              "text": "tool call error: tool call failed for `erp/data_query`\n\nCaused by:\n    Transport send error: Transport [codex_rmcp_client::tool_list_changes::ToolListChanges<codex_rmcp_client::event_notification_transport::EventNotificationTransport<rmcp::transport::worker::WorkerTransport<rmcp::transport::streamable_http_client::StreamableHttpClientWorker<codex_rmcp_client::http_client_adapter::StreamableHttpClientAdapter>>>>] error: unexpected server response: HTTP 403: {\"jsonrpc\":\"2.0\",\"id\":7,\"error\":{\"code\":\"TABLE_NOT_ALLOWED\",\"message\":\"TABLE_NOT_ALLOWED: 当前授权范围没有该表的已发布数据源。\",\"data\":{\"requestId\":\"12a00034-f28b-4eeb-998b-d7a7ff71569d\",\"toolVersion\":\"2.0.0\",\"businessCode\":\"DATASET_UNPUBLISHED\",\"dataAvailability\":\"NO_PUBLISHED_SOURCE\"}}}"
+            }
+          ],
+          "isError": true
+        },
+        "fieldCoverage": "tool call error: tool call failed for `lili/amazon.fields.coverage`\n\nCaused by:\n    Mcp error: -32603: Research request failed."
+      },
+      "verification": {
+        "CODE_IMPLEMENTED": "Explicit-object archive replay fixed locally; 404 partial continuation pre-existed",
+        "TEST_VERIFIED": "42 isolated observations integration cases including 6 new archive recovery regressions",
+        "REAL_DATA_VERIFIED": "NOT_VERIFIED_NEW_COLLECTION",
+        "ERP_QUERY_VERIFIED": "NOT_VERIFIED",
+        "MCP_QUERY_VERIFIED": "NOT_VERIFIED",
+        "SKILL_E2E_VERIFIED": "READ_ONLY_SKILL_ERP_QUERY_FLOW; NOT_RECOVERY_OR_COLLECTION"
+      },
+      "remaining": "Latest task CANCELLED with 47 staged records; no published dataset. Do not silently undo cancellation."
+    },
+    {
+      "resource": "orders",
+      "table": "orders",
+      "latestTask": {
+        "id": "84fcf987-2895-4576-ba7e-967b41c882e7",
+        "status": "FAILED",
+        "stage": "WAITING",
+        "processedCount": 0,
+        "pagesCompleted": 0,
+        "nextAttemptAt": "2026-11-09T15:16:28.833Z",
+        "attempts": 2,
+        "maxAttempts": 3,
+        "apiRequests": 1,
+        "throttles": 0,
+        "insertedCount": 0,
+        "updatedCount": 0,
+        "failedCount": 1,
+        "detailsCompletedCount": 0,
+        "executionStartedAt": "2026-11-09T15:13:27.191Z",
+        "finishedAt": "2026-11-09T15:16:18.756Z",
+        "orderRecovery": {
+          "checkedAt": "2026-11-09T17:46:21.956Z",
+          "approvalRequired": true,
+          "started": false,
+          "state": "CHECKPOINT_VALID",
+          "reason": null,
+          "message": "检查点可继续；权限、授权与任务版本仍须在申请和执行时复核。",
+          "checkpoint": {
+            "mode": "RESUME_COMMITTED_ORDER_CHECKPOINT",
+            "window": {
+              "from": "2024-11-25T09:20:07.189Z",
+              "to": "2024-11-26T09:20:07.189Z"
+            },
+            "pagesCompleted": 0,
+            "detailsCompleted": 0,
+            "pendingDetails": 0,
+            "archivedResponses": 1,
+            "listComplete": false,
+            "nextOperation": "searchOrders",
+            "restartsFromBeginning": false
+          }
+        },
+        "operatorAction": "查看结构日志与失败阶段，核对参数或重试上限后申请恢复；报告创建结果不确定时先人工核查，勿重复创建。"
+      },
+      "metrics": {
+        "requestCount": 1,
+        "requestCountScope": "Latest visible task; includes recorded transport requests, not report count",
+        "reportCount": null,
+        "reportCountByStatus": null,
+        "originalArchives": null,
+        "archiveScope": null,
+        "successfullyParsedRows": null,
+        "structuredStoredRows": null,
+        "latestTaskInserted": 0,
+        "latestTaskUpdated": 0,
+        "reusedRows": null,
+        "quarantinedRows": null,
+        "rejectedRows": null,
+        "latestTaskFailures": 1,
+        "storedRowsInPublishedDocuments": null,
+        "mcpQueryTotal": 2423,
+        "mcpLastPage": {
+          "page": 808,
+          "pageSize": 3,
+          "hasNext": false,
+          "total": 2423,
+          "pageCount": 808
+        },
+        "erpQueryTotal": null,
+        "erpLastPage": null
+      },
+      "history": {
+        "applicable": true,
+        "complete": false,
+        "percent": 1.9,
+        "target": {
+          "from": "2024-11-06T09:39:07.189Z",
+          "toExclusive": "2026-11-09T17:43:21.971Z"
+        },
+        "coveredMilliseconds": 1208820000,
+        "expectedMilliseconds": 63360254782,
+        "gapCount": 2,
+        "gaps": [
+          {
+            "from": "2024-11-06T09:39:07.189Z",
+            "toExclusive": "2024-11-11T09:34:07.189Z"
+          },
+          {
+            "from": "2024-11-25T09:21:07.189Z",
+            "toExclusive": "2026-11-09T17:43:21.971Z"
+          }
+        ],
+        "gapsTruncated": false,
+        "brand": null
+      },
+      "queryEvidence": {
+        "requestId": "0be2d7f0-a7f0-4b3b-a855-ac5a2d6e1239",
+        "source": "AmazonOrderRecord",
+        "lastSyncAt": "2026-11-09T15:13:17.438Z",
+        "freshness": "ok",
+        "publicationPolicy": "page_committed_current_facts",
+        "coverageStatus": "HISTORY_INCOMPLETE",
+        "warnings": [
+          "订单为已提交页的当前事实；不代表历史窗口或订单详情均完整。",
+          "当前订单详情策略未请求 PROCEEDS；不能据此判定 Amazon 未提供金额或账号缺少权限，收入补采需先核实并批准相应数据范围。",
+          "当前页存在金额或币种缺失；明细有效不代表收入数据完整，缺失不能解释为零。",
+          "当前订单同步窗口尚未完成；可查询已提交数据，不代表完整历史。"
+        ],
+        "firstPage": {
+          "page": 1,
+          "pageSize": 3,
+          "hasNext": true,
+          "total": 2423,
+          "pageCount": 808
+        },
+        "lastPageRequestId": "4dc3ac60-d74c-4623-8a9a-a82d06a0b355"
+      },
+      "errors": {
+        "query": null,
+        "fieldCoverage": "tool call error: tool call failed for `lili/amazon.fields.coverage`\n\nCaused by:\n    Mcp error: -32603: Research request failed."
+      },
+      "verification": {
+        "CODE_IMPLEMENTED": "Existing implementation; not newly implemented in this turn",
+        "TEST_VERIFIED": "38 isolated Orders integration cases",
+        "REAL_DATA_VERIFIED": "NOT_VERIFIED_NEW_COLLECTION",
+        "ERP_QUERY_VERIFIED": "NOT_VERIFIED",
+        "MCP_QUERY_VERIFIED": "CURRENT_VISIBLE_DATA_ONLY",
+        "SKILL_E2E_VERIFIED": "READ_ONLY_SKILL_ERP_QUERY_FLOW; NOT_RECOVERY_OR_COLLECTION"
+      },
+      "remaining": "Latest order window failed; committed records readable; PROCEEDS not requested by current detail policy."
+    },
+    {
+      "resource": "order_items",
+      "table": "order_items",
+      "latestTask": {
+        "id": "84fcf987-2895-4576-ba7e-967b41c882e7",
+        "status": "FAILED",
+        "stage": "WAITING",
+        "processedCount": 0,
+        "pagesCompleted": 0,
+        "nextAttemptAt": "2026-11-09T15:16:28.833Z",
+        "attempts": 2,
+        "maxAttempts": 3,
+        "apiRequests": 1,
+        "throttles": 0,
+        "insertedCount": 0,
+        "updatedCount": 0,
+        "failedCount": 1,
+        "detailsCompletedCount": 0,
+        "executionStartedAt": "2026-11-09T15:13:27.191Z",
+        "finishedAt": "2026-11-09T15:16:18.756Z",
+        "orderRecovery": {
+          "checkedAt": "2026-11-09T17:46:21.956Z",
+          "approvalRequired": true,
+          "started": false,
+          "state": "CHECKPOINT_VALID",
+          "reason": null,
+          "message": "检查点可继续；权限、授权与任务版本仍须在申请和执行时复核。",
+          "checkpoint": {
+            "mode": "RESUME_COMMITTED_ORDER_CHECKPOINT",
+            "window": {
+              "from": "2024-11-25T09:20:07.189Z",
+              "to": "2024-11-26T09:20:07.189Z"
+            },
+            "pagesCompleted": 0,
+            "detailsCompleted": 0,
+            "pendingDetails": 0,
+            "archivedResponses": 1,
+            "listComplete": false,
+            "nextOperation": "searchOrders",
+            "restartsFromBeginning": false
+          }
+        },
+        "operatorAction": "查看结构日志与失败阶段，核对参数或重试上限后申请恢复；报告创建结果不确定时先人工核查，勿重复创建。"
+      },
+      "metrics": {
+        "requestCount": null,
+        "requestCountScope": "Latest visible task; includes recorded transport requests, not report count",
+        "reportCount": null,
+        "reportCountByStatus": null,
+        "originalArchives": null,
+        "archiveScope": null,
+        "successfullyParsedRows": null,
+        "structuredStoredRows": null,
+        "latestTaskInserted": null,
+        "latestTaskUpdated": null,
+        "reusedRows": null,
+        "quarantinedRows": null,
+        "rejectedRows": null,
+        "latestTaskFailures": null,
+        "storedRowsInPublishedDocuments": null,
+        "mcpQueryTotal": 2474,
+        "mcpLastPage": {
+          "page": 825,
+          "pageSize": 3,
+          "hasNext": false,
+          "total": 2474,
+          "pageCount": 825
+        },
+        "erpQueryTotal": null,
+        "erpLastPage": null
+      },
+      "history": null,
+      "queryEvidence": {
+        "requestId": "0434f098-9df7-49b9-8572-054afc781c32",
+        "source": "AmazonOrderItemRecord",
+        "lastSyncAt": "2026-11-09T15:13:17.438Z",
+        "freshness": "ok",
+        "publicationPolicy": "page_committed_current_facts",
+        "coverageStatus": "HISTORY_INCOMPLETE",
+        "warnings": [
+          "按订单商品行分页；仅含已采集商品，空结果不代表没有订单或销量。",
+          "商品金额保留原始字符串与币种；过期明细不可作为完整销售统计。",
+          "当前订单详情策略未请求 PROCEEDS；不能据此判定 Amazon 未提供金额或账号缺少权限，收入补采需先核实并批准相应数据范围。",
+          "当前页存在金额或币种缺失；明细有效不代表收入数据完整，缺失不能解释为零。",
+          "当前订单同步窗口尚未完成；可查询已提交数据，不代表完整历史。"
+        ],
+        "firstPage": {
+          "page": 1,
+          "pageSize": 3,
+          "hasNext": true,
+          "total": 2474,
+          "pageCount": 825
+        },
+        "lastPageRequestId": "403eda49-1c7e-47cc-a196-baef9b1d63fa"
+      },
+      "errors": {
+        "query": null,
+        "fieldCoverage": null
+      },
+      "verification": {
+        "CODE_IMPLEMENTED": "Existing implementation; not newly implemented in this turn",
+        "TEST_VERIFIED": "Same 38 Orders integration cases (not an additional count)",
+        "REAL_DATA_VERIFIED": "NOT_VERIFIED_NEW_COLLECTION",
+        "ERP_QUERY_VERIFIED": "NOT_VERIFIED",
+        "MCP_QUERY_VERIFIED": "CURRENT_VISIBLE_DATA_ONLY",
+        "SKILL_E2E_VERIFIED": "READ_ONLY_SKILL_ERP_QUERY_FLOW; NOT_RECOVERY_OR_COLLECTION"
+      },
+      "remaining": "Latest order window failed; committed records readable; PROCEEDS not requested by current detail policy.",
+      "taskMetricsSharedWith": "orders; not additional requests or inserts"
+    },
+    {
+      "resource": "returns",
+      "table": "returns",
+      "latestTask": {
+        "id": "51272cb2-3831-4d9f-8554-adb4265e9127",
+        "status": "SUCCEEDED",
+        "stage": "RETURN_REPORT_COMPLETED",
+        "processedCount": 1,
+        "pagesCompleted": 1,
+        "nextAttemptAt": "2026-11-09T12:29:25.791Z",
+        "attempts": 2,
+        "maxAttempts": 5,
+        "apiRequests": 8,
+        "throttles": 0,
+        "insertedCount": 1,
+        "updatedCount": 0,
+        "failedCount": 3,
+        "detailsCompletedCount": 0,
+        "executionStartedAt": "2026-11-08T20:01:11.779Z",
+        "finishedAt": "2026-11-09T12:29:25.812Z",
+        "operatorAction": null
+      },
+      "metrics": {
+        "requestCount": 8,
+        "requestCountScope": "Latest visible task; includes recorded transport requests, not report count",
+        "reportCount": null,
+        "reportCountByStatus": null,
+        "originalArchives": null,
+        "archiveScope": null,
+        "successfullyParsedRows": null,
+        "structuredStoredRows": null,
+        "latestTaskInserted": 1,
+        "latestTaskUpdated": 0,
+        "reusedRows": null,
+        "quarantinedRows": null,
+        "rejectedRows": null,
+        "latestTaskFailures": 3,
+        "storedRowsInPublishedDocuments": null,
+        "mcpQueryTotal": 1,
+        "mcpLastPage": {
+          "page": 1,
+          "pageSize": 3,
+          "hasNext": false,
+          "total": 1,
+          "pageCount": 1
+        },
+        "erpQueryTotal": null,
+        "erpLastPage": null
+      },
+      "history": {
+        "applicable": true,
+        "complete": false,
+        "percent": 0,
+        "target": {
+          "from": "2024-11-06T09:39:07.189Z",
+          "toExclusive": "2026-11-08T17:46:21.971Z"
+        },
+        "coveredMilliseconds": 0,
+        "expectedMilliseconds": 63274034782,
+        "gapCount": 1,
+        "gaps": [
+          {
+            "from": "2024-11-06T09:39:07.189Z",
+            "toExclusive": "2026-11-08T17:46:21.971Z"
+          }
+        ],
+        "gapsTruncated": false,
+        "brand": null
+      },
+      "queryEvidence": {
+        "requestId": "6fa9dd7c-d42e-4f71-b7e5-7a04072d3a73",
+        "source": "AmazonReturnRecord",
+        "lastSyncAt": "2026-11-09T12:29:25.810Z",
+        "freshness": "ok",
+        "publicationPolicy": "single_published_report",
+        "coverageStatus": "HISTORY_INCOMPLETE",
+        "warnings": [
+          "单份已发布 FBA 仓收退货报告；重叠报告不能直接相加。"
+        ],
+        "firstPage": {
+          "page": 1,
+          "pageSize": 3,
+          "hasNext": false,
+          "total": 1,
+          "pageCount": 1
+        },
+        "lastPageRequestId": "6fa9dd7c-d42e-4f71-b7e5-7a04072d3a73"
+      },
+      "errors": {
+        "query": null,
+        "fieldCoverage": "tool call error: tool call failed for `lili/amazon.fields.coverage`\n\nCaused by:\n    Mcp error: -32603: Research request failed."
+      },
+      "verification": {
+        "CODE_IMPLEMENTED": "Existing implementation; not newly implemented in this turn",
+        "TEST_VERIFIED": "23 isolated Returns integration cases",
+        "REAL_DATA_VERIFIED": "NOT_VERIFIED_NEW_COLLECTION",
+        "ERP_QUERY_VERIFIED": "NOT_VERIFIED",
+        "MCP_QUERY_VERIFIED": "CURRENT_VISIBLE_DATA_ONLY",
+        "SKILL_E2E_VERIFIED": "READ_ONLY_SKILL_ERP_QUERY_FLOW; NOT_RECOVERY_OR_COLLECTION"
+      },
+      "remaining": "Current query exposes a single published FBA received-return report; not a complete return history."
+    },
+    {
+      "resource": "inventory_events",
+      "table": "inventory_events",
+      "latestTask": {
+        "id": "7dd47b7d-9d25-4d9f-96b1-0290005d8e08",
+        "status": "SUCCEEDED",
+        "stage": "ARCHIVED_SITE_PENDING",
+        "processedCount": 217,
+        "pagesCompleted": 2,
+        "nextAttemptAt": "2026-11-09T05:28:00.700Z",
+        "attempts": 1,
+        "maxAttempts": 3,
+        "apiRequests": 6,
+        "throttles": 0,
+        "insertedCount": 217,
+        "updatedCount": 0,
+        "failedCount": 0,
+        "detailsCompletedCount": 0,
+        "executionStartedAt": "2026-11-09T05:25:29.671Z",
+        "finishedAt": "2026-11-09T05:28:31.160Z",
+        "operatorAction": null
+      },
+      "metrics": {
+        "requestCount": 6,
+        "requestCountScope": "Latest visible task; includes recorded transport requests, not report count",
+        "reportCount": 20,
+        "reportCountByStatus": [
+          {
+            "status": "STAGED",
+            "count": 20
+          }
+        ],
+        "originalArchives": 20,
+        "archiveScope": "SOURCE_TASKS_OR_SELLER_REPORT_ROW_LINKS_NOT_DATE_FILTERED",
+        "successfullyParsedRows": null,
+        "structuredStoredRows": 176107,
+        "latestTaskInserted": 217,
+        "latestTaskUpdated": 0,
+        "reusedRows": null,
+        "quarantinedRows": null,
+        "rejectedRows": null,
+        "latestTaskFailures": 0,
+        "storedRowsInPublishedDocuments": 0,
+        "mcpQueryTotal": 0,
+        "mcpLastPage": {
+          "page": 1,
+          "pageSize": 3,
+          "hasNext": false,
+          "total": 0,
+          "pageCount": 0
+        },
+        "erpQueryTotal": null,
+        "erpLastPage": null
+      },
+      "history": {
+        "applicable": true,
+        "complete": false,
+        "percent": null,
+        "target": {
+          "from": "2025-05-18T00:00:00.000Z",
+          "toExclusive": "2026-11-09T00:00:00.000Z"
+        },
+        "coveredMilliseconds": null,
+        "expectedMilliseconds": null,
+        "gapCount": null,
+        "gaps": [],
+        "gapsTruncated": false,
+        "brand": null
+      },
+      "queryEvidence": {
+        "requestId": "49fb2e6f-28fe-48a1-bb7f-7c55645f392e",
+        "source": "AmazonSyncReportRow",
+        "lastSyncAt": null,
+        "freshness": "missing",
+        "publicationPolicy": "published_site_verified_report_rows",
+        "coverageStatus": "ATTRIBUTION_PENDING",
+        "warnings": [
+          "仅返回已发布且站点归属验证通过的报告行；原始金额字符串不自动换算。",
+          "报告行数仅代表当前查询可见结果；失败、未发布、未归因及重叠报告不能解释为没有损失或历史完整。"
+        ],
+        "firstPage": {
+          "page": 1,
+          "pageSize": 3,
+          "hasNext": false,
+          "total": 0,
+          "pageCount": 0
+        },
+        "lastPageRequestId": "49fb2e6f-28fe-48a1-bb7f-7c55645f392e"
+      },
+      "errors": {
+        "query": null,
+        "fieldCoverage": null
+      },
+      "verification": {
+        "CODE_IMPLEMENTED": "Existing implementation; not newly implemented in this turn",
+        "TEST_VERIFIED": "27 isolated domain report integration cases",
+        "REAL_DATA_VERIFIED": "NOT_VERIFIED_NEW_COLLECTION",
+        "ERP_QUERY_VERIFIED": "NOT_VERIFIED",
+        "MCP_QUERY_VERIFIED": "CURRENT_VISIBLE_DATA_ONLY",
+        "SKILL_E2E_VERIFIED": "READ_ONLY_SKILL_ERP_QUERY_FLOW; NOT_RECOVERY_OR_COLLECTION"
+      },
+      "remaining": "Report attribution remains pending; archive/storage counts do not prove publication or a continuous history."
+    },
+    {
+      "resource": "reimbursements",
+      "table": "reimbursements",
+      "latestTask": {
+        "id": "6299d02e-15dc-4970-8667-71e5cc8824bd",
+        "status": "SUCCEEDED",
+        "stage": "ARCHIVED_SITE_PENDING",
+        "processedCount": 1,
+        "pagesCompleted": 1,
+        "nextAttemptAt": "2026-11-09T14:08:08.498Z",
+        "attempts": 1,
+        "maxAttempts": 3,
+        "apiRequests": 0,
+        "throttles": 0,
+        "insertedCount": 0,
+        "updatedCount": 0,
+        "failedCount": 0,
+        "detailsCompletedCount": 0,
+        "executionStartedAt": "2026-11-09T14:08:08.457Z",
+        "finishedAt": "2026-11-09T14:08:36.239Z",
+        "operatorAction": null
+      },
+      "metrics": {
+        "requestCount": 0,
+        "requestCountScope": "Latest visible task; includes recorded transport requests, not report count",
+        "reportCount": 26,
+        "reportCountByStatus": [
+          {
+            "status": "PUBLISHED",
+            "count": 2
+          },
+          {
+            "status": "STAGED",
+            "count": 24
+          }
+        ],
+        "originalArchives": 26,
+        "archiveScope": "SOURCE_TASKS_OR_SELLER_REPORT_ROW_LINKS_NOT_DATE_FILTERED",
+        "successfullyParsedRows": null,
+        "structuredStoredRows": 2163,
+        "latestTaskInserted": 0,
+        "latestTaskUpdated": 0,
+        "reusedRows": null,
+        "quarantinedRows": null,
+        "rejectedRows": null,
+        "latestTaskFailures": 0,
+        "storedRowsInPublishedDocuments": 142,
+        "mcpQueryTotal": 16,
+        "mcpLastPage": {
+          "page": 6,
+          "pageSize": 3,
+          "hasNext": false,
+          "total": 16,
+          "pageCount": 6
+        },
+        "erpQueryTotal": null,
+        "erpLastPage": null
+      },
+      "history": {
+        "applicable": true,
+        "complete": false,
+        "percent": null,
+        "target": {
+          "from": "2024-11-09T00:00:00.000Z",
+          "toExclusive": "2026-11-09T00:00:00.000Z"
+        },
+        "coveredMilliseconds": null,
+        "expectedMilliseconds": null,
+        "gapCount": null,
+        "gaps": [],
+        "gapsTruncated": false,
+        "brand": null
+      },
+      "queryEvidence": {
+        "requestId": "9e7bcac9-a16d-464e-a096-2520a3d6b91d",
+        "source": "AmazonSyncReportRow",
+        "lastSyncAt": "2026-11-06T13:19:49.164Z",
+        "freshness": "stale",
+        "publicationPolicy": "published_site_verified_report_rows",
+        "coverageStatus": "ATTRIBUTION_PENDING",
+        "warnings": [
+          "仅返回已发布且站点归属验证通过的报告行；原始金额字符串不自动换算。",
+          "报告行数仅代表当前查询可见结果；失败、未发布、未归因及重叠报告不能解释为没有损失或历史完整。"
+        ],
+        "firstPage": {
+          "page": 1,
+          "pageSize": 3,
+          "hasNext": true,
+          "total": 16,
+          "pageCount": 6
+        },
+        "lastPageRequestId": "cdc07bf3-40aa-45ae-9e7b-fa327cf3c691"
+      },
+      "errors": {
+        "query": null,
+        "fieldCoverage": null
+      },
+      "verification": {
+        "CODE_IMPLEMENTED": "Existing implementation; not newly implemented in this turn",
+        "TEST_VERIFIED": "Same 27 domain report integration cases (not an additional count)",
+        "REAL_DATA_VERIFIED": "NOT_VERIFIED_NEW_COLLECTION",
+        "ERP_QUERY_VERIFIED": "NOT_VERIFIED",
+        "MCP_QUERY_VERIFIED": "CURRENT_VISIBLE_DATA_ONLY",
+        "SKILL_E2E_VERIFIED": "READ_ONLY_SKILL_ERP_QUERY_FLOW; NOT_RECOVERY_OR_COLLECTION"
+      },
+      "remaining": "Report attribution remains pending; archive/storage counts do not prove publication or a continuous history."
+    }
+  ],
+  "unknownMetricPolicy": "null means not exposed/verified; never substitute pagesCompleted, fixture counts, sampled rows, or zero.",
+  "restrictions": {
+    "configurationChanged": false,
+    "credentialsSaved": false,
+    "realTasksResumed": false,
+    "workerRestarted": false,
+    "migrationApplied": false,
+    "committed": false,
+    "pushed": false,
+    "deployed": false
+  },
+  "validation": {
+    "sharedUnitTests": {
+      "passed": 201,
+      "uniqueSet": true,
+      "repeatedByRunners": true
+    },
+    "coverageUnitTests": {
+      "passed": 21
+    },
+    "integration": {
+      "observations": 42,
+      "orders": 38,
+      "finance": 31,
+      "returns": 23,
+      "domainReports": 27,
+      "total": 161
+    },
+    "mockBrowserTests": {
+      "uniqueCasesPassed": 20,
+      "scope": "Orders 8, order fulfillment recovery 8, Finance 2, Returns 2; runners repeat some cases"
+    },
+    "typecheck": "PASSED",
+    "targetedEslint": "PASSED",
+    "diffCheck": "PASSED",
+    "beforeFix": {
+      "legacyArchiveRegressionFailures": 2,
+      "indexedControlsPassed": 2
+    },
+    "environment": "Disposable PostgreSQL/Redis and fixture HTTP; no root .env or inherited credentials; no real Amazon calls",
+    "fullCheck": "NOT_RUN; required before merge/release",
+    "build": "NOT_RUN; production build belongs to CI"
+  },
+  "executionBlockers": [
+    "The currently exposed MCP tool registry has no original-task detail/log or recovery-request executor; workflow confirmation cannot replace a missing bounded recovery request.",
+    "Catalog latest task is CANCELLED; no cancellation override or new collection was attempted.",
+    "Inventory events / reimbursement attribution remains pending; warehouse/site inference and publication bypass are forbidden.",
+    "Finance query is readable but coverage status reports ACCESS_RESTRICTED, so that status response cannot establish Finance historical coverage."
+  ],
+  "coreRecoveryVerification": {
+    "status": "TEST_VERIFIED",
+    "realRecoveryExecuted": false,
+    "implemented": [
+      "Catalog/Listing cancelled-task recovery with frozen scope and checkpoint approval binding",
+      "Existing-task-only MCP recovery for Catalog/Listing/Inbound",
+      "Lili chat approval execution for first-batch recovery domains"
+    ],
+    "isolatedTests": {
+      "observations": {
+        "passed": 46,
+        "failed": 0
+      },
+      "orders": {
+        "passed": 38,
+        "failed": 0
+      },
+      "sharedUnits": {
+        "passed": 201,
+        "failed": 0
+      },
+      "focusedUnits": {
+        "passed": 19,
+        "failed": 0
+      },
+      "ordersBrowser": {
+        "passed": 16,
+        "failed": 0
+      },
+      "syncCenterBrowser": {
+        "passed": 39,
+        "failed": 5,
+        "newCancelledRecoveryCasesPassed": 2
+      }
+    },
+    "staticChecks": {
+      "typecheck": "PASSED",
+      "focusedEslint": "PASSED",
+      "diffCheck": "PASSED"
+    },
+    "remainingBrowserFailures": [
+      "Catalog guidance text assertion",
+      "Authorization validate/disable feedback outside viewport (2 cases)",
+      "Listing/Catalog source configuration form interaction timeout (2 cases)"
+    ],
+    "realExecutionBlocker": "Connected ERP MCP registry exposes data_query/data_sync_status but no data_sync_start recovery executor; local changes have not been deployed."
+  },
+  "reportCheckpointRecoveryVerification": {
+    "status": "TEST_VERIFIED",
+    "resources": [
+      "reimbursements",
+      "inventory_events"
+    ],
+    "implemented": [
+      "MCP resume for paused existing report tasks",
+      "Approval digest binds report checkpoint, row progress and archive identity",
+      "Reject cursor seller/window drift and preserve pre-request task recovery"
+    ],
+    "isolatedTests": {
+      "domainReports": {
+        "passed": 30,
+        "failed": 0
+      },
+      "sharedUnits": {
+        "passed": 201,
+        "failed": 0
+      },
+      "focusedUnits": {
+        "passed": 14,
+        "failed": 0
+      }
+    },
+    "resumeScenario": {
+      "structuredRowsBeforePause": 500,
+      "structuredRowsAfterResume": 501,
+      "newReportRequestsAfterResume": 0,
+      "newDownloadsAfterResume": 0,
+      "erpQueryTotal": 501,
+      "erpLastPageRows": 1,
+      "mcpQueryTotal": 501,
+      "mcpLastPageRows": 1,
+      "scope": "ISOLATED_FIXTURE_ONLY"
+    },
+    "realRecoveryExecuted": false,
+    "productionDeployed": false
+  }
+}

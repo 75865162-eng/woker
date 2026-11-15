@@ -1,0 +1,173 @@
+{
+  "at": "2026-11-09T14:49:26.450Z",
+  "taskId": "f9fbc67f-2171-4690-b1a3-1eed65ee3f9f",
+  "window": {
+    "from": "2025-06-04T09:32:07.189Z",
+    "to": "2025-07-04T09:32:07.189Z"
+  },
+  "status": "SUCCEEDED",
+  "committedRawPages": 29,
+  "records_received": 14113,
+  "records_parsed": 14113,
+  "records_inserted": 9613,
+  "records_updated": 0,
+  "records_reused": 4500,
+  "records_rejected": 0,
+  "records_published": 14113,
+  "uniqueRecordsVerified": 14113,
+  "allParsedFieldsMatchDatabase": true,
+  "rawHashVerified": true,
+  "originalMoneyPreserved": true,
+  "requests": [
+    {
+      "statusCode": 200,
+      "requestId": "d1fd51d5-7e56-46bf-b4c0-aa94c163d26e",
+      "createdAt": "2026-11-09T14:34:39.088Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "7d793d04-38a3-41b0-82e0-64d1002b383a",
+      "createdAt": "2026-11-09T14:35:10.870Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "f546932a-60d2-49c9-b89e-46d885bab123",
+      "createdAt": "2026-11-09T14:35:38.068Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "e6b8428d-8a3a-4871-b814-25393519a541",
+      "createdAt": "2026-11-09T14:36:09.244Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "1fbca788-9a03-447a-88ee-5c79373531c4",
+      "createdAt": "2026-11-09T14:36:38.747Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "9f41a09f-5331-4199-9743-a3a667d87915",
+      "createdAt": "2026-11-09T14:37:11.012Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "497aa343-85f4-49f3-aa63-e26610eca190",
+      "createdAt": "2026-11-09T14:37:40.754Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "c22fa140-963b-4ef6-b470-7557d15fe0cf",
+      "createdAt": "2026-11-09T14:38:09.955Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "c9398a76-30f0-4fa3-a9f7-d8595f50fb9f",
+      "createdAt": "2026-11-09T14:38:41.522Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "b3da83be-1c29-4844-8b82-aa76282684be",
+      "createdAt": "2026-11-09T14:39:10.401Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "24433819-c854-4110-8aff-0501bf4a0183",
+      "createdAt": "2026-11-09T14:39:38.818Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "803145dd-2eb1-46a6-8080-6324d1c42e91",
+      "createdAt": "2026-11-09T14:40:09.689Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "e746ac91-ea21-4f46-8600-1ffb1e8c82cf",
+      "createdAt": "2026-11-09T14:40:40.798Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "bc8270d1-b790-42c0-8ea5-6161d60ecacd",
+      "createdAt": "2026-11-09T14:41:10.579Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "f1a40d22-f39f-4f6c-a5cc-40133b57190b",
+      "createdAt": "2026-11-09T14:41:39.248Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "fed85ae8-7d4e-44d1-824a-99726d889efc",
+      "createdAt": "2026-11-09T14:42:06.773Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "ee62b3f7-c306-440f-b0fe-4016af2216f9",
+      "createdAt": "2026-11-09T14:42:38.073Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "fb816d54-31ad-451a-af9b-492a0c880a4a",
+      "createdAt": "2026-11-09T14:43:05.807Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "03bde867-a0bd-4451-b12e-7026e61c650f",
+      "createdAt": "2026-11-09T14:43:38.386Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "a1296449-f882-4e13-ad59-af9ec5fd9acf",
+      "createdAt": "2026-11-09T14:44:05.885Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "e88d7098-f1e3-4dcc-bcef-548a091dae1f",
+      "createdAt": "2026-11-09T14:44:36.775Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "f9821f2d-dcd9-4513-a25e-3caf971cb8af",
+      "createdAt": "2026-11-09T14:45:07.554Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "1eeb5c6a-faeb-442b-ae7c-5c901bd83388",
+      "createdAt": "2026-11-09T14:45:43.580Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "a081a939-4984-4327-9e93-c60f39e103a5",
+      "createdAt": "2026-11-09T14:46:09.664Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "cdc6373e-a07b-4728-b85f-fa8fd8464de4",
+      "createdAt": "2026-11-09T14:46:45.195Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "f5d64346-f828-4982-a4ed-0d171f9669ff",
+      "createdAt": "2026-11-09T14:47:11.130Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "ef62ed61-2a38-43e6-8e27-005f953c6e73",
+      "createdAt": "2026-11-09T14:47:40.870Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "4da662a3-840f-4f7a-8043-3de18a3b1337",
+      "createdAt": "2026-11-09T14:48:10.089Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "4ff9b9dc-fa12-4d95-8146-8e0a06c1f091",
+      "createdAt": "2026-11-09T14:48:35.151Z"
+    }
+  ],
+  "verificationAmazonRequests": 0,
+  "verificationBusinessWrites": 0,
+  "mcpStatus": "VERIFIED_SINGLE_DAY_2025_06_25",
+  "mcpEvidenceFile": "outputs/amazon-finance-native-day-20261109.json",
+  "publicationNote": "records_published counts only a completed window head; committed attributed pages are queryable independently"
+}

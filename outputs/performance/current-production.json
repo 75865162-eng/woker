@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "mode": "production",
+  "bundler": "webpack",
+  "fixtureOnly": true,
+  "capturedAt": "2026-11-11T16:05:23.053Z",
+  "node": "v24.18.0",
+  "routes": [
+    "/listing-ai",
+    "/logistics",
+    "/workspace"
+  ],
+  "loginColdMs": 243.40366700000232,
+  "loginMs": {
+    "samples": [
+      34.34,
+      29.91,
+      30.25,
+      30.99,
+      31.3,
+      29.64,
+      30.04
+    ],
+    "median": 30.247542000000976,
+    "p95": 34.339083999999275
+  },
+  "coldPages": [
+    {
+      "path": "/listing-ai",
+      "totalMs": 920.135250000003
+    },
+    {
+      "path": "/logistics",
+      "totalMs": 891.1699169999993
+    },
+    {
+      "path": "/workspace",
+      "totalMs": 356.3847500000011
+    }
+  ],
+  "warmNavigationMs": {
+    "samples": [
+      849.85,
+      828.37,
+      810.62,
+      46.5,
+      61.33,
+      812.99,
+      57.56,
+      55.79,
+      811.82
+    ],
+    "median": 810.6206669999992,
+    "p95": 849.8540840000023
+  },
+  "rsc": [
+    {
+      "ms": 16.299999952316284,
+      "ttfb": 7
+    },
+    {
+      "ms": 22.800000190734863,
+      "ttfb": 4.8999998569488525
+    },
+    {
+      "ms": 17.799999952316284,
+      "ttfb": 6.200000047683716
+    },
+    {
+      "ms": 19.90000009536743,
+      "ttfb": 7.299999952316284
+    },
+    {
+      "ms": 12.299999952316284,
+      "ttfb": 2.8000001907348633
+    },
+    {
+      "ms": 8.900000095367432,
+      "ttfb": 2.200000047683716
+    }
+  ],
+  "shellPersisted": true,
+  "publicRequests": [],
+  "checks": [
+    "role revocation",
+    "cross-organization identity",
+    "disabled user"
+  ],
+  "limitations": [
+    "Disposable database and synthetic accounts; not production acceptance",
+    "External font loading excluded; CSS scan bounded to src in both measurements",
+    "Cold page navigation includes networkidle settle time",
+    "Selected real routes, not a full ERP benchmark"
+  ]
+}

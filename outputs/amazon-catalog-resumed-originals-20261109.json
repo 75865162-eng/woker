@@ -1,0 +1,16 @@
+{
+  "at": "2026-11-09T16:24:06.936Z",
+  "taskId": "e7571aca-1c91-421a-8c55-04bee66edb0d",
+  "status": "PARTIAL_SUCCESS",
+  "rawPages": 227,
+  "received": 227,
+  "parsedUnique": 227,
+  "inserted": 227,
+  "persisted": 227,
+  "allFieldsMatch": true,
+  "previousRows": 47,
+  "newRowsSinceRecovery": 180,
+  "published": 0,
+  "apiRequestsForVerification": 0,
+  "businessWrites": 0
+}

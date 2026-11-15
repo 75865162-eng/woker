@@ -1,0 +1,534 @@
+{
+  "checkedAt": "2026-11-09T15:02:02.880Z",
+  "scope": {
+    "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+    "marketplaceId": "ATVPDKIKX0DER"
+  },
+  "dateSemantics": "posted_at_utc",
+  "from": "2025-07-04",
+  "to": "2025-08-03",
+  "total": 2054,
+  "pages": 42,
+  "paginationUnique": true,
+  "allReturnedFieldsMatchDatabase": true,
+  "originalMoneyAndCurrencyPreserved": true,
+  "sourceRunTraceable": true,
+  "newRecoveryRecords": 2054,
+  "recordsDigest": "cef2cad0877d7305f38cd5de14eccf6d555f42c77a479c85e3690ae9e2aaa838",
+  "requests": [
+    {
+      "page": 1,
+      "requestId": "f2c31253-22b3-464e-8875-6e03f4c08a96",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 2,
+      "requestId": "b3ffef43-9cb3-498a-ab1c-d7b481aa9c42",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 3,
+      "requestId": "4519daea-7e8a-4183-b399-9efaf0dc51ac",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 4,
+      "requestId": "186a992b-8920-485b-92f5-38e8e37ae0df",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 5,
+      "requestId": "94a58b75-4d47-4f74-aba6-3763f9e87a01",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 6,
+      "requestId": "217acc60-af0f-4ed5-b6ec-35cbe17a9d34",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 7,
+      "requestId": "6404ed1b-2b12-46b7-ba66-6e6b1cb01da4",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 8,
+      "requestId": "b8e043d9-cb79-4b76-8a5c-080358f42c1c",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 9,
+      "requestId": "ece0db82-4287-448b-9669-fc081f0cb807",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 10,
+      "requestId": "28b55756-f0f7-4565-a383-290e0a2b7970",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 11,
+      "requestId": "be618c2e-4dbf-4833-9001-347f5f9bb4fc",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 12,
+      "requestId": "33f7ee7d-ece2-4557-ad41-348116e87bdc",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 13,
+      "requestId": "e5570995-b559-4805-9e7b-08358a655def",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 14,
+      "requestId": "518560d1-038e-48a2-afac-5d4a0af48280",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 15,
+      "requestId": "362fdb7a-2ddb-4de9-8b63-e264d55e4ae4",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 16,
+      "requestId": "a01e1bfa-4c36-4136-9c63-f1d542ac719c",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 17,
+      "requestId": "0b3115e4-e3c6-4738-a961-ef54a5177539",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 18,
+      "requestId": "cc3b1850-4ea0-406f-84a1-a6ad4b366c10",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 19,
+      "requestId": "d18a3b7d-e9e2-43eb-841e-f4cf19bb0971",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 20,
+      "requestId": "391b0b79-6db3-4cbc-8c02-d8602b7a08b7",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 21,
+      "requestId": "2306d06a-c4af-4492-8b13-d5bfc267c342",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 22,
+      "requestId": "35b2ddb6-1355-42e8-814e-7262304e2542",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 23,
+      "requestId": "8c5949ce-b497-4b1e-b9c5-92b1416db481",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 24,
+      "requestId": "8c740688-56e4-4b74-a5ae-0291836297ce",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 25,
+      "requestId": "8bd6d07d-56a9-45a7-82d5-d11a42279f20",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 26,
+      "requestId": "ef2735ef-4900-4bf1-a4b9-39019a1d63d4",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 27,
+      "requestId": "11a5a00d-c8fe-481d-bb63-a0d8253bbb58",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 28,
+      "requestId": "510d2a98-86f6-477c-97ef-a284d4ab3199",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 29,
+      "requestId": "2d68ec3c-4671-4c25-9ae3-5e95be9711ce",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 30,
+      "requestId": "d3a1bda9-bd61-43be-a8ae-e67debc93297",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 31,
+      "requestId": "22aadf88-caec-4991-ba46-3bb0fd1a34ef",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 32,
+      "requestId": "2c66d0d7-06f2-42f7-81e5-c0e30070b282",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 33,
+      "requestId": "4b7ca5e6-98d2-404b-85b5-2b3ccce695e9",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 34,
+      "requestId": "b5d38814-0860-4481-a054-6eeb34201f3c",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 35,
+      "requestId": "ad7d54d2-8a56-4960-8c82-4a43fcbbb270",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 36,
+      "requestId": "4680882a-88bb-4b76-88e9-db65411e0f21",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 37,
+      "requestId": "55bfc055-efbe-4eae-a245-e6f6feef0bc2",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 38,
+      "requestId": "10ba657f-7540-4d16-9922-a878881a2dd3",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 39,
+      "requestId": "fbf80e23-a663-4eed-8189-ae8b5677c4c8",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 40,
+      "requestId": "fdb9349e-36ad-41f7-9233-499ce3f885ea",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 41,
+      "requestId": "3c63610a-e056-4889-99b9-0f3ae8baa7a8",
+      "returned": 50,
+      "hasNext": true,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    },
+    {
+      "page": 42,
+      "requestId": "3e4ba884-4540-469c-bdd8-106c72f2774c",
+      "returned": 4,
+      "hasNext": false,
+      "evidenceRefs": [
+        {
+          "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+          "syncRunId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b"
+        }
+      ]
+    }
+  ],
+  "endPage": {
+    "page": 43,
+    "returned": 0,
+    "requestId": "2afc15b5-4a70-4fcc-bb99-8fcde5df39ea",
+    "evidenceRefs": []
+  },
+  "publicationPolicy": "page_committed_current_facts",
+  "historicalComplete": false,
+  "verificationAmazonRequests": 0,
+  "verificationBusinessWrites": 0
+}

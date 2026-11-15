@@ -108,7 +108,15 @@ test("MCP 数据集仅暴露已登记的 Sellfox 数据模型", () => {
   assert.ok(sellfoxTableAllowList.every(table => table.startsWith("Sellfox")));
 });
 
-test("MCP 查询使用凭证店铺范围，不通过全局空值绕过", () => {
-  assert.ok(mcpSource.includes("storeScope"));
+test("MCP 查询按数据集范围模式围栏，空店铺记录不绕过店铺授权", () => {
+  assert.ok(mcpSource.includes("datasetWhere(alias: string, dataset:"));
+  assert.ok(mcpSource.includes('dataset.scopeMode === "store_join"'));
+  assert.ok(mcpSource.includes('dataset.scopeMode === "tenant_only"'));
+  assert.ok(mcpSource.includes('dataset.nullableStore && !this.identity.storeScope.includes("*")'));
   assert.doesNotMatch(mcpSource, /OR\s+[^\n]*storeId\s+IS\s+NULL/i);
+});
+
+test("当前态快照查询通过 SellfoxSnapshotHead 过滤版本", () => {
+  assert.match(mcpSource, /dataset\.headResource && dataset\.versionColumn/);
+  assert.match(mcpSource, /FROM "SellfoxSnapshotHead" h/);
 });

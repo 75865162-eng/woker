@@ -1,0 +1,38 @@
+{
+  "checkedAt": "2026-11-09T15:13:58.916Z",
+  "taskId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b",
+  "approvalId": "3c7d86d1-a36a-4052-8b79-7c26071c0e14",
+  "page": 6,
+  "rawSha256": "6eb25e78d35561d83abb857922ff4e5d71b30c23f93ad83eb37fb520dc939bba",
+  "received": 500,
+  "parsed": 500,
+  "persisted": 500,
+  "attributed": 499,
+  "quarantined": 1,
+  "siteCounts": {
+    "ATVPDKIKX0DER": 402,
+    "A2EUQ1WTGCTBG2": 97,
+    "QUARANTINED": 1
+  },
+  "allFieldsMatch": true,
+  "encryptedQuarantineMatchesOriginal": true,
+  "originalReused": true,
+  "amazonRequestsToRecoverPage": 0,
+  "committedAt": "2026-11-09T15:12:58.936Z",
+  "taskStatus": "FAILED",
+  "committedPages": 6,
+  "processedCount": 3000,
+  "insertedCount": 3000,
+  "updatedCount": 0,
+  "skippedCount": 0,
+  "completeWindowPublished": false,
+  "mcpStatus": "NOT_RUN_CONNECTOR_UNAVAILABLE",
+  "verificationBusinessWrites": 0,
+  "erpReadback": {
+    "verified": true,
+    "rows": 1,
+    "originalAmountMatches": true,
+    "currencyMatches": true,
+    "sourceRunMatches": true
+  }
+}

@@ -1,0 +1,4 @@
+
+> tiaotiao@0.1.0 typecheck
+> node scripts/runtime/typecheck.mjs
+

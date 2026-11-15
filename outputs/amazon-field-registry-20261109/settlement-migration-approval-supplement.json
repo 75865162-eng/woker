@@ -1,0 +1,121 @@
+{
+  "observedAt": "2026-11-09T08:52:28.090Z",
+  "status": "AWAITING_APPROVAL_FOR_TWO_ADDITIONAL_PENDING_MIGRATIONS",
+  "target": {
+    "environment": "EXISTING_LOCAL_DATABASE",
+    "container": "amazon-sync-live-postgres",
+    "host": "127.0.0.1",
+    "port": 55439,
+    "database": "amazon_sync_live_local"
+  },
+  "organizationId": "amazon-live-local",
+  "workspaceId": "default",
+  "reason": "Standard prisma migrate deploy applies every pending migration; original approved plan names only the field registry migration. No selective migration or migration-ledger bypass will be used.",
+  "migrationCommand": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/prisma/build/index.js migrate deploy",
+  "migrations": [
+    {
+      "name": "20261107050000_amazon_buy_box_automatic",
+      "path": "prisma/migrations/20261107050000_amazon_buy_box_automatic/migration.sql",
+      "sha256": "92948f7165f408427e2e78741d4cc6699bde7c8f66e2aba196b8d9cf4f14b821",
+      "effect": "Expand five existing CHECK constraints for Buy Box and notification resource values; no plan enablement or task creation.",
+      "additionalApprovalRequired": true
+    },
+    {
+      "name": "20261109010000_amazon_order_created_time_index",
+      "path": "prisma/migrations/20261109010000_amazon_order_created_time_index/migration.sql",
+      "sha256": "c33d42925bf4ae5d92ad911bb1a47cbb798457e779fceb225234aae51f2820b5",
+      "effect": "Create source/createdTime index on AmazonOrderRecord; no order fact rewrite.",
+      "additionalApprovalRequired": true
+    },
+    {
+      "name": "20261109020000_amazon_field_registry",
+      "path": "prisma/migrations/20261109020000_amazon_field_registry/migration.sql",
+      "sha256": "a31a74a0203fcb00465cb091ba5149aae6bf527099b06e11770037a9d7b3c103",
+      "effect": "Create four field registry tables and indexes/FKs; add nullable currency provenance columns and checks; no fact backfill.",
+      "additionalApprovalRequired": false
+    }
+  ],
+  "currentReadiness": {
+    "plans": [
+      {
+        "id": "amazon-sync-auto-a17e96fa124a483a22b0f26288f0d7eb",
+        "revision": 6,
+        "enabled": true,
+        "resource": "settlements",
+        "targets": [
+          {
+            "sourceId": "6f93830f-77a7-4ef1-a327-ff6e93603fcf"
+          }
+        ]
+      },
+      {
+        "id": "amazon-sync-auto-215c3eb2748b0acc65d52bec0aa505a3",
+        "revision": 6,
+        "enabled": true,
+        "resource": "settlements",
+        "targets": [
+          {
+            "sourceId": "636d327e-8da0-499a-9322-d6c375475ca5"
+          }
+        ]
+      },
+      {
+        "id": "amazon-sync-auto-5af004cb399e4b26fd0ac61af5acfb9f",
+        "revision": 6,
+        "enabled": true,
+        "resource": "settlements",
+        "targets": [
+          {
+            "sourceId": "2f4f1145-45dd-4454-aea6-2ad01aa0f2d4"
+          }
+        ]
+      },
+      {
+        "id": "amazon-sync-auto-683fdc65b769969c1d83569e86e512d2",
+        "revision": 6,
+        "enabled": true,
+        "resource": "settlements",
+        "targets": [
+          {
+            "sourceId": "4d1ff1ca-bd06-4a00-926e-d0f1f0d6fd7b"
+          }
+        ]
+      }
+    ],
+    "activeTasks": 0,
+    "actorRole": "owner",
+    "actorUserId": "cmw1ml22b0000208ov5k9954k",
+    "databaseWritesThisTurn": 0,
+    "amazonRequests": 0,
+    "operationsPage": "CONNECTION_REFUSED"
+  },
+  "steps": [
+    "Revalidate target, pending list and SQL checksums; stop on any discrepancy.",
+    "Pause only four listed settlement plans using request/approve/apply services; verify zero active tasks.",
+    "Run standard migrate deploy with bounded lock and statement timeouts; halt on error; never mark unapplied SQL as applied.",
+    "Recompute exact eight-document currencyOnly previews; use current approval service and compare raw hashes, row identities, amounts, currencies, report heads and business-query visibility.",
+    "Restore only plans paused by this operation after successful verification."
+  ],
+  "risks": [
+    "CHECK replacement and non-concurrent index creation can wait for locks or block writes; use bounded timeouts and halt on failure.",
+    "Do not downgrade database or drop additive schema automatically; retain facts and audit; repair migration failures by reviewed forward action."
+  ],
+  "retainedLimits": {
+    "amazonRequests": 0,
+    "deleteOrReinsertFacts": false,
+    "guessCurrency": false,
+    "serverDeployment": false,
+    "workerRestart": false,
+    "otherDomainBackfill": false
+  },
+  "expectedRecoverableSiteRows": 16757,
+  "targetBusinessDateRecoverableRows": 13266,
+  "notExecuted": [
+    "pause plans",
+    "migrate deploy",
+    "currency repair",
+    "worker restart",
+    "Amazon requests",
+    "commit/push/deploy"
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "at": "2026-11-09T17:02:29.750Z",
+  "taskId": "010c5403-7e2f-4ae7-8d5a-08d5a7b7cba9",
+  "status": "SUCCEEDED",
+  "filterFields": [
+    "inboundPlanId",
+    "shipmentId"
+  ],
+  "stagedRowsForFilter": 7,
+  "publishedQueryTotal": 7,
+  "publishedPageRows": 1,
+  "filteredVerified": 7,
+  "emptyPage": 8,
+  "stagingRejected": false,
+  "queryScope": {
+    "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+    "marketplaceId": "ATVPDKIKX0DER"
+  },
+  "verification": "PUBLISHED_FILTER_QUERY_EXECUTED",
+  "mcpStatus": "NOT_RUN_CONNECTOR_UNAVAILABLE",
+  "amazonRequests": 0,
+  "businessWrites": 0
+}

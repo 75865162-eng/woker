@@ -1,0 +1,302 @@
+{
+  "verifiedAt": "2026-11-09 10:55:29 UTC",
+  "environment": "local",
+  "database": "127.0.0.1:55439/amazon_sync_live_local",
+  "migration": {
+    "name": "20261109030000_amazon_order_fulfillment",
+    "applied": true,
+    "ledgerChecksumVerified": true,
+    "businessRecordsModified": 0
+  },
+  "queries": [
+    {
+      "query": {
+        "table": "orders",
+        "page": 2,
+        "pageSize": 3
+      },
+      "requestId": "cc4f4dc5-acbe-4182-a5c7-5fe0cd994bcc",
+      "source": "AmazonOrderRecord",
+      "scope": {
+        "pairs": [
+          {
+            "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+            "marketplaceId": "ATVPDKIKX0DER"
+          }
+        ]
+      },
+      "total": 1740,
+      "returned": 3,
+      "evidenceRefs": [
+        {
+          "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+          "syncRunId": "e84f5ab4-a1ba-43e1-bfac-65fa9ea98ba6"
+        }
+      ],
+      "evidenceRefScope": "RETURNED_PAGE_COMMITTED_RECORDS",
+      "lastSyncAt": "2026-11-06T19:31:55.166Z",
+      "freshness": "stale",
+      "orderCoverage": {
+        "detailsEnabled": true,
+        "recoveryTask": {
+          "id": "266118a2-dba3-44a8-bc40-03260b827a34",
+          "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+          "status": "FAILED",
+          "stage": "FETCHING_DETAILS",
+          "pagesCompleted": 0,
+          "detailsCompletedCount": 491,
+          "attempts": 3,
+          "maxAttempts": 3,
+          "apiRequests": 493,
+          "throttles": 0,
+          "nextAttemptAt": "2026-11-06T22:10:29.896Z",
+          "progress": {
+            "state": "ACTION_REQUIRED",
+            "message": "任务需要人工核对，恢复仍须通过现有审批。",
+            "needsAttention": true,
+            "checkedAt": "2026-11-09T10:54:30.357Z",
+            "lastProgressAt": "2026-11-06T21:52:56.064Z",
+            "progressBasis": "COMMITTED_PAGE_OR_DETAIL",
+            "graceSeconds": 900
+          },
+          "recoveryOutcome": null,
+          "lastHttpErrorStatus": null,
+          "operatorAction": "查看结构日志与失败阶段，核对参数或重试上限后申请恢复；报告创建结果不确定时先人工核查，勿重复创建。",
+          "canRequestRetry": true,
+          "failureReason": "自动重试次数已用尽；原件、已提交页和游标保留。"
+        },
+        "historicalBackfill": null,
+        "historicalBackfillEnabled": true,
+        "historicalBackfillWindow": null,
+        "historicalBackfillBasis": "LAST_PUBLISHED_WINDOW",
+        "moneyRequest": {
+          "proceedsRequested": false,
+          "basis": "CURRENT_SOURCE_POLICY"
+        },
+        "money": {
+          "field": "grandTotalOriginal",
+          "returned": 3,
+          "present": 0,
+          "missing": 3
+        },
+        "window": {
+          "from": "2024-11-20T09:25:07.189Z",
+          "to": "2024-11-21T09:25:07.189Z",
+          "status": "FAILED",
+          "listComplete": false,
+          "detailsComplete": false,
+          "lastSuccessAt": "2026-11-06T19:31:55.166Z",
+          "updatedAt": "2026-11-06T22:10:30.200Z"
+        },
+        "page": {
+          "returned": 3,
+          "detailsCurrent": 0,
+          "detailsMissingOrStale": 3
+        }
+      },
+      "warnings": [
+        "订单为已提交页的当前事实；不代表历史窗口或订单详情均完整。",
+        "当前订单详情策略未请求 PROCEEDS；不能据此判定 Amazon 未提供金额或账号缺少权限，收入补采需先核实并批准相应数据范围。",
+        "当前页存在金额或币种缺失；明细有效不代表收入数据完整，缺失不能解释为零。",
+        "当前订单同步窗口尚未完成；可查询已提交数据，不代表完整历史。",
+        "当前返回页存在未采集或已过期的订单明细，不能用于完整商品或金额统计。"
+      ]
+    },
+    {
+      "query": {
+        "table": "orders",
+        "detailsStatus": "CURRENT",
+        "page": 1,
+        "pageSize": 3
+      },
+      "requestId": "4b9f1822-b13a-417e-be0e-3e1a2b5fafa6",
+      "source": "AmazonOrderRecord",
+      "scope": {
+        "pairs": [
+          {
+            "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+            "marketplaceId": "ATVPDKIKX0DER"
+          }
+        ]
+      },
+      "total": 491,
+      "returned": 3,
+      "evidenceRefs": [
+        {
+          "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+          "syncRunId": "266118a2-dba3-44a8-bc40-03260b827a34"
+        }
+      ],
+      "evidenceRefScope": "RETURNED_PAGE_COMMITTED_RECORDS",
+      "lastSyncAt": "2026-11-06T19:31:55.166Z",
+      "freshness": "stale",
+      "orderCoverage": {
+        "detailsEnabled": true,
+        "recoveryTask": {
+          "id": "266118a2-dba3-44a8-bc40-03260b827a34",
+          "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+          "status": "FAILED",
+          "stage": "FETCHING_DETAILS",
+          "pagesCompleted": 0,
+          "detailsCompletedCount": 491,
+          "attempts": 3,
+          "maxAttempts": 3,
+          "apiRequests": 493,
+          "throttles": 0,
+          "nextAttemptAt": "2026-11-06T22:10:29.896Z",
+          "progress": {
+            "state": "ACTION_REQUIRED",
+            "message": "任务需要人工核对，恢复仍须通过现有审批。",
+            "needsAttention": true,
+            "checkedAt": "2026-11-09T10:54:30.630Z",
+            "lastProgressAt": "2026-11-06T21:52:56.064Z",
+            "progressBasis": "COMMITTED_PAGE_OR_DETAIL",
+            "graceSeconds": 900
+          },
+          "recoveryOutcome": null,
+          "lastHttpErrorStatus": null,
+          "operatorAction": "查看结构日志与失败阶段，核对参数或重试上限后申请恢复；报告创建结果不确定时先人工核查，勿重复创建。",
+          "canRequestRetry": true,
+          "failureReason": "自动重试次数已用尽；原件、已提交页和游标保留。"
+        },
+        "historicalBackfill": null,
+        "historicalBackfillEnabled": true,
+        "historicalBackfillWindow": null,
+        "historicalBackfillBasis": "LAST_PUBLISHED_WINDOW",
+        "moneyRequest": {
+          "proceedsRequested": false,
+          "basis": "CURRENT_SOURCE_POLICY"
+        },
+        "money": {
+          "field": "grandTotalOriginal",
+          "returned": 3,
+          "present": 0,
+          "missing": 3
+        },
+        "window": {
+          "from": "2024-11-20T09:25:07.189Z",
+          "to": "2024-11-21T09:25:07.189Z",
+          "status": "FAILED",
+          "listComplete": false,
+          "detailsComplete": false,
+          "lastSuccessAt": "2026-11-06T19:31:55.166Z",
+          "updatedAt": "2026-11-06T22:10:30.200Z"
+        },
+        "page": {
+          "returned": 3,
+          "detailsCurrent": 3,
+          "detailsMissingOrStale": 0
+        }
+      },
+      "warnings": [
+        "订单为已提交页的当前事实；不代表历史窗口或订单详情均完整。",
+        "当前订单详情策略未请求 PROCEEDS；不能据此判定 Amazon 未提供金额或账号缺少权限，收入补采需先核实并批准相应数据范围。",
+        "当前页存在金额或币种缺失；明细有效不代表收入数据完整，缺失不能解释为零。",
+        "当前订单同步窗口尚未完成；可查询已提交数据，不代表完整历史。"
+      ]
+    },
+    {
+      "query": {
+        "table": "order_items",
+        "page": 1,
+        "pageSize": 3
+      },
+      "requestId": "84604350-5224-4e79-bf41-eb65566be28a",
+      "source": "AmazonOrderItemRecord",
+      "scope": {
+        "pairs": [
+          {
+            "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+            "marketplaceId": "ATVPDKIKX0DER"
+          }
+        ]
+      },
+      "total": 500,
+      "returned": 3,
+      "evidenceRefs": [
+        {
+          "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+          "syncRunId": "266118a2-dba3-44a8-bc40-03260b827a34"
+        }
+      ],
+      "evidenceRefScope": "RETURNED_PAGE_COMMITTED_RECORDS",
+      "lastSyncAt": "2026-11-06T19:31:55.166Z",
+      "freshness": "stale",
+      "orderCoverage": {
+        "detailsEnabled": true,
+        "recoveryTask": {
+          "id": "266118a2-dba3-44a8-bc40-03260b827a34",
+          "sourceId": "406f3b73-d57e-4a1a-95fa-f521c939eeb9",
+          "status": "FAILED",
+          "stage": "FETCHING_DETAILS",
+          "pagesCompleted": 0,
+          "detailsCompletedCount": 491,
+          "attempts": 3,
+          "maxAttempts": 3,
+          "apiRequests": 493,
+          "throttles": 0,
+          "nextAttemptAt": "2026-11-06T22:10:29.896Z",
+          "progress": {
+            "state": "ACTION_REQUIRED",
+            "message": "任务需要人工核对，恢复仍须通过现有审批。",
+            "needsAttention": true,
+            "checkedAt": "2026-11-09T10:54:30.902Z",
+            "lastProgressAt": "2026-11-06T21:52:56.064Z",
+            "progressBasis": "COMMITTED_PAGE_OR_DETAIL",
+            "graceSeconds": 900
+          },
+          "recoveryOutcome": null,
+          "lastHttpErrorStatus": null,
+          "operatorAction": "查看结构日志与失败阶段，核对参数或重试上限后申请恢复；报告创建结果不确定时先人工核查，勿重复创建。",
+          "canRequestRetry": true,
+          "failureReason": "自动重试次数已用尽；原件、已提交页和游标保留。"
+        },
+        "historicalBackfill": null,
+        "historicalBackfillEnabled": true,
+        "historicalBackfillWindow": null,
+        "historicalBackfillBasis": "LAST_PUBLISHED_WINDOW",
+        "moneyRequest": {
+          "proceedsRequested": false,
+          "basis": "CURRENT_SOURCE_POLICY"
+        },
+        "money": {
+          "field": "proceedsOriginal",
+          "returned": 3,
+          "present": 0,
+          "missing": 3
+        },
+        "window": {
+          "from": "2024-11-20T09:25:07.189Z",
+          "to": "2024-11-21T09:25:07.189Z",
+          "status": "FAILED",
+          "listComplete": false,
+          "detailsComplete": false,
+          "lastSuccessAt": "2026-11-06T19:31:55.166Z",
+          "updatedAt": "2026-11-06T22:10:30.200Z"
+        },
+        "page": {
+          "returned": 3,
+          "detailsCurrent": 3,
+          "detailsMissingOrStale": 0
+        }
+      },
+      "warnings": [
+        "按订单商品行分页；仅含已采集商品，空结果不代表没有订单或销量。",
+        "商品金额保留原始字符串与币种；过期明细不可作为完整销售统计。",
+        "当前订单详情策略未请求 PROCEEDS；不能据此判定 Amazon 未提供金额或账号缺少权限，收入补采需先核实并批准相应数据范围。",
+        "当前页存在金额或币种缺失；明细有效不代表收入数据完整，缺失不能解释为零。",
+        "当前订单同步窗口尚未完成；可查询已提交数据，不代表完整历史。"
+      ]
+    }
+  ],
+  "amazonUpstreamCallsThisTurn": 0,
+  "businessInsertsThisTurn": 0,
+  "replicationVerified": false,
+  "acceptance": "Existing real data read through injected ERP MCP; not fresh Amazon collection or full-history acceptance.",
+  "isolatedTests": {
+    "datasetUnit": 8,
+    "unit": 192,
+    "ordersIntegration": 37,
+    "browser": 16
+  }
+}

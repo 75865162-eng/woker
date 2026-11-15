@@ -1,0 +1,29 @@
+{
+  "at": "2026-11-09T16:12:18.755Z",
+  "taskId": "04b420e5-f1a0-4d84-8156-0b2cfa8db910",
+  "approvalId": "e2f6b5db-abf2-489e-90d8-5adeb0084a21",
+  "manifest": {
+    "version": "finance-site-quarantine.v1",
+    "taskId": "04b420e5-f1a0-4d84-8156-0b2cfa8db910",
+    "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+    "sourceRevision": 7,
+    "rawPage": 6,
+    "rawSha256": "1716af4ea6ee8d631bb9cdc08ed0dbfb09d577e8de2de79ef16b767e8587a34c",
+    "window": {
+      "from": "2025-07-04T09:31:07.189Z",
+      "to": "2025-08-03T09:31:07.189Z"
+    },
+    "rows": 500,
+    "outOfScopeRows": 1,
+    "approvedMarketplaceIds": [
+      "A1AM78C64UM0Y8",
+      "A2EUQ1WTGCTBG2",
+      "A2Q3Y263D00KWC",
+      "ATVPDKIKX0DER"
+    ]
+  },
+  "result": {
+    "applied": true,
+    "changeRequestId": "e2f6b5db-abf2-489e-90d8-5adeb0084a21"
+  }
+}

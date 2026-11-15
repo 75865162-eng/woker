@@ -1,0 +1,134 @@
+{
+  "at": "2026-11-09T15:38:18.868Z",
+  "taskId": "321b4634-380b-4482-b557-84998e5383ab",
+  "window": {
+    "from": "2025-07-04T09:31:07.189Z",
+    "to": "2025-08-03T09:31:07.189Z"
+  },
+  "status": "FAILED",
+  "committedRawPages": 20,
+  "records_received": 10000,
+  "records_parsed": 10000,
+  "records_inserted": 7000,
+  "records_updated": 0,
+  "records_reused": 3000,
+  "records_rejected": 0,
+  "records_quarantined": 3,
+  "records_published": 0,
+  "uniqueRecordsVerified": 10000,
+  "allParsedFieldsMatchDatabase": true,
+  "rawHashVerified": true,
+  "originalMoneyPreserved": true,
+  "requests": [
+    {
+      "statusCode": 200,
+      "requestId": "16e47d0a-f671-43eb-9312-f4cffec371cf",
+      "createdAt": "2026-11-09T15:18:02.337Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "3369d1f7-de0c-49fb-9774-ea8c2ef89094",
+      "createdAt": "2026-11-09T15:18:31.072Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "caa370ba-b96d-481c-be4f-cd9accebc105",
+      "createdAt": "2026-11-09T15:18:57.588Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "0a85bc74-b1fb-4144-a83c-651c51341cf9",
+      "createdAt": "2026-11-09T15:19:44.101Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "deb8de80-d486-4e9d-9eb1-cb834548a0cf",
+      "createdAt": "2026-11-09T15:20:01.141Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "245cd62a-94b1-45e0-9ac8-792517f768a2",
+      "createdAt": "2026-11-09T15:20:33.296Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "1f94c088-c4a2-4a1a-97aa-adc24ee41230",
+      "createdAt": "2026-11-09T15:22:35.961Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "2184470e-fcd4-4cd8-bc9d-ec32a3d66acb",
+      "createdAt": "2026-11-09T15:22:57.984Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "ac9e2119-0a4b-4f47-8bae-6e8e488e582c",
+      "createdAt": "2026-11-09T15:23:28.515Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "8ee7c0d3-3873-4c1b-8c2c-431e0024ed51",
+      "createdAt": "2026-11-09T15:23:56.400Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "b3736424-0daa-453f-8822-a692bc1fb908",
+      "createdAt": "2026-11-09T15:24:27.214Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "9512794f-8c00-4104-a0b7-da22b05f3b6e",
+      "createdAt": "2026-11-09T15:24:57.174Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "41a40dec-77b2-45c3-8a9e-d3fd62580861",
+      "createdAt": "2026-11-09T15:25:25.765Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "a324b732-a389-4874-9151-42211715597b",
+      "createdAt": "2026-11-09T15:25:58.631Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "f3893327-a36c-475d-9046-98679a08a82b",
+      "createdAt": "2026-11-09T15:26:29.128Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "c7b8a1c0-5adb-4b34-a494-44df6ffc2312",
+      "createdAt": "2026-11-09T15:26:59.461Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "98891601-e35a-4962-8ec2-4c0487b6e2e9",
+      "createdAt": "2026-11-09T15:27:27.946Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "d4008910-ccb7-4995-a176-0ffac3bb285f",
+      "createdAt": "2026-11-09T15:27:57.525Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "64120835-e9c8-451b-925f-4e0437270288",
+      "createdAt": "2026-11-09T15:28:27.501Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "de57614b-ca2d-44b2-9def-375f1b596822",
+      "createdAt": "2026-11-09T15:28:57.696Z"
+    },
+    {
+      "statusCode": 200,
+      "requestId": "995cfbf5-d118-4341-89d7-498068904965",
+      "createdAt": "2026-11-09T15:29:27.711Z"
+    }
+  ],
+  "recoveredPageReused": true,
+  "verificationAmazonRequests": 0,
+  "verificationBusinessWrites": 0,
+  "mcpStatus": "NOT_RUN_CONNECTOR_UNAVAILABLE",
+  "publicationNote": "records_published counts only a completed window head; committed attributed pages are queryable independently"
+}

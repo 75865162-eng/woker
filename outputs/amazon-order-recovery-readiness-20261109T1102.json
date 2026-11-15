@@ -1,0 +1,54 @@
+{
+  "scope": {
+    "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+    "marketplaceId": "ATVPDKIKX0DER",
+    "displayName": "aoocy-us"
+  },
+  "source": "injected ERP MCP data_sync_status",
+  "task": {
+    "id": "266118a2-dba3-44a8-bc40-03260b827a34",
+    "status": "FAILED",
+    "stage": "FETCHING_DETAILS",
+    "processedCount": 0,
+    "pagesCompleted": 0,
+    "nextAttemptAt": "2026-11-06T22:10:29.896Z",
+    "attempts": 3,
+    "maxAttempts": 3,
+    "apiRequests": 493,
+    "throttles": 0,
+    "insertedCount": 0,
+    "updatedCount": 0,
+    "failedCount": 0,
+    "detailsCompletedCount": 491,
+    "executionStartedAt": "2026-11-06T19:32:33.392Z",
+    "finishedAt": "2026-11-06T22:10:29.896Z",
+    "orderRecovery": {
+      "checkedAt": "2026-11-09T11:02:58.766Z",
+      "approvalRequired": true,
+      "started": false,
+      "state": "CHECKPOINT_VALID",
+      "reason": null,
+      "message": "检查点可继续；权限、授权与任务版本仍须在申请和执行时复核。",
+      "checkpoint": {
+        "mode": "RESUME_COMMITTED_ORDER_CHECKPOINT",
+        "window": {
+          "from": "2024-11-20T09:25:07.189Z",
+          "to": "2024-11-21T09:25:07.189Z"
+        },
+        "pagesCompleted": 0,
+        "detailsCompleted": 491,
+        "pendingDetails": 1249,
+        "archivedResponses": 491,
+        "listComplete": false,
+        "nextOperation": "getOrder",
+        "restartsFromBeginning": false
+      }
+    },
+    "operatorAction": "查看结构日志与失败阶段，核对参数或重试上限后申请恢复；报告创建结果不确定时先人工核查，勿重复创建。"
+  },
+  "acceptance": "Read-only recovery checkpoint verification; no retry request, approval, task execution or Amazon upstream request performed.",
+  "amazonUpstreamCalls": 0,
+  "businessRowsInserted": 0,
+  "businessRowsUpdated": 0,
+  "replicationVerified": false
+}

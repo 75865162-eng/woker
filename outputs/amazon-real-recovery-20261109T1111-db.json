@@ -1,0 +1,146 @@
+{
+  "at": "2026-11-09T12:17:23.460Z",
+  "scope": {
+    "organizationId": "amazon-live-local",
+    "workspaceId": "default",
+    "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+    "marketplaceId": "ATVPDKIKX0DER"
+  },
+  "since": "2026-11-09T11:11:12.000Z",
+  "orders": {
+    "taskId": "266118a2-dba3-44a8-bc40-03260b827a34",
+    "status": "WAITING",
+    "stage": "FETCHING_DETAILS",
+    "baselineDetails": 491,
+    "currentDetails": 1030,
+    "newRawResponses": 539,
+    "committedDetails": 539,
+    "recordsUpdated": 539,
+    "associatedItemRows": 553,
+    "totalItemRows": 1053,
+    "runCounters": {
+      "processed": 0,
+      "inserted": 0,
+      "updated": 0,
+      "rejected": 1
+    },
+    "counterCaveat": "Legacy detail slices advance detailsCompletedCount and ORDER_DETAIL_COMMITTED, but not run processed/inserted/updated counters. Item count is persisted associated rows, not an inferred inserted delta.",
+    "windowComplete": false
+  },
+  "otherDomains": [
+    {
+      "id": "7367dd0a-b896-4db9-baef-7e2c600dd85f",
+      "resource": "fulfillment",
+      "activeRunId": null,
+      "rowCount": 0,
+      "runs": [
+        {
+          "id": "010c5403-7e2f-4ae7-8d5a-08d5a7b7cba9",
+          "status": "FAILED",
+          "stage": "FETCHING",
+          "processedCount": 0,
+          "insertedCount": 0,
+          "updatedCount": 0,
+          "failedCount": 1,
+          "pagesCompleted": 15,
+          "error": "同步配置、响应完整性或检查点校验失败；未发布新快照。请核对数据源及授权后重试。"
+        }
+      ]
+    },
+    {
+      "id": "8b82d84b-17f5-4245-8d8f-6b3e12a9d359",
+      "resource": "listing_details",
+      "activeRunId": "39f4e9dc-56d3-429d-9fb2-54f8a8b527ba",
+      "rowCount": 230,
+      "runs": [
+        {
+          "id": "39f4e9dc-56d3-429d-9fb2-54f8a8b527ba",
+          "status": "SUCCEEDED",
+          "stage": "COMPLETED",
+          "processedCount": 230,
+          "insertedCount": 230,
+          "updatedCount": 0,
+          "failedCount": 2,
+          "pagesCompleted": 230,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "0f4918c4-8fc4-4e17-a696-4bb6a13d4a76",
+      "resource": "inventory_events",
+      "activeRunId": null,
+      "rowCount": 0,
+      "runs": [
+        {
+          "id": "7dd47b7d-9d25-4d9f-96b1-0290005d8e08",
+          "status": "SUCCEEDED",
+          "stage": "ARCHIVED_SITE_PENDING",
+          "processedCount": 217,
+          "insertedCount": 217,
+          "updatedCount": 0,
+          "failedCount": 0,
+          "pagesCompleted": 2,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "636d327e-8da0-499a-9322-d6c375475ca5",
+      "resource": "settlements",
+      "activeRunId": "a321796a-bd91-4c45-bc04-b08e4119ce21",
+      "rowCount": 64217,
+      "runs": [
+        {
+          "id": "a321796a-bd91-4c45-bc04-b08e4119ce21",
+          "status": "SUCCEEDED",
+          "stage": "COMPLETED",
+          "processedCount": 61280,
+          "insertedCount": 0,
+          "updatedCount": 0,
+          "failedCount": 0,
+          "pagesCompleted": 138,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "7ec967f0-d1d2-49fc-b264-6b64d8980e94",
+      "resource": "reimbursements",
+      "activeRunId": "4ebcd7f5-aedf-436a-a53e-18797943234f",
+      "rowCount": 0,
+      "runs": [
+        {
+          "id": "bd0d6fa1-c177-43f3-9537-48b25d617741",
+          "status": "SUCCEEDED",
+          "stage": "ARCHIVED_SITE_PENDING",
+          "processedCount": 48,
+          "insertedCount": 48,
+          "updatedCount": 0,
+          "failedCount": 0,
+          "pagesCompleted": 2,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "9cbf4a37-280a-4aef-842d-a848761f86ce",
+      "resource": "returns",
+      "activeRunId": "a0b56a5e-0b32-49e7-91f2-2cce427ed3cc",
+      "rowCount": 6,
+      "runs": [
+        {
+          "id": "51272cb2-3831-4d9f-8554-adb4265e9127",
+          "status": "FAILED",
+          "stage": "RETURN_REPORT_POLLING",
+          "processedCount": 0,
+          "insertedCount": 0,
+          "updatedCount": 0,
+          "failedCount": 2,
+          "pagesCompleted": 0,
+          "error": "退货报告失败、取消或文档身份缺失，未推断为空报告。"
+        }
+      ]
+    }
+  ]
+}

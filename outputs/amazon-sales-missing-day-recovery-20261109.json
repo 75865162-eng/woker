@@ -1,0 +1,17 @@
+{
+  "at": "2026-11-09T14:21:48.979Z",
+  "approvalId": "09ad60b5-d0b5-40f7-9202-5e611837dd0d",
+  "originalTaskId": "28567ef1-03a5-4c9d-9d01-a57a8130e709",
+  "missingDates": [
+    "2026-11-07"
+  ],
+  "result": {
+    "applied": true,
+    "changeRequestId": "09ad60b5-d0b5-40f7-9202-5e611837dd0d"
+  },
+  "run": {
+    "id": "17ab4e5e-8f73-4648-9f6b-7b26678c5aea",
+    "status": "WAITING",
+    "stage": "WAITING"
+  }
+}

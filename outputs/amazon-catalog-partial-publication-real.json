@@ -1,0 +1,37 @@
+{
+  "at": "2026-11-09T17:52:38.752Z",
+  "taskId": "e7571aca-1c91-421a-8c55-04bee66edb0d",
+  "approvalId": "ee4083e5-3ffe-4708-a4c7-0eb7dc7b0bcd",
+  "applied": {
+    "applied": true,
+    "changeRequestId": "ee4083e5-3ffe-4708-a4c7-0eb7dc7b0bcd"
+  },
+  "received": 227,
+  "inserted": 227,
+  "updated": 0,
+  "reused": 0,
+  "published": 227,
+  "status": "PARTIAL_SUCCESS",
+  "stage": "PARTIAL_PUBLISHED",
+  "coverage": {
+    "type": "APPROVED_SCOPE_OBSERVATION",
+    "reason": "UPSTREAM_OBJECT_NOT_FOUND",
+    "complete": false,
+    "resource": "catalog_items",
+    "rowCount": 227,
+    "publication": "PARTIAL_VERIFIED_OBJECTS",
+    "publishedAt": "2026-11-09T17:52:38.728Z",
+    "requestedObjects": 228,
+    "unavailableObjects": 1,
+    "marketplaceVerified": true,
+    "unavailableObjectIds": [
+      "B09BNS592R"
+    ],
+    "accountUniverseComplete": false,
+    "unavailableObjectIndexes": [
+      47
+    ]
+  },
+  "checkpointPreserved": true,
+  "amazonRequests": 0
+}

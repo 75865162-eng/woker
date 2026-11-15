@@ -272,7 +272,7 @@ function validateArgs(definition: SellfoxMcpToolDefinition, raw: unknown, storeS
     if (typeof value !== "string" || !value || value.length > 200 || value !== value.trim()) throw new McpIsolationError(`参数「${key}」无效。`, "TOOL_NOT_ALLOWED", 400, "sellfox");
     if (key === "dataset" && !sellfoxDatasetKeys.includes(value)) throw new McpIsolationError(`未知数据集「${value}」。`, "DATASET_NOT_ALLOWED", 403, "sellfox");
     if (typeof spec.format === "string" && spec.format === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new McpIsolationError(`参数「${key}」须为 YYYY-MM-DD。`, "TOOL_NOT_ALLOWED", 400, "sellfox");
-    if (key === "fields" && !["summary", "all"].includes(value)) throw new McpIsolationError("fields 仅支持 summary 或 all。", "TOOL_NOT_ALLOWED", 400, "sellfox");
+    if (Array.isArray(spec.enum) && !spec.enum.includes(value)) throw new McpIsolationError(`参数「${key}」取值无效。`, "TOOL_NOT_ALLOWED", 400, "sellfox");
   }
   if (typeof args.storeId === "string") assertCredentialStores("sellfox", storeScope, [args.storeId]);
   return args;
@@ -323,7 +323,7 @@ async function toolQueryData(identity: SellfoxMcpIdentity, args: ToolArgs) {
   if (typeof args.fromDate === "string") where.push(`t."${dataset.dateField}"${dateCast} >= ${scope.add(args.fromDate)}::date`);
   if (typeof args.toDate === "string") where.push(`t."${dataset.dateField}"${dateCast} <= ${scope.add(args.toDate)}::date`);
   if (dataset.headResource && dataset.versionColumn) {
-    where.push(`t."${dataset.versionColumn}" = (SELECT h."capturedAt" FROM "SellfoxSnapshotHead" h WHERE h."storeId" = t."storeId" AND h."resource" = ${scope.add(dataset.headResource)})`);
+    where.push(`EXISTS (SELECT 1 FROM "SellfoxSnapshotHead" h WHERE h."storeId" = t."storeId" AND h."resource" = ${scope.add(dataset.headResource)} AND h."capturedAt" = t."${dataset.versionColumn}")`);
   }
   const selectedColumns = args.fields === "all" ? (dataset.allColumns ?? dataset.columns) : dataset.columns;
   const limit = limitOf(args, dataset.defaultLimit);

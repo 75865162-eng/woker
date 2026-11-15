@@ -1,0 +1,22 @@
+
+Running 15 tests using 1 worker
+
+(node:70271) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 tests/browser/operations.spec.ts:84:5 › overview shows six domains, stale reason/action and honest orders/ads placeholders (469ms)
+  ✓   2 tests/browser/operations.spec.ts:99:5 › unsynced inventory quantities and catalog fields stay unknown (240ms)
+  ✓   3 tests/browser/operations.spec.ts:109:5 › product and order links open one seller-site catalog snapshot and keep the SKU filter on refresh (206ms)
+  ✓   4 tests/browser/operations.spec.ts:125:5 › catalog displays persisted main images at 150px and reuses the URL for duplicate ASINs (238ms)
+  ✓   5 tests/browser/operations.spec.ts:142:5 › legacy schedules lead to the unified center without parallel writes (173ms)
+  ✓   6 tests/browser/operations.spec.ts:152:5 › legacy manual sync opens current configuration without starting a second task (198ms)
+  ✓   7 tests/browser/operations.spec.ts:159:5 › legacy order panel links to the existing order route (117ms)
+  ✓   8 tests/browser/operations.spec.ts:166:6 › late /inventory/snapshots failures cannot contaminate the current workspace (304ms)
+  ✓   9 tests/browser/operations.spec.ts:166:6 › late /metrics/daily failures cannot contaminate the current workspace (304ms)
+  ✓  10 tests/browser/operations.spec.ts:166:6 › late /freshness failures cannot contaminate the current workspace (304ms)
+  ✓  11 tests/browser/operations.spec.ts:186:5 › 403 is visible and does not become a successful empty-data state (186ms)
+  ✓  12 tests/browser/operations.spec.ts:194:5 › Amazon replenishment stays on Amazon account data and links Sellfox suggestions separately (372ms)
+  ✓  13 tests/browser/operations.spec.ts:219:5 › Amazon result rows show READY source, NEEDS_DATA inputs, urgency and expandable reasons (294ms)
+  ✓  14 tests/browser/operations.spec.ts:238:5 › blank Amazon sales quantity is rejected instead of becoming zero (302ms)
+  ✓  15 tests/browser/operations.spec.ts:251:5 › Amazon replenishment has no Sellfox sales preview and retains a separate Sellfox route (156ms)
+
+  15 passed (4.7s)

@@ -1,0 +1,35 @@
+{
+  "checkedAt": "2026-11-09T15:12:13.832Z",
+  "manifest": {
+    "version": "finance-site-quarantine.v1",
+    "taskId": "86bd26bf-620c-462b-a2ec-00d8f94a1b1b",
+    "sourceId": "4f8abfad-7bce-4553-9d09-35ce7468d087",
+    "sourceRevision": 5,
+    "rawPage": 6,
+    "rawSha256": "6eb25e78d35561d83abb857922ff4e5d71b30c23f93ad83eb37fb520dc939bba",
+    "window": {
+      "from": "2025-07-04T09:31:07.189Z",
+      "to": "2025-08-03T09:31:07.189Z"
+    },
+    "rows": 500,
+    "outOfScopeRows": 1,
+    "approvedMarketplaceIds": [
+      "A1AM78C64UM0Y8",
+      "A2EUQ1WTGCTBG2",
+      "A2Q3Y263D00KWC",
+      "ATVPDKIKX0DER"
+    ]
+  },
+  "parsed": 500,
+  "proposedAttributedRows": {
+    "ATVPDKIKX0DER": 402,
+    "A2EUQ1WTGCTBG2": 97
+  },
+  "proposedQuarantineRows": 1,
+  "taskStatusUnchanged": "FAILED",
+  "committedPagesUnchanged": 5,
+  "databaseBusinessWrites": 0,
+  "amazonRequests": 0,
+  "status": "REAL_ARCHIVE_PARSE_VERIFIED_ONLY",
+  "liveRecoveryApplied": false
+}

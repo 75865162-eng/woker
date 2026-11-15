@@ -1,0 +1,41 @@
+{
+  "checkedAt": "2026-11-09T07:26:16.119987+00:00",
+  "url": "https://developer-docs.amazon/sp-api/docs/report-type-values-settlement",
+  "htmlSha256": "6b709db263581b41195bd7fae58920e7f3c8c9658969ffe34af06209a7156b5d",
+  "currentReportType": "GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2",
+  "deprecatedTypes": [
+    "GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE",
+    "GET_V2_SETTLEMENT_REPORT_DATA_XML"
+  ],
+  "documentedColumns": [
+    "settlement-id",
+    "settlement-start-date",
+    "settlement-end-date",
+    "deposit-date",
+    "total-amount",
+    "currency",
+    "transaction-type",
+    "order-id",
+    "merchant-order-id",
+    "adjustment-id",
+    "shipment-id",
+    "marketplace-name",
+    "amount-type",
+    "amount-description",
+    "amount",
+    "fulfillment-id",
+    "posted-date",
+    "posted-date-time",
+    "order-item-code",
+    "merchant-order-item-id",
+    "merchant-adjustment-item-id",
+    "sku",
+    "quantity-purchased",
+    "promotion-id"
+  ],
+  "limitations": [
+    "Documentation column list is not a machine-readable full schema.",
+    "Currency propagation requires explicit same-settlement header evidence; never Marketplace defaults.",
+    "This check does not constitute authenticated API acceptance."
+  ]
+}

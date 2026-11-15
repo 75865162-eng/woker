@@ -1,0 +1,8 @@
+
+Running 1 test using 1 worker
+
+(node:64015) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/browser/wimoor-ui.spec.ts:247:48 › expense-management 未接入布局不发业务请求 (475ms)
+
+  1 passed (1.4s)

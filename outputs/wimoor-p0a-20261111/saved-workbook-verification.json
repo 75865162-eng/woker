@@ -1,0 +1,210 @@
+[
+  {
+    "workbook": "ads-api-modernization-matrix.xlsx",
+    "sheet": "Operations",
+    "dataset": "ads_modernization",
+    "rows": 5,
+    "saved_row_count": 6,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "erp-existing-capability-matrix.xlsx",
+    "sheet": "Capabilities",
+    "dataset": "capabilities",
+    "rows": 11,
+    "saved_row_count": 12,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "erp-existing-capability-matrix.xlsx",
+    "sheet": "ERP fingerprints",
+    "dataset": "erp_evidence",
+    "rows": 24,
+    "saved_row_count": 25,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "prisma-model-mapping.xlsx",
+    "sheet": "WMS fields",
+    "dataset": "model_mapping",
+    "rows": 137,
+    "saved_row_count": 138,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "sp-api-modernization-matrix.xlsx",
+    "sheet": "Operations",
+    "dataset": "sp_modernization",
+    "rows": 31,
+    "saved_row_count": 32,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "wimoor-api-inventory.xlsx",
+    "sheet": "Source methods",
+    "dataset": "apis",
+    "rows": 4589,
+    "saved_row_count": 4590,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "wimoor-api-inventory.xlsx",
+    "sheet": "ERP methods",
+    "dataset": "erp_operations",
+    "rows": 31,
+    "saved_row_count": 32,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "wimoor-business-rules.xlsx",
+    "sheet": "Rules",
+    "dataset": "rules",
+    "rows": 12,
+    "saved_row_count": 13,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "wimoor-column-inventory.xlsx",
+    "sheet": "Columns",
+    "dataset": "columns",
+    "rows": 9197,
+    "saved_row_count": 9198,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "wimoor-column-inventory.xlsx",
+    "sheet": "Entity fields",
+    "dataset": "entity_fields",
+    "rows": 5084,
+    "saved_row_count": 5085,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "wimoor-index-constraint-inventory.xlsx",
+    "sheet": "Constraints",
+    "dataset": "constraints",
+    "rows": 1656,
+    "saved_row_count": 1657,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "wimoor-module-dependency.xlsx",
+    "sheet": "Module counts",
+    "dataset": "module_counts",
+    "rows": 3,
+    "saved_row_count": 4,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "wimoor-module-dependency.xlsx",
+    "sheet": "Module membership",
+    "dataset": "module_membership",
+    "rows": 78,
+    "saved_row_count": 79,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "wimoor-module-dependency.xlsx",
+    "sheet": "Imports",
+    "dataset": "dependencies",
+    "rows": 9952,
+    "saved_row_count": 9953,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "wimoor-module-dependency.xlsx",
+    "sheet": "Entities",
+    "dataset": "entities",
+    "rows": 536,
+    "saved_row_count": 537,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "wimoor-module-dependency.xlsx",
+    "sheet": "Pages",
+    "dataset": "pages",
+    "rows": 814,
+    "saved_row_count": 815,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "wimoor-scheduler-inventory.xlsx",
+    "sheet": "Schedulers",
+    "dataset": "schedulers",
+    "rows": 10,
+    "saved_row_count": 11,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "wimoor-service-call-graph.xlsx",
+    "sheet": "Calls",
+    "dataset": "calls",
+    "rows": 102016,
+    "saved_row_count": 102017,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "wimoor-service-call-graph.xlsx",
+    "sheet": "Mapper SQL",
+    "dataset": "mapper_statements",
+    "rows": 2130,
+    "saved_row_count": 2131,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "wimoor-service-method-inventory.xlsx",
+    "sheet": "Services",
+    "dataset": "services",
+    "rows": 1055,
+    "saved_row_count": 1056,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "wimoor-service-method-inventory.xlsx",
+    "sheet": "Methods",
+    "dataset": "methods",
+    "rows": 9018,
+    "saved_row_count": 9019,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "wimoor-service-method-inventory.xlsx",
+    "sheet": "Duplicate files",
+    "dataset": "service_duplicates",
+    "rows": 0,
+    "saved_row_count": 2,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "wimoor-table-inventory.xlsx",
+    "sheet": "Tables",
+    "dataset": "table_review",
+    "rows": 748,
+    "saved_row_count": 749,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "wimoor-table-inventory.xlsx",
+    "sheet": "Table references",
+    "dataset": "table_references",
+    "rows": 7143,
+    "saved_row_count": 7144,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "wimoor-table-inventory.xlsx",
+    "sheet": "Duplicates",
+    "dataset": "duplicates",
+    "rows": 7,
+    "saved_row_count": 8,
+    "header_first_last_cells": "PASS"
+  },
+  {
+    "workbook": "wimoor-table-inventory.xlsx",
+    "sheet": "Conflicts",
+    "dataset": "conflicts",
+    "rows": 0,
+    "saved_row_count": 2,
+    "header_first_last_cells": "PASS"
+  }
+]

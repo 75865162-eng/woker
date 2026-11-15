@@ -1,0 +1,35 @@
+{
+  "at": "2026-11-09T15:56:43.332Z",
+  "taskId": "321b4634-380b-4482-b557-84998e5383ab",
+  "page": 21,
+  "rawSha256": "138d99a4fe9611e5948e7430731974d45107c3b13162fd17b77c533b8c1f15e6",
+  "bytes": 2978639,
+  "nativeJsonValid": true,
+  "values": 100358,
+  "maxDepth": 15,
+  "transactions": 500,
+  "records_parsed": 500,
+  "quarantined": 0,
+  "parseMilliseconds": 42,
+  "parserVersion": "finance-list-transactions.2024-06-19.v2",
+  "resultDigest": "50d007caa5efa46d6dc0c39b375810c9590bc511fde7d93df63fc8cedc5d8bad",
+  "recoveryPreview": {
+    "examined": 1,
+    "recovered": 0,
+    "deferred": 0,
+    "candidates": [
+      {
+        "taskId": "321b4634-380b-4482-b557-84998e5383ab",
+        "page": 21,
+        "rawSha256": "138d99a4fe9611e5948e7430731974d45107c3b13162fd17b77c533b8c1f15e6",
+        "parserVersion": "finance-list-transactions.2024-06-19.v2",
+        "recordsParsed": 500
+      }
+    ]
+  },
+  "rawReused": true,
+  "businessWrites": 0,
+  "amazonRequests": 0,
+  "published": 0,
+  "verification": "REAL_ARCHIVE_PARSE_AND_RECOVERY_PREFLIGHT_ONLY"
+}

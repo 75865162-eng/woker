@@ -1,0 +1,197 @@
+{
+  "scope": {
+    "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+    "marketplaceId": "ATVPDKIKX0DER"
+  },
+  "total": 1840,
+  "unique": 1840,
+  "pages": [
+    {
+      "page": 1,
+      "count": 50,
+      "requestId": "f2a49ebc-6fed-4826-82fd-6349e3d4a418"
+    },
+    {
+      "page": 2,
+      "count": 50,
+      "requestId": "a9d2b649-b866-47bd-9d22-1694ea041cc5"
+    },
+    {
+      "page": 3,
+      "count": 50,
+      "requestId": "01d4a01c-4723-4310-890c-dab621b5ed9d"
+    },
+    {
+      "page": 4,
+      "count": 50,
+      "requestId": "fc1ba501-561d-44a7-9fff-c08d020ad262"
+    },
+    {
+      "page": 5,
+      "count": 50,
+      "requestId": "3459802a-333c-429b-aef5-9ff43ebcba72"
+    },
+    {
+      "page": 6,
+      "count": 50,
+      "requestId": "f6808e3e-b0b7-48db-a4ed-8adcfa67016b"
+    },
+    {
+      "page": 7,
+      "count": 50,
+      "requestId": "dafb6f2d-434e-4558-84b7-50ae9786f49a"
+    },
+    {
+      "page": 8,
+      "count": 50,
+      "requestId": "24a48ba9-ec65-46c7-85e3-cac8c1454d65"
+    },
+    {
+      "page": 9,
+      "count": 50,
+      "requestId": "6e46fd2d-9ecc-4055-ae7a-ab61e75b9040"
+    },
+    {
+      "page": 10,
+      "count": 50,
+      "requestId": "9601036c-a033-4d90-a4cb-8f6cc2f98d51"
+    },
+    {
+      "page": 11,
+      "count": 50,
+      "requestId": "acee5ea3-3b3b-4cae-9c97-a1d537cc51ef"
+    },
+    {
+      "page": 12,
+      "count": 50,
+      "requestId": "8d7e62f3-234e-4144-a308-33203f8c5bc8"
+    },
+    {
+      "page": 13,
+      "count": 50,
+      "requestId": "5d919d68-7ca5-472a-830b-b5269ab668a2"
+    },
+    {
+      "page": 14,
+      "count": 50,
+      "requestId": "a4917282-2f5f-49d1-9bc8-7576ed0d9f00"
+    },
+    {
+      "page": 15,
+      "count": 50,
+      "requestId": "20aa158e-d7fa-4c84-9f79-65e965962910"
+    },
+    {
+      "page": 16,
+      "count": 50,
+      "requestId": "230d844d-c276-4d27-9674-68168290d687"
+    },
+    {
+      "page": 17,
+      "count": 50,
+      "requestId": "6a4a63ad-1351-4832-9454-ce8aeea2fad4"
+    },
+    {
+      "page": 18,
+      "count": 50,
+      "requestId": "5ac889b8-521b-4e90-b26a-f464c95dd43f"
+    },
+    {
+      "page": 19,
+      "count": 50,
+      "requestId": "06655973-03c9-472a-83a3-44e0e606679c"
+    },
+    {
+      "page": 20,
+      "count": 50,
+      "requestId": "8cc25920-c086-4fe3-88a2-ebd8d8bf7d6a"
+    },
+    {
+      "page": 21,
+      "count": 50,
+      "requestId": "184ee1c6-d216-4db5-8104-f0362f83fcf2"
+    },
+    {
+      "page": 22,
+      "count": 50,
+      "requestId": "d1d0da1d-75fd-4293-81bb-bfe718a2b996"
+    },
+    {
+      "page": 23,
+      "count": 50,
+      "requestId": "526fc978-d1b1-4b95-8db8-2c84945eadc2"
+    },
+    {
+      "page": 24,
+      "count": 50,
+      "requestId": "61953828-abc5-4542-ad86-41d40954649a"
+    },
+    {
+      "page": 25,
+      "count": 50,
+      "requestId": "8e4b56f6-421e-4608-8cf6-3e4d08cc4f62"
+    },
+    {
+      "page": 26,
+      "count": 50,
+      "requestId": "c66615c3-8d53-4822-ad4e-8aac223ec6f3"
+    },
+    {
+      "page": 27,
+      "count": 50,
+      "requestId": "2e612165-ac46-46e0-a68c-4413dfdb375a"
+    },
+    {
+      "page": 28,
+      "count": 50,
+      "requestId": "86915327-a259-46e9-b5eb-d172f67c06d0"
+    },
+    {
+      "page": 29,
+      "count": 50,
+      "requestId": "ce00b08d-3605-41bb-9f9d-07431170e93c"
+    },
+    {
+      "page": 30,
+      "count": 50,
+      "requestId": "09030f9e-4218-46a5-a707-835220a182c5"
+    },
+    {
+      "page": 31,
+      "count": 50,
+      "requestId": "667dbc0e-18ce-4c0a-9615-d94451a85d13"
+    },
+    {
+      "page": 32,
+      "count": 50,
+      "requestId": "351d4801-f804-43b7-a466-45a60ab4580a"
+    },
+    {
+      "page": 33,
+      "count": 50,
+      "requestId": "9ef5d77e-9dae-4989-8546-d14993418e92"
+    },
+    {
+      "page": 34,
+      "count": 50,
+      "requestId": "16d9f6cc-f59e-41f5-ac72-637df2f827f2"
+    },
+    {
+      "page": 35,
+      "count": 50,
+      "requestId": "1ebafb88-a2fd-4277-94dc-03d465f83abe"
+    },
+    {
+      "page": 36,
+      "count": 50,
+      "requestId": "85ceaea3-8eb0-4182-8ea5-c3b1082274bf"
+    },
+    {
+      "page": 37,
+      "count": 40,
+      "requestId": "868ba404-e52a-41c7-9b8c-d37a0fbccd97"
+    }
+  ],
+  "checkedAt": "2026-11-09T13:43:02.376Z",
+  "windowComplete": false
+}
