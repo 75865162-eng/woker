@@ -16,6 +16,40 @@ import { createHeartbeatWriter } from "../src/lib/runtime/heartbeat-writer";
 import { connectionIdentity, publicHeartbeatMetadata } from "../src/lib/runtime/connection-identity";
 import { restoreNextEnvironment } from "../scripts/runtime/generated-types-cleanup.mjs";
 
+test("scheduler-only registration does not require an invented queue connection", async () => {
+  const { runtimeHeartbeatMetadata } = await import("../src/lib/runtime/worker-diagnostics");
+  const previous = process.env.ERP_WORKER_REGISTRATION;
+  try {
+    process.env.ERP_WORKER_REGISTRATION = "forecast";
+    assert.equal(runtimeHeartbeatMetadata().queueReady, true);
+    process.env.ERP_WORKER_REGISTRATION = "import";
+    assert.equal(runtimeHeartbeatMetadata().queueReady, false);
+    process.env.ERP_WORKER_REGISTRATION = "unknown";
+    assert.equal(runtimeHeartbeatMetadata().queueReady, false);
+  } finally {
+    if (previous === undefined) delete process.env.ERP_WORKER_REGISTRATION;
+    else process.env.ERP_WORKER_REGISTRATION = previous;
+  }
+});
+
+test("runtime fixture secrets satisfy the real session signing boundary without inheriting credentials", () => {
+  const env = fixtureEnvironment({ inherited: { PATH: process.env.PATH, AUTH_SECRET: "must-not-inherit" }, directory: tmpdir(), pgPort: 55432, redisPort: 56379, webPort: 53000, guard: "fixture-guard.mjs" });
+  const previous = process.env.AUTH_SECRET;
+  try {
+    process.env.AUTH_SECRET = env.AUTH_SECRET;
+    assert.equal(getAuthSecret(), env.AUTH_SECRET);
+    assert.notEqual(env.AUTH_SECRET, "must-not-inherit");
+    const source = readFileSync(new URL("../scripts/test-runtime-integration.mjs", import.meta.url), "utf8");
+    const configuredSecret = source.match(/AUTH_SECRET: "([^"]+)"/)?.[1];
+    assert.ok(configuredSecret);
+    process.env.AUTH_SECRET = configuredSecret;
+    assert.doesNotThrow(() => getAuthSecret());
+  } finally {
+    if (previous === undefined) delete process.env.AUTH_SECRET;
+    else process.env.AUTH_SECRET = previous;
+  }
+});
+
 const fixtureConfig = "DATABASE_URL=postgresql://fixture:password@127.0.0.1:5440/fixture\nREDIS_URL=redis://127.0.0.1:6381/4\nQUEUE_DRIVER=redis\nAUTH_SECRET=literal$dollar\n";
 test("connection identity compares Redis target/index without disclosing credentials", () => {
   const env = { DATABASE_URL: "postgresql://user:secret@localhost:5432/fixture", REDIS_URL: "redis://localhost:6379/0", AUTH_SECRET: "fixture-secret", QUEUE_DRIVER: "redis" };

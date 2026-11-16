@@ -1,5 +1,6 @@
 import type { Worker } from "bullmq";
 import { connectionIdentity } from "./connection-identity";
+import registry from "./worker-registry.json";
 
 const connections = new Map<Worker, boolean>();
 export function observeWorker(worker: Worker, label: string) {
@@ -18,10 +19,12 @@ export function observeWorker(worker: Worker, label: string) {
 }
 
 export function runtimeHeartbeatMetadata() {
+  const registration = registry.find(item => item.id === process.env.ERP_WORKER_REGISTRATION);
+  const schedulerOnly = registration?.queues.length === 0;
   return {
     registration: process.env.ERP_WORKER_REGISTRATION ?? "legacy-unmanaged",
     version: process.env.ERP_RUNTIME_VERSION ?? "development",
     connectionIdentity: connectionIdentity(),
-    queueReady: connections.size > 0 && [...connections.values()].every(Boolean),
+    queueReady: (schedulerOnly || connections.size > 0) && [...connections.values()].every(Boolean),
   };
 }
