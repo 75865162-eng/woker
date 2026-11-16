@@ -4,7 +4,19 @@
 
 本报告只记录本轮实际操作和证据。未把执行环境拒绝、已有测试或静态检查冒充为生产验收。生产数据库、外部授权和正式服务器均未连接；没有部署、迁移或生产数据修改。
 
-## 基线与工作区
+## 续轮验证记录（2026-11-16，进行中）
+
+以下为续轮当前证据；后文第一轮记录保留用于追溯，不代表当前候选版本的最终状态。
+
+- 续轮起始与 10:39 UTC 复核 HEAD 均为 `0d973c6b1f2e93e162a771c39c2d42d0c1d8a591`。本轮修改未提交，不能把 HEAD 单独视作最终候选内容。
+- 全量测试启动于 `2026-11-16T10:19:39.214Z`，结束于 `2026-11-16T10:38:59.410Z`，退出码 1：1,967 tests、1,966 pass、1 fail、0 cancelled、0 skipped、0 todo；Node 报告耗时 1,156,135.5773 ms。完整证据为 `outputs/erp-closeout-unit.tap`。
+- 唯一失败是 `tests/amazon-ads-capabilities.test.ts` 的 CLI 子进程 `ETIMEDOUT`，该测试执行时尚未应用续轮修复。未沿用第一轮 48 项失败数字作为当前结果。
+- 修复能力目录 CLI 测试：子进程只继承必要系统变量，直接使用 `node --import tsx` 启动，保留 10 秒超时与所有能力/权限断言。`node --import tsx --test tests/amazon-ads-capabilities.test.ts` 定向复测退出码 0：4 pass、0 fail、0 skipped，耗时 9,677.9725 ms；局部 ESLint 退出码 0。
+- `npm run typecheck` 退出码 0；`npm run lint` 退出码 0（0 errors、2 个既有 `<img>` warning）；`node scripts/runtime/ui-guard.mjs` 退出码 0，所有指标相对基线无增加。修改仍在进行，以上不是最终冻结候选的全套回归。
+- 当前机器另有独立全量校验进程；未停止或修改该进程。其结果不自动纳入本报告。
+- 容器身份接线、发布验证子进程边界与 WMS 全链路入口仍在核查/修复。Docker 缺失仍阻断数据库、浏览器业务闭环、故障恢复、迁移、备份恢复与性能实测。最终判定保持 **NO-GO**。
+
+## 基线与工作区（第一轮历史记录）
 
 - 初始 HEAD：`80dc88cdfd8c159d452757a1434812d7374f4910`。
 - 检查期间观察到 HEAD 自动变化为 `2cbb962502c51c2e635c658d8a2c2a2fd297ee7a`（merge commit）。该变更不是本轮执行的，且测试跨越了 HEAD 变化，因此本轮结果不属于固定单一 Commit 的验收证据。
@@ -62,7 +74,7 @@
 2. **固定最终候选 commit。** 先调查 HEAD 自动变化和用户修改消失的来源；提交动作需用户授权。本轮不创建 commit。随后所有验收必须对同一个 commit 执行并保存原始日志、退出码、通过/失败/跳过数。
 3. **复核 48 个单测失败。** 需要在可读日志的位置重跑 `npm run test`，输出 TAP 到获准的工作区日志路径，逐项定位并修复；当前失败明细不可访问，不能断言是环境错误或代码错误。
 4. **真实隔离端到端。** 运行 `npm run test:runtime:integration`，覆盖完整迁移链、重复部署幂等、运行态故障、真实 App Router 浏览、API 持久化、Worker/Redis/PostgreSQL 恢复及独立空库备份恢复。该脚本的部分任务内容为合成 fixture，不能代表外部供应商或生产数据验收。
-5. **WMS 浏览器全链路。** Docker 可用后运行 `node scripts/test-wms-core-offline.mjs --browser`，保留真实 Playwright 日志和双会话的质检、审核、入库/状态转换证据；任何失败须修复并复测。
+5. **WMS 浏览器全链路（入口静态复核修正，尚未执行）。** Docker 可用后运行 `node scripts/test-wms-schema-offline.mjs`（不带筛选参数）：其默认入口 `wms-first-loop.integration.ts` 调用 `verifyWmsHttp`，再由 `wms-http.integration.ts` 不传 focused 参数调用 `verifyWmsBrowser`，进入 `wms-browser-workflow.ts` 的双会话收货、分批质检和上架流程。旧 Schema fixture 若因当前模型依赖失败，应修复后复测，不将入口存在视为通过。另运行 `node scripts/test-wms-core-offline.mjs --browser` 验证 focused 调拨、转换和计价流程；该命令当前不会进入通用质检工作流，不能单独作为质检全链路证据。保留实际 Playwright 日志和双会话审批、执行、库存/状态转换证据；任何失败须修复并复测。本项修正仅澄清命令覆盖范围，不改变上述历史未运行事实。
 6. **Workspace 性能门禁。** 在同模式、同机器的认可基线上分别运行 dev/Turbopack 与 production fixture，并比较登录和热切页 P50/P95、导航请求、DOM 持久性及撤权/禁用账号断言。当前无本轮数据，不能判定 SLO 达标。
 7. **迁移历史。** 在隔离空 PostgreSQL 上执行仓库完整 `migrate deploy`、核对 checksum/历史并重复执行验证幂等。生产目标库的 `_prisma_migrations` 及零步迁移历史必须在单独批准的目标环境中只读核实；禁止擅自执行生产迁移。
 8. **最终完整回归。** 同一固定 commit 上按 CI 流程执行 typecheck、lint、全量单测、集成、浏览器 E2E、production build、迁移、权限隔离、并发/幂等/故障恢复、性能与资源压测及数据库备份恢复。当前没有这些完整证据。

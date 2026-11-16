@@ -1,6 +1,6 @@
 # CI/CD 发布方案
 
-执行规则：服务器发布只走现有 CI artifact 流程并独立审批；下方迁移的服务器清单保留数据保护约束，机器状态须本次只读核验。迁移、依赖安装与基础设施更新按 deployment-plan 按需执行；当前应用发布统一切换全部四类注册 Worker，纯文档不发布应用。不使用 SSH 补丁或源码同步绕过 CI。
+执行规则：服务器发布只走现有 CI artifact 流程并独立审批；下方迁移的服务器清单保留数据保护约束，机器状态须本次只读核验。迁移、依赖安装与基础设施更新按 deployment-plan 按需执行；当前应用发布统一切换 `src/lib/runtime/worker-registry.json` 中全部注册 Worker，纯文档不发布应用。不使用 SSH 补丁或源码同步绕过 CI。
 
 本项目的默认发布链路是 CI 构建产物发布；三端对齐时也走同一条链路，不把 build 放回服务器：
 
@@ -63,7 +63,7 @@ artifact 不包含完整项目工作区、`node_modules/`、`.git/`、`coverage/
 - 服务器系统：Ubuntu 24.04 LTS x64。
 - 生产架构：PostgreSQL 和 Redis 使用 Docker；Next web 和 worker 使用服务器本机 Node.js + systemd；Caddy 使用 Docker 反代到本机 web。
 - Docker Compose 只管理 infra：`postgres`、`redis`。不要再为普通代码更新执行 `docker compose up -d --build web worker`。
-- systemd 服务：`amazon-web`、`amazon-worker`、`amazon-image-upscale-worker`、`amazon-sync-worker`、`amazon-sellfox-sync-worker`。
+- systemd 服务：`amazon-web`；Worker 以 `src/lib/runtime/worker-registry.json` 为准，当前为 `amazon-worker`、`amazon-image-upscale-worker`、`amazon-sync-worker`、`amazon-sellfox-sync-worker`、`amazon-forecast-worker`。
 - UFW 必须允许 `22/tcp`、`80/tcp`、`443/tcp`；`3000`、`5432`、`6379` 不开放公网。
 - Caddy 证书和配置使用 Docker volumes `amazon-caddy-data`、`amazon-caddy-config` 持久化；不要无备份删除这些 volumes。
 - 服务器 `.env` 路径：`/opt/amazon-ad-bulk-operation/.env`。这里保存 `AUTH_SECRET`、管理员 bootstrap 配置、R2/S3 配置等敏感运行环境变量。
@@ -79,10 +79,10 @@ artifact 不包含完整项目工作区、`node_modules/`、`.git/`、`coverage/
 - 本机生产进程必须使用 `npm run build` 后的 standalone 输出，web 启动命令是 `npm run start:standalone`，不要用 `npm run dev` 跑公网。
 - 全新 Ubuntu 24.04 主机先运行 `sudo bash scripts/bootstrap-server.sh`，再通过 workflow_dispatch 显式启用 `initial_deployment=true` 和 `install_dependencies=true`。该脚本生成独立 `.env` 与管理员初始密码文件；首发执行迁移、管理员 seed，并启用 systemd workers。
 - worker 由 systemd 执行 `npm run worker`。服务器发布脚本会用 `node_modules/.package-lock.sha256` 判断依赖是否变化；`package-lock.json` 未变时跳过 `npm ci`。
-- 仓库不保留应用 Dockerfile；生产应用进程只走本机 Node.js + systemd。不要为 web/worker 恢复 Docker build，除非用户明确要求重新容器化。
-- 发布最高原则：根据实际改动按需迁移和重启。禁止每次发布默认迁移数据库、重启全部 worker、重建 Caddy 或更新 infra。
+- 仓库保留应用 `Dockerfile`，但它不属于当前发布链路；生产应用进程只走 CI standalone artifact + 本机 Node.js + systemd。不要为 web/worker 启用 Docker build，除非用户明确要求重新容器化。
+- 发布最高原则：数据库迁移、依赖安装、Caddy 和 infra 更新按实际改动及 deployment-plan 执行，不默认全量操作；应用发布统一切换 web 和全部已登记 Worker 到新 release，避免旧代码消费者继续运行。
 - CI 使用明确的 BASE_SHA 与目标 commit 生成 `deployment-plan.json`，随校验产物发布；服务器核对 headSha 与产物一致、baseSha 与当前线上 RELEASE.json 的 commit 一致。清单缺失、字段无效或基线不一致时停止，不默认全量操作。
-- 仅文档改动只同步 GitHub；当前 `scripts/deployment-plan.mjs` 对应用发布安排 web 和全部四类已登记 Worker 切换新 release。不得沿用历史按入口选择性重启规则；依赖、迁移、配置和 infra 仍按清单按需执行。
+- 仅文档改动只同步 GitHub；当前 `scripts/deployment-plan.mjs` 对应用发布安排 web 和全部已登记 Worker（当前五类，含 forecast）切换新 release。不得沿用历史按入口选择性重启规则；依赖、迁移、配置和 infra 仍按清单按需执行。
 - 仅 Prisma schema、migration 或依赖锁文件变化才执行服务器 Prisma generate；仅 migration 变化才执行 migrate deploy。schema 变化缺少配套 migration 时禁止发布，迁移必须人工审核。服务器 npm ci 仍需锁文件变化和明确安装授权。
 - systemd、Caddy 和 Docker infra 分别按清单更新；发布脚本和基础设施变化必须人工审核并显式确认。普通发布不执行 bootstrap seed 或商品维护脚本，不触碰 .env、上传文件或 volumes。
 - 服务器校验 CI artifact SHA256、按清单执行必要操作、生成 release、切换 current symlink、健康检查并记录结果；不执行 Next standalone build。失败只回滚应用及本次涉及的运行配置，不自动回滚数据库。

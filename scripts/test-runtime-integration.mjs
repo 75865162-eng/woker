@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import { chromium } from "@playwright/test";
 import { restoreNextEnvironment } from "./runtime/generated-types-cleanup.mjs";
 import { backupDatabase } from "./runtime/backup-postgres.mjs";
+import { assertFixtureContainer } from "./runtime/fixture-safety.mjs";
 import { migrationCatalog, migrationReadiness } from "./runtime/readiness-contract.mjs";
 const { Client } = createRequire(import.meta.url)("pg");
 const XLSX = createRequire(import.meta.url)("xlsx");
@@ -19,11 +20,20 @@ const directory = mkdtempSync(path.join(tmpdir(), "erp-runtime-integration-"));
 const pgName = `erp-runtime-pg-${tag}`, redisName = `erp-runtime-redis-${tag}`;
 const dist = `.next-dev-runtime-${tag}`;
 const containers = [], children = [];
+let pgPort, redisPort, pgContainerId, redisContainerId;
+const pgFixture = { name: pgName, port: null, servicePort: 5432, id: null };
+const redisFixture = { name: redisName, port: null, servicePort: 6379, id: null };
 const baselineTsconfig = readFileSync(path.join(root, "tsconfig.json"), "utf8");
 const baselineNextEnv = readFileSync(path.join(root, "next-env.d.ts"), "utf8");
 let browser;
 const logFd = openSync(path.join(directory, "fixture.log"), "w", 0o600);
 const docker = args => execFileSync("docker", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+function verifyFixture(fixture) {
+  assert.ok(fixture.id, `fixture ${fixture.name} has no recorded container ID`);
+  const inspected = JSON.parse(docker(["inspect", fixture.id]))[0];
+  assertFixtureContainer(inspected, { id: fixture.id, name: fixture.name, tag, port: fixture.port, servicePort: fixture.servicePort });
+  return inspected;
+}
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(fn, label, timeout = 90_000) {
   const started = Date.now();
@@ -58,11 +68,16 @@ async function freePort() {
 const results = [];
 try {
   docker(["image", "inspect", "postgres:16-alpine"]); docker(["image", "inspect", "redis:7"]);
-  const pgPort = String(await freePort()), redisPort = String(await freePort());
-  docker(["run", "--pull=never", "-d", "--name", pgName, "--label", "codex.task=erp-runtime-fixture", "--memory=512m", "--cpus=1", "-e", "POSTGRES_PASSWORD=fixture_password", "-e", "POSTGRES_DB=erp_fixture", "-p", `127.0.0.1:${pgPort}:5432`, "postgres:16-alpine"]); containers.push(pgName);
-  docker(["run", "--pull=never", "-d", "--name", redisName, "--label", "codex.task=erp-runtime-fixture", "--memory=128m", "--cpus=0.5", "-p", `127.0.0.1:${redisPort}:6379`, "redis:7", "redis-server", "--save", "", "--appendonly", "no"]); containers.push(redisName);
-  assert.ok(docker(["port", pgName, "5432"]).endsWith(":" + pgPort));
-  assert.ok(docker(["port", redisName, "6379"]).endsWith(":" + redisPort));
+  pgPort = String(await freePort()); redisPort = String(await freePort());
+  pgFixture.port = pgPort; redisFixture.port = redisPort;
+  pgFixture.id = docker(["run", "--pull=never", "-d", "--name", pgName, "--label", "codex.task=erp-runtime-fixture", "--label", `erp.fixture.run=${tag}`, "--memory=512m", "--cpus=1", "-e", "POSTGRES_PASSWORD=fixture_password", "-e", "POSTGRES_DB=erp_fixture", "-p", `127.0.0.1:${pgPort}:5432`, "postgres:16-alpine"]);
+  containers.push(pgFixture);
+  redisFixture.id = docker(["run", "--pull=never", "-d", "--name", redisName, "--label", "codex.task=erp-runtime-fixture", "--label", `erp.fixture.run=${tag}`, "--memory=128m", "--cpus=0.5", "-p", `127.0.0.1:${redisPort}:6379`, "redis:7", "redis-server", "--save", "", "--appendonly", "no"]);
+  containers.push(redisFixture);
+  pgContainerId = pgFixture.id; redisContainerId = redisFixture.id;
+  verifyFixture(pgFixture); verifyFixture(redisFixture);
+  assert.ok(docker(["port", pgFixture.id, "5432"]).endsWith(":" + pgPort));
+  assert.ok(docker(["port", redisFixture.id, "6379"]).endsWith(":" + redisPort));
   const env = {
     PATH: process.env.PATH, TMPDIR: tmpdir(), ERP_RUNTIME_MODE: "production", NODE_ENV: "development", __NEXT_PROCESSED_ENV: "true",
     DATABASE_URL: `postgresql://postgres:fixture_password@127.0.0.1:${pgPort}/erp_fixture`, REDIS_URL: `redis://127.0.0.1:${redisPort}`,
@@ -95,7 +110,7 @@ try {
   results.push("import stale publication rejected; final audit failure rolls back file/export/job/success versions");
   results.push("import pre-publication and mock image CPU gates: SIGKILL followed by bounded lease takeover publishes once");
   execFileSync(process.execPath, ["node_modules/tsx/dist/cli.mjs", "--test", "--test-concurrency=1", "tests/integration/runtime-faults.integration.ts"], {
-    cwd: root, env: { ...env, ERP_RUNTIME_EXECUTION_FIXTURE: "1", ERP_RUNTIME_FIXTURE_PG_CONTAINER: pgName }, stdio: ["ignore", logFd, logFd],
+    cwd: root, env: { ...env, ERP_RUNTIME_EXECUTION_FIXTURE: "1", ERP_RUNTIME_FIXTURE_PG_CONTAINER: pgName, ERP_RUNTIME_FIXTURE_PG_ID: pgContainerId, ERP_RUNTIME_FIXTURE_TAG: tag }, stdio: ["ignore", logFd, logFd],
   });
   results.push("real XLSX parser SIGKILL preserves original Bulk input and recovers to one export");
   results.push("image engine executable SIGKILL rejects partial output; protocol fixture retries successfully");
@@ -263,7 +278,8 @@ try {
 
   // Flush/restart only this newly created Redis. No business/real queues touched.
   await stop(manager);
-  docker(["stop", redisName]);
+  verifyFixture(redisFixture);
+  docker(["stop", redisFixture.id]);
   const deferredForm = new FormData(); deferredForm.set("file", new File(["fixture,queued\n1,2"], "deferred.csv", { type: "text/csv" }));
   const deferredResponse = await fetch(base + "/api/files/upload", { method: "POST", headers: { cookie }, body: deferredForm, signal: AbortSignal.timeout(10_000) });
   assert.equal(deferredResponse.status, 200);
@@ -279,10 +295,12 @@ try {
   assert.deepEqual(readFileSync(path.join(directory, "uploads", image.inputKey)), imageBytes);
   assert.ok(readFileSync(path.join(directory, "uploads", deferred.job.file.storageKey)).length > 0);
   results.push("Redis outage: upload and image APIs retain queued database intent and original input files");
-  docker(["start", redisName]);
-  await until(() => docker(["exec", redisName, "redis-cli", "PING"]) === "PONG", "fixture Redis restart");
-  docker(["exec", redisName, "redis-cli", "FLUSHALL"]);
-  docker(["restart", redisName]);
+  verifyFixture(redisFixture);
+  docker(["start", redisFixture.id]);
+  await until(() => docker(["exec", redisFixture.id, "redis-cli", "PING"]) === "PONG", "fixture Redis restart");
+  docker(["exec", redisFixture.id, "redis-cli", "FLUSHALL"]);
+  verifyFixture(redisFixture);
+  docker(["restart", redisFixture.id]);
   await sql(env.DATABASE_URL, `UPDATE "ImportJob" SET status='queued',error=NULL WHERE id=$1`, [uploaded.job.id]);
   manager = start(["scripts/runtime/worker-manager.mjs"], env);
   await until(async () => (await sql(env.DATABASE_URL, `SELECT status FROM "ImportJob" WHERE id=$1`, [uploaded.job.id])).rows[0]?.status === "failed", "recovery from database after Redis data loss");
@@ -292,7 +310,8 @@ try {
   assert.deepEqual(readFileSync(path.join(directory, "uploads", image.inputKey)), imageBytes);
   results.push("connection recovery consumes both deferred jobs with original image input intact");
   const databaseRestartedAt = Date.now();
-  docker(["restart", pgName]);
+  verifyFixture(pgFixture);
+  docker(["restart", pgFixture.id]);
   await until(() => sql(env.DATABASE_URL, "SELECT 1"), "PostgreSQL restarted");
   await until(async () => {
     const workers = (await health()).registeredWorkers;
@@ -300,11 +319,11 @@ try {
   }, "database reconnect", 120_000);
   results.push("PostgreSQL restart: web and all Worker heartbeats reconnect");
   const backup = await backupDatabase({ directory: path.join(directory, "backups"), env, run: async (command, args) => {
-    if (command === "pg_dump") writeFileSync(args.at(-1), execFileSync("docker", ["exec", pgName, "pg_dump", "-U", "postgres", "-d", "erp_fixture", "--format=custom"], { maxBuffer: 16 * 1024 * 1024 }));
-    else execFileSync("docker", ["exec", "-i", pgName, "pg_restore", "--list"], { input: readFileSync(args.at(-1)), stdio: ["pipe", "ignore", "pipe"] });
+    if (command === "pg_dump") writeFileSync(args.at(-1), execFileSync("docker", ["exec", pgFixture.id, "pg_dump", "-U", "postgres", "-d", "erp_fixture", "--format=custom"], { maxBuffer: 16 * 1024 * 1024 }));
+    else execFileSync("docker", ["exec", "-i", pgFixture.id, "pg_restore", "--list"], { input: readFileSync(args.at(-1)), stdio: ["pipe", "ignore", "pipe"] });
   } });
   await sql(env.DATABASE_URL, "CREATE DATABASE fixture_restore");
-  execFileSync("docker", ["exec", "-i", pgName, "pg_restore", "-U", "postgres", "--dbname=fixture_restore", "--exit-on-error"], { input: readFileSync(path.join(directory, "backups", backup.filename)), stdio: ["pipe", "ignore", "pipe"] });
+  execFileSync("docker", ["exec", "-i", pgFixture.id, "pg_restore", "-U", "postgres", "--dbname=fixture_restore", "--exit-on-error"], { input: readFileSync(path.join(directory, "backups", backup.filename)), stdio: ["pipe", "ignore", "pipe"] });
   assert.equal((await sql(env.DATABASE_URL.replace("/erp_fixture", "/fixture_restore"), `SELECT count(*)::int AS n FROM "WorkerHeartbeat"`)).rows[0].n > 0, true);
   results.push("fixture PostgreSQL custom backup verified and restored into a separate disposable database");
   await browser.close(); browser = null;
@@ -316,7 +335,12 @@ try {
 } finally {
   if (browser) await browser.close();
   for (const child of children.reverse()) await stop(child);
-  for (const container of containers.reverse()) { try { docker(["rm", "-f", container]); } catch { console.error(`[runtime-fixture] remove disposable container ${container} manually`); } }
+  let cleanupFailed = false;
+  for (const fixture of containers.reverse()) {
+    try { verifyFixture(fixture); docker(["rm", "-f", fixture.id]); }
+    catch (error) { cleanupFailed = true; console.error(`[runtime-fixture] refuse cleanup for ${fixture.name}: ${error.message}`); }
+  }
+  if (cleanupFailed) process.exitCode = 1;
   closeSync(logFd);
   rmSync(path.join(root, dist), { recursive: true, force: true });
   // Next appends a generated types include even when distDir is disposable.

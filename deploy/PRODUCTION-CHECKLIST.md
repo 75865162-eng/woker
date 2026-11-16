@@ -25,6 +25,7 @@ sudo npm run check:production -- --env /opt/amazon-ad-bulk-operation/.env --gate
 | FAIL 项 | 动作 |
 |---|---|
 | `amazon.sp_api_credentials` | 在生产 env 填入真实 `AMAZON_SP_API_LWA_CLIENT_ID` / `CLIENT_SECRET` / `REFRESH_TOKEN`（目前是空占位符） |
+| OAuth 必填（模板已列） | `AMAZON_SP_API_APPLICATION_ID` 与 `AMAZON_SP_API_OAUTH_REDIRECT_URI` 由 OAuth consent 流程强制读取；redirect 路径须精确为 `/api/integrations/amazon/sp-api/oauth/callback`，否则授权直接失败 |
 | `amazon.ads_credentials` | 填入真实 `AMAZON_ADS_LWA_CLIENT_ID` / `AMAZON_ADS_LWA_CLIENT_SECRET` |
 | `amazon.authorization` | 跑 `npm run prod:onboard-amazon` 完成 OAuth 授权，产生已验证授权记录 |
 | `amazon.seller_identity` | 授权后由 SP-API 核实站点身份（自动写入） |

@@ -10,6 +10,7 @@ import { migrationReadiness, migrationCatalog, validConnection, authReadiness } 
 
 const read = (file: string) => readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
 const registry = JSON.parse(read("src/lib/runtime/worker-registry.json")) as Array<{ id: string; entry: string; service: string }>;
+const childProcessEnv = () => Object.fromEntries(["PATH", "Path", "SystemRoot", "SYSTEMROOT", "COMSPEC", "PATHEXT", "TEMP", "TMP"].flatMap(key => process.env[key] === undefined ? [] : [[key, process.env[key]!]]));
 
 test("当前五项注册 Worker 均有真实入口、manager 命令和正式 systemd 合同", () => {
   assert.deepEqual(registry.map(worker => worker.id), ["import", "image-upscale", "amazon-sync", "sellfox-sync", "forecast"]);
@@ -39,9 +40,9 @@ test("release-check 接受完整合成包，拒绝缺失注册 unit 和真实配
     put("src/lib/uploads.ts");
     const check = () => {
       const artifact = "fixture.tar.gz";
-      execFileSync("tar", ["-czf", artifact, "-C", "package", "."], { cwd: root });
+      execFileSync("tar", ["-czf", artifact, "-C", "package", "."], { cwd: root, env: childProcessEnv(), timeout: 15_000 });
       writeFileSync(path.join(root, "release-manifest.json"), JSON.stringify({ commit: "fixture", build: "passed", lint: "passed", tests: "passed", artifactSha256: createHash("sha256").update(readFileSync(path.join(root, artifact))).digest("hex") }));
-      execFileSync("bash", [fileURLToPath(new URL("../scripts/release-check.sh", import.meta.url)), artifact], { cwd: root, env: { PATH: process.env.PATH, NODE_ENV: "test", SOURCE_COMMIT: "fixture" }, stdio: "pipe" });
+      execFileSync("bash", [fileURLToPath(new URL("../scripts/release-check.sh", import.meta.url)), artifact], { cwd: root, env: { ...childProcessEnv(), NODE_ENV: "test", SOURCE_COMMIT: "fixture" }, stdio: "pipe", timeout: 30_000 });
     };
     assert.doesNotThrow(check);
     put("RELEASE-METADATA.json", JSON.stringify({ ...metadata, commit: "other" }));
@@ -92,7 +93,7 @@ test("部署入口在任何网络操作前拒绝失败、漂移或不完整的�
     writeFileSync(report, typeof data === "string" ? data : JSON.stringify(data));
     return spawnSync("bash", ["-c", 'scp() { exit 93; }; ssh() { exit 94; }; source "$1" "$2"', "deploy-evidence-test", script, "fixture.tar.gz"], {
       cwd: root,
-      env: { PATH: process.env.PATH, NODE_ENV: "test", SOURCE_COMMIT: sourceCommit, SOURCE_BRANCH: "isolated-fixture", RELEASE_CHECK_PATH: "release-check.json", SERVER_HOST: "deployment-test.invalid", SERVER_USER: "fixture" },
+      env: { ...childProcessEnv(), NODE_ENV: "test", SOURCE_COMMIT: sourceCommit, SOURCE_BRANCH: "isolated-fixture", RELEASE_CHECK_PATH: "release-check.json", SERVER_HOST: "deployment-test.invalid", SERVER_USER: "fixture" },
       encoding: "utf8",
       timeout: 15_000,
     });

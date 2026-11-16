@@ -58,7 +58,11 @@ test("code catalog cannot authorize live access, writes or invent history limits
 });
 
 test("capability CLI preserves JSON inventory and exposes isolation in Markdown without live readiness", () => {
-  const run = (...args: string[]) => execFileSync(process.execPath, ["node_modules/tsx/dist/cli.mjs", "scripts/amazon-ads-capabilities.ts", ...args], { encoding: "utf8", env: { ...process.env, NODE_ENV: "test" }, timeout: 10000 });
+  const env: NodeJS.ProcessEnv = { NODE_ENV: "test" };
+  for (const key of ["PATH", "Path", "SystemRoot", "SYSTEMROOT", "COMSPEC", "PATHEXT", "TEMP", "TMP"]) {
+    if (process.env[key]) env[key] = process.env[key];
+  }
+  const run = (...args: string[]) => execFileSync(process.execPath, ["--import", "tsx", "scripts/amazon-ads-capabilities.ts", ...args], { encoding: "utf8", env, timeout: 10000 });
   const output = JSON.parse(run("--product=SP")) as { kind: string; capabilities: ReturnType<typeof listAdsCapabilities> };
   assert.equal(output.kind, "CODE_INVENTORY_ONLY");
   assert.equal(output.capabilities.length, 18);
