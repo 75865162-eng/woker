@@ -48,11 +48,19 @@ export function ProductEditorImagePanel({
     setRetriedFileIds((current) => [...current, fileId]);
     void refreshSignedImageUrls([fileId]).catch(() => undefined);
   };
+  // 缩略图已升级为 250×250；本地资产 URL 加版本参数，让已加载过的旧 160px 缩略图立即复取。
+  // 仅对 /api/assets/ 代理路径生效，不影响 S3/R2 预签名 URL 的签名。
+  const bustLegacyAssetCache = (url: string) => {
+    if (!url.startsWith("/api/assets/")) return url;
+    return `${url}${url.includes("?") ? "&" : "?"}v=thumb250`;
+  };
   const sourceForAsset = (asset: ProductImageAsset) => {
     const fileId = asset.thumbFileId || asset.id;
-    return !isPlaceholderProductImageAssetId(fileId)
-      ? signedImageUrls[fileId] || ""
-      : getProductListImage({ imageAssets: [asset] });
+    return bustLegacyAssetCache(
+      !isPlaceholderProductImageAssetId(fileId)
+        ? signedImageUrls[fileId] || ""
+        : getProductListImage({ imageAssets: [asset] }),
+    );
   };
   const primaryImage = primaryImageAsset ? sourceForAsset(primaryImageAsset) : "";
 

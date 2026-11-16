@@ -152,6 +152,7 @@
 | 本地配置、Worker、任务恢复、备份 | `docs/erp-runtime-operations.md` |
 | Git 同步、commit/push、桌面六项页面追溯 | `docs/delivery-traceability.md` |
 | 服务器发布、部署脚本、systemd、infra | `docs/ci-cd.md`；当前清单以 `scripts/deployment-plan.mjs` 为准 |
+| 生产构建、部署前验收、双池隔离与迁移状态 | `docs/pre-deploy-acceptance-2026-11-15.md`（带日期的状态快照，改代码前先核对当前代码与实库）；发布流程仍以 `docs/ci-cd.md` 为准 |
 | SP-API 文档、配置、鉴权、API 版本／端点、限流、错误码与迁移参考 | 直接查阅 `/Users/chenjieliang/Desktop/亚马逊官方文档 SP-API新人配置指南.md`（文内校对日期：2026-11-05）；不主动到亚马逊官方网站搜索、抓取或补充文档资料 |
 | Amazon 同步、Orders、财务、退货、MCP/OAuth、Ops CLI | `docs/amazon-agent-boundaries.md` 中相关小节；持续调度另读 `docs/amazon-automatic-sync.md` 最新章节 |
 | Sellfox 查询、报表、采集、凭据、回填 | `docs/sellfox-agent-read.md` 中相关小节及其专项链接 |

@@ -185,13 +185,11 @@ export function AppShellClient({
             <div className="space-y-0.5">
           {group.items.map((item) => {
             const active = isNavigationActive(item.href);
-            const Icon = item.icon;
 
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                prefetch={false}
                 aria-current={active ? "page" : undefined}
                 title={navCollapsed ? item.label : undefined}
                 className={cn(
@@ -274,7 +272,6 @@ export function AppShellClient({
                       <Link
                         key={item.href}
                         href={item.href}
-                        prefetch={false}
                         className={itemClassName}
                       >
                         <Icon className="h-4 w-4" />
