@@ -15,6 +15,8 @@ import { watchParent } from "../scripts/runtime/parent-lifecycle.mjs";
 import { createHeartbeatWriter } from "../src/lib/runtime/heartbeat-writer";
 import { connectionIdentity, publicHeartbeatMetadata } from "../src/lib/runtime/connection-identity";
 import { restoreNextEnvironment } from "../scripts/runtime/generated-types-cleanup.mjs";
+import { fixtureEnvironment } from "../scripts/runtime/fixture-safety.mjs";
+import { createLocalSession } from "../src/lib/auth/session";
 
 test("scheduler-only registration does not require an invented queue connection", async () => {
   const { runtimeHeartbeatMetadata } = await import("../src/lib/runtime/worker-diagnostics");
@@ -32,21 +34,26 @@ test("scheduler-only registration does not require an invented queue connection"
   }
 });
 
-test("runtime fixture secrets satisfy the real session signing boundary without inheriting credentials", () => {
+test("runtime fixture secrets satisfy the real session signing boundary without inheriting credentials", async () => {
   const env = fixtureEnvironment({ inherited: { PATH: process.env.PATH, AUTH_SECRET: "must-not-inherit" }, directory: tmpdir(), pgPort: 55432, redisPort: 56379, webPort: 53000, guard: "fixture-guard.mjs" });
   const previous = process.env.AUTH_SECRET;
+  const previousMode = process.env.NODE_ENV;
+  const user = { id: "fixture", email: "fixture@example.invalid", name: "Fixture", role: "viewer", organizationId: "fixture", organizationName: "Fixture" };
   try {
+    Object.assign(process.env, { NODE_ENV: "production" });
     process.env.AUTH_SECRET = env.AUTH_SECRET;
-    assert.equal(getAuthSecret(), env.AUTH_SECRET);
+    await assert.doesNotReject(() => createLocalSession(user));
     assert.notEqual(env.AUTH_SECRET, "must-not-inherit");
     const source = readFileSync(new URL("../scripts/test-runtime-integration.mjs", import.meta.url), "utf8");
     const configuredSecret = source.match(/AUTH_SECRET: "([^"]+)"/)?.[1];
     assert.ok(configuredSecret);
     process.env.AUTH_SECRET = configuredSecret;
-    assert.doesNotThrow(() => getAuthSecret());
+    await assert.doesNotReject(() => createLocalSession(user));
   } finally {
     if (previous === undefined) delete process.env.AUTH_SECRET;
     else process.env.AUTH_SECRET = previous;
+    if (previousMode === undefined) Reflect.deleteProperty(process.env, "NODE_ENV");
+    else Object.assign(process.env, { NODE_ENV: previousMode });
   }
 });
 

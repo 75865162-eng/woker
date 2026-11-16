@@ -82,7 +82,7 @@ try {
     PATH: process.env.PATH, TMPDIR: tmpdir(), ERP_RUNTIME_MODE: "production", NODE_ENV: "development", __NEXT_PROCESSED_ENV: "true",
     DATABASE_URL: `postgresql://postgres:fixture_password@127.0.0.1:${pgPort}/erp_fixture`, REDIS_URL: `redis://127.0.0.1:${redisPort}`,
     QUEUE_DRIVER: "redis", STORAGE_DRIVER: "local", UPLOAD_DIR: path.join(directory, "uploads"),
-    AUTH_DRIVER: "database", AUTH_SECRET: "isolated-runtime-fixture-secret", NEXT_TELEMETRY_DISABLED: "1",
+    AUTH_DRIVER: "database", AUTH_SECRET: "isolated-runtime-fixture-secret-at-least-32-characters", NEXT_TELEMETRY_DISABLED: "1",
     AMAZON_DATA_CENTER_ENVIRONMENT: "local", AMAZON_SYNC_CENTER_SCOPES: "[]",
   };
   await until(() => sql(env.DATABASE_URL, "SELECT 1"), "PostgreSQL ready");

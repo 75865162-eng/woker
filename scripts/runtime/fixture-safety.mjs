@@ -27,7 +27,7 @@ export function fixtureEnvironment({ inherited = {}, directory, pgPort, redisPor
     REDIS_URL: `redis://127.0.0.1:${redisPort}/0`, QUEUE_DRIVER: "redis",
     STORAGE_DRIVER: "local", UPLOAD_DIR: path.join(directory, "uploads"),
     AUTH_PUBLIC_ORIGIN: `http://127.0.0.1:${webPort}`,
-    AUTH_DRIVER: "database", AUTH_SECRET: "isolated-runtime-fixture-secret", NEXT_TELEMETRY_DISABLED: "1",
+    AUTH_DRIVER: "database", AUTH_SECRET: "isolated-runtime-fixture-secret-at-least-32-characters", NEXT_TELEMETRY_DISABLED: "1",
     AMAZON_DATA_CENTER_ENVIRONMENT: "local", AMAZON_SYNC_CENTER_SCOPES: "[]",
     AMAZON_FBA_REMOTE_EXECUTION_ENABLED: "false",
   };
