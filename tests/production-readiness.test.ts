@@ -102,7 +102,7 @@ test("migration history requires every catalog migration and rejects failed, unk
 });
 
 test("non-full readiness gates skip DB IO while full gate remains explicit", () => {
-  const subprocessEnv = { PATH: process.env.PATH ?? "", HOME: os.homedir(), NODE_ENV: "production" };
+  const subprocessEnv = { PATH: process.env.PATH ?? "", HOME: os.homedir(), NODE_ENV: "production" } as const;
   assert.ok(!("DATABASE_URL" in subprocessEnv), "readiness subprocess must not inherit a database connection string");
   for (const gate of ["code", "deploy"]) {
     const result = spawnSync(process.execPath, ["scripts/runtime/production-readiness.mjs", "--env", "process", "--gate", gate, "--json"], {

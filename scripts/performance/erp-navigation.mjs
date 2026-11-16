@@ -109,12 +109,25 @@ try {
   const socket = createServer(); await new Promise(r => socket.listen(0, "127.0.0.1", r));
   const port = socket.address().port; await new Promise(r => socket.close(r));
   const base = `http://127.0.0.1:${port}`;
+  env.AUTH_PUBLIC_ORIGIN = base;
   const next = path.join(root, "node_modules/next/dist/bin/next");
   if (mode === "production") { env.NODE_ENV = "production"; await run([next, "build", app], env); }
   server = spawn(process.execPath, [next, mode === "dev" ? "dev" : "start", app, ...(mode === "dev" ? ["--turbopack"] : []), "--hostname", "127.0.0.1", "--port", String(port)], { cwd: app, env, detached: true, stdio: ["ignore", "pipe", "pipe"] });
   const onLog = data => { logs += data; writeFileSync(path.join(directory, "server.log"), logs); };
   server.stdout.on("data", onLog); server.stderr.on("data", onLog);
-  await waitFor(async () => { if (server.exitCode !== null) throw Error(logs.slice(-4000)); try { return (await fetch(`${base}/login`, { signal: AbortSignal.timeout(30000) })).ok; } catch { return false; } }, "Next fixture");
+  let readinessDetail = "No response received";
+  try {
+    await waitFor(async () => {
+      if (server.exitCode !== null) throw Error(`Next fixture exited (${server.exitCode}): ${logs.slice(-8000)}`);
+      try {
+        const response = await fetch(`${base}/login`, { signal: AbortSignal.timeout(30000) });
+        readinessDetail = `HTTP ${response.status}: ${(await response.text()).slice(0, 1000)}`;
+        return response.ok;
+      } catch (error) { readinessDetail = String(error); return false; }
+    }, "Next fixture");
+  } catch (error) {
+    throw new Error(`${error.message}\nLast readiness response: ${readinessDetail}\nFixture server logs:\n${logs.slice(-12000)}`, { cause: error });
+  }
   browser = await chromium.launch({ channel: process.env.CI ? undefined : "chrome", headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   await context.route("**/*", route => new URL(route.request().url()).origin === base ? route.continue() : route.abort());
