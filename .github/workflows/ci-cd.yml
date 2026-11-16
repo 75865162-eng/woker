@@ -65,7 +65,9 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Prepare disposable database image
-        run: docker pull postgres:16-alpine
+        run: |
+          docker pull postgres:16-alpine
+          docker pull redis:7
 
       - name: Measure base revision
         env:

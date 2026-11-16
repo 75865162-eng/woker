@@ -21,10 +21,11 @@ mkdirSync(path.join(root, "tmp"), { recursive: true });
 const directory = mkdtempSync(path.join(root, "tmp", "erp-performance-"));
 const app = path.join(directory, "app");
 const tag = randomUUID().slice(0, 8), container = `erp-performance-${tag}`;
+const redisContainer = `${container}-redis`;
 const fixtureLabel = `erp-performance-${tag}`;
 const docker = args => execFileSync("docker", args, { encoding: "utf8", env: { PATH: process.env.PATH }, stdio: ["ignore", "pipe", "pipe"] }).trim();
 const { Client } = createRequire(import.meta.url)("pg");
-let created = false, db, server, browser, logs = "";
+let created = false, redisCreated = false, db, server, browser, logs = "";
 const pause = ms => new Promise(r => setTimeout(r, ms));
 async function waitFor(fn, label, timeout = 120000) {
   const start = Date.now();
@@ -44,11 +45,19 @@ const percentile = (values, p) => [...values].sort((a, b) => a - b)[Math.ceil(va
 const summary = values => ({ samples: values.map(n => Math.round(n * 100) / 100), median: percentile(values, .5), p95: percentile(values, .95) });
 try {
   docker(["image", "inspect", "postgres:16-alpine"]);
+  docker(["image", "inspect", "redis:7"]);
   docker(["run", "--pull=never", "-d", "--name", container, "--label", `codex.fixture=${fixtureLabel}`, "--memory=512m", "--cpus=1", "-e", "POSTGRES_PASSWORD=performance_fixture", "-e", "POSTGRES_DB=erp_performance_fixture", "-p", "127.0.0.1::5432", "postgres:16-alpine", "postgres", "-c", "log_min_duration_statement=0"]);
   created = true;
   const dbAddress = docker(["port", container, "5432/tcp"]);
   assert.match(dbAddress, /^127\.0\.0\.1:\d+$/);
   const databaseUrl = `postgresql://postgres:performance_fixture@${dbAddress}/erp_performance_fixture`;
+  docker(["run", "--pull=never", "-d", "--name", redisContainer, "--label", `codex.fixture=${fixtureLabel}`, "--memory=128m", "--cpus=1", "-p", "127.0.0.1::6379", "redis:7"]);
+  redisCreated = true;
+  const redisAddress = docker(["port", redisContainer, "6379/tcp"]);
+  assert.match(redisAddress, /^127\.0\.0\.1:\d+$/);
+  await waitFor(async () => {
+    try { return docker(["exec", redisContainer, "redis-cli", "ping"]) === "PONG"; } catch { return false; }
+  }, "disposable Redis");
   await waitFor(async () => {
     const candidate = new Client({ connectionString: databaseUrl, connectionTimeoutMillis: 1000 });
     try { await candidate.connect(); db = candidate; return true; } catch { await candidate.end(); return false; }
@@ -88,7 +97,7 @@ try {
   writeFileSync(path.join(app, "next.config.mjs"), `export default {distDir:".next-performance",turbopack:{root:${JSON.stringify(root)}},typescript:{ignoreBuildErrors:true},eslint:{ignoreDuringBuilds:true}};`);
   const env = {
     PATH: process.env.PATH, TMPDIR: directory, ERP_RUNTIME_MODE: "production", NODE_ENV: "development",
-    DATABASE_URL: databaseUrl, AUTH_DRIVER: "database", AUTH_SECRET: "isolated-performance-fixture-secret-at-least-32-characters",
+    DATABASE_URL: databaseUrl, REDIS_URL: `redis://${redisAddress}/0`, AUTH_DRIVER: "database", AUTH_SECRET: "isolated-performance-fixture-secret-at-least-32-characters",
     NEXT_TELEMETRY_DISABLED: "1", ERP_PERFORMANCE_TRACE: "1",
     NODE_OPTIONS: `--import=${JSON.stringify(path.join(root, "tests/helpers/performance-process-preload.mjs"))}`,
   };
@@ -227,6 +236,10 @@ try {
     process.kill(-server.pid, "SIGTERM"); await new Promise(resolve => { const timeout = setTimeout(() => { try { process.kill(-server.pid, "SIGKILL"); } catch { /* Already exited. */ } resolve(); }, 10000); server.once("exit", () => { clearTimeout(timeout); resolve(); }); });
   }
   await db?.end();
+  if (redisCreated) {
+    assert.equal(docker(["inspect", "--format", '{{index .Config.Labels "codex.fixture"}}', redisContainer]), fixtureLabel, "Owned Redis fixture identity");
+    docker(["rm", "-f", redisContainer]);
+  }
   if (created) {
     assert.equal(docker(["inspect", "--format", '{{index .Config.Labels "codex.fixture"}}', container]), fixtureLabel, "Owned fixture identity");
     docker(["rm", "-f", container]);
