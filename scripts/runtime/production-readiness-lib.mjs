@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { migrationChecksums } from "./readiness-contract.mjs";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -65,8 +65,7 @@ export function migrationHistoryStatus(catalog, historyRows, migrationsRoot) {
       const row = rows.find(candidate => candidate.migration_name === item.name && candidate.finished_at && !candidate.rolled_back_at);
       if (!row || invalidCatalog.some(candidate => candidate.name === item.name)) return [];
       const sql = readFileSync(path.join(migrationsRoot, item.name, "migration.sql"));
-      const expected = createHash("sha256").update(sql).digest("hex");
-      return row.checksum === expected ? [] : [item.name];
+      return migrationChecksums(sql).includes(row.checksum) ? [] : [item.name];
     })
     : [];
   const ok = catalog.length > 0 && invalidCatalog.length === 0 && failed.length === 0 && pending.length === 0 && unknown.length === 0 && duplicates.length === 0 && noSteps.length === 0 && checksumDrift.length === 0;

@@ -22,20 +22,27 @@ export function authReadiness(env) {
   return { ok: true, detail: loopback ? "生产隔离来源为 loopback，未启用可信代理" : "生产来源为 HTTPS 且使用 Caddy 可信代理" };
 }
 
+// Accept only byte-identical SQL or its LF/CRLF equivalents, as Prisma does.
+export function migrationChecksums(sql) {
+  const lf = Buffer.from(sql).toString("utf8").replace(/\r\n/g, "\n");
+  return [...new Set([Buffer.from(sql), Buffer.from(lf), Buffer.from(lf.replace(/\n/g, "\r\n"))].map(value => createHash("sha256").update(value).digest("hex")))];
+}
+
 export function migrationCatalog(root) {
   return readdirSync(root, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => ({
     name: entry.name,
     checksum: createHash("sha256").update(readFileSync(path.join(root, entry.name, "migration.sql"))).digest("hex"),
+    checksums: migrationChecksums(readFileSync(path.join(root, entry.name, "migration.sql"))),
   })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function migrationReadiness(catalog, history) {
-  const expected = new Map(catalog.map(row => [row.name, row.checksum]));
+  const expected = new Map(catalog.map(row => [row.name, row.checksums ?? [row.checksum]]));
   const issues = [];
   for (const row of history) {
     if (!expected.has(row.migration_name)) issues.push(`目录外迁移：${row.migration_name}`);
     if (!row.finished_at && !row.rolled_back_at) issues.push(`未完成迁移：${row.migration_name}`);
-    if (!row.rolled_back_at && expected.has(row.migration_name) && expected.get(row.migration_name) !== row.checksum) issues.push(`校验和不一致：${row.migration_name}`);
+    if (!row.rolled_back_at && expected.has(row.migration_name) && !expected.get(row.migration_name).includes(row.checksum)) issues.push(`校验和不一致：${row.migration_name}`);
   }
   for (const row of catalog) {
     const applied = history.filter(item => item.migration_name === row.name && item.finished_at && !item.rolled_back_at);

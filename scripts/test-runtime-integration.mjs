@@ -331,6 +331,8 @@ try {
   console.log(JSON.stringify({ fixtureOnly: true, executionTests: { passed: 12, todo: 0 }, results, notCovered: ["native Real-ESRGAN GPU computation (executable protocol fixture tested; native engine not installed)", "real provider calls", "production deployment or reboot", "production backup activation"] }, null, 2));
 } catch (error) {
   console.error(`[runtime-fixture] ${error.message}; logs at ${directory}/fixture.log`);
+  console.error(`[runtime-fixture] completed checks: ${JSON.stringify(results)}`);
+  console.error(readFileSync(path.join(directory, "fixture.log"), "utf8").slice(-24000));
   process.exitCode = 1;
 } finally {
   if (browser) await browser.close();

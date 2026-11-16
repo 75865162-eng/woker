@@ -56,6 +56,22 @@ test("migration catalog requires non-empty SQL in every migration directory", ()
   }
 });
 
+test("migration checks accept LF and CRLF history but reject SQL content changes", async () => {
+  const contract = await import("../scripts/runtime/readiness-contract.mjs");
+  const root = mkdtempSync(path.join(os.tmpdir(), "readiness-newlines-"));
+  try {
+    mkdirSync(path.join(root, "one"));
+    const sql = "CREATE TABLE sample (id int);\n";
+    writeFileSync(path.join(root, "one/migration.sql"), sql);
+    const row = { migration_name: "one", checksum: createHash("sha256").update(sql.replace(/\n/g, "\r\n")).digest("hex"), finished_at: new Date(), rolled_back_at: null, applied_steps_count: 1 };
+    assert.equal(contract.migrationReadiness(contract.migrationCatalog(root), [row]).ok, true);
+    assert.equal(migrationHistoryStatus(migrationCatalog(root), [row], root).ok, true);
+    writeFileSync(path.join(root, "one/migration.sql"), sql.replace("int", "text"));
+    assert.equal(contract.migrationReadiness(contract.migrationCatalog(root), [row]).ok, false);
+    assert.equal(migrationHistoryStatus(migrationCatalog(root), [row], root).ok, false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("encryption key readiness requires canonical Base64 encoding of 32 bytes", () => {
   const valid = Buffer.alloc(32, 7).toString("base64");
   assert.deepEqual(encryptionKeyStatus(valid), { ok: true, bytes: 32 });

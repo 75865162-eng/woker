@@ -194,7 +194,13 @@ install_runtime_from_release() {
       restart_amazon_sync_worker=false
     fi
     install -m 0644 "$runtime_release/deploy/systemd/amazon-sellfox-sync-worker.service" /etc/systemd/system/amazon-sellfox-sync-worker.service || return 1
-    install -m 0644 "$runtime_release/deploy/systemd/amazon-forecast-worker.service" /etc/systemd/system/amazon-forecast-worker.service || return 1
+    if [ -f "$runtime_release/deploy/systemd/amazon-forecast-worker.service" ]; then
+      install -m 0644 "$runtime_release/deploy/systemd/amazon-forecast-worker.service" /etc/systemd/system/amazon-forecast-worker.service || return 1
+    else
+      systemctl disable --now amazon-forecast-worker 2>/dev/null || true
+      rm -f /etc/systemd/system/amazon-forecast-worker.service
+      restart_forecast_worker=false
+    fi
     systemctl daemon-reload
   fi
   if [ "$restart_web" = "true" ]; then restart_runtime_service amazon-web "$runtime_release" || return 1; fi
