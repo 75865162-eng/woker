@@ -1,6 +1,6 @@
 // Disposable Docker fixtures only. Never loads .env or inherits credentials.
 import { execFileSync, spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, rmSync, openSync, closeSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync, readFileSync, rmSync, openSync, closeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 import { randomUUID, scryptSync } from "node:crypto";
@@ -24,7 +24,7 @@ let pgPort, redisPort, pgContainerId, redisContainerId;
 const pgFixture = { name: pgName, port: null, servicePort: 5432, id: null };
 const redisFixture = { name: redisName, port: null, servicePort: 6379, id: null };
 const baselineTsconfig = readFileSync(path.join(root, "tsconfig.json"), "utf8");
-const baselineNextEnv = readFileSync(path.join(root, "next-env.d.ts"), "utf8");
+const baselineNextEnv = existsSync(path.join(root, "next-env.d.ts")) ? readFileSync(path.join(root, "next-env.d.ts"), "utf8") : "";
 let browser;
 const logFd = openSync(path.join(directory, "fixture.log"), "w", 0o600);
 const docker = args => execFileSync("docker", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -354,7 +354,7 @@ try {
   // Restore byte-for-byte only if Next made the only edits; preserve concurrent work.
   writeFileSync(configPath, JSON.stringify(comparable) === JSON.stringify(previous) ? baselineTsconfig : JSON.stringify(config, null, 2) + "\n");
   const nextEnvPath = path.join(root, "next-env.d.ts");
-  const currentNextEnv = readFileSync(nextEnvPath, "utf8");
+  const currentNextEnv = existsSync(nextEnvPath) ? readFileSync(nextEnvPath, "utf8") : "";
   const restoredNextEnv = restoreNextEnvironment(currentNextEnv, baselineNextEnv, dist);
   if (restoredNextEnv !== currentNextEnv) writeFileSync(nextEnvPath, restoredNextEnv);
   if (!process.exitCode) rmSync(directory, { recursive: true, force: true });
