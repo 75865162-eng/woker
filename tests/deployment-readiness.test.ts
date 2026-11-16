@@ -28,6 +28,7 @@ test("当前五项注册 Worker 均有真实入口、manager 命令和正式 sys
 });
 
 test("release-check 接受完整合成包，拒绝缺失注册 unit 和真实配置文件", () => {
+  mkdirSync(fileURLToPath(new URL("../tmp/", import.meta.url)), { recursive: true });
   const root = mkdtempSync(fileURLToPath(new URL("../tmp/upgrade-release-contract-", import.meta.url)));
   const put = (file: string, content = "fixture") => { mkdirSync(path.dirname(path.join(root, "package", file)), { recursive: true }); writeFileSync(path.join(root, "package", file), content); };
   try {
@@ -77,6 +78,7 @@ test("release-check 接受完整合成包，拒绝缺失注册 unit 和真实配
 });
 
 test("部署入口在任何网络操作前拒绝失败、漂移或不完整的发布证据", () => {
+  mkdirSync(fileURLToPath(new URL("../tmp/", import.meta.url)), { recursive: true });
   const root = mkdtempSync(fileURLToPath(new URL("../tmp/deploy-evidence-", import.meta.url)));
   const commit = "a".repeat(40);
   const artifact = path.join(root, "fixture.tar.gz");

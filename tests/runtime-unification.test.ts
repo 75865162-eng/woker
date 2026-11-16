@@ -129,7 +129,7 @@ test("runtime integration worker assertions stay complete with the registry", ()
   assert.match(source, /ERP_RUNTIME_FIXTURE_TAG: tag/);
   assert.match(source, /assertFixtureContainer/);
   assert.match(source, /const pgFixture = \{ name: pgName/);
-  assert.match(source, /docker\(\["run"[\s\S]*pgFixture\.id =/);
+  assert.match(source, /pgFixture\.id = docker\(\["run"/);
   assert.match(source, /assertFixtureContainer\(inspected, \{ id: fixture\.id/);
   assert.match(source, /process\.exitCode = 1/);
   assert.match(source, /"migrate", "deploy", "--config", config/);

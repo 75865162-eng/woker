@@ -102,10 +102,12 @@ test("migration history requires every catalog migration and rejects failed, unk
 });
 
 test("non-full readiness gates skip DB IO while full gate remains explicit", () => {
+  const subprocessEnv = { PATH: process.env.PATH ?? "", HOME: os.homedir(), NODE_ENV: "production" };
+  assert.ok(!("DATABASE_URL" in subprocessEnv), "readiness subprocess must not inherit a database connection string");
   for (const gate of ["code", "deploy"]) {
     const result = spawnSync(process.execPath, ["scripts/runtime/production-readiness.mjs", "--env", "process", "--gate", gate, "--json"], {
       cwd: process.cwd(),
-      env: { PATH: process.env.PATH ?? "", HOME: os.homedir(), NODE_ENV: "production" },
+      env: subprocessEnv,
       encoding: "utf8",
     });
     assert.equal(result.status, 1);
@@ -119,7 +121,6 @@ test("non-full readiness gates skip DB IO while full gate remains explicit", () 
   assert.match(source, /代码门禁\$\{blockingFailures\.length === 0 \? "通过" : "未通过"\}；未检查数据库状态/);
   assert.match(source, /部署清单与静态资产检查\$\{blockingFailures\.length === 0 \? "通过" : "未通过"\}；不代表部署包完整或生产已就绪/);
   assert.doesNotMatch(source, /数据侧已收口|部署包与内部资产完整/);
-  assert.ok(!process.env.DATABASE_URL, "readiness subprocess must not inherit a database connection string");
 });
 
 test("deployment gate rejects insecure auth, TLS overrides and unsafe write switches without DB IO", () => {
