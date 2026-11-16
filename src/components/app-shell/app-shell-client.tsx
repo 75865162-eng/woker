@@ -185,6 +185,7 @@ export function AppShellClient({
             <div className="space-y-0.5">
           {group.items.map((item) => {
             const active = isNavigationActive(item.href);
+            const Icon = item.icon;
 
             return (
               <Link
