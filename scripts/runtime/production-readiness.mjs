@@ -6,7 +6,7 @@
  *   npm run check:production                                  # local root .env
  *   npm run check:production -- --gate code                  # internal checks, no DB IO
  *   npm run check:production -- --gate deploy                # package + static assets, no DB IO
- *   npm run check:production -- --env /etc/tiaotiao/erp.env  # production EnvironmentFile
+ *   npm run check:production -- --env /opt/amazon-ad-bulk-operation/.env  # production EnvironmentFile
  *   npm run check:production -- --env process --gate full    # systemd-injected process.env
  *   npm run check:production -- --json
  *
@@ -22,7 +22,8 @@ import { parseEnv } from "node:util";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { projectRoot } from "./environment.mjs";
-import { deploymentAssetStatus, encryptionKeyStatus, migrationCatalog, migrationHistoryStatus, productionEndpointStatus } from "./production-readiness-lib.mjs";
+import { authReadiness } from "./readiness-contract.mjs";
+import { deploymentAssetStatus, encryptionKeyStatus, migrationCatalog, migrationHistoryStatus, productionEndpointStatus, workerHeartbeatStatus } from "./production-readiness-lib.mjs";
 
 const require = createRequire(import.meta.url);
 const { Client } = require("pg");
@@ -51,7 +52,7 @@ const internalIds = new Set([
 const assetIds = new Set([
   // A rendered EnvironmentFile with REPLACE:/GENERATE: leftovers is a package
   // defect, not an external dependency, so --gate deploy must catch it.
-  "config.placeholders",
+  "config.placeholders", "config.auth_origin", "config.tls_verification", "config.database_remote", "config.redis_remote",
   "deploy.env_template", "deploy.runbook", "deploy.systemd_units", "deploy.backup",
   "deploy.tls", "deploy.env_init", "deploy.password_rotation", "deploy.health_endpoint",
   "deploy.csrf_guard", "deploy.amazon_onboarding",
@@ -94,10 +95,10 @@ const unresolvedKeys = Object.entries(env).filter(([, value]) => hasPlaceholder(
 // --- Runtime configuration -------------------------------------------------
 const mode = env.ERP_RUNTIME_MODE ?? "local";
 add("config.runtime_mode", "ERP_RUNTIME_MODE=production", mode === "production", `当前 ${mode}；production 模式才允许远程数据库/Redis`);
-const databaseStatus = productionEndpointStatus(env.DATABASE_URL, { allowLoopback: true });
+const databaseStatus = productionEndpointStatus(env.DATABASE_URL, { allowLoopback: true, protocols: ["postgres:", "postgresql:"] });
 add("config.database_remote", "生产数据库地址符合目标机拓扑", databaseStatus.ok,
   `DATABASE_URL ${databaseStatus.detail}`);
-const redisStatus = productionEndpointStatus(env.REDIS_URL, { allowLoopback: true });
+const redisStatus = productionEndpointStatus(env.REDIS_URL, { allowLoopback: true, protocols: ["redis:", "rediss:"] });
 add("config.redis_remote", "生产 Redis 地址符合目标机拓扑", redisStatus.ok,
   `REDIS_URL ${redisStatus.detail}`);
 add("config.queue_driver", "QUEUE_DRIVER=redis", env.QUEUE_DRIVER === "redis", `当前 ${env.QUEUE_DRIVER ?? "(空)"}；web 与 worker 必须共用持久队列`);
@@ -108,6 +109,11 @@ add("config.execution_role", "AMAZON_API_EXECUTION_ROLE=cloud", env.AMAZON_API_E
   `当前 ${env.AMAZON_API_EXECUTION_ROLE ?? "(空)"}；local 会关闭官方 OAuth/读取/报表下载`);
 add("config.hsts", "HTTPS 已启用 HSTS 响应头", env.ERP_HSTS_ENABLED === "true",
   `ERP_HSTS_ENABLED=${env.ERP_HSTS_ENABLED ?? "(空)"}；仅在全部域名正确终结 TLS 后开启`, { blocking: false });
+
+const authOrigin = authReadiness(env);
+add("config.auth_origin", "认证公开来源与可信代理配置", authOrigin.ok, authOrigin.detail);
+add("config.tls_verification", "TLS 证书校验保持启用", env.NODE_TLS_REJECT_UNAUTHORIZED !== "0" && process.env.NODE_TLS_REJECT_UNAUTHORIZED !== "0",
+  "EnvironmentFile 与当前进程均不得设置 NODE_TLS_REJECT_UNAUTHORIZED=0");
 
 const placeholder = /replace|change-me|example|dev-only|placeholder|your-|REPLACE:/i;
 const authSecret = env.AUTH_SECRET ?? "";
@@ -126,7 +132,7 @@ add("secret.bootstrap_password", "BOOTSTRAP_ADMIN_PASSWORD 非弱口令",
   `${bootPassword.length} 字符；当前账号 ${env.BOOTSTRAP_ADMIN_EMAIL ?? "(空)"}`);
 
 add("gate.write_disabled", "Amazon 写执行门禁显式配置",
-  env.AMAZON_FBA_REMOTE_EXECUTION_ENABLED !== undefined && env.AMAZON_ADS_EXECUTION_ENABLED !== undefined,
+  env.AMAZON_FBA_REMOTE_EXECUTION_ENABLED === "false" && env.AMAZON_ADS_EXECUTION_ENABLED === "false",
   `FBA=${env.AMAZON_FBA_REMOTE_EXECUTION_ENABLED ?? "(空)"} Ads=${env.AMAZON_ADS_EXECUTION_ENABLED ?? "(空)"}；按当前范围保持 false`);
 add("config.storage", "生产文件存储为持久化驱动", env.STORAGE_DRIVER && env.STORAGE_DRIVER !== "local",
   `STORAGE_DRIVER=${env.STORAGE_DRIVER ?? "(默认 local)"}；local 需挂载持久卷或改用 s3/r2`, { blocking: false });
@@ -209,9 +215,12 @@ try {
 
   // Prisma 将 DateTime 写入 timestamp（无时区）列时统一存 UTC 值；裸 pg 连接的
   // 会话时区可能是 Asia/Shanghai，now()::timestamp 会错 8 小时。显式按 UTC 比较。
-  const heartbeats = await client.query(`SELECT count(*)::int AS n FROM "WorkerHeartbeat"
-    WHERE "lastSeenAt" > (now() AT TIME ZONE 'UTC') - interval '3 minutes'`);
-  add("runtime.worker", "常驻 worker 在线", heartbeats.rows[0].n > 0, `近 3 分钟心跳=${heartbeats.rows[0].n}；需 npm run worker 常驻`);
+  const heartbeats = await client.query(`SELECT "queueName", status, "lastSeenAt" AT TIME ZONE 'UTC' AS "lastSeenAt", metadata FROM "WorkerHeartbeat"
+    WHERE "lastSeenAt" >= (now() AT TIME ZONE 'UTC') - interval '90 seconds'
+      AND "lastSeenAt" <= (now() AT TIME ZONE 'UTC') + interval '5 seconds'
+      AND "queueName" = ANY($1::text[])`, [registry.map(item => item.heartbeatQueue)]);
+  const workerStatus = workerHeartbeatStatus(registry, heartbeats.rows);
+  add("runtime.worker", "全部注册 Worker 在线且报告队列就绪", workerStatus.ok, workerStatus.detail);
 } catch (error) {
   if (!skipDb) add("db.connect", "生产数据库可连接", false, error?.message ?? String(error));
 } finally {
@@ -244,12 +253,12 @@ if (asJson) {
   }
   console.log("─".repeat(100));
   console.log(`通过 ${passed.length} · 跳过 ${skipped.length} · 阻塞 ${blockingFailures.length} · 提示 ${warnings.length}`);
-  console.log(blockingFailures.length === 0
-    ? (gate === "code"
-      ? "结论：代码 / 构建 / 数据侧已收口；外部接入须另跑 --gate full 并完成真实 Amazon 验收。"
-      : gate === "deploy"
-        ? "结论：部署包与内部资产完整；上线前仍须用生产 EnvironmentFile 跑 --gate full。"
-        : "结论：配置侧已就绪（仍须完成真实 Amazon 与生产环境验收）。")
-    : "结论：未达生产级，须先解决上述 FAIL 项。");
+  console.log(gate === "code"
+    ? `结论：代码门禁${blockingFailures.length === 0 ? "通过" : "未通过"}；未检查数据库状态，外部接入须另跑 --gate full 并完成真实 Amazon 验收。`
+    : gate === "deploy"
+      ? `结论：部署清单与静态资产检查${blockingFailures.length === 0 ? "通过" : "未通过"}；不代表部署包完整或生产已就绪，上线前仍须用生产 EnvironmentFile 跑 --gate full。`
+      : blockingFailures.length === 0
+        ? "结论：配置侧已就绪（仍须完成真实 Amazon 与生产环境验收）。"
+        : "结论：未达生产级，须先解决上述 FAIL 项。");
 }
 process.exitCode = blockingFailures.length === 0 ? 0 : 1;

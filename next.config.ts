@@ -8,12 +8,7 @@ const localOnlyTraceExcludes = [
   "**/tmp/**/*",
   "**/tools/**/*",
   "**/uploads/**/*",
-  "**/.next-build*/**",
-  "**\\.git\\**\\*",
-  "**\\tmp\\**\\*",
-  "**\\tools\\**\\*",
-  "**\\uploads\\**\\*",
-  "**\\.next-build*\\**",
+  "**/.next-build-*/**",
 ];
 
 const nextConfig: NextConfig = {

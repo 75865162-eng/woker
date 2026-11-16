@@ -4,6 +4,7 @@ import { OperationsSyncEntry } from "@/components/operations/sync-center-workben
 
 export default async function OperationsPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const { view } = await searchParams;
+  if (view === "expense-management") redirect("/operations/expenses");
   const warehouseTabs: Record<string, string> = { warehouses: "warehouses", "warehouse-inbound": "receipts", "warehouse-outbound": "reservations", "warehouse-transfers": "balances" };
   if (view && Object.hasOwn(warehouseTabs, view)) redirect("/logistics/warehouse?tab=" + warehouseTabs[view]);
   return (

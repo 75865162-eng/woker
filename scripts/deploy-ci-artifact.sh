@@ -7,7 +7,7 @@ SERVER_HOST="${SERVER_HOST:-123.207.47.225}"
 SERVER_USER="${SERVER_USER:-ubuntu}"
 SERVER_DIR="${SERVER_DIR:-/opt/amazon-ad-bulk-operation}"
 SERVER_KEY="${SERVER_KEY:-}"
-SSH_OPTS="${SSH_OPTS:--o StrictHostKeyChecking=no -o UserKnownHostsFile=/tmp/codex_known_hosts}"
+SSH_OPTS="${SSH_OPTS:--o StrictHostKeyChecking=yes}"
 if [ -n "$SERVER_KEY" ]; then
   SSH_OPTS="$SSH_OPTS -i $SERVER_KEY -o IdentitiesOnly=yes"
 fi
@@ -26,10 +26,38 @@ if [ ! -f "$RELEASE_CHECK_PATH" ]; then
   exit 1
 fi
 
-artifact_sha256="$(shasum -a 256 "$ARTIFACT_PATH" | awk '{print $1}')"
-checked_sha256="$(node -e 'const fs=require("fs"); const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(data.artifactSha256 || "")' "$RELEASE_CHECK_PATH")"
-if [ "$artifact_sha256" != "$checked_sha256" ]; then
-  echo "Artifact does not match release-check.json." >&2
+if command -v shasum >/dev/null 2>&1; then
+  artifact_sha256="$(shasum -a 256 "$ARTIFACT_PATH" | awk '{print $1}')"
+elif command -v sha256sum >/dev/null 2>&1; then
+  artifact_sha256="$(sha256sum "$ARTIFACT_PATH" | awk '{print $1}')"
+else
+  echo "Neither shasum nor sha256sum is available." >&2
+  exit 1
+fi
+if ! node - "$RELEASE_CHECK_PATH" "$SOURCE_COMMIT" "$artifact_sha256" <<'NODE'
+const fs = require("fs");
+const [path, sourceCommit, artifactSha256] = process.argv.slice(2);
+let data;
+try {
+  data = JSON.parse(fs.readFileSync(path, "utf8"));
+} catch {
+  console.error("Invalid release-check.json.");
+  process.exit(1);
+}
+const passed = (value) => value === "passed";
+const checks = data.checks || {};
+const paths = checks.requiredPaths && checks.forbiddenPaths;
+const digest = checks.sha256;
+if (data.status !== "passed" || !sourceCommit || sourceCommit === "unknown" ||
+    data.commit !== sourceCommit || data.expectedCommit !== sourceCommit ||
+    !passed(data.build) || !passed(data.lint) || !passed(data.tests) ||
+    digest !== true || checks.requiredPaths !== true || checks.forbiddenPaths !== true ||
+    data.artifactSha256 !== artifactSha256) {
+  console.error("release-check.json does not validate this artifact and commit.");
+  process.exit(1);
+}
+NODE
+then
   exit 1
 fi
 

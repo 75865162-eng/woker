@@ -136,6 +136,10 @@ jobs:
         if: steps.plan.outputs.release == 'true'
         run: npm run ui:guard
 
+      - name: Install test browser
+        if: steps.plan.outputs.release == 'true'
+        run: npx playwright install --with-deps chromium
+
       - name: Test
         if: steps.plan.outputs.release == 'true'
         run: npm run test
@@ -177,9 +181,43 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  runtime-integration:
+    needs: build
+    if: needs.build.outputs.release == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        env:
+          DATABASE_URL: postgresql://fixture:fixture@127.0.0.1:5432/fixture
+        run: npm run db:generate
+
+      - name: Install fixture browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Prepare disposable images
+        run: |
+          docker pull postgres:16-alpine
+          docker pull redis:7
+
+      - name: Verify isolated runtime and recovery
+        run: npm run test:runtime:integration
+
   deploy-production:
-    needs: [build, performance-regression]
-    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.deploy_production && needs.build.result == 'success' && needs.build.outputs.release == 'true' && (needs.performance-regression.result == 'success' || (inputs.initial_deployment && needs.performance-regression.result == 'skipped')) }}
+    needs: [build, performance-regression, runtime-integration]
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.deploy_production && needs.build.result == 'success' && needs.runtime-integration.result == 'success' && needs.build.outputs.release == 'true' && (needs.performance-regression.result == 'success' || (inputs.initial_deployment && needs.performance-regression.result == 'skipped')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment: production

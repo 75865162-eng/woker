@@ -8,13 +8,18 @@ SOURCE_COMMIT="${SOURCE_COMMIT:-$(git rev-parse HEAD 2>/dev/null || echo unknown
 SOURCE_BRANCH="${SOURCE_BRANCH:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)}"
 RELEASE_LINT_STATUS="${RELEASE_LINT_STATUS:-unknown}"
 RELEASE_TEST_STATUS="${RELEASE_TEST_STATUS:-unknown}"
-RELEASE_BUILD_STATUS="${RELEASE_BUILD_STATUS:-passed}"
+RELEASE_BUILD_STATUS="${RELEASE_BUILD_STATUS:-unknown}"
 
 cleanup() {
   rm -rf "$WORK_DIR"
 }
 
 trap cleanup EXIT
+
+if [ "$RELEASE_BUILD_STATUS" != "passed" ] || [ "$RELEASE_LINT_STATUS" != "passed" ] || [ "$RELEASE_TEST_STATUS" != "passed" ]; then
+  echo "Build, lint, and tests must all pass before packaging." >&2
+  exit 1
+fi
 
 if [ ! -d .next-build/standalone ] || [ ! -d .next-build/server ] || [ ! -d .next-build/static ]; then
   echo "Missing .next-build output. Run npm run build before packaging." >&2
@@ -74,6 +79,7 @@ cat > "$PACKAGE_DIR/RELEASE-METADATA.json" <<JSON
 }
 JSON
 
+find "$PACKAGE_DIR" -type f \( -name "production.env" -o -name "production.env.*" -o -name "*.production.env" -o -name "*.production.env.*" \) ! -name "production.env.example" -delete
 find "$PACKAGE_DIR" \( -name ".env" -o -name ".env.*" \) -type f -delete
 find "$PACKAGE_DIR" \( -name "._*" -o -name ".DS_Store" \) -type f -delete
 find "$PACKAGE_DIR" \( -name "*.log" -o -name "*.tsbuildinfo" \) -type f -delete
@@ -81,7 +87,14 @@ find "$PACKAGE_DIR" \( -name "*.log" -o -name "*.tsbuildinfo" \) -type f -delete
 mkdir -p "$(dirname "$ARTIFACT_PATH")"
 COPYFILE_DISABLE=1 tar -C "$PACKAGE_DIR" --exclude='._*' -czf "$ARTIFACT_PATH" .
 
-artifact_sha256="$(shasum -a 256 "$ARTIFACT_PATH" | awk '{print $1}')"
+if command -v shasum >/dev/null 2>&1; then
+  artifact_sha256="$(shasum -a 256 "$ARTIFACT_PATH" | awk '{print $1}')"
+elif command -v sha256sum >/dev/null 2>&1; then
+  artifact_sha256="$(sha256sum "$ARTIFACT_PATH" | awk '{print $1}')"
+else
+  echo "Neither shasum nor sha256sum is available." >&2
+  exit 1
+fi
 artifact_size="$(stat -f%z "$ARTIFACT_PATH" 2>/dev/null || stat -c%s "$ARTIFACT_PATH")"
 manifest_path="$(dirname "$ARTIFACT_PATH")/release-manifest.json"
 cat > "$manifest_path" <<JSON

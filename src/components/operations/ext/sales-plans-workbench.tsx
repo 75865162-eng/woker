@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { fetchExtQuery } from "@/lib/workspace/ext-query";
 import { WorkbenchPageTemplate } from "@/components/templates/page-templates";
 import { Button } from "@/components/ui/button";
 import { useDraftState } from "@/lib/workspace/use-draft-state";
@@ -29,6 +30,9 @@ export function SalesPlansWorkbench() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loadState, setLoadState] = useState<"idle" | "loading" | "ready" | "blocked">("idle");
+  const loadRef = useRef({ sequence: 0, state: loadState });
+  const busyRef = useRef(false);
 
   const plans = useExt<{ items: PlanRow[] }>("sales-plans");
   const detail = useExt<{ plan: PlanDetail["plan"]; lines: PlanDetail["lines"]; totals: PlanDetail["totals"] }>("sales-plan", { id: selected }, Boolean(selected));
@@ -42,13 +46,16 @@ export function SalesPlansWorkbench() {
   }, [header.periodStart, header.periodEnd]);
 
   async function run(action: string, body: Record<string, unknown>, message: string, after: () => Promise<void> | void) {
+    if (busyRef.current || loadRef.current.state === "loading") return;
+    busyRef.current = true;
     setBusy(true); setError(""); setNotice("");
     try { await extPost(action, body); setNotice(message); await after(); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "操作失败。"); }
-    finally { setBusy(false); }
+    finally { busyRef.current = false; setBusy(false); }
   }
 
   function save() {
+    if (busyRef.current || !["idle", "ready"].includes(loadRef.current.state)) return;
     const payloadLines = lines.filter(line => line.sellerSku.trim()).map(line => ({
       sellerSku: line.sellerSku.trim(), asin: line.asin.trim(),
       targetQty: Number(line.targetQty || 0), targetRevenue: Number(line.targetRevenue || 0), unitCost: Number(line.unitCost || 0),
@@ -59,20 +66,62 @@ export function SalesPlansWorkbench() {
       periodType: header.periodType, forecastWindowDays: Number(header.forecastWindowDays), seasonalityBp: Number(header.seasonalityBp),
       lines: payloadLines,
     }, editing ? "销售计划已更新。" : "销售计划已创建。", async () => {
+      loadRef.current = { sequence: loadRef.current.sequence + 1, state: "idle" };
+      setLoadState("idle");
       setEditing(null); clearLinesDraft(); clearHeaderDraft();
       const response = await plans.reload() as unknown;
       void response;
     });
   }
 
-  function loadPlan(row: PlanRow) {
+  async function loadPlan(row: PlanRow) {
+    if (busyRef.current) return;
+    const sequence = loadRef.current.sequence + 1;
+    loadRef.current = { sequence, state: "loading" };
+    setLoadState("loading");
     setSelected(row.id);
-    setEditing({ id: row.id, revision: row.revision });
-    setHeader({
-      name: row.name, marketplace: row.marketplace, currency: "CNY", periodType: "MONTH",
-      periodStart: row.periodStart, periodEnd: row.periodEnd, forecastWindowDays: "90", seasonalityBp: "10000", notes: "",
-    });
-    setNotice(`已选择「${row.name}」，行明细在下方区域加载后可编辑。`);
+    setEditing(null);
+    setError("");
+    setNotice("正在读取销售计划明细…");
+    try {
+      if (row.status === "CLOSED") throw new Error("已关闭的销售计划不可编辑。");
+      const loaded = await fetchExtQuery<PlanDetail>(new URLSearchParams({ kind: "sales-plan", id: row.id }).toString());
+      if (loadRef.current.sequence !== sequence) return;
+      if (loaded.plan.id !== row.id) throw new Error("销售计划明细与所选计划不一致，请重新载入。");
+      if (loaded.plan.status === "CLOSED") throw new Error("已关闭的销售计划不可编辑。");
+      const plan = loaded.plan;
+      setHeader({
+        name: plan.name, marketplace: plan.marketplace, currency: plan.currency, periodType: plan.periodType,
+        periodStart: plan.periodStart, periodEnd: plan.periodEnd, forecastWindowDays: String(plan.forecastWindowDays),
+        seasonalityBp: String(plan.seasonalityBp), notes: plan.notes,
+      });
+      setLines(loaded.lines.map(line => ({
+        sellerSku: line.sellerSku, asin: line.asin, targetQty: String(line.targetQty),
+        targetRevenue: line.targetRevenue, unitCost: line.unitCost,
+      })));
+      setEditing({ id: plan.id, revision: plan.revision });
+      loadRef.current = { sequence, state: "ready" };
+      setLoadState("ready");
+      setNotice(`已载入「${plan.name}」，可编辑并保存。`);
+    } catch (cause) {
+      if (loadRef.current.sequence !== sequence) return;
+      loadRef.current = { sequence, state: "blocked" };
+      setLoadState("blocked");
+      setNotice("");
+      setError(cause instanceof Error ? cause.message : "读取销售计划失败。");
+    }
+  }
+
+  function exitEditing() {
+    if (busyRef.current) return;
+    loadRef.current = { sequence: loadRef.current.sequence + 1, state: "idle" };
+    setLoadState("idle");
+    setEditing(null);
+    clearHeaderDraft();
+    clearLinesDraft();
+    setSelected("");
+    setError("");
+    setNotice("");
   }
 
   return <WorkbenchPageTemplate context={<Notice error={error || plans.error || detail.error || ""} notice={notice} />} kpis={<Kpis items={[
@@ -83,6 +132,7 @@ export function SalesPlansWorkbench() {
     ]} />} main={<div className="space-y-6">
 
     <Section title={editing ? "编辑销售计划" : "新建销售计划"} description="预测取历史日均销量 × 计划天数 × 季节系数；实际销量取订单事实，两者都不允许手填覆盖。">
+      <fieldset disabled={busy || loadState === "loading" || loadState === "blocked"} className="min-w-0 space-y-3">
       <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
         <Field label="计划名称" value={header.name} onChange={value => setHeader(c => ({ ...c, name: value }))} placeholder="2026-12 北美主推" />
         <SelectField label="站点" value={header.marketplace} onChange={value => setHeader(c => ({ ...c, marketplace: value }))} options={["US", "CA", "MX", "UK", "DE", "FR", "IT", "ES", "JP"].map(value => ({ value, label: value }))} />
@@ -110,9 +160,10 @@ export function SalesPlansWorkbench() {
       </div>
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="ghost" type="button" onClick={() => setLines(current => [...current, { ...emptyLine }])}>新增一行</Button>
-        <Button size="sm" disabled={busy} onClick={save}>{editing ? "保存修改" : "创建计划"}</Button>
-        {editing && <Button size="sm" variant="ghost" onClick={() => { setEditing(null); setLines([{ ...emptyLine }]); setSelected(""); }}>退出编辑</Button>}
+        <Button size="sm" disabled={busy || loadState === "loading" || loadState === "blocked"} onClick={save}>{editing ? "保存修改" : "创建计划"}</Button>
       </div>
+      </fieldset>
+      {loadState !== "idle" && <Button size="sm" variant="ghost" disabled={busy} onClick={exitEditing}>退出编辑</Button>}
     </Section>
 
     <Section title="计划清单" description="点击「载入明细」把行明细带入编辑区；关闭后不可再改。">
@@ -129,7 +180,7 @@ export function SalesPlansWorkbench() {
           { key: "targetRevenue", label: "目标销售额", align: "right", render: row => money(row.targetRevenue) },
           { key: "status", label: "状态", render: row => <Badge text={statusLabel(row.status)} tone={row.status === "ACTIVE" ? "good" : row.status === "CLOSED" ? "muted" : "info"} /> },
           { key: "ops", label: "操作", render: row => <div className="flex flex-wrap gap-1">
-            <Button size="sm" variant="ghost" onClick={() => loadPlan(row)}>载入明细</Button>
+            <Button size="sm" variant="ghost" disabled={busy} onClick={() => void loadPlan(row)}>载入明细</Button>
             {row.status !== "CLOSED" && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void run("close-sales-plan", { id: row.id, revision: row.revision }, "计划已关闭。", plans.reload)}>关闭</Button>}
           </div> },
         ]}

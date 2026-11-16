@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { chmodSync, mkdirSync, renameSync, createReadStream, statSync, writeFileSync, rmSync, openSync, closeSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
+import { finished } from "node:stream/promises";
 import path from "node:path";
 import { applyRuntimeEnvironment, projectRoot } from "./environment.mjs";
 
@@ -37,7 +38,13 @@ export async function backupDatabase({ directory, env, run = execute, timestamp 
     const bytes = statSync(temporary).size;
     if (!bytes) throw new Error("Empty database backup refused");
     const hash = createHash("sha256");
-    for await (const chunk of createReadStream(temporary)) hash.update(chunk);
+    const input = createReadStream(temporary);
+    try {
+      for await (const chunk of input) hash.update(chunk);
+    } finally {
+      input.destroy();
+      await finished(input, { cleanup: true });
+    }
     const checksum = hash.digest("hex");
     renameSync(temporary, destination);
     writeFileSync(`${destination}.sha256`, `${checksum}  ${name}\n`, { mode: 0o600, flag: "wx" });

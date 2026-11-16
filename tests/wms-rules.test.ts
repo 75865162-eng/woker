@@ -1,7 +1,20 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { availableQuantity, assertBalanceInvariant, hashWmsRequest, normalizeWmsPayload } from "../src/lib/wms/rules";
 import { approvalActionFlags } from "../src/lib/wms/approval-query";
+
+test("WMS browser acceptance source propagates workflow failures before reporting PASS", () => {
+  const source = readFileSync(fileURLToPath(new URL("./integration/wms-browser.integration.ts", import.meta.url)), "utf8");
+  const workflow = source.indexOf("await runWmsPageWorkflow(page,approverContext,base)");
+  const procurement = source.indexOf("await runProcurementPageWorkflow", workflow);
+  const pass = source.indexOf("PASS: disposable Next and Chromium", workflow);
+  assert.ok(workflow >= 0, "full acceptance must execute the WMS workflow");
+  assert.ok(procurement > workflow, "procurement workflow runs only after successful WMS workflow");
+  assert.ok(pass > procurement, "overall PASS is emitted only after both workflows succeed");
+  assert.doesNotMatch(source.slice(workflow, procurement), /catch\s*\(/, "WMS workflow failures must not be swallowed");
+});
 
 test("WMS approval controls require live permission, distinct members and unexpired approval", () => {
   const scope = { organizationId: "fixture", workspaceId: "default", actorUserId: "operator" };

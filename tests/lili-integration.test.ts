@@ -17,7 +17,7 @@ test("Next standalone tracing excludes local output and user uploads", async () 
   const config = await readFile("next.config.ts", "utf8");
   assert.ok(config.includes("outputFileTracingExcludes"));
   assert.ok(config.includes('"**/uploads/**/*"'));
-  assert.ok(config.includes('"**/.next-build*/**"'));
+  assert.ok(config.includes('"**/.next-build-*/**"'));
 });
 
 test("all shipped Lili definitions, translations and full skill procedures are retained", async () => {

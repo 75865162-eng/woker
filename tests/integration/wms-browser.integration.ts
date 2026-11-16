@@ -55,7 +55,10 @@ export async function verifyWmsBrowser(cookie:string, approverCookie:string, foc
    await approverContext.route('**/*',route=>new URL(route.request().url()).origin===base?route.continue():route.abort());
    const split=approverCookie.indexOf('=');await approverContext.addCookies([{name:approverCookie.slice(0,split),value:approverCookie.slice(split+1),domain:'127.0.0.1',path:'/'}]);
    if (focused) await focused.run(page,approverContext,base);
-   else { try { await runWmsPageWorkflow(page,approverContext,base); } catch (error) { console.warn('WMS browser regression prevented the procurement page workflow:', error instanceof Error ? error.stack : 'unknown error'); } await runProcurementPageWorkflow(page,await approverContext.newPage(),base); }
+   else {
+    await runWmsPageWorkflow(page,approverContext,base);
+    await runProcurementPageWorkflow(page,await approverContext.newPage(),base);
+   }
    mkdirSync(path.join(root,'outputs/wms-p0b-local'),{recursive:true});
    await page.screenshot({path:path.join(root,'outputs/wms-p0b-local/warehouse.png'),fullPage:false});
    console.log(focused ? 'PASS: disposable Next and Chromium verify the focused two-session warehouse workflow' : 'PASS: disposable Next and Chromium verify the full two-session warehouse page workflow, workspace scope and pagination');

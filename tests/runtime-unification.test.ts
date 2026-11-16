@@ -116,6 +116,23 @@ test("local remote targets and inline mode are refused; production only reads in
   assert.throws(() => runtimeEnvironment({ root, inherited: { ...prod, QUEUE_DRIVER: "inline" } }), /QUEUE_DRIVER=redis/);
 }));
 
+test("runtime integration worker assertions stay complete with the registry", () => {
+  const source = readFileSync(new URL("../scripts/test-runtime-integration.mjs", import.meta.url), "utf8");
+  assert.match(source, /workerRegistry/);
+  assert.match(source, /chromium\.launch\(\{ headless: true \}\)/);
+  assert.doesNotMatch(source, /channel:\s*["']chrome["']/);
+  assert.match(source, /name: "FBA 本地计划工作台"/);
+  assert.match(source, /getByTestId\("finance-expenses-workbench"\)/);
+  assert.doesNotMatch(source, /all three unconnected layouts/);
+  assert.match(source, /"migrate", "deploy", "--config", config/);
+  assert.match(source, /migrationReadiness\(migrationCatalog\(migrationsRoot\), firstHistory\)/);
+  assert.match(source, /repeat migrate deploy must not change applied history/);
+  assert.doesNotMatch(source, /"db", "push"|before-leases\.prisma/);
+  assert.match(source, /workers\.length === workerIds\.length/);
+  assert.match(source, /workerIds\.every\(id => workers\.some/);
+  assert.doesNotMatch(source, /length\s*===\s*4|all four/i);
+});
+
 test("registry covers existing capabilities; missing, stopping, expired and mismatched heartbeats remain visible", () => {
   const now = new Date("2026-11-06T10:00:00Z");
   // import, image-upscale, amazon-sync, sellfox-sync, forecast

@@ -10,9 +10,11 @@ import assert from "node:assert/strict";
 import { chromium } from "@playwright/test";
 import { restoreNextEnvironment } from "./runtime/generated-types-cleanup.mjs";
 import { backupDatabase } from "./runtime/backup-postgres.mjs";
+import { migrationCatalog, migrationReadiness } from "./runtime/readiness-contract.mjs";
 const { Client } = createRequire(import.meta.url)("pg");
 const XLSX = createRequire(import.meta.url)("xlsx");
 const root = process.cwd(), tag = randomUUID().slice(0, 8);
+const workerRegistry = JSON.parse(readFileSync(path.join(root, "src/lib/runtime/worker-registry.json"), "utf8"));
 const directory = mkdtempSync(path.join(tmpdir(), "erp-runtime-integration-"));
 const pgName = `erp-runtime-pg-${tag}`, redisName = `erp-runtime-redis-${tag}`;
 const dist = `.next-dev-runtime-${tag}`;
@@ -70,14 +72,18 @@ try {
   };
   await until(() => sql(env.DATABASE_URL, "SELECT 1"), "PostgreSQL ready");
   const config = path.join(directory, "prisma.config.ts");
-  const beforeLeaseSchema = path.join(directory, "before-leases.prisma");
-  const schema = readFileSync(path.join(root, "prisma/schema.prisma"), "utf8");
-  const baseline = schema.replace(/model (ImportJob|ImageUpscaleJob) \{[\s\S]*?\n\}/g, block => block.replace(/^  (executionToken|leaseExpiresAt|executionAttempts|maxAttempts) .*\n/gm, "").replace(/^  @@index\(\[status, leaseExpiresAt\]\).*\n/gm, ""));
-  writeFileSync(beforeLeaseSchema, baseline);
-  writeFileSync(config, `import { defineConfig } from ${JSON.stringify(path.join(root, "node_modules/prisma/config.js"))}; export default defineConfig({ schema: ${JSON.stringify(beforeLeaseSchema)}, datasource: {url: ${JSON.stringify(env.DATABASE_URL)}} });`);
+  const migrationsRoot = path.join(root, "prisma/migrations");
+  writeFileSync(config, `import { defineConfig } from ${JSON.stringify(path.join(root, "node_modules/prisma/config.js"))}; export default defineConfig({ schema: ${JSON.stringify(path.join(root, "prisma/schema.prisma"))}, migrations: {path: ${JSON.stringify(migrationsRoot)}}, datasource: {url: ${JSON.stringify(env.DATABASE_URL)}} });`);
   // Prisma CLI may auto-load cwd/.env; launch from the disposable directory.
-  execFileSync(process.execPath, [path.join(root, "node_modules/prisma/build/index.js"), "db", "push", "--config", config], { cwd: directory, env, stdio: ["ignore", logFd, logFd] });
-  await sql(env.DATABASE_URL, readFileSync(path.join(root, "prisma/migrations/20261106170000_runtime_execution_leases/migration.sql"), "utf8"));
+  const migrate = () => execFileSync(process.execPath, [path.join(root, "node_modules/prisma/build/index.js"), "migrate", "deploy", "--config", config], { cwd: directory, env, stdio: ["ignore", logFd, logFd] });
+  migrate();
+  const historySql = 'SELECT migration_name, checksum, finished_at, rolled_back_at, applied_steps_count FROM "_prisma_migrations" ORDER BY started_at, id';
+  const firstHistory = (await sql(env.DATABASE_URL, historySql)).rows;
+  const migrationStatus = migrationReadiness(migrationCatalog(migrationsRoot), firstHistory);
+  assert.equal(migrationStatus.ok, true, migrationStatus.detail);
+  migrate();
+  assert.deepEqual((await sql(env.DATABASE_URL, historySql)).rows, firstHistory, "repeat migrate deploy must not change applied history");
+  results.push("complete repository migration chain applied to empty disposable PostgreSQL; checksums verified and repeat deploy is idempotent");
   const passwordHash = `scrypt:fixture:${scryptSync("fixture_password", "fixture", 64).toString("base64url")}`;
   await sql(env.DATABASE_URL, `INSERT INTO "Organization" (id,name,slug,"updatedAt") VALUES ('fixture-org','Fixture','runtime-fixture',now());
     INSERT INTO "WorkspaceScope" ("organizationId",id,name,"isDefault","updatedAt") VALUES ('fixture-org','default','Fixture',true,now());
@@ -104,31 +110,34 @@ try {
   const cookie = login.headers.getSetCookie().map(value => value.split(";")[0]).join("; ");
   async function health() { const response = await fetch(base + "/api/system/worker-health", { headers: { cookie }, signal: AbortSignal.timeout(15_000) }); assert.equal(response.status, 200); return response.json(); }
   results.push("isolated dev web and database login started");
+  const workerIds = workerRegistry.map(item => item.id);
+  const hasAllHealthyWorkers = workers => workers.length === workerIds.length
+    && workerIds.every(id => workers.some(item => item.id === id && item.online && item.queueReady && item.connectionMatches === true));
   let manager = start(["scripts/runtime/worker-manager.mjs"], env);
-  await until(async () => { const data = await health(); return data.registeredWorkers.length === 4 && data.registeredWorkers.every(item => item.online && item.queueReady && item.connectionMatches === true); }, "all registered heartbeats and Redis connections", 120_000);
-  results.push("all four real Worker processes visible through authenticated health API");
+  await until(async () => hasAllHealthyWorkers((await health()).registeredWorkers), "all registered heartbeats and Redis connections", 120_000);
+  results.push("all registered Worker processes visible through authenticated health API");
   const duplicate = start(["scripts/runtime/worker-manager.mjs"], env);
   await until(() => duplicate.exitCode !== null, "duplicate manager refused");
   assert.notEqual(duplicate.exitCode, 0);
-  assert.ok((await health()).registeredWorkers.every(item => item.online));
-  results.push("duplicate manager refused without stopping the original four Workers");
-  browser = await chromium.launch({ channel: "chrome", headless: true });
+  assert.equal(hasAllHealthyWorkers((await health()).registeredWorkers), true);
+  results.push("duplicate manager refused without stopping the original registered Workers");
+  browser = await chromium.launch({ headless: true });
   const context = await browser.newContext();
   await context.route("**/*", route => new URL(route.request().url()).origin === base ? route.continue() : route.abort());
   await context.addCookies(login.headers.getSetCookie().filter(value => value.startsWith("amazon_bulk_ad_session=")).map(value => { const pair = value.split(";")[0]; const i = pair.indexOf("="); return { name: pair.slice(0,i), value: pair.slice(i+1), domain: "127.0.0.1", path: "/", httpOnly: true, secure: false }; }));
   const page = await context.newPage();
   await page.goto(base + "/settings?tab=operations");
-  await page.getByText("文件导入与商品 Outbox", { exact: true }).waitFor();
-  assert.equal(await page.getByText("心跳在线", { exact: true }).count() >= 4, true);
-  results.push("real browser settings page renders all four registered Worker heartbeats");
+  await page.getByText(workerRegistry.find(worker => worker.id === "import").label, { exact: true }).waitFor();
+  assert.equal(await page.getByText("心跳在线", { exact: true }).count(), workerIds.length);
+  results.push("real browser settings page renders all registered Worker heartbeats");
   await page.route("**/api/system/worker-health", route => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "fixture health unavailable" }) }));
-  const healthCard = page.locator("div").filter({ has: page.getByText("Redis Worker 运维", { exact: true }) }).filter({ has: page.getByText("文件导入与商品 Outbox", { exact: true }) }).last();
+  const healthCard = page.locator("div").filter({ has: page.getByText("Redis Worker 运维", { exact: true }) }).filter({ has: page.getByText(workerRegistry.find(worker => worker.id === "import").label, { exact: true }) }).last();
   await healthCard.getByRole("button", { name: "刷新", exact: true }).click();
   await page.getByText("fixture health unavailable", { exact: true }).waitFor();
-  assert.equal(await page.getByText("文件导入与商品 Outbox", { exact: true }).count(), 0);
+  assert.equal(await page.getByText(workerRegistry.find(worker => worker.id === "import").label, { exact: true }).count(), 0);
   await page.unroute("**/api/system/worker-health");
   await page.reload();
-  await page.getByText("文件导入与商品 Outbox", { exact: true }).waitFor();
+  await page.getByText(workerRegistry.find(worker => worker.id === "import").label, { exact: true }).waitFor();
   results.push("health fetch failure clears stale online cards; successful refresh restores current state");
 
   const routePage = await context.newPage();
@@ -161,18 +170,23 @@ try {
   assert.equal(new URL(routePage.url()).searchParams.get("tab"), "receipts");
   await routePage.goBack();
   await routePage.waitForURL(/tab=warehouses/);
-  for (const [label, view] of [["FBA 装箱", "fba-boxing"], ["头程物流", "first-mile"], ["ERP 费用单", "expense-management"]]) {
+  for (const [label, view] of [["FBA 装箱", "fba-boxing"], ["头程物流", "first-mile"]]) {
     await navigation.getByRole("link", { name: label, exact: true }).click();
     await routePage.waitForURL(new RegExp(`view=${view}`));
     assert.equal(new URL(routePage.url()).searchParams.get("view"), view);
     if (view === "fba-boxing") await routePage.screenshot({ path: path.join(directory, "fba-boxing-route-debug.png") });
     await routePage.getByRole("heading", { name: view === "fba-boxing" ? "FBA 装箱与箱规" : label, exact: true, level: 1 }).waitFor();
-    await routePage.getByRole("status").filter({ hasText: "布局预览" }).waitFor();
+    await routePage.getByRole("region", { name: "FBA 本地计划工作台" }).waitFor();
+    await routePage.getByRole("heading", { name: view === "fba-boxing" ? "FBA 本地装箱" : "FBA 本地发货计划", exact: true }).waitFor();
+    assert.equal(await routePage.getByRole("status").filter({ hasText: "布局预览" }).count(), 0);
   }
+  await navigation.getByRole("link", { name: "ERP 费用单", exact: true }).click();
+  await routePage.waitForURL(/\/operations\/expenses$/);
+  await routePage.getByTestId("finance-expenses-workbench").waitFor();
   await mkdirSync(path.join(root, "docs/wimoor-integration/ui/screenshots"), { recursive: true });
   await routePage.screenshot({ path: path.join(root, "docs/wimoor-integration/ui/screenshots/app-shell-isolated-routes.png") });
   assert.deepEqual(routeMutations, [], "route coverage must remain read-only");
-  results.push("real Next App Router: procurement, suppliers, orders, WMS deep links, refresh/back, and all three unconnected layouts; no API writes");
+  results.push("real Next App Router: procurement, suppliers, orders, WMS deep links, refresh/back, local FBA packing/plans and finance expenses; no API writes");
   results.push("real AppShell screenshot captured against disposable fixture database");
 
   const operationsLogin = await fetch(base + "/api/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "operations@example.invalid", password: "fixture_password" }) });
@@ -225,19 +239,26 @@ try {
   assert.equal((await sql(env.DATABASE_URL, `SELECT count(*)::int AS n FROM "ExportRecord" WHERE "jobId"=$1`, [validUpload.job.id])).rows[0].n, 1);
   results.push("valid Bulk upload → real Worker → done → authenticated download; bid updated, identity/input preserved, one export");
   await stop(manager);
-  assert.ok((await health()).registeredWorkers.every(item => !item.online));
+  const stoppedWorkers = (await health()).registeredWorkers;
+  assert.equal(stoppedWorkers.length, workerIds.length);
+  assert.equal(stoppedWorkers.every(item => !item.online), true);
   await page.reload();
   await page.getByText("离线 / 未启动", { exact: true }).first().waitFor();
-  assert.equal(await page.getByText("离线 / 未启动", { exact: true }).count(), 4);
-  results.push("graceful stop makes all four Workers offline");
+  assert.equal(await page.getByText("离线 / 未启动", { exact: true }).count(), workerIds.length);
+  results.push("graceful stop makes all registered Workers offline");
   manager = start(["scripts/runtime/worker-manager.mjs"], env);
-  await until(async () => (await health()).registeredWorkers.every(item => item.online), "Worker restart");
+  await until(async () => {
+    const workers = (await health()).registeredWorkers;
+    return workers.length === workerIds.length && workers.every(item => workerIds.includes(item.id) && item.online);
+  }, "Worker restart");
   results.push("Worker restart restores all registered heartbeats");
   const childPids = (await sql(env.DATABASE_URL, `SELECT metadata->>'pid' AS pid FROM "WorkerHeartbeat" WHERE status='online'`)).rows.map(row => Number(row.pid));
-  assert.equal(childPids.length, 4);
+  assert.equal(childPids.length, workerIds.length);
   manager.kill("SIGKILL");
   await until(() => childPids.every(pid => { try { process.kill(pid, 0); return false; } catch (error) { if (error.code !== "ESRCH") throw error; return true; } }), "no orphan Workers after manager SIGKILL", 40_000);
-  assert.ok((await health()).registeredWorkers.every(item => !item.online));
+  const killedWorkers = (await health()).registeredWorkers;
+  assert.equal(killedWorkers.length, workerIds.length);
+  assert.equal(killedWorkers.every(item => !item.online), true);
   results.push("manager SIGKILL: all owned Worker processes terminate without orphans");
 
   // Flush/restart only this newly created Redis. No business/real queues touched.
@@ -273,7 +294,10 @@ try {
   const databaseRestartedAt = Date.now();
   docker(["restart", pgName]);
   await until(() => sql(env.DATABASE_URL, "SELECT 1"), "PostgreSQL restarted");
-  await until(async () => (await health()).registeredWorkers.every(item => item.online && item.queueReady && new Date(item.lastSeenAt).getTime() > databaseRestartedAt), "database reconnect", 120_000);
+  await until(async () => {
+    const workers = (await health()).registeredWorkers;
+    return workers.length === workerIds.length && workers.every(item => workerIds.includes(item.id) && item.online && item.queueReady && new Date(item.lastSeenAt).getTime() > databaseRestartedAt);
+  }, "database reconnect", 120_000);
   results.push("PostgreSQL restart: web and all Worker heartbeats reconnect");
   const backup = await backupDatabase({ directory: path.join(directory, "backups"), env, run: async (command, args) => {
     if (command === "pg_dump") writeFileSync(args.at(-1), execFileSync("docker", ["exec", pgName, "pg_dump", "-U", "postgres", "-d", "erp_fixture", "--format=custom"], { maxBuffer: 16 * 1024 * 1024 }));

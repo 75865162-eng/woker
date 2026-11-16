@@ -47,6 +47,8 @@ fi
 tar_listing="$(tar -tzf "$ARTIFACT_PATH" | sed 's#^\./##')"
 required_paths=(
   ".next-build/standalone/server.js"
+  ".next-build/standalone/.next-build/BUILD_ID"
+  ".next-build/standalone/.next-build/server/"
   ".next-build/standalone/.next-build/static/"
   ".next-build/standalone/public/"
   "prisma/migrations/"
@@ -58,7 +60,7 @@ required_paths=(
   "deploy/systemd/amazon-web.service"
 )
 for required_path in "${required_paths[@]}"; do
-  if ! grep -Fq "$required_path" <<< "$tar_listing"; then
+  if ! grep -Fxq "$required_path" <<< "$tar_listing"; then
     echo "Artifact is missing required path: $required_path" >&2
     exit 1
   fi
@@ -71,10 +73,38 @@ for forbidden_path in "node_modules/" ".git/" "coverage/" "tests/" ".next/" ".ne
   fi
 done
 
-if grep -Eq '(^|/)[.]env($|[.])|^deploy/production[.]env$' <<< "$tar_listing"; then
+if grep -Eq '(^|/)uploads(/|$)' <<< "$tar_listing"; then
+  echo "Artifact contains forbidden path: uploads/" >&2
+  exit 1
+fi
+
+if grep -Eq '(^|/)[.]env($|[.])|(^|/)production[.]env($|[^a-zA-Z0-9])' <<< "$(grep -Fvx 'deploy/production.env.example' <<< "$tar_listing")"; then
   echo "Artifact contains a forbidden environment file." >&2
   exit 1
 fi
+# Check member sizes without extracting executable content onto the filesystem.
+node - "$ARTIFACT_PATH" "$MANIFEST_PATH" <<'NODE'
+const { execFileSync } = require("node:child_process");
+const fs = require("node:fs");
+const archive = process.argv[2];
+const names = execFileSync("tar", ["-tzf", archive], { encoding: "utf8" }).trim().split("\n");
+const members = new Map(names.map(name => [name.replace(/^\.\//, ""), name]));
+for (const name of members.keys()) {
+  if (name.startsWith("/") || name.includes("\\") || name.split("/").includes("..")) throw Error(`Unsafe archive path: ${name}`);
+}
+for (const name of [".next-build/standalone/server.js", ".next-build/standalone/.next-build/BUILD_ID", "RELEASE-METADATA.json", "deployment-plan.json"]) {
+  const content = execFileSync("tar", ["-xOzf", archive, members.get(name)], { maxBuffer: 16 * 1024 * 1024 });
+  if (!content.toString("utf8").trim()) throw Error(`Empty required artifact file: ${name}`);
+}
+const metadata = JSON.parse(execFileSync("tar", ["-xOzf", archive, members.get("RELEASE-METADATA.json")], { encoding: "utf8" }));
+const manifest = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
+for (const field of ["commit", "build", "lint", "tests"]) {
+  if (!manifest[field] || metadata[field] !== manifest[field]) throw Error(`Artifact metadata mismatch: ${field}`);
+}
+for (const prefix of [".next-build/standalone/.next-build/server/", ".next-build/standalone/.next-build/static/", "prisma/migrations/"]) {
+  if (![...members.keys()].some(name => name.startsWith(prefix) && !name.endsWith("/"))) throw Error(`Empty required artifact directory: ${prefix}`);
+}
+NODE
 registry_json="$(tar -xOzf "$ARTIFACT_PATH" ./src/lib/runtime/worker-registry.json)"
 worker_paths="$(node -e 'const r=JSON.parse(process.argv[1]); if(!Array.isArray(r)||!r.length) throw Error("Empty registry"); for(const w of r) { if(!/^scripts\/[a-z0-9-]+[.]ts$/.test(w.entry)||!/^amazon-[a-z0-9-]+$/.test(w.service)) throw Error("Invalid registry"); console.log(w.entry); console.log(`deploy/systemd/${w.service}.service`); }' "$registry_json")"
 while IFS= read -r worker_path; do
