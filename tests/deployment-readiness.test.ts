@@ -40,7 +40,7 @@ test("release-check 接受完整合成包，拒绝缺失注册 unit 和真实配
     put("src/lib/uploads.ts");
     const check = () => {
       const artifact = "fixture.tar.gz";
-      execFileSync("tar", ["-czf", artifact, "-C", "package", "."], { cwd: root, env: childProcessEnv(), timeout: 15_000 });
+      execFileSync("tar", ["-czf", artifact, "-C", "package", "."], { cwd: root, env: { ...childProcessEnv(), NODE_ENV: "test" }, timeout: 15_000 });
       writeFileSync(path.join(root, "release-manifest.json"), JSON.stringify({ commit: "fixture", build: "passed", lint: "passed", tests: "passed", artifactSha256: createHash("sha256").update(readFileSync(path.join(root, artifact))).digest("hex") }));
       execFileSync("bash", [fileURLToPath(new URL("../scripts/release-check.sh", import.meta.url)), artifact], { cwd: root, env: { ...childProcessEnv(), NODE_ENV: "test", SOURCE_COMMIT: "fixture" }, stdio: "pipe", timeout: 30_000 });
     };
