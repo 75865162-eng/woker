@@ -3,8 +3,9 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { assertWorkspaceAccess } from "@/lib/workspace/access";
-import { roleCanPerformAction, defaultRolePermissionMap } from "@/lib/accounts/permissions";
-import { normalizeRolePermissions } from "@/lib/accounts/role-permissions-utils";
+import { roleCanPerformAction } from "@/lib/accounts/permissions";
+import { mergeRolePermissions, type RolePermissionRow } from "@/lib/accounts/role-permissions-utils";
+import { getOrganizationRolePermissionsCached } from "@/lib/accounts/role-permission-cache";
 import { encryptAmazonAdsRefreshToken } from "./credentials";
 import { AmazonAdsConnectionError, createAmazonAdsOAuthTransport, lwaConsentHosts, type AdsRegion, type AmazonAdsOAuthTransport, type AmazonAdsProfilePayload } from "./oauth-contract";
 import { missingAmazonAdsProfileIds } from "./profile-reconciliation";
@@ -29,8 +30,10 @@ function oauthSettings(environment: Record<string, string | undefined> = process
 export async function assertAdsSettingsManager(scope: AdsAuthScope, actor: string, db: typeof prisma | Prisma.TransactionClient = prisma) {
   const member = await db.organizationMember.findUnique({ where: { organizationId_userId: { organizationId: scope.organizationId, userId: actor } }, include: { user: { select: { status: true } } } });
   if (!member || member.user.status !== "active" || !await assertWorkspaceAccess(scope.organizationId, scope.workspaceId, actor, db)) throw new Error("Amazon Ads 数据范围不可访问。");
-  const permissions = { ...defaultRolePermissionMap };
-  for (const role of await db.organizationRosterRole.findMany({ where: { organizationId: scope.organizationId }, select: { id: true, permissions: true } })) permissions[role.id] = { ...(permissions[role.id] ?? {}), ...normalizeRolePermissions(role.permissions) };
+  const readRoles = () => db.organizationRosterRole.findMany({ where: { organizationId: scope.organizationId }, select: { id: true, permissions: true } }) as Promise<RolePermissionRow[]>;
+  const permissions = db === prisma
+    ? await getOrganizationRolePermissionsCached(scope.organizationId, async () => mergeRolePermissions(await readRoles()))
+    : mergeRolePermissions(await readRoles());
   if (!roleCanPerformAction(member.role, "settings", "edit", permissions)) throw new Error("当前账号没有管理 Amazon Ads 授权的权限。");
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
 import { Bell, CheckCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -108,15 +109,9 @@ export function UserNotificationCenter() {
   useEffect(() => {
     const loadSequence = loadSequenceRef;
     void loadNotifications();
-    const timer = window.setInterval(() => {
-      void loadNotifications();
-    }, 15000);
-
-    return () => {
-      window.clearInterval(timer);
-      ++loadSequence.current;
-    };
+    return () => { ++loadSequence.current; };
   }, [loadNotifications]);
+  useVisiblePolling({ intervalMs: 15000, enabled: true, onPoll: loadNotifications });
 
   const markRead = useCallback(async (ids: string[]) => {
     if (!ids.length) return;

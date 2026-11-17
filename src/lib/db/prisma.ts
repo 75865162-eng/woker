@@ -1,5 +1,6 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
+import type { PoolConfig } from "pg";
 import { createHash } from "node:crypto";
 
 const globalForPrisma = globalThis as unknown as {
@@ -10,6 +11,20 @@ function readPositiveIntegerEnv(name: string, fallback: number) {
   const value = Number(process.env[name]);
 
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+}
+
+/**
+ * Explicit pg pool configuration. Defaults match the previous implicit `pg`
+ * behaviour (max=10) so existing deployments are unchanged when env is absent.
+ * Exported as a pure function so env→config mapping is unit-testable.
+ */
+export function buildPgPoolConfig(connectionString: string): PoolConfig {
+  return {
+    connectionString,
+    max: readPositiveIntegerEnv("PG_POOL_MAX", 10),
+    idleTimeoutMillis: readPositiveIntegerEnv("PG_POOL_IDLE_TIMEOUT_MS", 10_000),
+    connectionTimeoutMillis: readPositiveIntegerEnv("PG_POOL_CONNECTION_TIMEOUT_MS", 10_000),
+  };
 }
 
 function getPrismaClient() {
@@ -23,7 +38,7 @@ function getPrismaClient() {
     throw new Error("DATABASE_URL is required to initialize Prisma.");
   }
 
-  const adapter = new PrismaPg({ connectionString });
+  const adapter = new PrismaPg(buildPgPoolConfig(connectionString));
   const prismaClient = new PrismaClient({
     adapter,
     log: process.env.ERP_PERFORMANCE_TRACE === "1" ? [{ emit: "event", level: "query" }] : [],

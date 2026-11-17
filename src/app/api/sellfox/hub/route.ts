@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getSellfoxCredentialStatus } from "@/lib/sellfox/credential-store";
 import { sellfoxLiveDatasets, sellfoxPlanSummary } from "@/lib/sellfox/data-plan";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
+import { getHubDatasetStats, hubOverviewCacheKey } from "@/lib/sellfox/hub-overview-cache";
 
 export const runtime = "nodejs";
 
@@ -26,24 +27,33 @@ export async function GET(request: Request) {
       prisma.sellfoxCoverage.groupBy({ by: ["resource"], where, _sum: { rowCount: true }, _count: { _all: true }, _max: { lastDate: true, firstDate: true, lastStatus: true } }),
     ]);
 
-    const datasets = await Promise.all(sellfoxLiveDatasets.map(async (dataset) => {
+    // Only the pure per-dataset statistics are cached (org+workspace scoped);
+    // live fields like lastRun status are rebuilt on every request.
+    const stats = await getHubDatasetStats(hubOverviewCacheKey(organizationId, workspaceId), () =>
+      Promise.all(sellfoxLiveDatasets.map(async (dataset) => {
+        try {
+          // table / column names come from a static allow-list in data-plan.ts, values stay parameterized.
+          const [counter] = await prisma.$queryRawUnsafe<Counter[]>(
+            `select count(*)::bigint as n, max("${dataset.dateField}"::text) as latest, count(distinct "storeId")::bigint as stores from "${dataset.table}" where "organizationId" = $1 and "workspaceId" = $2`,
+            organizationId, workspaceId,
+          );
+          return { key: dataset.key, rows: Number(counter?.n ?? 0), latest: counter?.latest ?? null, storesWithData: Number(counter?.stores ?? 0), readError: null };
+        } catch {
+          // One unreadable snapshot table must not blank the whole hub; do not cache this entry.
+          return { key: dataset.key, rows: 0, latest: null, storesWithData: 0, readError: "该表统计读取失败" };
+        }
+      })),
+    );
+    const statByKey = new Map(stats.map((stat) => [stat.key, stat]));
+    const datasets = sellfoxLiveDatasets.map((dataset) => {
       const lastRun = runs.find((run) => run.resource === dataset.resource) ?? null;
-      const base = {
+      const stat = statByKey.get(dataset.key);
+      return {
         key: dataset.key, label: dataset.label, resource: dataset.resource, table: dataset.table, href: dataset.href ?? null,
         lastRun: lastRun ? { id: lastRun.id, status: lastRun.status, startedAt: lastRun.startedAt, finishedAt: lastRun.finishedAt, error: lastRun.error } : null,
+        rows: stat?.rows ?? 0, latest: stat?.latest ?? null, storesWithData: stat?.storesWithData ?? 0, readError: stat?.readError ?? null,
       };
-      try {
-        // table / column names come from a static allow-list in data-plan.ts, values stay parameterized.
-        const [counter] = await prisma.$queryRawUnsafe<Counter[]>(
-          `select count(*)::bigint as n, max("${dataset.dateField}"::text) as latest, count(distinct "storeId")::bigint as stores from "${dataset.table}" where "organizationId" = $1 and "workspaceId" = $2`,
-          organizationId, workspaceId,
-        );
-        return { ...base, rows: Number(counter?.n ?? 0), latest: counter?.latest ?? null, storesWithData: Number(counter?.stores ?? 0), readError: null };
-      } catch {
-        // One unreadable snapshot table must not blank the whole hub.
-        return { ...base, rows: 0, latest: null, storesWithData: 0, readError: "该表统计读取失败" };
-      }
-    }));
+    });
 
     const hourly = await prisma.sellfoxHourlyMetric.count({ where });
     const lastSuccess = new Map<string, string>();

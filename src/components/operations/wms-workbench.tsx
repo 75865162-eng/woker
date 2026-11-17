@@ -11,6 +11,7 @@ import {WmsTransferOrders} from "./wms-transfer-orders";
 import {transferStatusLabels} from "./wms-transfer-table";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
 import { Check, ChevronLeft, ChevronRight, Plus, RefreshCw, X } from "lucide-react";
 import { emitWorkspaceScopeChanged, workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
 import { useWmsOptions } from "./use-wms-options";
@@ -134,24 +135,19 @@ export function WmsWorkbench({ initialTab = "warehouses", initialReceiptId = "",
     window.addEventListener(workspaceScopeChangedEventName, updateScope);
     return () => window.removeEventListener(workspaceScopeChangedEventName, updateScope);
   }, []);
-  useEffect(() => {
-    const hasShellPicker = Boolean(document.querySelector('select[title="选择工作区"]:not([aria-label="仓库工作区"])'));
-    setStandaloneScopePicker(!hasShellPicker);
-    if (hasShellPicker) return;
-    let cancelled = false;
-    const refresh = async () => {
-      try {
-        const response = await fetch("/api/workspaces", { cache: "no-store" });
-        const data = await response.json();
-        if (!response.ok || !Array.isArray(data.workspaces)) return;
-        const options = data.workspaces.filter((item: unknown): item is { id: string; name: string; accountId?: string | null; marketplace?: string | null } => Boolean(item && typeof item === "object" && typeof (item as { id?: unknown }).id === "string" && typeof (item as { name?: unknown }).name === "string"));
-        if (!cancelled && options.length) setWorkspaceOptions(options);
-      } catch { /* Keep the current workspace available during temporary scope-list failures. */ }
-    };
-    void refresh();
-    const interval = window.setInterval(() => void refresh(), 5000);
-    return () => { cancelled = true; window.clearInterval(interval); };
+  const refreshWorkspaceOptions = useCallback(async () => {
+    try {
+      const response = await fetch("/api/workspaces", { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok || !Array.isArray(data.workspaces)) return;
+      const options = data.workspaces.filter((item: unknown): item is { id: string; name: string; accountId?: string | null; marketplace?: string | null } => Boolean(item && typeof item === "object" && typeof (item as { id?: unknown }).id === "string" && typeof (item as { name?: unknown }).name === "string"));
+      if (options.length) setWorkspaceOptions(options);
+    } catch { /* Keep the current workspace available during temporary scope-list failures. */ }
   }, []);
+  useEffect(() => {
+    void refreshWorkspaceOptions();
+  }, [refreshWorkspaceOptions]);
+  useVisiblePolling({ intervalMs: 5000, enabled: standaloneScopePicker, onPoll: refreshWorkspaceOptions });
   useEffect(() => {
     // AppShell can finish loading after this workbench mounts.
     const syncPicker = () => setStandaloneScopePicker(!document.querySelector('select[title="选择工作区"]:not([aria-label="仓库工作区"])'));

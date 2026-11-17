@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
 import { AlertCircle, ArrowUpRight, ChevronLeft, ChevronRight, CloudCog, LockKeyhole, PackageSearch, RefreshCw, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -225,11 +226,7 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true, se
     return () => { cancelled = true; };
   }, [loadReadiness, scopeRevision, needsReadiness]);
 
-  useEffect(() => {
-    if (!needsReadiness) return;
-    const timer = window.setInterval(() => { void loadReadiness().catch(() => undefined); }, 30_000);
-    return () => window.clearInterval(timer);
-  }, [loadReadiness, needsReadiness]);
+  useVisiblePolling({ intervalMs: 30_000, enabled: needsReadiness, onPoll: () => { void loadReadiness().catch(() => undefined); } });
 
   useEffect(() => { if (!embeddedTab || embeddedTab === "inventory") void loadInventory(); }, [loadInventory, scopeRevision, embeddedTab]);
   useEffect(() => { if (!embeddedTab || embeddedTab === "ads") void loadMetrics(); }, [loadMetrics, scopeRevision, embeddedTab]);

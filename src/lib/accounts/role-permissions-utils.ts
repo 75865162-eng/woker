@@ -1,6 +1,23 @@
-import { permissionActions, type PermissionAction, type RolePermissionMap, type RolePermissions } from "@/lib/accounts/permissions";
+import { defaultRolePermissionMap, permissionActions, type PermissionAction, type RolePermissionMap, type RolePermissions } from "@/lib/accounts/permissions";
 
 const validActions = new Set<PermissionAction>(permissionActions.map((action) => action.id));
+
+/** A role row as read from `organizationRosterRole` in every RBAC hot path. */
+export type RolePermissionRow = { id: string; permissions: unknown };
+
+/**
+ * Single source of truth for merging stored role rows into the default map.
+ * Previously duplicated ({ ...defaultRolePermissionMap } + for-loop) in four
+ * call sites; the cache read path and direct DB path now share this function so
+ * the authorization verdict cannot drift between them.
+ */
+export function mergeRolePermissions(roles: Iterable<RolePermissionRow>, base: RolePermissionMap = defaultRolePermissionMap): RolePermissionMap {
+  const permissions: RolePermissionMap = { ...base };
+  for (const role of roles) {
+    permissions[role.id] = { ...(permissions[role.id] ?? {}), ...normalizeRolePermissions(role.permissions) };
+  }
+  return permissions;
+}
 
 export function normalizeRolePermissionMap(value: unknown): RolePermissionMap {
   if (!value || typeof value !== "object" || Array.isArray(value)) {

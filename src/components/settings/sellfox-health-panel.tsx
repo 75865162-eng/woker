@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
 import Link from "next/link";
 import { useAppShellUser } from "@/components/app-shell/app-shell-context";
 import { roleCanPerformAction } from "@/lib/accounts/permissions";
@@ -16,32 +17,32 @@ export function SellfoxHealthPanel() {
   const user = useAppShellUser();
   const allowed = roleCanPerformAction(user?.userRole, "sellfox", "view", user?.rolePermissions);
   const [state, setState] = useState<{ data: Health | null; error: string }>({ data: null, error: "" });
+  const controllerRef = useRef<AbortController | undefined>(undefined);
+  const generationRef = useRef(0);
+  const load = useCallback(async () => {
+    controllerRef.current?.abort(); controllerRef.current = new AbortController();
+    const signal = controllerRef.current.signal; const epoch = ++generationRef.current;
+    setState({ data: null, error: "" });
+    try {
+      let stored: unknown;
+      try { stored = JSON.parse(localStorage.getItem("amazon_bulk_ad_workspace_scope") ?? "{}"); } catch { stored = {}; }
+      const scope = normalizeWorkspaceScope(stored as Parameters<typeof normalizeWorkspaceScope>[0]);
+      const response = await fetch("/api/sellfox/schedules", { headers: { "x-workspace-id": scope.workspaceId }, cache: "no-store", signal });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "赛狐运行状态读取失败。");
+      if (!signal.aborted && epoch === generationRef.current) setState({ data, error: "" });
+    } catch (error) {
+      if (!signal.aborted && epoch === generationRef.current) setState({ data: null, error: error instanceof Error ? error.message : "赛狐运行状态读取失败。" });
+    }
+  }, []);
   useEffect(() => {
     if (!allowed) return;
-    let controller: AbortController | undefined;
-    let generation = 0;
-    async function load() {
-      controller?.abort(); controller = new AbortController();
-      const signal = controller.signal; const epoch = ++generation;
-      setState({ data: null, error: "" });
-      try {
-        let stored: unknown;
-        try { stored = JSON.parse(localStorage.getItem("amazon_bulk_ad_workspace_scope") ?? "{}"); } catch { stored = {}; }
-        const scope = normalizeWorkspaceScope(stored as Parameters<typeof normalizeWorkspaceScope>[0]);
-        const response = await fetch("/api/sellfox/schedules", { headers: { "x-workspace-id": scope.workspaceId }, cache: "no-store", signal });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "赛狐运行状态读取失败。");
-        if (!signal.aborted && epoch === generation) setState({ data, error: "" });
-      } catch (error) {
-        if (!signal.aborted && epoch === generation) setState({ data: null, error: error instanceof Error ? error.message : "赛狐运行状态读取失败。" });
-      }
-    }
     void load();
     const refresh = () => { void load(); };
-    const timer = setInterval(refresh, 30_000);
     window.addEventListener(workspaceScopeChangedEventName, refresh);
-    return () => { ++generation; controller?.abort(); clearInterval(timer); window.removeEventListener(workspaceScopeChangedEventName, refresh); };
-  }, [allowed]);
+    return () => { controllerRef.current?.abort(); window.removeEventListener(workspaceScopeChangedEventName, refresh); };
+  }, [allowed, load]);
+  useVisiblePolling({ intervalMs: 30_000, enabled: allowed, onPoll: load });
   if (!allowed) return null;
   const data = state.data;
   return <Card><CardHeader><CardTitle>赛狐同步运行状态</CardTitle></CardHeader><CardContent className="space-y-2 text-sm">

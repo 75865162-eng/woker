@@ -200,3 +200,37 @@
 **Verification**: check:fast EXIT=0 under Node 22.19.0 — 2349 tests pass (0 fail, 0 cancelled), lint 0 error, ui:guard 0 regression. Build EXIT=0. code gate 0 blockers. NOTE: one real regression (operations-replenishment mock missing role-grant) was found via clean-HEAD worktree diff and fixed before this result.
 **本地环境修正**：当前 shell 原用 Node 22.13.1（低于门禁 22.19），已切到系统已装的 22.19.0；production-readiness 测试随之 11/11 通过
 **未闭环（外部环境依赖，不造假）**：真实连通性校验端点接线（需真实外部 API）、Ads SB/SD 与订单明细真实采集、生产 EnvironmentFile 下的 full gate 端到端
+
+## 十三、P2 性能整改 + DB/Redis 连接池（2026-11-18，依据两份新文档）
+
+**依据**：《P2 性能整改方案 — woker（基线 bac8a3a）》（Y1–Y4）+《真实环境 PostgreSQL/Redis 测试整改方案》（B1–B8；该文档明确"只做规划、不改业务代码、落地另行排期"，本轮仅落地其中唯一明确可落地的代码项 B1）。动手前以当前 HEAD `36945e6` 复核所有行号（基线已偏移），逐项以代码现状为准。
+
+### Y2 统一轮询可见性 Hook（文档建议顺序第 1）
+- 新增 `src/lib/hooks/use-visible-polling.ts`：可见性暂停/恢复（hidden 清 timer、visible 重建并可选补刷一次）、busy 跳过、enabled 关闭不建 timer；onPoll 走 ref 保持稳定引用无需重建 timer；卸载清理 timer + visibilitychange 监听
+- 迁移文档列出的 8 处（sync-center-workbench 已是参照实现，保留对照）：wms、sync-console、sellfox-hub、sellfox-workbench（overview+runs 两路，用 ref 中转保留原 epoch/abort/inFlight 语义）、task-center、operations-hub、sellfox-health-panel（load 提取为 useCallback + ref 管理 controller/generation）、sales-traffic（终态自动停）
+- 额外纳入审计发现的 3 处客户端后台轮询：user-notification-center、wecom-notification-runner、image-upscale-workbench
+
+### Y1 角色权限快照缓存（鉴权热路径）
+- 新增 `src/lib/accounts/role-permission-cache.ts`：进程内 LRU（≤32、45s TTL）+ 可选 Redis（REDIS_URL 未配置则仅进程内，复用 login-rate-limit 的惰性单例/短超时/静默错误/测试注入模式）；`getOrganizationRolePermissionsCached`/`invalidateOrganizationRolePermissions`/`setRolePermissionCacheRedisForTest`；任何缓存异常回源 onMiss，鉴权判断本身 fail-closed
+- 收口"角色行合并进默认 Map"纯函数 `mergeRolePermissions`（`role-permissions-utils.ts`），消除 data-access/authorization 等处重复合并
+- 接入非事务热路径 `assertAmazonAction`（data-access.ts）、`assertAdsSettingsManager`（authorization.ts）：**仅当 db === 全局 prisma 走缓存**，传入 tx 时直查；成员状态始终实时查、不缓存
+- 写后失效：`saveOrganizationRoleCatalog` 事务**提交后**调用失效（不在事务内删键，避免回滚误删）；生产 src 直接写 `organizationRosterRole` 的唯一入口已覆盖
+- 事务内路径（change-approval、processor 及传 tx 的 assert 调用）保持直查，不缓存
+
+### Y4 sellfox hub 概览计数缓存
+- 新增 `src/lib/sellfox/hub-overview-cache.ts`：按 org+workspace 缓存 12 条数据集 count/max/distinct 统计（45s TTL、≤64 条 LRU）；**仅缓存纯统计**，lastRun/href/plan 等实时字段每次重建；任一表读取失败则整批不缓存（下次全量重试，不冻结失败结果）
+- hub route 用 `getHubDatasetStats` 包装聚合查询；失效挂 `sync-service.ts` 的 done（事务提交后）/failed 分支
+- SQL 表名/列名仍只取 data-plan.ts 白名单、值参数化，单表不可用仍不空白
+
+### Y3 前端请求缓存与并发去重
+- 在 `workspace-api-cache.ts` 泛化 `cachedApiGet`（TTL 默认 5s + inflight 去重 + retries + force + scope/generation 前缀失效），复用现有 queryCache，不新建第二套缓存、不引入新依赖；失败不写缓存
+- 第一批接入：`host-workbench.tsx` 的 sellfox overview stores 只读加载（mount 一次性、无轮询竞态）；强实时任务/进度/导出状态与写操作明确不进缓存
+
+### B1 PG 连接池显式配置
+- `src/lib/db/prisma.ts`：`buildPgPoolConfig()` 给 `PrismaPg` 透传 PoolConfig（max/idleTimeoutMillis/connectionTimeoutMillis），env `PG_POOL_MAX`（默认10，等同原 pg 隐式行为）/ `PG_POOL_IDLE_TIMEOUT_MS` / `PG_POOL_CONNECTION_TIMEOUT_MS`，缺省回退现状；`.env.example` 补示例
+
+**测试**（新增 18 项）：`tests/role-permission-cache.test.ts`（合并口径/命中/失效/失败不缓存/鉴权判定一致，5项）、`tests/hub-overview-cache.test.ts`（命中/失效/失败不缓存/scope隔离，4项）、`tests/workspace-api-cache.test.ts`（TTL/inflight去重/force/retries/失效，6项）、`tests/pg-pool-config.test.ts`（默认值/正整数覆盖/非法值回退，3项）
+**改动边界**：金额字段未新增 Float；权限"成员∪角色并集"与 owner/database_admin 豁免口径不变；事务内鉴权保持直查；不新增未评估的重型前端依赖
+**未闭环（规划文档 B2–B8 属复核/实测项，非本轮代码改动）**：慢查询日志与告警、索引随数据量的 EXPLAIN 复核、Redis8 下队列/锁/心跳专项、PG16 复跑迁移与压测——需在有真实数据量 + Docker/浏览器 + 生产版本环境执行，本机空库无法定论，如实留档
+
+**验证（Node 22.19.0）**：check:fast EXIT=0（**2367 测试 / 0 失败 / 0 cancelled**、lint 0 error、typecheck 通过、ui:guard 零回退；首次 2364 + B1 连接池 3 项）；build 单独跑 EXIT=0（首次与 check:fast 并行因内存竞争被 SIGKILL，非代码问题，重跑通过）；code gate 阻塞 0。P0 安全边界回归 26/26 通过（amazon-account-access/account-roles/amazon-ads-authorization/operations-replenishment/workspace-membership）。

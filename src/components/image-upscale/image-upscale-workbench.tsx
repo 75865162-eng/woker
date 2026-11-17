@@ -2,6 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
+import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
 import { Archive, Download, ImagePlus, Loader2, RefreshCw, RotateCcw, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,15 +52,15 @@ export function ImageUpscaleWorkbench() {
     if (sourceUrlRef.current) URL.revokeObjectURL(sourceUrlRef.current);
   }, []);
 
-  useEffect(() => {
-    if (!batchId || !jobs.length || jobs.every((job) => job.status === "completed" || job.status === "failed")) return;
-    const timer = window.setInterval(() => {
+  useVisiblePolling({
+    intervalMs: 2000,
+    enabled: Boolean(batchId && jobs.length && !jobs.every((job) => job.status === "completed" || job.status === "failed")),
+    onPoll: () => {
       void refreshJobs(jobs.map((job) => job.id), false).then((nextJobs) => {
         if (nextJobs.length && nextJobs.every((job) => job.status === "completed" || job.status === "failed")) void loadHistory();
       });
-    }, 2000);
-    return () => window.clearInterval(timer);
-  }, [batchId, jobs]);
+    },
+  });
 
   useEffect(() => {
     if (selectedJob?.status === "completed" && !resultUrls[selectedJob.id]) void loadResult(selectedJob);

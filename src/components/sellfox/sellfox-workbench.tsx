@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
 import { AlertCircle, RefreshCw, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAppShellUser } from "@/components/app-shell/app-shell-context";
@@ -30,6 +31,8 @@ export function SellfoxWorkbench() {
   const canExport = roleCanPerformAction(shellUser?.userRole, "sellfox", "export", shellUser?.rolePermissions);
   const [view, setView] = useState(defaultSellfoxView); const [scope, setScope] = useState(normalizeWorkspaceScope());
   const [ready, setReady] = useState(false); const scopeEpoch = useRef(0);
+  const overviewPollRef = useRef<(() => void) | null>(null);
+  const tablePollRef = useRef<(() => void) | null>(null);
   const [overview, setOverview] = useState<Overview | null>(null); const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [rows, setRows] = useState<Row[]>([]); const [pagination, setPagination] = useState<Pagination>({ page: 1, pageSize: 20, total: 0 });
   const [selectedRow, setSelectedRow] = useState<Row | null>(null); const [loading, setLoading] = useState(true);
@@ -97,9 +100,11 @@ export function SellfoxWorkbench() {
       } catch (cause) { if (!canceled && scopeEpoch.current === epoch) setOverviewError(cause instanceof Error ? cause.message : "读取赛狐概览失败。"); }
       finally { inFlight = false; }
     }
-    void load(); const timer = pollOverview ? window.setInterval(() => void load(), 15_000) : undefined;
-    return () => { canceled = true; controller.abort(); if (timer) window.clearInterval(timer); };
+    overviewPollRef.current = () => { void load(); };
+    void load();
+    return () => { canceled = true; controller.abort(); if (overviewPollRef.current) overviewPollRef.current = null; };
   }, [ready, headers, refreshVersion, pollOverview]);
+  useVisiblePolling({ intervalMs: 15_000, enabled: ready && pollOverview, onPoll: () => overviewPollRef.current?.() });
 
   useEffect(() => {
     if (!ready) return;
@@ -123,9 +128,10 @@ export function SellfoxWorkbench() {
       finally { inFlight = false; if (!canceled && scopeEpoch.current === epoch) setLoading(false); }
     }
     const delay = window.setTimeout(() => void load(), 300);
-    const timer = view.domain === "runs" ? window.setInterval(() => void load(), 5_000) : undefined;
-    return () => { canceled = true; controller.abort(); window.clearTimeout(delay); if (timer) window.clearInterval(timer); };
+    tablePollRef.current = () => { void load(); };
+    return () => { canceled = true; controller.abort(); window.clearTimeout(delay); if (tablePollRef.current) tablePollRef.current = null; };
   }, [ready, view, headers, withScope, refreshVersion]);
+  useVisiblePolling({ intervalMs: 5_000, enabled: ready && view.domain === "runs", onPoll: () => tablePollRef.current?.() });
 
   const exportHref = useMemo(() => {
     if (!ready || !["stores", "inventory", "sales", "performance", "ads", "runs", "listings"].includes(view.domain)) return "";

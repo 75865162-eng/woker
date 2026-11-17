@@ -4,8 +4,9 @@ import { assertWorkspaceAccess } from "@/lib/workspace/access";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Prisma } from "@prisma/client";
 import { SyncInputError, type SyncScope } from "./policy";
-import { defaultRolePermissionMap, roleCanPerformAction, type PermissionAction } from "@/lib/accounts/permissions";
-import { normalizeRolePermissions } from "@/lib/accounts/role-permissions-utils";
+import { roleCanPerformAction, type PermissionAction } from "@/lib/accounts/permissions";
+import { mergeRolePermissions, type RolePermissionRow } from "@/lib/accounts/role-permissions-utils";
+import { getOrganizationRolePermissionsCached } from "@/lib/accounts/role-permission-cache";
 
 export const isAmazonScopeAdmin = (role: string) => role === "owner" || role === "database_admin";
 export type AmazonDataAction = "view" | "sync" | "export" | "edit";
@@ -113,9 +114,14 @@ export async function assertAmazonFinanceAccess(scope: SyncScope, actor: string,
 /** Live RBAC for background work as well as HTTP. Never trust a session role snapshot. */
 export async function assertAmazonAction(scope: SyncScope, actor: string, action: PermissionAction, db: Prisma.TransactionClient = prisma, moduleId = "operations") {
   const member = await db.organizationMember.findUnique({ where: { organizationId_userId: { organizationId: scope.organizationId, userId: actor } }, include: { user: { select: { status: true } } } });
-  const permissions = { ...defaultRolePermissionMap };
-  for (const role of await db.organizationRosterRole.findMany({ where: { organizationId: scope.organizationId }, select: { id: true, permissions: true } })) permissions[role.id] = { ...(permissions[role.id] ?? {}), ...normalizeRolePermissions(role.permissions) };
-  if (!member || member.user.status !== "active" || !roleCanPerformAction(member.role, moduleId, action, permissions)) throw new SyncInputError("数据范围不可访问。", 403);
+  if (!member || member.user.status !== "active") throw new SyncInputError("数据范围不可访问。", 403);
+  const readRoles = () => db.organizationRosterRole.findMany({ where: { organizationId: scope.organizationId }, select: { id: true, permissions: true } }) as Promise<RolePermissionRow[]>;
+  // Transaction clients must read their own view; only the global client may use
+  // the cross-request cache. The member status above is always read live.
+  const permissions = db === prisma
+    ? await getOrganizationRolePermissionsCached(scope.organizationId, async () => mergeRolePermissions(await readRoles()))
+    : mergeRolePermissions(await readRoles());
+  if (!roleCanPerformAction(member.role, moduleId, action, permissions)) throw new SyncInputError("数据范围不可访问。", 403);
 }
 
 /** A local Marketplace FK or a matching SKU is not evidence of an Amazon site binding. */

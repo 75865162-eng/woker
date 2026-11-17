@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
 import {
   buildLaunchOverdueAlerts,
   buildWeComLaunchOverdueMarkdown,
@@ -19,12 +20,13 @@ const wecomSettingsApiPath = "/api/notifications/wecom/settings";
 
 export function WeComNotificationRunner() {
   const inFlightRef = useRef(false);
+  const scanRef = useRef<(() => void) | null>(null);
+  const disposedRef = useRef(false);
 
   useEffect(() => {
-    let disposed = false;
-
+    disposedRef.current = false;
     async function scanAndSend() {
-      if (disposed || inFlightRef.current) return;
+      if (disposedRef.current || inFlightRef.current) return;
 
       const { settings, sentRecords } = await readSettings();
       if (!settings.enabled || !validateWeComWebhookUrl(settings.webhookUrl)) return;
@@ -67,16 +69,14 @@ export function WeComNotificationRunner() {
       }
     }
 
+    scanRef.current = () => { void scanAndSend(); };
     void scanAndSend();
-    const timer = window.setInterval(() => {
-      void scanAndSend();
-    }, scanIntervalMs);
-
     return () => {
-      disposed = true;
-      window.clearInterval(timer);
+      disposedRef.current = true;
+      scanRef.current = null;
     };
   }, []);
+  useVisiblePolling({ intervalMs: scanIntervalMs, enabled: true, onPoll: () => scanRef.current?.() });
 
   return null;
 }

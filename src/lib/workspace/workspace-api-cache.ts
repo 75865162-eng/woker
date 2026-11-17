@@ -83,6 +83,7 @@ export function invalidateWorkspaceApiCache() {
   teamAccountsCache.clear();
   teamAccountsInflight.clear();
   queryCache.clear();
+  apiInflight.clear();
 }
 
 export async function fetchWorkspacesCached(options?: { signal?: AbortSignal; force?: boolean }) {
@@ -117,6 +118,59 @@ export async function fetchWorkspacesCached(options?: { signal?: AbortSignal; fo
     return await promise;
   } finally {
     workspacesInflight.delete(cacheKey);
+  }
+}
+
+export type CachedFetchOptions<T> = {
+  /** Cache key; callers include scope + endpoint + serialized params (identity scope is prefixed automatically). */
+  queryKey: string;
+  ttlMs?: number;
+  force?: boolean;
+  fetcher: () => Promise<T>;
+  /** Retries on fetcher failure; default 0. Retries share the same inflight promise. */
+  retries?: number;
+};
+
+const apiInflight = new Map<string, Promise<unknown>>();
+
+/**
+ * Generic stale-while-revalidate style GET with TTL + in-flight de-duplication.
+ * Built on the existing queryCache (identity scope + generation prefixed), not a
+ * second cache system. Strongly-realtime data (running jobs/progress/export
+ * status) and write operations must NOT use this — only read-only list/overview
+ * endpoints. Cache lives in browser memory only (lost on refresh).
+ */
+export async function cachedApiGet<T>(options: CachedFetchOptions<T>): Promise<T> {
+  const { queryKey, ttlMs = REQUEST_CACHE_TTL_MS, force = false, fetcher, retries = 0 } = options;
+  const fullKey = queryCacheKey(queryKey);
+
+  if (!force) {
+    const hit = readWorkspaceApiQuery<T>(queryKey);
+    if (hit && Date.now() - hit.cachedAt < ttlMs) return hit.data;
+    const inFlight = apiInflight.get(fullKey);
+    if (inFlight) return inFlight as Promise<T>;
+  }
+
+  const run = async (): Promise<T> => {
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const data = await fetcher();
+        writeWorkspaceApiQuery(queryKey, data);
+        return data;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError;
+  };
+
+  const promise = run();
+  apiInflight.set(fullKey, promise);
+  try {
+    return await promise;
+  } finally {
+    if (apiInflight.get(fullKey) === promise) apiInflight.delete(fullKey);
   }
 }
 

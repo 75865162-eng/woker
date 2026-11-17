@@ -5,6 +5,7 @@ import { buildDefaultRoleCatalog, type RoleCatalogItem } from "@/lib/accounts/ro
 import { prisma } from "@/lib/db/prisma";
 import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
 import { normalizeRolePermissions } from "@/lib/accounts/role-permissions-utils";
+import { invalidateOrganizationRolePermissions } from "@/lib/accounts/role-permission-cache";
 
 export type RoleCatalogSnapshot = {
   roles: RoleCatalogItem[];
@@ -182,6 +183,10 @@ export async function saveOrganizationRoleCatalog(organizationId: string, roles:
       orderBy: [{ sortOrder: "asc" }, { updatedAt: "asc" }, { id: "asc" }],
     });
   });
+
+  // Invalidate only after the transaction commits — never inside it, so a
+  // rollback cannot leave a stale-empty cache window.
+  invalidateOrganizationRolePermissions(organizationId);
 
   return {
     roles: saved.map((role) => normalizeRoleRow(role as RoleRow)),

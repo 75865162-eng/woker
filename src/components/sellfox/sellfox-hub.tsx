@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
 import { AlertCircle, ArrowUpRight, CheckCircle2, Clock3, Loader2, PlayCircle, RefreshCw, Store } from "lucide-react";
 import { useAppShellUser } from "@/components/app-shell/app-shell-context";
 import { roleCanPerformAction } from "@/lib/accounts/permissions";
@@ -72,11 +73,7 @@ export function SellfoxHub() {
 
   useEffect(() => { void load(); }, [load]);
   const running = Boolean(data?.runs.some((run) => ["queued", "running"].includes(run.status)) || batch);
-  useEffect(() => {
-    if (!running) return;
-    const timer = window.setInterval(() => void load(), 6000);
-    return () => window.clearInterval(timer);
-  }, [running, load]);
+  useVisiblePolling({ intervalMs: 6000, enabled: running, onPoll: load });
 
   async function syncResource(resource: SellfoxSyncResource) {
     const response = await fetch("/api/sellfox/sync", {

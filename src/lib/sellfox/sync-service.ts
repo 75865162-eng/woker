@@ -16,6 +16,7 @@ import { withSellfoxCredentialScope } from "./credential-context";
 import { buildRunShards, recordSellfoxShards, refreshSellfoxCoverage } from "@/lib/sellfox/sync-shards";
 import { syncSellfoxGenericEndpoint, type SellfoxEndpointConfig } from "@/lib/sellfox/generic-endpoint-sync";
 import { buildSellfoxReconciliation } from "@/lib/sellfox/reconciliation";
+import { invalidateHubOverview } from "@/lib/sellfox/hub-overview-cache";
 
 function endpointConfig(row: {
   code: string; label: string; path: string; dateMode: string; scopeMode: string;
@@ -302,6 +303,7 @@ export async function processSellfoxSyncRun(runId: string) {
       const reconciliation = buildSellfoxReconciliation(result, asRecord(current?.summary)?.progress);
       await finishSellfoxRun(lease, { status: "done", summary: { ...asRecord(current?.summary), result, reconciliation } as Prisma.InputJsonValue }, tx);
     });
+    invalidateHubOverview(input.organizationId, input.workspaceId);
     // 分片与覆盖度是记账，不是业务数据：失败只打日志，不把成功的同步改判为失败。
     try {
       const shards = buildRunShards(input.resource, { reportDate: request.reportDate, startDate: request.startDate, endDate: request.endDate }, result, request.progress);
@@ -317,6 +319,7 @@ export async function processSellfoxSyncRun(runId: string) {
     if (error instanceof SellfoxLeaseLostError) throw error;
     const message = error instanceof SellfoxSyncUnavailableError || error instanceof SellfoxStoreSyncError ? error.message : sellfoxStoreFailure(error).error;
     await finishSellfoxRun(lease, { status: "failed", error: message });
+    invalidateHubOverview(run!.organizationId, run!.workspaceId);
     throw error;
   } finally { clearInterval(timer); }
 }

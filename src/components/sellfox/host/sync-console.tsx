@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
 import Link from "next/link";
 import { SellfoxTabs } from "../sellfox-nav";
 import { useAppShellUser } from "@/components/app-shell/app-shell-context";
@@ -106,11 +107,7 @@ export function SyncConsole() {
   useEffect(() => { void load(); }, [load]);
 
   const running = Boolean(data?.runs.some((run) => ["queued", "running"].includes(run.status)));
-  useEffect(() => {
-    if (!running) return;
-    const timer = window.setInterval(() => void load(), 6000);
-    return () => window.clearInterval(timer);
-  }, [running, load]);
+  useVisiblePolling({ intervalMs: 6000, enabled: running, onPoll: load });
 
   async function trigger(resource: string) {
     if (!canSync || busy) return;

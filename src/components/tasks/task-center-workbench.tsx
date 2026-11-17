@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
 import { Download, RefreshCw, RotateCcw, Search } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -185,19 +186,14 @@ export function TaskCenterWorkbench() {
     };
   }, [query.page, query.refreshToken, searchParams]);
 
-  useEffect(() => {
-    const hasActiveJobs = jobs.some((job) => job.status === "queued" || job.status === "running");
-    if (!hasActiveJobs) {
-      return;
-    }
-
-    const timer = window.setInterval(() => {
+  useVisiblePolling({
+    intervalMs: 5_000,
+    enabled: jobs.some((job) => job.status === "queued" || job.status === "running"),
+    onPoll: () => {
       backgroundRefreshRef.current = true;
       setQuery((current) => ({ ...current, refreshToken: current.refreshToken + 1 }));
-    }, 5_000);
-
-    return () => window.clearInterval(timer);
-  }, [jobs]);
+    },
+  });
 
   function submitSearch() {
     backgroundRefreshRef.current = false;

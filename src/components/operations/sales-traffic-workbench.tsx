@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
 import { Button } from "@/components/ui/button";
 import { StandardDataTable } from "@/components/ui/table-variants";
 import { type DataTableColumn } from "@/components/ui/data-table";
@@ -29,12 +30,14 @@ export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onT
     void fetch(`${endpoint}?${params}`, { headers: scopeHeaders(), cache: "no-store", signal: controller.signal }).then(async response => { const payload = await response.json(); if (!response.ok) throw new Error(payload.error ?? "销售流量读取失败。"); if (n === sequence.current) setResult(payload); }).catch(e => { if (n === sequence.current && !controller.signal.aborted) setError(e instanceof Error ? e.message : "读取失败。"); }).finally(() => { if (n === sequence.current) setLoading(false); });
     return () => { controller.abort(); };
   }, [queryKey, page, reload]);
-  useEffect(() => {
-    if (!job || !["QUEUED", "RUNNING"].includes(job.status)) return;
-    let active = true;
-    const timer = window.setInterval(() => { void fetch(`${endpoint}/exports?id=${encodeURIComponent(job.id)}`, { headers: scopeHeaders(), cache: "no-store" }).then(async r => { const p = await r.json(); if (!r.ok) throw new Error(p.error ?? "导出状态读取失败。"); if (active) setJob(p); }).catch(e => { if (active) setError(e instanceof Error ? e.message : "导出状态读取失败。"); }); }, 3000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, [job]);
+  useVisiblePolling({
+    intervalMs: 3000,
+    enabled: Boolean(job && ["QUEUED", "RUNNING"].includes(job.status)),
+    onPoll: () => {
+      if (!job) return;
+      void fetch(`${endpoint}/exports?id=${encodeURIComponent(job.id)}`, { headers: scopeHeaders(), cache: "no-store" }).then(async r => { const p = await r.json(); if (!r.ok) throw new Error(p.error ?? "导出状态读取失败。"); setJob(p); }).catch(e => { setError(e instanceof Error ? e.message : "导出状态读取失败。"); });
+    },
+  });
   const requestSync = async () => {
     const n = ++mutation.current; setBusy(true); setError(""); setNotice("");
     try {

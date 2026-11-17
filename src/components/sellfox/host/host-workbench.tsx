@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { cachedApiGet } from "@/lib/workspace/workspace-api-cache";
 import Link from "next/link";
 import { SellfoxTabs } from "../sellfox-nav";
 import { sellfoxSiteLabel } from "@/lib/sellfox/marketplace-site";
@@ -114,10 +115,15 @@ export function HostWorkbench({ page }: { page: HostPage }) {
   const live = dataset?.status === "live";
 
   useEffect(() => {
-    fetch("/api/sellfox/overview", { cache: "no-store" })
-      .then((response) => response.ok ? response.json() as Promise<{ stores?: Store[] }> : { stores: [] })
-      .then((body) => setStores(body.stores ?? []))
-      .catch(() => setStores([]));
+    let active = true;
+    void cachedApiGet({
+      queryKey: "sellfox:overview:stores",
+      fetcher: async () => {
+        const response = await fetch("/api/sellfox/overview", { cache: "no-store" });
+        return response.ok ? (await response.json() as { stores?: Store[] }) : { stores: [] as Store[] };
+      },
+    }).then((body) => { if (active) setStores(body.stores ?? []); }).catch(() => { if (active) setStores([]); });
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {

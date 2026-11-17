@@ -102,3 +102,29 @@
 - **未闭环部分均为外部环境依赖**：真实授权与连通校验、Ads SB/SD 采集、生产 DB/Redis/证书、full gate 端到端——必须由操作员在目标机完成，本报告不假称完成。
 - **不为凑数制造改动**：真实连通校验端点与 SB/SD 采集需外部 API，当前环境无法验证，按数据真实性原则留档而非接跑不通的端点。
 - 当前代码健康：2349 测试 / 0 失败、lint 0 error、code gate 全绿、ui:guard 零回退、build 成功。
+
+---
+
+## 八、P2 性能整改 + 连接池（两份新文档，已落地）
+
+| 项 | 交付 | 证据 |
+|---|---|---|
+| Y2 轮询可见性 | 新增 `use-visible-polling`（hidden 暂停/visible 补刷/终态停/busy 跳过），迁移文档 8 处 + 审计发现的 3 处，sync-center 参照实现保留 | `src/lib/hooks/use-visible-polling.ts` 及各 workbench 组件 |
+| Y1 角色权限缓存 | 进程 LRU(45s)+可选 Redis+写后失效+降级回源；合并逻辑收口 `mergeRolePermissions`；仅非事务路径(db===prisma)走缓存，事务内直查；成员状态不缓存 | `src/lib/accounts/role-permission-cache.ts`、`data-access.ts`、`authorization.ts`、`role-catalog-server.ts`、`tests/role-permission-cache.test.ts` |
+| Y4 hub 概览缓存 | 12 条聚合统计按 org+ws 做 45s TTL 缓存，实时字段每次重建，任一表失败整批不缓存；同步 done/failed 失效 | `src/lib/sellfox/hub-overview-cache.ts`、`api/sellfox/hub/route.ts`、`sync-service.ts`、`tests/hub-overview-cache.test.ts` |
+| Y3 请求缓存层 | 泛化 `cachedApiGet`（TTL/inflight 去重/retries/force/scope 失效），第一批接入 host-workbench overview；强实时与写操作不进缓存 | `src/lib/workspace/workspace-api-cache.ts`、`host-workbench.tsx`、`tests/workspace-api-cache.test.ts` |
+| B1 连接池 | `PrismaPg` 透传 PoolConfig（max 默认10=原行为 + idle/connection timeout），env 可配，缺省回退 | `src/lib/db/prisma.ts`、`.env.example`、`tests/pg-pool-config.test.ts` |
+
+- **安全不变**：金额字段未新增 Float；权限成员∪角色并集、owner/database_admin 豁免口径不变；事务内鉴权保持直查避免一致性风险
+- **边界如实**：第二份文档 B2–B8（慢查询告警/索引实测/Redis8 专项/PG16 压测）为需真实数据量与生产版本环境的复核项，明确"只做规划不改代码"，本轮只落地其唯一明确代码项 B1，其余不假称完成
+- **Build 说明**：首次 build 与 check:fast 并行因内存竞争被 SIGKILL（非代码错误），单独重跑 EXIT=0
+
+**验证（Node 22.19.0）**：check:fast EXIT=0（2367 测试 / 0 失败 / 0 cancelled；lint 0 error；typecheck/ui:guard 通过）；build EXIT=0；P0 安全边界回归 26/26。
+
+---
+
+## 九、本轮结论
+
+- P0 安全边界、统一管理中心、多源目录（前几章）与本轮 P2 性能整改均已落地并通过本地全量验证。
+- 未闭环项均为外部环境依赖或需真实数据量的复核项（真实授权/连通校验、SB/SD 采集、full gate、慢查询压测），本报告不假称完成。
+- 当前代码健康：2367 测试 / 0 失败、lint 0 error、code gate 全绿、ui:guard 零回退、build 成功。
