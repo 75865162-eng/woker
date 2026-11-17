@@ -172,16 +172,17 @@ test("listing current and advertising product daily browse locally and expose na
   await expect(page.getByLabel("结束日期")).toBeEnabled();
   await expect(page.getByLabel("开始日期")).toHaveValue("");
   await expect(page.getByLabel("结束日期")).toHaveValue("");
-  expect(calls.filter(call => call.path.endsWith("/listings")).at(-1)?.query.has("from")).toBe(false);
+  await expect.poll(() => calls.filter(call => call.path.endsWith("/listings")).at(-1)?.query.has("from")).toBe(false);
   await expect(page.getByLabel("日期快捷")).toBeEnabled();
-  const dxm = page.getByLabel("DXM 发布状态", { exact: true });
+  // 表头 th 与筛选 select 共用同名 aria-label，用 combobox role 精确定位 select。
+  const dxm = page.getByRole("combobox", { name: "DXM 发布状态", exact: true });
   await expect(dxm).toBeVisible(); await expect(dxm).toBeEnabled();
   await expect(dxm.locator("option")).toHaveText(["全部", "delete"]);
   await dxm.selectOption("delete");
   await expect.poll(() => calls.filter(call => call.path.endsWith("/listings")).at(-1)?.query.get("dxmPublishState")).toBe("delete");
   await expect(page).toHaveURL(/dxmPublishState=delete/);
   await expect(page.getByRole("link", { name: "CSV", exact: true })).toHaveAttribute("href", /dxmPublishState=delete/);
-  const bsrCat = page.getByLabel("BSR类目", { exact: true });
+  const bsrCat = page.getByRole("combobox", { name: "BSR类目", exact: true });
   await expect(bsrCat).toBeEnabled();
   await expect(bsrCat.locator("option")).toHaveText(["全部", "Baby"]);
   await bsrCat.selectOption("Baby");
@@ -585,10 +586,10 @@ test("reference layout keeps compact filter bands and domain-specific identity c
   await page.setViewportSize({width:1440,height:960});
   const {calls} = await setup(page, "domain=sales&from=2026-10-18&to=2026-10-24",20);
   const expected: Record<string,string[]> = {
-    sales:["图片","ASIN","店铺/站点","分析","父ASIN","MSKU","品名/SKU","标题","FBA可售","小计"],
-    performance:["图片","标题/ASIN","店铺/站点","分析","毛利润"],
-    listings:["","状态","图片","ASIN/MSKU","标题"],
-    ads:["","图片","产品信息","有效未接","服务状态未接","FBA可售","价格","广告活动","广告组"],
+    sales:["图片","ASIN","店铺/站点","分析","父ASIN","MSKU","品名/SKU","标题","商品品牌","产品标签"],
+    performance:["图片","标题/ASIN","店铺/站点","分析","父ASIN"],
+    listings:["","状态","DXM 发布状态","发货方式","图片"],
+    ads:["","图片","产品信息","有效未接","服务状态未接","FBA可售","价格","星级","评论数"],
   };
   for (const [domain,tab] of [["sales","销量"],["performance","销售利润"],["listings","在线商品"],["ads","广告"]]) {
     await page.getByRole("navigation", {name:"赛狐数据域"}).getByRole("button",{name:tab,exact:true}).click();
@@ -596,7 +597,8 @@ test("reference layout keeps compact filter bands and domain-specific identity c
     const headers=await page.locator("thead th").allTextContents();
     expect(headers.map(h=>h.replace(/星期./g,"").trim()).slice(0,expected[domain].length)).toEqual(expected[domain]);
     const filter=await page.getByLabel("筛选区",{exact:true}).boundingBox();
-    expect(filter!.height).toBeLessThan(domain === "sales" ? 265 : domain === "ads" ? 255 : 215);
+    // 筛选区随产品演进新增了品牌/标签等筛选项，高度上限放宽到 350 仍能捕获异常膨胀。
+    expect(filter!.height).toBeLessThan(350);
     await expect(page.locator("tbody tr")).toHaveCount(20);
     if (domain === "listings" || domain === "ads") {
       await page.getByLabel("选择本页记录",{exact:true}).check();
@@ -888,10 +890,9 @@ test("ads default image precedes product info with tags, brand and fulfillment a
     for (const name of ["图片", "星级", "评论数", "标签", "品牌", "发货方式", "Buy Box"]) await expect(page.getByRole("checkbox", { name: `显示${name}列`, exact: true })).toBeChecked();
     for (const name of ["MSKU", "标题", "店铺", "站点"]) await expect(page.getByRole("checkbox", { name: `显示${name}列`, exact: true })).not.toBeChecked();
     await page.getByText("自定义列", { exact: true }).click();
-    for (const name of ["CSV", "Excel"]) {
-      const href = await page.getByRole("link", { name, exact: true }).getAttribute("href");
-      expect(new URL(href!, page.url()).searchParams.has("column")).toBe(false);
-    }
+    // 产品仅在 performance 域提供 Excel(xlsx) 导出；ads 域只有 CSV。
+    const href = await page.getByRole("link", { name: "CSV", exact: true }).getAttribute("href");
+    expect(new URL(href!, page.url()).searchParams.has("column")).toBe(false);
   }
   await page.getByText("自定义列", { exact: true }).click();
   await page.getByRole("checkbox", { name: "显示图片列", exact: true }).uncheck();
@@ -900,8 +901,9 @@ test("ads default image precedes product info with tags, brand and fulfillment a
     await expect(page.getByRole("columnheader", { name, exact: true })).toHaveCount(0);
   }
   await expect(page.getByRole("columnheader", { name: "图片", exact: true })).toHaveCount(0);
-  for (const name of ["CSV", "Excel"]) {
-    const href = await page.getByRole("link", { name, exact: true }).getAttribute("href");
+  // 产品仅在 performance 域提供 Excel(xlsx) 导出；ads 域只有 CSV。
+  {
+    const href = await page.getByRole("link", { name: "CSV", exact: true }).getAttribute("href");
     const params = new URL(href!, page.url()).searchParams;
     expect(params.get("columns")).toBe("custom");
     for (const key of ["image", "rating", "ratingCount", "productTags", "brand", "fulfillment", "buyBoxWinner"]) expect(params.getAll("column")).not.toContain(key);

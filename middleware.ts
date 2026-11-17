@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthDriver, publicApiPrefixes, publicRoutes, sessionCookieName } from "@/lib/auth/constants";
+import { isProductionAuthSecretValid } from "@/lib/auth/secret-policy";
 
 function base64UrlToBytes(value: string) {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
@@ -10,10 +11,15 @@ function base64UrlToBytes(value: string) {
 }
 
 async function verifySignature(payload: string, signature: string) {
-  const secret = process.env.AUTH_SECRET || "local-development-auth-secret";
+  const secret = process.env.AUTH_SECRET;
+  // 生产环境：密钥缺失/占位/过短时判定签名无效（fail-closed），与 Node 侧 session 策略一致。
+  // 绝不因误配弱密钥而放行会话 cookie。
+  if (process.env.NODE_ENV === "production" && !isProductionAuthSecretValid(secret)) {
+    return false;
+  }
   const key = await crypto.subtle.importKey(
     "raw",
-    new TextEncoder().encode(secret),
+    new TextEncoder().encode(secret || "local-development-auth-secret"),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["verify"],

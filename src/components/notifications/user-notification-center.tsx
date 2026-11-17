@@ -104,6 +104,7 @@ export function UserNotificationCenter() {
   }, [canViewProducts, shellUser?.organizationId, shellUser?.userId]);
 
   useEffect(() => {
+    const sequenceRef = loadSequenceRef;
     void loadNotifications();
     const timer = window.setInterval(() => {
       void loadNotifications();
@@ -111,7 +112,7 @@ export function UserNotificationCenter() {
 
     return () => {
       window.clearInterval(timer);
-      ++loadSequenceRef.current;
+      ++sequenceRef.current;
     };
   }, [loadNotifications]);
 

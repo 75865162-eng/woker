@@ -3,6 +3,7 @@ import { type AiModelSettings } from "@/lib/ai-settings";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { extractChatCompletionText, extractOutputText, type ResponsesApiOutput } from "@/lib/listing-ai/client";
 import { fetchAiApi, type AiFetchResponse } from "@/lib/server/ai-fetch";
+import { aiFailureMessage, classifyUpstreamError, redactForLog, safeBaseUrl } from "@/lib/server/ai-error";
 import {
   buildAiRequestHeaders,
   buildAiTextEndpoint,
@@ -92,10 +93,13 @@ export async function POST(request: Request) {
 
     if (!response.ok) {
       const errorText = await response.text();
+      // 上游原文只用于服务端排查与布尔分类，绝不进入客户端响应。
+      console.warn(`[ai-test] upstream ${response.status}: ${redactForLog(errorText)}`);
       if (errorText.includes("only allows Codex official clients")) {
         return NextResponse.json({ error: "连接已到达 AIGOCODE，但这个 API Key 只允许 Codex 官方客户端使用，不能被当前本地 Web App 直接调用。请更换可用于 OpenAI 兼容 API 的 Key，或换成可直接调用的 Base URL。" }, { status: 403 });
       }
-      return NextResponse.json({ error: `测试失败：${response.status} ${errorText.slice(0, 500)}` }, { status: response.status });
+      const safe = aiFailureMessage(classifyUpstreamError(response.status, errorText));
+      return NextResponse.json({ error: safe.error }, { status: safe.status });
     }
 
     const data = await response.json();
@@ -109,11 +113,16 @@ export async function POST(request: Request) {
       result: {
         message: text,
         model: settings.model,
-        baseUrl: settings.baseUrl,
+        // 只回 scheme://host，去掉内网路径/查询参数/userinfo。
+        baseUrl: safeBaseUrl(settings.baseUrl),
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "测试失败，请稍后重试。";
-    return NextResponse.json({ error: message }, { status: 500 });
+    // 不回显任意异常 message（可能含请求 URL / 配置细节）。
+    if (error instanceof Error && error.name === "AbortError") {
+      return NextResponse.json({ error: "测试请求超时，请稍后重试。" }, { status: 504 });
+    }
+    console.warn("[ai-test] request failed:", error instanceof Error ? redactForLog(error.message) : "unknown error");
+    return NextResponse.json({ error: "测试失败，请检查配置或稍后重试。" }, { status: 500 });
   }
 }

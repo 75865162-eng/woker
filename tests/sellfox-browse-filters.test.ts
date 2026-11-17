@@ -345,7 +345,7 @@ test("listings show independent first-sale inputs and shortcuts, reset both rang
   } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
 });
 
-test("listings show totalInventory min/max inputs, reset clears them, and hide elsewhere", (t) => {
+test("listings show totalInventory min/max inputs, reset clears them, and hide elsewhere", () => {
   const globals = globalThis as unknown as { React?: typeof React }, previous = globals.React;
   globals.React = React;
   try {

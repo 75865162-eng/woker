@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getAuthDriver, sessionCookieName, sessionMaxAgeSeconds } from "@/lib/auth/constants";
 import { rolePermissionsCookieName } from "@/lib/accounts/permissions";
 import { getOrganizationRolePermissionsSnapshot, type RolePermissionsSnapshot } from "@/lib/accounts/role-permissions-server";
+import { isProductionAuthSecretValid } from "@/lib/auth/secret-policy";
 
 type SessionPayload = {
   driver?: "database" | "local";
@@ -62,15 +63,9 @@ export function isSecureRequest(request: Request) {
 function getAuthSecret() {
   const secret = process.env.AUTH_SECRET;
 
-  if (process.env.NODE_ENV === "production") {
-    if (
-      !secret
-      || secret === "change-this-local-secret-before-production"
-      || secret === "replace-with-a-random-secret-at-least-32-characters"
-      || secret.length < 32
-    ) {
-      throw new Error("AUTH_SECRET must be a non-placeholder value with at least 32 characters in production.");
-    }
+  // 与 middleware（Edge）共用同一策略，避免两处判定漂移。
+  if (process.env.NODE_ENV === "production" && !isProductionAuthSecretValid(secret)) {
+    throw new Error("AUTH_SECRET must be a non-placeholder value with at least 32 characters in production.");
   }
 
   return secret || "local-development-auth-secret";

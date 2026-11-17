@@ -17,6 +17,7 @@ import {
 } from "@/lib/ai-settings";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { resolveAiSettings } from "@/lib/server/ai-runtime";
+import { redactForLog } from "@/lib/server/ai-error";
 
 export const runtime = "nodejs";
 
@@ -187,8 +188,8 @@ export async function GET(request: Request) {
       activeProfileId: record.activeProfileId ?? "",
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to load AI settings.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.warn("[ai-settings] load failed:", error instanceof Error ? redactForLog(error.message) : "unknown error");
+    return NextResponse.json({ error: "加载 AI 配置失败，请稍后重试。" }, { status: 500 });
   }
 }
 
@@ -272,7 +273,7 @@ export async function PUT(request: Request) {
 
     return NextResponse.json({ settings: settings.text, imageSettings: settings.image, profiles: nextProfiles, activeProfileId });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to save AI settings.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.warn("[ai-settings] save failed:", error instanceof Error ? redactForLog(error.message) : "unknown error");
+    return NextResponse.json({ error: "保存 AI 配置失败，请检查输入或稍后重试。" }, { status: 500 });
   }
 }

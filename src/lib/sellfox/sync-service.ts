@@ -9,6 +9,7 @@ import { sellfoxPost } from "@/lib/sellfox/client";
 import { isSellfoxSyncResource, normalizeSellfoxDates, sellfoxReportDates, sellfoxDateAt, SellfoxSyncInputError, nextSellfoxPage, sellfoxSyncResources, sellfoxSyncDisabledReason, SellfoxSyncUnavailableError, type SellfoxSyncResource } from "@/lib/sellfox/sync-contract";
 import { sellfoxStoreFailure, SellfoxStoreSyncError } from "@/lib/sellfox/sync-errors";
 import { syncSellfoxSnapshotStores, type SnapshotCheckpoint } from "@/lib/sellfox/snapshot-sync";
+import { buildSellfoxReconciliation } from "@/lib/sellfox/reconciliation";
 
 export const sellfoxResources = sellfoxSyncResources;
 export type SyncResource = SellfoxSyncResource;
@@ -246,7 +247,8 @@ export async function processSellfoxSyncRun(runId: string) {
         const next = new Date(Date.parse(`${request.backfillTo}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
         await tx.sellfoxSyncSchedule.updateMany({ where: { id: request.scheduleId, organizationId: input.organizationId, workspaceId: input.workspaceId, backfillNextDate: request.backfillFrom }, data: { backfillNextDate: next } });
       }
-      await finishSellfoxRun(lease, { status: "done", summary: { ...asRecord(current?.summary), result } as Prisma.InputJsonValue }, tx);
+      const reconciliation = buildSellfoxReconciliation(result, asRecord(current?.summary)?.progress);
+      await finishSellfoxRun(lease, { status: "done", summary: { ...asRecord(current?.summary), result, reconciliation } as Prisma.InputJsonValue }, tx);
     });
   } catch (error) {
     if (error instanceof SellfoxLeaseLostError) throw error;

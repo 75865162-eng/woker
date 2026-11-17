@@ -2,7 +2,7 @@ export type Row = Record<string, unknown>;
 export type Pagination = { page: number; pageSize: number; total: number };
 export type StoreRow = { id: string; externalId: string; name: string; marketplace: string; country: string; status: string; lastSyncedAt: string };
 export type Run = { id: string; resource: string; status: string; summary?: Row | null; error?: string | null; startedAt: string; finishedAt?: string | null };
-export type Overview = { configured: boolean; stores: StoreRow[]; counts: Record<string, number>; coverage?: { inventoryStores: number; inventoryMissingStores: number; salesStores: number; salesMissingStores: number }; latestRuns: Run[]; latestSuccessByResource?: Record<string, Run>; workerOnline?: boolean };
+export type Overview = { configured: boolean; stores: StoreRow[]; counts: Record<string, number>; coverage?: { inventoryStores: number; inventoryMissingStores: number; salesStores: number; salesMissingStores: number }; latestRuns: Run[]; latestSuccessByResource?: Record<string, Run>; workerOnline?: boolean; earliestReportDate?: { sales?: string | null; performance?: string | null } };
 export type Schedule = { backfillStart?: string | null; backfillNextDate?: string | null; resource: string; enabled: boolean; intervalMinutes: number; lastEnqueuedAt?: string | null; nextRunAt?: string | null };
 export const resourceLabels: Record<string, string> = { stores: "店铺", inventory: "FBA 库存", sales: "销量", performance: "销售利润", hourly: "SP 小时样本", listings: "在线商品", ads_report: "广告产品日报", ads_targeting: "广告投放日报", ads_search_term: "广告搜索词日报", ads_campaign: "广告活动日报", ads_ad_group: "广告组日报", ads_placement: "广告位日报" };
 export function browseEmptyMessage(domain: string, overview: Overview | null) {
@@ -10,7 +10,10 @@ export function browseEmptyMessage(domain: string, overview: Overview | null) {
   const label = domain === "sales" ? "销量" : "销售利润";
   if (overview?.workerOnline === false) return `Worker 当前离线，无法自动同步${label}数据。可点“立即同步”排队，或检查 Worker 状态。`;
   if (!overview?.latestSuccessByResource?.[domain]) return `尚无${label}同步成功记录，请点“立即同步”获取数据。`;
-  return `当前筛选日期暂无${label}数据，可调整日期范围，或点“立即同步”补数。`;
+  const earliest = overview.earliestReportDate?.[domain];
+  return earliest
+    ? `当前筛选日期暂无${label}数据；最早可查日期为 ${earliest}，可调整日期范围，或点“立即同步”补数。`
+    : `当前筛选日期暂无${label}数据，可调整日期范围，或点“立即同步”补数。`;
 }
 export const captions: Record<string, string> = {
   evaluationCapital: "测评本金", evaluationCommission: "测评佣金", dealPerformanceFeeAmount: "Deal表现费", couponParticipationFeeAmount: "优惠券参与费", safetReimbursedAmount: "SAFE-T赔偿", affordabilityExpenseAmount: "可负担性费用", withheldFeeAmount: "预扣费用", chargebackIncomeAmount: "拒付收入", guaranteeClaimIncomeAmount: "A-Z索赔收入", promotionSalesAmount: "促销销售额", promotionShippingAmount: "促销运费", promotionTaxAmount: "促销税费",

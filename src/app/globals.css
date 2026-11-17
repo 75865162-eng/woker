@@ -79,6 +79,15 @@ button {
   cursor: pointer;
 }
 
+/* Solid brand surfaces always use white text, including their icons and labels. */
+:is(.bg-brand, .bg-brand-dark) {
+  color: #fff;
+}
+
+:is(.bg-brand, .bg-brand-dark) :is(span, svg) {
+  color: inherit;
+}
+
 ::selection {
   background: rgba(23, 107, 135, 0.16);
 }

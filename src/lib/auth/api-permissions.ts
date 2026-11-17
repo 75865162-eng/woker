@@ -3,6 +3,7 @@ import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-
 import { roleCanPerformAction, type PermissionAction } from "@/lib/accounts/permissions";
 import { getCurrentUser, getCurrentUserFromRequest, type CurrentUser } from "@/lib/auth/session";
 import { assertWorkspaceAccess } from "@/lib/workspace/access";
+import { recordAccessDenied } from "@/lib/audit/access-denied";
 
 export type ApiPermissionResult =
   | {
@@ -27,6 +28,14 @@ export async function requireApiPermission(moduleId: string, action: PermissionA
   const permissions = await getOrganizationRolePermissions(user.organizationId);
 
   if (!roleCanPerformAction(user.role, moduleId, action, permissions)) {
+    await recordAccessDenied({
+      organizationId: user.organizationId,
+      userId: user.id,
+      reason: "role_action_denied",
+      moduleId,
+      action,
+      path: request ? new URL(request.url).pathname : undefined,
+    });
     return {
       ok: false,
       response: NextResponse.json({ error: "Forbidden." }, { status: 403 }),
@@ -49,6 +58,15 @@ export async function requireApiPermission(moduleId: string, action: PermissionA
       ? bodyWorkspaceId
       : new URL(request.url).searchParams.get("workspaceId") || request.headers.get("x-workspace-id");
     if (requestedWorkspaceId && !(await assertWorkspaceAccess(user.organizationId, requestedWorkspaceId))) {
+      await recordAccessDenied({
+        organizationId: user.organizationId,
+        userId: user.id,
+        reason: "workspace_access_denied",
+        moduleId,
+        action,
+        path: new URL(request.url).pathname,
+        requestedWorkspaceId,
+      });
       return { ok: false, response: NextResponse.json({ error: "Forbidden." }, { status: 403 }) };
     }
   }

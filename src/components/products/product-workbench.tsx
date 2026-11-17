@@ -390,6 +390,9 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
   const [teamAccounts, setTeamAccounts] = useState<TeamAccountRecord[]>([]);
   const [deepLinkMessage, setDeepLinkMessage] = useState("");
   const handledDeepLinkRef = useRef("");
+  // deep-link effect 只在 productsLoading/searchParams 变化时触发；用 ref 持有最新 openProduct，
+  // 避免将每次 render 都会重建的普通函数加入依赖导致 effect 反复触发。
+  const openProductRef = useRef<(sku: string) => Promise<void>>(async () => {});
   const currentUserId = shellUser?.userId || "";
   const creatorName = shellUser?.userName?.trim() || "当前创建人";
   const currentUserName = creatorName === "当前创建人" ? "" : creatorName.trim();
@@ -914,6 +917,7 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
 
     await alignProductDetail(workspaceId, normalizedSku);
   }
+  openProductRef.current = openProduct;
 
   useEffect(() => {
     const sku = searchParams.get("sku")?.trim() ?? "";
@@ -930,7 +934,7 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
       if (productsLoading) return;
       handledDeepLinkRef.current = requestKey;
       setDeepLinkMessage("");
-      void openProduct(sku);
+      void openProductRef.current(sku);
     };
     openWhenScopeReady();
     window.addEventListener(workspaceScopeChangedEventName, openWhenScopeReady);
