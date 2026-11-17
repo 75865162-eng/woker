@@ -125,3 +125,12 @@
 - 真实外部 Amazon/Sellfox 凭据、`--gate full` 的数据库/外部接入验收：本地无真实凭据，须在目标机用生产 EnvironmentFile 完成，不造假
 - `config.storage=local` 为非阻塞提示，上线须配置持久卷或 s3/r2 并做恢复演练
 - 生产模板渲染验证仅证明模板结构与部署清单完整，不代表生产已就绪
+
+## 九、git push 状态（用户已授权，环境凭据阻塞）
+
+- 本地 `main` ahead 228 / behind 0，`origin/main`（`03d48e4`）是本地祖先，满足快进条件
+- 本地提交已全部就绪：`e4d93d4`（d74fdfc 验收增强合并）、`ed17277`（生产级检测收口）
+- `git push origin main` **未成功**，阻塞原因（环境侧，非代码）：
+  1. **无 GitHub 写认证凭据**：仓库公开（fetch/clone 只读无需认证）成功，但 push 需写权限；credential helper 无存储、`gh` 未登录、`GITHUB_TOKEN`/`GH_TOKEN` 未设置、当前任务无可用 GitHub connector
+  2. 网络波动：多次 `GnuTLS recv error (-110)` / 连接 443 超时（curl 小请求偶发 200）
+- 远程 main 仍为 `03d48e4`，未被部分更新；待提供写凭据后执行 `git push origin main` 即可（快进，无需 force）
