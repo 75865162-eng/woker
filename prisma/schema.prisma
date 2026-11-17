@@ -163,8 +163,8 @@ model WorkspaceMembership {
   organizationId String
   workspaceId    String
   userId         String
-  createdAt      DateTime @default(now())
-  workspace      WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Cascade, map: "WorkspaceMembership_workspace_fkey")
+  createdAt      DateTime           @default(now())
+  workspace      WorkspaceScope     @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Cascade, map: "WorkspaceMembership_workspace_fkey")
   member         OrganizationMember @relation(fields: [organizationId, userId], references: [organizationId, userId], onDelete: Cascade, map: "WorkspaceMembership_member_fkey")
 
   @@id([organizationId, workspaceId, userId])
@@ -172,7 +172,7 @@ model WorkspaceMembership {
 }
 
 model WorkspaceScope {
-  memberships WorkspaceMembership[]
+  memberships                    WorkspaceMembership[]
   productCatalogEntries          ProductCatalogEntry[]
   wmsWarehouseTypes              WmsWarehouseType[]
   wmsWarehouseAddresses          WmsWarehouseAddress[]
@@ -576,7 +576,8 @@ model ProductRecord {
   status                       String                     @default("")
   source                       String                     @default("dashboard")
   supplierName                 String                     @default("")
-  purchasePrice                Float                      @default(0)
+  purchasePrice                Decimal                    @default(0) @db.Decimal(20, 4)
+  currency                     String                     @default("CNY")
   selectionOwner               String                     @default("")
   opsAssignee                  String                     @default("")
   designerAssignee             String                     @default("")
@@ -766,7 +767,7 @@ model ProductListing {
   listingStatus    String          @default("")
   title            String          @default("")
   currency         String          @default("")
-  price            Float?
+  price            Decimal?        @db.Decimal(20, 4)
   inventory        Int?
   fulfillmentType  String          @default("")
   sourceRevision   Int             @default(1)
@@ -818,7 +819,7 @@ model ProductCost {
   organizationId   String
   workspaceId      String          @default("default")
   costType         ProductCostType @default(purchase)
-  amount           Float           @default(0)
+  amount           Decimal         @default(0) @db.Decimal(20, 4)
   currency         String          @default("CNY")
   effectiveAt      DateTime?
   sourceRevision   Int             @default(1)
@@ -878,7 +879,8 @@ model ProductSummaryRecord {
   primaryImageUrl              String        @default("")
   status                       String        @default("")
   supplierName                 String        @default("")
-  purchasePrice                Float         @default(0)
+  purchasePrice                Decimal       @default(0) @db.Decimal(20, 4)
+  currency                     String        @default("CNY")
   selectionOwner               String        @default("")
   opsAssignee                  String        @default("")
   designerAssignee             String        @default("")
@@ -1324,8 +1326,9 @@ model SellfoxHourlyMetric {
   entityName     String       @default("")
   impressions    Int
   clicks         Int
-  cost           Float
-  sales          Float
+  cost           Decimal      @db.Decimal(20, 4)
+  sales          Decimal      @db.Decimal(20, 4)
+  currency       String       @default("CNY")
   orders         Int
   payload        Json
   syncedAt       DateTime     @default(now())
@@ -1367,99 +1370,99 @@ model SellfoxProductDailySnapshot {
   title                                        String       @default("")
   currency                                     String       @default("")
   orderNum                                     Int?
-  netRevenue                                   Float?
+  netRevenue                                   Decimal?     @db.Decimal(20, 4)
   saleQuantity                                 Int?
   fbaQuantity                                  Int?
   fbmQuantity                                  Int?
-  saleRevenue                                  Float?
-  grossProfit                                  Float?
+  saleRevenue                                  Decimal?     @db.Decimal(20, 4)
+  grossProfit                                  Decimal?     @db.Decimal(20, 4)
   grossProfitRate                              Float?
-  adCost                                       Float?
-  promotionDiscount                            Float?
-  giftWrapFee                                  Float?
+  adCost                                       Decimal?     @db.Decimal(20, 4)
+  promotionDiscount                            Decimal?     @db.Decimal(20, 4)
+  giftWrapFee                                  Decimal?     @db.Decimal(20, 4)
   imageUrl                                     String?
   refundRate                                   Float?
-  refundPrice                                  Float?
+  refundPrice                                  Decimal?     @db.Decimal(20, 4)
   refundNum                                    Float?
-  commodityCost                                Float?
-  shippingPrice                                Float?
-  taxPrice                                     Float?
-  headTripPrice                                Float?
-  avgPurchaseCost                              Float?
-  amazonCommissionPrice                        Float?
-  fbaStorageFeeAmount                          Float?
-  fbaLongTermStorageFeeAmount                  Float?
-  fbaRemovalFeeAmount                          Float?
-  fbaDisposalFeeAmount                         Float?
-  customAsinFee                                Float?
-  customShopFee                                Float?
-  serviceFeeAmount                             Float?
-  storageFeeAmount                             Float?
-  compensationAmount                           Float?
-  evaluationFee                                Float?
-  promotionTotalAmount                         Float?
-  fbaOverageFeeAmount                          Float?
-  chargebackAmount                             Float?
-  guaranteeClaimAmount                         Float?
-  digitalServicesFeeAmount                     Float?
-  otherPriceAmount                             Float?
-  shippingChargeAmount                         Float?
-  regulatoryFeeAmount                          Float?
-  couponPaymentAmount                          Float?
-  sellerDealPaymentAmount                      Float?
-  vineFeeAmount                                Float?
-  starStorageFeeAmount                         Float?
-  subscriptionAmount                           Float?
-  fbaCustomerReturnAmount                      Float?
-  fbaInboundConvenienceFeeAmount               Float?
-  inboundTransportationFeeAmount               Float?
-  shippingChargebackAmount                     Float?
-  giftwrapChargebackAmount                     Float?
-  costOfPointsGrantedAmount                    Float?
-  orderOtherPriceAmount                        Float?
-  fbaInboundTransportationProgramFee           Float?
-  aglFeeAmount                                 Float?
-  paidServicesFeeAmount                        Float?
-  customerReturnHrrUnitFeeAmount               Float?
-  amazonUpstreamStorageTransportationFeeAmount Float?
-  amazonUpstreamProcessingFeeAmount            Float?
-  mfnPostageFeeAmount                          Float?
-  adjustmentFeeAmount                          Float?
-  otherServiceFeeAmount                        Float?
-  avgHeadTripPrice                             Float?
-  purchaseRefundPrice                          Float?
-  revenueAmount                                Float?
-  fbaPerUnitFulfillmentFeeRefundAmount         Float?
-  fbaWeightBasedFeeRefundAmount                Float?
-  deferredAmount                               Float?
-  withheldTaxAmount                            Float?
-  otherPriceIncomeAmount                       Float?
-  paymentMethodFeeAmount                       Float?
-  fixedClosingFeeAmount                        Float?
-  variableClosingFeeAmount                     Float?
-  imagingServicesFeeAmount                     Float?
-  netCoAmount                                  Float?
-  comminglingVatAmount                         Float?
-  codFeeAmount                                 Float?
-  evaluationCapital                            Float?
-  evaluationCommission                         Float?
-  dealPerformanceFeeAmount                     Float?
-  couponParticipationFeeAmount                 Float?
-  safetReimbursedAmount                        Float?
-  affordabilityExpenseAmount                   Float?
-  withheldFeeAmount                            Float?
-  chargebackIncomeAmount                       Float?
-  guaranteeClaimIncomeAmount                   Float?
-  promotionSalesAmount                         Float?
-  promotionShippingAmount                      Float?
-  promotionTaxAmount                           Float?
+  commodityCost                                Decimal?     @db.Decimal(20, 4)
+  shippingPrice                                Decimal?     @db.Decimal(20, 4)
+  taxPrice                                     Decimal?     @db.Decimal(20, 4)
+  headTripPrice                                Decimal?     @db.Decimal(20, 4)
+  avgPurchaseCost                              Decimal?     @db.Decimal(20, 4)
+  amazonCommissionPrice                        Decimal?     @db.Decimal(20, 4)
+  fbaStorageFeeAmount                          Decimal?     @db.Decimal(20, 4)
+  fbaLongTermStorageFeeAmount                  Decimal?     @db.Decimal(20, 4)
+  fbaRemovalFeeAmount                          Decimal?     @db.Decimal(20, 4)
+  fbaDisposalFeeAmount                         Decimal?     @db.Decimal(20, 4)
+  customAsinFee                                Decimal?     @db.Decimal(20, 4)
+  customShopFee                                Decimal?     @db.Decimal(20, 4)
+  serviceFeeAmount                             Decimal?     @db.Decimal(20, 4)
+  storageFeeAmount                             Decimal?     @db.Decimal(20, 4)
+  compensationAmount                           Decimal?     @db.Decimal(20, 4)
+  evaluationFee                                Decimal?     @db.Decimal(20, 4)
+  promotionTotalAmount                         Decimal?     @db.Decimal(20, 4)
+  fbaOverageFeeAmount                          Decimal?     @db.Decimal(20, 4)
+  chargebackAmount                             Decimal?     @db.Decimal(20, 4)
+  guaranteeClaimAmount                         Decimal?     @db.Decimal(20, 4)
+  digitalServicesFeeAmount                     Decimal?     @db.Decimal(20, 4)
+  otherPriceAmount                             Decimal?     @db.Decimal(20, 4)
+  shippingChargeAmount                         Decimal?     @db.Decimal(20, 4)
+  regulatoryFeeAmount                          Decimal?     @db.Decimal(20, 4)
+  couponPaymentAmount                          Decimal?     @db.Decimal(20, 4)
+  sellerDealPaymentAmount                      Decimal?     @db.Decimal(20, 4)
+  vineFeeAmount                                Decimal?     @db.Decimal(20, 4)
+  starStorageFeeAmount                         Decimal?     @db.Decimal(20, 4)
+  subscriptionAmount                           Decimal?     @db.Decimal(20, 4)
+  fbaCustomerReturnAmount                      Decimal?     @db.Decimal(20, 4)
+  fbaInboundConvenienceFeeAmount               Decimal?     @db.Decimal(20, 4)
+  inboundTransportationFeeAmount               Decimal?     @db.Decimal(20, 4)
+  shippingChargebackAmount                     Decimal?     @db.Decimal(20, 4)
+  giftwrapChargebackAmount                     Decimal?     @db.Decimal(20, 4)
+  costOfPointsGrantedAmount                    Decimal?     @db.Decimal(20, 4)
+  orderOtherPriceAmount                        Decimal?     @db.Decimal(20, 4)
+  fbaInboundTransportationProgramFee           Decimal?     @db.Decimal(20, 4)
+  aglFeeAmount                                 Decimal?     @db.Decimal(20, 4)
+  paidServicesFeeAmount                        Decimal?     @db.Decimal(20, 4)
+  customerReturnHrrUnitFeeAmount               Decimal?     @db.Decimal(20, 4)
+  amazonUpstreamStorageTransportationFeeAmount Decimal?     @db.Decimal(20, 4)
+  amazonUpstreamProcessingFeeAmount            Decimal?     @db.Decimal(20, 4)
+  mfnPostageFeeAmount                          Decimal?     @db.Decimal(20, 4)
+  adjustmentFeeAmount                          Decimal?     @db.Decimal(20, 4)
+  otherServiceFeeAmount                        Decimal?     @db.Decimal(20, 4)
+  avgHeadTripPrice                             Decimal?     @db.Decimal(20, 4)
+  purchaseRefundPrice                          Decimal?     @db.Decimal(20, 4)
+  revenueAmount                                Decimal?     @db.Decimal(20, 4)
+  fbaPerUnitFulfillmentFeeRefundAmount         Decimal?     @db.Decimal(20, 4)
+  fbaWeightBasedFeeRefundAmount                Decimal?     @db.Decimal(20, 4)
+  deferredAmount                               Decimal?     @db.Decimal(20, 4)
+  withheldTaxAmount                            Decimal?     @db.Decimal(20, 4)
+  otherPriceIncomeAmount                       Decimal?     @db.Decimal(20, 4)
+  paymentMethodFeeAmount                       Decimal?     @db.Decimal(20, 4)
+  fixedClosingFeeAmount                        Decimal?     @db.Decimal(20, 4)
+  variableClosingFeeAmount                     Decimal?     @db.Decimal(20, 4)
+  imagingServicesFeeAmount                     Decimal?     @db.Decimal(20, 4)
+  netCoAmount                                  Decimal?     @db.Decimal(20, 4)
+  comminglingVatAmount                         Decimal?     @db.Decimal(20, 4)
+  codFeeAmount                                 Decimal?     @db.Decimal(20, 4)
+  evaluationCapital                            Decimal?     @db.Decimal(20, 4)
+  evaluationCommission                         Decimal?     @db.Decimal(20, 4)
+  dealPerformanceFeeAmount                     Decimal?     @db.Decimal(20, 4)
+  couponParticipationFeeAmount                 Decimal?     @db.Decimal(20, 4)
+  safetReimbursedAmount                        Decimal?     @db.Decimal(20, 4)
+  affordabilityExpenseAmount                   Decimal?     @db.Decimal(20, 4)
+  withheldFeeAmount                            Decimal?     @db.Decimal(20, 4)
+  chargebackIncomeAmount                       Decimal?     @db.Decimal(20, 4)
+  guaranteeClaimIncomeAmount                   Decimal?     @db.Decimal(20, 4)
+  promotionSalesAmount                         Decimal?     @db.Decimal(20, 4)
+  promotionShippingAmount                      Decimal?     @db.Decimal(20, 4)
+  promotionTaxAmount                           Decimal?     @db.Decimal(20, 4)
   evaluationSaleNum                            Float?
   channelSaleNum                               Float?
-  adSpCost                                     Float?
-  adSdCost                                     Float?
-  adSbCost                                     Float?
-  adSbvCost                                    Float?
-  adSbsCost                                    Float?
+  adSpCost                                     Decimal?     @db.Decimal(20, 4)
+  adSdCost                                     Decimal?     @db.Decimal(20, 4)
+  adSbCost                                     Decimal?     @db.Decimal(20, 4)
+  adSbvCost                                    Decimal?     @db.Decimal(20, 4)
+  adSbsCost                                    Decimal?     @db.Decimal(20, 4)
   userNameList                                 String[]     @default([])
   payload                                      Json
   syncedAt                                     DateTime     @default(now())
@@ -1573,27 +1576,27 @@ model SellfoxCoverage {
 
 /// 后台配置的赛狐 API 端点。新增接口只需填一条配置，编排器自动生成全量计划、定时与回填。
 model SellfoxApiEndpoint {
-  id             String   @id
+  id             String    @id
   organizationId String
-  workspaceId    String   @default("default")
+  workspaceId    String    @default("default")
   code           String
   label          String
   path           String
-  dateMode       String   @default("range")
-  scopeMode      String   @default("store")
-  chunkDays      Int      @default(7)
-  pageSize       Int      @default(100)
-  rowsPath       String   @default("")
-  idFields       String   @default("")
-  params         String   @default("{}")
-  dateFormat     String   @default("yyyy-MM-dd")
-  maxRows        Int      @default(50000)
-  enabled        Boolean  @default(false)
+  dateMode       String    @default("range")
+  scopeMode      String    @default("store")
+  chunkDays      Int       @default(7)
+  pageSize       Int       @default(100)
+  rowsPath       String    @default("")
+  idFields       String    @default("")
+  params         String    @default("{}")
+  dateFormat     String    @default("yyyy-MM-dd")
+  maxRows        Int       @default(50000)
+  enabled        Boolean   @default(false)
   historyFrom    String?
   cursorDate     String?
   lastPlannedAt  DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@unique([organizationId, workspaceId, code])
   @@index([organizationId, workspaceId, enabled])
@@ -1642,8 +1645,8 @@ model SellfoxFbaInventorySnapshot {
   warehouseName          String?
   commodityName          String?
   currency               String?
-  avgInventoryCost       Float?
-  avgTransportCost       Float?
+  avgInventoryCost       Decimal?     @db.Decimal(20, 4)
+  avgTransportCost       Decimal?     @db.Decimal(20, 4)
   payload                Json
   syncedAt               DateTime     @default(now())
   createdAt              DateTime     @default(now())
@@ -1669,7 +1672,7 @@ model SellfoxSalesDailySnapshot {
   asin           String       @default("")
   orders         Int?
   quantity       Int?
-  revenue        Float?
+  revenue        Decimal?     @db.Decimal(20, 4)
   currency       String       @default("")
   payload        Json
   syncedAt       DateTime     @default(now())
@@ -1703,11 +1706,11 @@ model SellfoxOrderSnapshot {
   payAt              String?
   refundAt           String?
   currency           String?
-  orderTotal         Float?
+  orderTotal         Decimal?     @db.Decimal(20, 4)
   qty                Int?
   refundQty          Int?
-  itemAmount         Float?
-  revenue            Float?
+  itemAmount         Decimal?     @db.Decimal(20, 4)
+  revenue            Decimal?     @db.Decimal(20, 4)
   promo              String?
   shipServiceLevel   String?
   fulfillmentChannel String       @default("")
@@ -2884,18 +2887,18 @@ model SellfoxListingSnapshot {
   parentAsin      String?
   title           String?
   status          String?
-  price           Float?
+  price           Decimal?     @db.Decimal(20, 4)
   currency        String?
   fulfillable     Int?
   sales7          Int?
   sales14         Int?
   sales30         Int?
-  revenue7        Float?
-  revenue14       Float?
-  revenue30       Float?
-  adSpend7        Float?
-  adSpend14       Float?
-  adSpend30       Float?
+  revenue7        Decimal?     @db.Decimal(20, 4)
+  revenue14       Decimal?     @db.Decimal(20, 4)
+  revenue30       Decimal?     @db.Decimal(20, 4)
+  adSpend7        Decimal?     @db.Decimal(20, 4)
+  adSpend14       Decimal?     @db.Decimal(20, 4)
+  adSpend30       Decimal?     @db.Decimal(20, 4)
   sourceUpdatedAt String?
   // Write-time derived list columns, maintained by sellfox_listing_project_write.
   dxmPublishState String?
@@ -2913,14 +2916,14 @@ model SellfoxListingSnapshot {
   ratingValue     Float?
   ratingCount     Float?
   bsrRank         Float?
-  purchaseCost    Float?
-  fbaFees         Float?
-  referralFee     Float?
-  totalFee        Float?
-  headTripCost    Float?
+  purchaseCost    Decimal?     @db.Decimal(20, 4)
+  fbaFees         Decimal?     @db.Decimal(20, 4)
+  referralFee     Decimal?     @db.Decimal(20, 4)
+  totalFee        Decimal?     @db.Decimal(20, 4)
+  headTripCost    Decimal?     @db.Decimal(20, 4)
   reservedQty     Float?
-  shippingPrice   Float?
-  profitPrice     Float?
+  shippingPrice   Decimal?     @db.Decimal(20, 4)
+  profitPrice     Decimal?     @db.Decimal(20, 4)
   profitRate      Float?
   listingQuantity Float?
   unsellable      Float?
@@ -2976,9 +2979,9 @@ model SellfoxAdsProductDaily {
   currency       String?
   impressions    Int?
   clicks         Int?
-  cost           Float?
+  cost           Decimal?     @db.Decimal(20, 4)
   adOrders       Int?
-  adSales        Float?
+  adSales        Decimal?     @db.Decimal(20, 4)
   payload        Json
   syncedAt       DateTime     @default(now())
   SellfoxStore   SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
@@ -3015,9 +3018,9 @@ model SellfoxAdsTargetingDaily {
   currency       String?
   impressions    Int?
   clicks         Int?
-  cost           Float?
+  cost           Decimal?     @db.Decimal(20, 4)
   adOrders       Int?
-  adSales        Float?
+  adSales        Decimal?     @db.Decimal(20, 4)
   payload        Json
   syncedAt       DateTime     @default(now())
   SellfoxStore   SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
@@ -3045,9 +3048,9 @@ model SellfoxAdsSearchTermDaily {
   currency       String?
   impressions    Int?
   clicks         Int?
-  cost           Float?
+  cost           Decimal?     @db.Decimal(20, 4)
   adOrders       Int?
-  adSales        Float?
+  adSales        Decimal?     @db.Decimal(20, 4)
   payload        Json
   syncedAt       DateTime     @default(now())
   SellfoxStore   SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
@@ -3071,9 +3074,9 @@ model SellfoxAdsCampaignDaily {
   currency       String?
   impressions    Int?
   clicks         Int?
-  cost           Float?
+  cost           Decimal?     @db.Decimal(20, 4)
   adOrders       Int?
-  adSales        Float?
+  adSales        Decimal?     @db.Decimal(20, 4)
   payload        Json
   syncedAt       DateTime     @default(now())
   SellfoxStore   SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
@@ -3100,9 +3103,9 @@ model SellfoxAdsAdGroupDaily {
   currency       String?
   impressions    Int?
   clicks         Int?
-  cost           Float?
+  cost           Decimal?     @db.Decimal(20, 4)
   adOrders       Int?
-  adSales        Float?
+  adSales        Decimal?     @db.Decimal(20, 4)
   payload        Json
   syncedAt       DateTime     @default(now())
   SellfoxStore   SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
@@ -3127,9 +3130,9 @@ model SellfoxAdsPlacementDaily {
   currency       String?
   impressions    Int?
   clicks         Int?
-  cost           Float?
+  cost           Decimal?     @db.Decimal(20, 4)
   adOrders       Int?
-  adSales        Float?
+  adSales        Decimal?     @db.Decimal(20, 4)
   payload        Json
   syncedAt       DateTime     @default(now())
   SellfoxStore   SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
@@ -6820,20 +6823,20 @@ model SalesPlan {
 }
 
 model SalesPlanLine {
-  id              String         @id @default(cuid())
+  id              String    @id @default(cuid())
   organizationId  String
-  workspaceId     String         @default("default")
+  workspaceId     String    @default("default")
   planId          String
   sellerSku       String
-  asin            String         @default("")
+  asin            String    @default("")
   targetQty       Int
-  targetRevenue   Decimal        @db.Decimal(20, 6)
-  unitCost        Decimal        @default(0) @db.Decimal(20, 6)
-  historyDailyAvg Decimal?       @db.Decimal(20, 6)
+  targetRevenue   Decimal   @db.Decimal(20, 6)
+  unitCost        Decimal   @default(0) @db.Decimal(20, 6)
+  historyDailyAvg Decimal?  @db.Decimal(20, 6)
   forecastQty     Int?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  plan            SalesPlan      @relation(fields: [organizationId, workspaceId, planId], references: [organizationId, workspaceId, id], onDelete: Cascade)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  plan            SalesPlan @relation(fields: [organizationId, workspaceId, planId], references: [organizationId, workspaceId, id], onDelete: Cascade)
 
   @@unique([organizationId, workspaceId, id])
   @@unique([organizationId, workspaceId, planId, sellerSku])
@@ -6985,22 +6988,22 @@ model TaxFilingPeriod {
 
 /// 多渠道店铺档案：Amazon 之外的自营渠道（eBay / Walmart / Temu / TikTok / Shopify）。
 model MultiChannelAccount {
-  id             String         @id @default(cuid())
+  id             String              @id @default(cuid())
   organizationId String
-  workspaceId    String         @default("default")
+  workspaceId    String              @default("default")
   channel        String
   name           String
-  sellerId       String         @default("")
-  marketplace    String         @default("")
-  credentialsRef String         @default("")
+  sellerId       String              @default("")
+  marketplace    String              @default("")
+  credentialsRef String              @default("")
   /// ACTIVE / SUSPENDED / CLOSED
-  status         String         @default("ACTIVE")
+  status         String              @default("ACTIVE")
   createdBy      String
-  revision       Int            @default(1)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  workspace      WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+  revision       Int                 @default(1)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      WorkspaceScope      @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
   orders         MultiChannelOrder[]
 
   @@unique([organizationId, workspaceId, id])
@@ -7040,19 +7043,19 @@ model MultiChannelOrder {
 
 /// 数据字典：把散落在各页面的枚举收敛为可维护字典（wimoor sys/fields 的等价物）。
 model DataDictionary {
-  id             String                @id @default(cuid())
+  id             String               @id @default(cuid())
   organizationId String
-  workspaceId    String                @default("default")
+  workspaceId    String               @default("default")
   code           String
   name           String
-  description    String                @default("")
-  itemCount      Int                   @default(0)
+  description    String               @default("")
+  itemCount      Int                  @default(0)
   createdBy      String
-  revision       Int                   @default(1)
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
-  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  workspace      WorkspaceScope        @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+  revision       Int                  @default(1)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      WorkspaceScope       @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
   items          DataDictionaryItem[]
 
   @@unique([organizationId, workspaceId, id])
@@ -7108,7 +7111,7 @@ model CustomFieldDefinition {
 
 /// 库存×广告联动优化方案：分析器产出 → 用户批准 → 生成 AmazonAdsChangeDraft 执行。
 model SellfoxAdsProposal {
-  id             String   @id
+  id             String       @id
   organizationId String
   workspaceId    String
   storeId        String
@@ -7123,15 +7126,15 @@ model SellfoxAdsProposal {
   proposed       Json
   basis          Json
   expectedImpact String?
-  status         String   @default("PENDING")
+  status         String       @default("PENDING")
   reviewedBy     String?
   decisionReason String?
   changeDraftId  String?
-  executedAt     DateTime? @db.Timestamp(3)
+  executedAt     DateTime?    @db.Timestamp(3)
   executionNote  String?
   // 现有迁移为 timestamp；应用适配器以 UTC 分量读写，API 输出 ISO UTC。
-  createdAt      DateTime @default(now()) @db.Timestamp(3)
-  updatedAt      DateTime @updatedAt @db.Timestamp(3)
+  createdAt      DateTime     @default(now()) @db.Timestamp(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamp(3)
   store          SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
 
   @@unique([organizationId, workspaceId, storeId, entityType, externalId, kind], map: "SellfoxAdsProposal_key")
@@ -7146,40 +7149,40 @@ model SellfoxAdsProposal {
 
 /// 组织级积分策略。1 组织 1 条，缺失时按硬编码默认值兜底。
 model PointsPolicy {
-  organizationId        String   @id
-  baseQuota             Int      @default(50)
-  carryoverCap          Int      @default(50)
-  maxRequestsPerPeriod  Int      @default(3)
-  maxRequestAmount      Int      @default(200)
-  maxExtraPerPeriod     Int      @default(300)
-  requestExpireDays     Int      @default(7)
-  reserveTimeoutMinutes Int      @default(15)
-  warnPercent           Int      @default(20)
-  grantOnCreate         Boolean  @default(true)
-  grantToDisabled       Boolean  @default(false)
-  timezone              String   @default("Asia/Shanghai")
+  organizationId        String       @id
+  baseQuota             Int          @default(50)
+  carryoverCap          Int          @default(50)
+  maxRequestsPerPeriod  Int          @default(3)
+  maxRequestAmount      Int          @default(200)
+  maxExtraPerPeriod     Int          @default(300)
+  requestExpireDays     Int          @default(7)
+  reserveTimeoutMinutes Int          @default(15)
+  warnPercent           Int          @default(20)
+  grantOnCreate         Boolean      @default(true)
+  grantToDisabled       Boolean      @default(false)
+  timezone              String       @default("Asia/Shanghai")
   updatedById           String?
-  createdAt             DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt             DateTime @updatedAt @db.Timestamptz(3)
+  createdAt             DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime     @updatedAt @db.Timestamptz(3)
   organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 /// 按操作类型的定价，版本化。历史流水锁定 priceRuleVersion + unitCost。
 model PointsPriceRule {
-  id             String    @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
   operationCode  String
-  version        Int       @default(1)
+  version        Int          @default(1)
   unitCost       Int
   maxCost        Int
-  dailyFreeCount Int       @default(0)
-  status         String    @default("ACTIVE")
-  effectiveFrom  DateTime  @default(now()) @db.Timestamptz(3)
-  effectiveTo    DateTime? @db.Timestamptz(3)
+  dailyFreeCount Int          @default(0)
+  status         String       @default("ACTIVE")
+  effectiveFrom  DateTime     @default(now()) @db.Timestamptz(3)
+  effectiveTo    DateTime?    @db.Timestamptz(3)
   note           String?
   createdById    String?
-  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, operationCode, version])
@@ -7190,12 +7193,12 @@ model PointsPriceRule {
 model PointsAccount {
   organizationId String
   userId         String
-  balance        Int      @default(0)
-  reserved       Int      @default(0)
+  balance        Int          @default(0)
+  reserved       Int          @default(0)
   lastPeriod     String?
-  revision       Int      @default(1)
-  createdAt      DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+  revision       Int          @default(1)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -7205,23 +7208,23 @@ model PointsAccount {
 
 /// 额度批次。只有 BASE 可结转，其余全部当月失效。
 model PointsGrant {
-  id              String    @id @default(cuid())
+  id              String       @id @default(cuid())
   organizationId  String
   userId          String
   period          String
   kind            String
   amount          Int
   remaining       Int
-  reserved        Int       @default(0)
-  carryable       Boolean   @default(false)
-  status          String    @default("ACTIVE")
-  expiresAt       DateTime  @db.Timestamptz(3)
-  sourceRequestId String?   @unique
+  reserved        Int          @default(0)
+  carryable       Boolean      @default(false)
+  status          String       @default("ACTIVE")
+  expiresAt       DateTime     @db.Timestamptz(3)
+  sourceRequestId String?      @unique
   sourceRunId     String?
   reason          String?
   operatorId      String?
-  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+  createdAt       DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime     @updatedAt @db.Timestamptz(3)
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -7231,16 +7234,16 @@ model PointsGrant {
 
 /// 不可篡改流水。requestKey 幂等，(org,user,requestKey,kind) 唯一。
 model PointsLedger {
-  id               String    @id @default(cuid())
+  id               String       @id @default(cuid())
   organizationId   String
   userId           String
   requestKey       String
   kind             String
   operationCode    String?
   delta            Int
-  status           String    @default("POSTED")
+  status           String       @default("POSTED")
   balanceAfter     Int
-  reservedAfter    Int       @default(0)
+  reservedAfter    Int          @default(0)
   grantId          String?
   priceRuleVersion Int?
   unitCost         Int?
@@ -7248,7 +7251,7 @@ model PointsLedger {
   requestId        String?
   note             String
   createdById      String?
-  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
   organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -7262,14 +7265,14 @@ model PointsPeriod {
   organizationId String
   userId         String
   period         String
-  baseQuota      Int      @default(0)
-  carriedIn      Int      @default(0)
-  extraGranted   Int      @default(0)
-  consumed       Int      @default(0)
-  expiredAmount  Int      @default(0)
-  status         String   @default("OPEN")
-  openedAt       DateTime @default(now()) @db.Timestamptz(3)
-  closedAt       DateTime? @db.Timestamptz(3)
+  baseQuota      Int          @default(0)
+  carriedIn      Int          @default(0)
+  extraGranted   Int          @default(0)
+  consumed       Int          @default(0)
+  expiredAmount  Int          @default(0)
+  status         String       @default("OPEN")
+  openedAt       DateTime     @default(now()) @db.Timestamptz(3)
+  closedAt       DateTime?    @db.Timestamptz(3)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -7279,7 +7282,7 @@ model PointsPeriod {
 
 /// 补充额度申请单。审批通过生成 EXTRA grant，sourceRequestId 保证一单只发一次。
 model PointsRequest {
-  id              String    @id @default(cuid())
+  id              String       @id @default(cuid())
   organizationId  String
   requestNo       String
   applicantId     String
@@ -7288,14 +7291,14 @@ model PointsRequest {
   approvedAmount  Int?
   reason          String
   usagePlan       String?
-  status          String    @default("PENDING")
+  status          String       @default("PENDING")
   approverId      String?
   decisionNote    String?
-  decidedAt       DateTime? @db.Timestamptz(3)
-  expiresAt       DateTime  @db.Timestamptz(3)
+  decidedAt       DateTime?    @db.Timestamptz(3)
+  expiresAt       DateTime     @db.Timestamptz(3)
   grantId         String?
-  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+  createdAt       DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime     @updatedAt @db.Timestamptz(3)
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, requestNo])
@@ -7305,16 +7308,16 @@ model PointsRequest {
 
 /// 预扣分配明细。一个 requestKey 可能跨多个批次，结算/释放必须逐批次回滚。
 model PointsAllocation {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
   userId         String
   requestKey     String
   grantId        String
   amount         Int
-  status         String   @default("HELD")
-  settledAmount  Int      @default(0)
-  createdAt      DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+  status         String       @default("HELD")
+  settledAmount  Int          @default(0)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -7329,12 +7332,12 @@ model PointsMemberOverride {
   userId         String
   monthlyQuota   Int?
   carryoverCap   Int?
-  canApprove     Boolean   @default(false)
-  canRequest     Boolean   @default(true)
+  canApprove     Boolean      @default(false)
+  canRequest     Boolean      @default(true)
   note           String?
   updatedById    String?
-  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 

@@ -28,8 +28,12 @@ export const THRESHOLDS = {
 type AggRow = {
   storeId: string; targetingId: string; adGroupId: string; campaignId: string; currency: string | null;
   targetingText: string | null; matchType: string | null; asin: string | null; msku: string | null;
-  clicks: number; cost: number; adOrders: number; adSales: number; spend7d: number;
+  clicks: number; cost: Prisma.Decimal | null; adOrders: number; adSales: Prisma.Decimal | null; spend7d: Prisma.Decimal | null;
 };
+
+/** raw sum(numeric) 返回 Decimal 或 null（无匹配行）；缺失金额不补造零值，交由调用方跳过。 */
+const asDecimal = (value: Prisma.Decimal | number | string | null | undefined): Prisma.Decimal | null =>
+  value == null ? null : Prisma.Decimal.isDecimal(value) ? value : new Prisma.Decimal(String(value));
 type SalesDayRow = { storeId: string; msku: string; date: string; quantity: number | null };
 type InventoryDayRow = { storeId: string; msku: string; date: string; quantity: number | null };
 type StockRow = { storeId: string; msku: string; fulfillable: number | null };
@@ -52,13 +56,16 @@ function entityTypeOf(row: AggRow) {
 }
 
 function toProposal(row: AggRow, cover: CoverRow | undefined, kind: ProposalKind): GeneratedProposal | null {
-  const acosPct = row.adSales > 0 ? (row.cost / row.adSales) * 100 : null;
-  const amount = `${row.currency ?? ""} ${row.cost.toFixed(2)}`.trim();
+  const cost = asDecimal(row.cost)!;
+  const adSales = asDecimal(row.adSales)!;
+  const acosDecimal = adSales.gt(0) ? cost.div(adSales).mul(100) : null;
+  const acosPct = acosDecimal == null ? null : acosDecimal.toNumber();
+  const amount = `${row.currency ?? ""} ${cost.toFixed(2)}`.trim();
   const basis = {
     windowDays: THRESHOLDS.windowDays,
-    clicks: row.clicks, cost: Number(row.cost.toFixed(2)), adOrders: row.adOrders, adSales: Number(row.adSales.toFixed(2)),
-    acosPct: acosPct == null ? null : Number(acosPct.toFixed(1)),
-    spend7d: row.spend7d == null ? null : Number(row.spend7d.toFixed(2)),
+    clicks: row.clicks, cost: Number(cost.toFixed(2)), adOrders: row.adOrders, adSales: Number(adSales.toFixed(2)),
+    acosPct: acosDecimal == null ? null : Number(acosDecimal.toFixed(1)),
+    spend7d: row.spend7d == null ? null : Number(asDecimal(row.spend7d)!.toFixed(2)),
     currency: row.currency,
     coverDays: cover ? Number(cover.coverDays.toFixed(1)) : null,
     onHand: cover?.onHand ?? null, dailyRate: cover ? Number(cover.dailyRate.toFixed(2)) : null,
@@ -180,32 +187,35 @@ export async function generateAdsProposals(organizationId: string, workspaceId: 
   }
   const candidates: GeneratedProposal[] = [];
   for (const row of agg) {
-    if (row.clicks <= 0 && row.cost <= 0) continue;
-    const metrics = [row.clicks, row.cost, row.adOrders, row.adSales, row.spend7d];
-    if (metrics.some(value => !Number.isFinite(value) || value < 0)) continue;
+    const cost = asDecimal(row.cost);
+    const adSales = asDecimal(row.adSales);
+    const spend7d = asDecimal(row.spend7d);
+    if (cost == null || adSales == null) continue; // 金额缺失不补造零值，跳过该行
+    if (row.clicks <= 0 && cost.lte(0)) continue;
+    if (cost.isNegative() || adSales.isNegative() || (spend7d != null && spend7d.isNegative())) continue;
     const currency = (row.currency ?? "").trim().toUpperCase();
     const threshold = proposalThresholdsByCurrency[currency];
     if (!threshold) continue;
     const coverKey = `${row.storeId}|${row.msku ?? ""}`;
     const cover = coverByKey.get(coverKey);
-    const acosPct = row.adSales > 0 ? (row.cost / row.adSales) * 100 : null;
+    const acosDecimal = adSales.gt(0) ? cost.div(adSales).mul(100) : null;
     // 优先级：断货 > 止血 > 压ACOS > 抢量（同一关键词只出一条最优先方案）。
-    if (cover && cover.coverDays != null && cover.coverDays <= THRESHOLDS.stockoutRisk.maxCoverDays && row.spend7d >= THRESHOLDS.stockoutRisk.minSpend7d) {
+    if (cover && cover.coverDays != null && cover.coverDays <= THRESHOLDS.stockoutRisk.maxCoverDays && spend7d != null && spend7d.gte(THRESHOLDS.stockoutRisk.minSpend7d)) {
       const proposal = toProposal(row, cover, "STOCKOUT_RISK");
       if (proposal) candidates.push(proposal);
       continue;
     }
-    if (row.clicks >= THRESHOLDS.noConversion.minClicks && row.adOrders === 0 && row.cost >= threshold.noConversionSpend) {
+    if (row.clicks >= THRESHOLDS.noConversion.minClicks && row.adOrders === 0 && cost.gte(threshold.noConversionSpend)) {
       const proposal = toProposal(row, cover, "NO_CONVERSION");
       if (proposal) candidates.push(proposal);
       continue;
     }
-    if (acosPct != null && acosPct >= THRESHOLDS.highAcos.acosPct && row.cost >= threshold.highAcosSpend) {
+    if (acosDecimal != null && acosDecimal.gte(THRESHOLDS.highAcos.acosPct) && cost.gte(threshold.highAcosSpend)) {
       const proposal = toProposal(row, cover, "HIGH_ACOS");
       if (proposal) candidates.push(proposal);
       continue;
     }
-    if (acosPct != null && acosPct <= THRESHOLDS.highPotential.maxAcosPct && row.cost >= threshold.highPotentialSpend
+    if (acosDecimal != null && acosDecimal.lte(THRESHOLDS.highPotential.maxAcosPct) && cost.gte(threshold.highPotentialSpend)
       && cover != null && cover.coverDays >= THRESHOLDS.highPotential.minCoverDays) {
       const proposal = toProposal(row, cover, "HIGH_POTENTIAL");
       if (proposal) candidates.push(proposal);

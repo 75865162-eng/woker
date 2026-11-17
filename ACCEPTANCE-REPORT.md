@@ -62,11 +62,20 @@
 
 ---
 
-## 五、技术债（部署后处理，本轮不改，遵守"部署前不破坏现有代码"）
+## 五、金额字段 Float → Decimal 整改（原技术债，已按用户要求消除）
 
-| 项 | 位置 | 需求冲突 | 为何本轮不改 |
-|---|---|---|---|
-| 赛狐域及 `ProductRecord.purchasePrice` 金额使用 `Float`（schema 共 140 个 Float 字段，多为金额/费用） | `prisma/schema.prisma:579,1327-1462,2887-3132` 等 | §3.2 要求"金额用原币+USD，Decimal/字符串，不用 float" | 改 Decimal 需 schema 迁移 + 20+ 读写文件类型契约变更（`number` → `Decimal`），影响查询/排序/导出/DTO，明天部署窗口改动风险 > 收益；按文档 §0.2"发现冲突先报告，不自行扩大范围"列为技术债 |
+> 用户明确将本项由"部署后技术债"升级为"必须淘汰的硬伤，马上整改"，本轮已完成。
+
+| 项 | 整改结果 | 证据 |
+|---|---|---|
+| 赛狐域及 `ProductRecord.purchasePrice` 金额使用 `Float` | 122 个金额字段改为 `Decimal @db.Decimal(20,4)`；18 个非金额字段（比率/件数/评分/限流）保留 Float；补齐 3 模型 `currency` | migration `20261118050000_money_float_to_decimal`；`tests/money-decimal.test.ts`；`UPGRADE-STATUS.md` 第十一章 |
+
+- 运算层全部走 `Prisma.Decimal`（decimal.js）：`src/lib/sellfox/ads-proposal.ts` ACOS/阈值比较、财务域既有 Decimal 范式
+- 展示/导出边界用 `moneyToNumber()` 转 number 保持前端契约（null 保持 null，不补造零值）
+- 现有 `FinanceExchangeRate.rate` 为 `Decimal(24,12)`，比规范 (12,6) 更精确，保留
+- 验证：单测 2332/0 失败、typecheck/lint/ui:guard 全绿、build 成功、code gate 阻塞 0、数据库列 numeric(20,4) 回读精度无损、11 视图重建可查
+
+**仍未闭环的能力缺口**（对照需求第 4/6 节，均为需新建表/状态机的大功能或外部授权依赖，本窗口不强行实现）：O2C 回款/对账闭环、通用费用单后端、AI 经营复盘顺序编排（6.5）、统一经营分析层、FBA/Ads 真实写入（需外部授权）。详见 `UPGRADE-STATUS.md` 第十一章审计结论。
 
 ---
 

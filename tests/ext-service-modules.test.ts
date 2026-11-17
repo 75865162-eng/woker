@@ -192,7 +192,7 @@ test('离线迁移删除全部11项观测默认值且与非空schema一致', asy
     const model = schema.split(`model ${table} {`)[1].split('}')[0];
     const statement = sql.split(`ALTER TABLE "${table}"`)[1].split(';')[0];
     for (const field of fields) {
-      assert.match(model, new RegExp(`\\n  ${field}\\s+(Int|Float)\\s*\\n`));
+      assert.match(model, new RegExp(`\\n  ${field}\\s+(Int|Float|Decimal)(\\s+@db\\.\\w+\\([^)]*\\))?\\s*\\n`));
       assert.ok(statement.includes(`ALTER COLUMN "${field}" DROP DEFAULT`));
     }
   }

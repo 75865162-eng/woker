@@ -8,6 +8,7 @@ import { sellfoxBrowseQuery, sellfoxStoreWhere, sellfoxSnapshotWhere, sellfoxHou
 import { sellfoxBrowseStoreIds } from "@/lib/sellfox/browse-store-scope";
 import { sellfoxInventoryHeadWhere } from "@/lib/sellfox/inventory-head";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
+import { moneyToNumber } from "@/lib/sellfox/money-display";
 
 export const runtime = "nodejs";
 const domains = ["stores", "inventory", "sales", "hourly", "runs", "listings", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const;
@@ -39,7 +40,8 @@ export async function GET(request: Request, context: { params: Promise<{ domain:
     if (domain === "hourly") {
       const where = sellfoxHourlyWhere(query, common.organizationId, common.workspaceId, storeIds);
       const [total, rows] = await Promise.all([prisma.sellfoxHourlyMetric.count({ where }), prisma.sellfoxHourlyMetric.findMany({ where, select: { id: true, reportDate: true, hour: true, adType: true, entityType: true, entityId: true, entityName: true, impressions: true, clicks: true, cost: true, sales: true, orders: true, syncedAt: true, SellfoxStore: { select: { name: true, externalId: true, marketplace: true } } }, orderBy: sellfoxPrismaOrder("hourly", query), skip: (page - 1) * pageSize, take: pageSize })]);
-      return NextResponse.json({ rows, pagination: { page, pageSize, total } });
+      const displayRows = rows.map((row) => ({ ...row, cost: moneyToNumber(row.cost), sales: moneyToNumber(row.sales) }));
+      return NextResponse.json({ rows: displayRows, pagination: { page, pageSize, total } });
     }
 
     const snapshotWhere = sellfoxSnapshotWhere(query, common.organizationId, common.workspaceId, storeIds);

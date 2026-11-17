@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import type { HostDataset } from "./host-pages";
+import { moneyToNumber } from "./money-display";
 
 /**
  * 承接页只读数据层。
@@ -244,9 +245,11 @@ async function readHourly(scope: Scope, query: HostQuery): Promise<HostResult> {
   ]);
   const flat = rows.map((row) => ({
     ...row,
+    cost: moneyToNumber(row.cost),
+    sales: moneyToNumber(row.sales),
     store: [row.SellfoxStore?.name, row.SellfoxStore?.marketplace].filter(Boolean).join(" / "),
     adOrders: row.orders,
-    adSales: row.sales,
+    adSales: moneyToNumber(row.sales),
   }));
   return {
     rows: flat,

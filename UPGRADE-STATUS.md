@@ -144,3 +144,28 @@
 - **技术债（部署后处理）**：赛狐域 + `ProductRecord.purchasePrice` 用 Float 存金额（schema 140 个 Float 字段），违反文档 Decimal 要求；改需 schema 迁移 + 20+ 文件类型契约变更，部署窗口改动风险 > 收益，按文档 §0.2 列为技术债不在本轮改
 - **本轮无代码改动**：审计未发现可安全本地闭环且不破坏现有代码的 P0/P1 缺口；不为优化而制造改动
 - 复验：check:fast EXIT=0（2332 测试/0 失败、lint 0 error、ui:guard 通过）、code gate 阻塞 0、生产模板 deploy gate 阻塞 0
+
+## 十一、金额字段 Decimal 整改 + 未覆盖能力审计（2026-11-18，用户明确要求"马上整改"）
+
+**背景**：用户将第十章列为"部署后技术债"的 Float 金额升级为"必须淘汰的硬伤，马上整改"，并给出字段规范（采购/成本/销售价、订单金额/库存汇总/毛利 DECIMAL(20,4)；汇率 DECIMAL(12,6)；独立 currency；Decimal + decimal.js，禁 number 承接运算）。
+
+**整改内容（已落地）**：
+- Schema：140 个 Float 字段精确分类 → **122 个金额字段改 `Decimal @db.Decimal(20,4)`**，18 个非金额字段（毛利率/退款率/件数/评分/排名/限流令牌）保留 Float；补齐 `ProductRecord`/`ProductSummaryRecord`/`SellfoxHourlyMetric` 的 `currency` 字段（默认 CNY）
+- 现有财务域已是 Decimal 范式（`FinanceExchangeRate.rate` 用 `Decimal(24,12)`，比规范 (12,6) 更精确，保留；采购/总账金额均 Decimal + `.toString()` 序列化），本次将赛狐域对齐该范式
+- Migration：`20261118050000_money_float_to_decimal`（122 ALTER + 3 ADD COLUMN；因 10+ 视图依赖金额列，采用 DROP VIEW → ALTER → CREATE OR REPLACE VIEW 重建）
+- 代码改造（运算/序列化，展示边界转 number 不改前端契约）：
+  - `src/lib/sellfox/ads-proposal.ts`：ACOS/花费比较全部改 `Prisma.Decimal` 的 `div/mul/gte/lte`，缺失金额跳过不补零
+  - `src/lib/products/product-detail-service.ts`：listings.price / costs.amount / summary.purchasePrice 展示序列化
+  - `src/lib/sellfox/{orders-read,host-read}.ts`、`src/app/api/sellfox/[domain]/route.ts`：金额 API 输出 `moneyToNumber()` 转 number
+  - `src/app/api/sellfox/performance/export/route.ts`：ExcelJS 数值单元格转 number
+  - 新增 `src/lib/sellfox/money-display.ts`（展示序列化边界，null 保持 null）
+- 新增 `tests/money-decimal.test.ts`（5 项不变量：序列化/主档 Decimal/赛狐金额 Decimal vs 比率 Float/广告订单金额与 currency/decimal.js 精度），防未来回退
+- 修复测试断言 `tests/ext-service-modules.test.ts`（成本字段类型枚举加 Decimal 并兼容 `@db` 尾缀）
+
+**验证**：单测 2332/0 失败；typecheck 0 error；lint 0 error（4 既有 warning）；ui:guard 通过；build EXIT=0；code gate 阻塞 0；数据库列类型 numeric(20,4) 确认、11 视图重建可查、金额精度回读 19.9999 无损；standalone 服务 health 200、登录/赛狐 hourly/数据质量 API 200
+
+**未覆盖能力审计结论（对照需求总纲第 4/6 节）**：
+- 已完整：P2P 采购到付款（状态机+审批+付款+入账）、WMS 盘点/调拨/出入库/库龄、MCP（Amazon ~40 + 赛狐 20+ 工具，账号站点围栏、只读）、财务报表（基于过账凭证）
+- 部分实现：O2C 回款/对账闭环（订单同步真实，但应收/回款为 `data-plan.ts` 的 `planned` 设计占位）；通用费用单（UI 预览无后端）；AI 经营复盘编排（6.5 顺序编排未实现，现有 skill 偏单域）；统一经营分析层（无独立指标/来源标注层）
+- 外部授权依赖（不可本地闭环）：FBA 写入提交（网关 `enabled:false`）、Amazon Ads 真实写入、真实端到端数据验收
+- 处理决定：缺口均为需新建表/状态机的**大功能**或外部授权依赖，本窗口强行实现会引入无真实数据验证的半成品，违反"数据真实性/最小改动"。按文档 §0.2 报告现状并列为下一批任务，不为凑数制造改动

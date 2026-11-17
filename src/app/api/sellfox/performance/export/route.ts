@@ -17,6 +17,11 @@ function csvCell(value: unknown) {
   return `"${text.replaceAll('"', '""')}"`;
 }
 
+/** 展示序列化：Prisma Decimal -> number，仅供 Excel 数值单元格，不参与金额运算。 */
+function toNum(value: { toString(): string } | null): number | null {
+  return value == null ? null : Number(value.toString());
+}
+
 export async function GET(request: Request) {
   const permission = await requireApiPermission("sellfox", "export", request);
   if (!permission.ok) return permission.response;
@@ -74,7 +79,8 @@ export async function GET(request: Request) {
     sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
     sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF176B87" } };
     for (const row of rows) {
-      sheet.addRow({ ...row, shopExternalId: row.SellfoxStore.externalId, store: row.SellfoxStore.name || row.SellfoxStore.externalId, marketplace: row.SellfoxStore.marketplace });
+      // Prisma Decimal 需转成 number 供 ExcelJS 数值单元格与 numFmt 正确识别（展示序列化，不参与运算）。
+      sheet.addRow({ ...row, saleRevenue: toNum(row.saleRevenue), grossProfit: toNum(row.grossProfit), adCost: toNum(row.adCost), shopExternalId: row.SellfoxStore.externalId, store: row.SellfoxStore.name || row.SellfoxStore.externalId, marketplace: row.SellfoxStore.marketplace });
     }
     ["saleRevenue", "grossProfit", "adCost"].forEach((key) => (sheet.getColumn(key).numFmt = "#,##0.00"));
     ["grossProfitRate", "refundRate"].forEach((key) => (sheet.getColumn(key).numFmt = "0.00%"));

@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import type { SellfoxBrowseQuery } from "./browse-query";
 import { sellfoxStoreSyncFailures } from "./sync-failures";
+import { moneyToNumber } from "./money-display";
 
 type Scope = { organizationId: string; workspaceId: string };
 
@@ -49,16 +50,16 @@ export async function readSellfoxOrders(query: SellfoxBrowseQuery, scope: Scope,
     payAt: line.payAt,
     refundAt: line.refundAt,
     status: line.orderStatus,
-    revenue: line.revenue,
+    revenue: moneyToNumber(line.revenue),
     asin: line.asin,
     msku: line.msku,
     sku: line.sku,
     qty: line.qty,
     refundQty: line.refundQty,
     promo: line.promo,
-    amount: line.itemAmount,
+    amount: moneyToNumber(line.itemAmount),
     currency: line.currency,
-    profit: line.revenue,
+    profit: moneyToNumber(line.revenue),
     shipServiceLevel: line.shipServiceLevel,
     fulfillmentChannel: line.fulfillmentChannel,
   }));

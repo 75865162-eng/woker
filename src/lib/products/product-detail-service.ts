@@ -3,6 +3,10 @@ import type { Product } from "@/lib/products/types";
 import { getProductListImage, safeProductImageUrl } from "@/lib/products/image-assets";
 import { productRecordPayloadToProduct } from "@/lib/products/product-projection";
 
+/** 展示层序列化：将 Prisma Decimal 转成前端契约所需的 number。仅用于读取边界展示，不参与任何金额运算。 */
+const toDisplayNumber = (value: { toString(): string } | null | undefined): number | null =>
+  value == null ? null : Number(value.toString());
+
 export type ProductDetailDTO = {
   product: Product;
   productCenter: {
@@ -410,6 +414,7 @@ export async function getProductDetail(input: {
           variants: productMaster.variants,
           listings: productMaster.listings.map((listing) => ({
             ...listing,
+            price: toDisplayNumber(listing.price),
             marketplaceCode: listing.marketplace?.code ?? null,
             sellerAccountKey: listing.sellerAccount?.accountKey ?? null,
             marketplace: undefined,
@@ -428,6 +433,7 @@ export async function getProductDetail(input: {
           })),
           costs: productMaster.costs.map((cost) => ({
             ...cost,
+            amount: Number(cost.amount.toString()),
             effectiveAt: cost.effectiveAt?.toISOString() ?? null,
           })),
           media: productMaster.media,
@@ -436,6 +442,7 @@ export async function getProductDetail(input: {
     summary: summary
       ? {
           ...summary,
+          purchasePrice: Number(summary.purchasePrice.toString()),
           workflowDueAt: summary.workflowDueAt?.toISOString() ?? null,
           sourceUpdatedAt: summary.sourceUpdatedAt?.toISOString() ?? null,
         }
