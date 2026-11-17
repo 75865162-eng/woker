@@ -7,7 +7,6 @@ import { prisma } from "@/lib/db/prisma";
 import {
   createAiImageProfileName,
   createAiProfileName,
-  normalizeAiSettingsBundle,
   normalizeAiImageSettings,
   normalizeAiSettings,
   normalizeSavedAiModelProfiles,
@@ -17,6 +16,12 @@ import {
 } from "@/lib/ai-settings";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { resolveAiSettings } from "@/lib/server/ai-runtime";
+import {
+  decryptAiBundleFromStorage,
+  decryptAiProfilesFromStorage,
+  encryptAiBundleForStorage,
+  encryptAiProfilesForStorage,
+} from "@/lib/server/ai-settings-store";
 
 export const runtime = "nodejs";
 
@@ -41,21 +46,6 @@ async function recordVersionSafely(input: Parameters<typeof recordDataChangeVers
     const message = error instanceof Error ? error.message : "Failed to record AI settings version.";
     console.warn(message);
   }
-}
-
-function parseSettings(value: unknown): AiSettingsBundle {
-  if (value == null) {
-    return {
-      text: resolveAiSettings(undefined, "text"),
-      image: resolveAiSettings(undefined, "image"),
-    };
-  }
-
-  if (!isRecord(value)) {
-    throw new Error("Invalid AI settings payload.");
-  }
-
-  return normalizeAiSettingsBundle(value as Partial<AiSettingsBundle> | Partial<AiModelSettings>);
 }
 
 function parsePartialSettings(value: unknown, fallback: AiModelSettings, kind: "text" | "image") {
@@ -156,6 +146,7 @@ export async function GET(request: Request) {
       const activeProfileId = nextProfiles.find((profile) => profile.kind === "system")?.id || "";
 
       await ensureCurrentUserRecord(user);
+      const cryptoScope = { organizationId: user.organizationId, workspaceId: scope.workspaceId };
       await prisma.aiModelSetting.create({
         data: {
           organizationId: user.organizationId,
@@ -164,8 +155,8 @@ export async function GET(request: Request) {
           accountId: scope.accountId,
           marketplace: scope.marketplace,
           activeProfileId,
-          settings: defaults as unknown as Prisma.InputJsonValue,
-          profiles: nextProfiles as unknown as Prisma.InputJsonValue,
+          settings: encryptAiBundleForStorage(defaults, cryptoScope) as unknown as Prisma.InputJsonValue,
+          profiles: encryptAiProfilesForStorage(nextProfiles, cryptoScope) as unknown as Prisma.InputJsonValue,
         },
       });
 
@@ -177,8 +168,9 @@ export async function GET(request: Request) {
       });
     }
 
-    const normalized = parseSettings(record.settings);
-    const nextProfiles = pairProfiles(normalized, normalizeSavedAiModelProfiles(record.profiles));
+    const cryptoScope = { organizationId: user.organizationId, workspaceId: scope.workspaceId };
+    const normalized = decryptAiBundleFromStorage(record.settings, cryptoScope);
+    const nextProfiles = pairProfiles(normalized, decryptAiProfilesFromStorage(record.profiles, cryptoScope));
 
     return NextResponse.json({
       settings: normalized.text,
@@ -212,8 +204,9 @@ export async function PUT(request: Request) {
         },
       },
     });
+    const cryptoScope = { organizationId: user.organizationId, workspaceId: scope.workspaceId };
     const existingSettings = existingRecord
-      ? parseSettings(existingRecord.settings)
+      ? decryptAiBundleFromStorage(existingRecord.settings, cryptoScope)
       : createDefaultSettingsBundle();
     const settings = {
       text: parsePartialSettings(body.settings, existingSettings.text, "text"),
@@ -221,12 +214,16 @@ export async function PUT(request: Request) {
     } satisfies AiSettingsBundle;
     const submittedProfiles =
       body.profiles === undefined
-        ? normalizeSavedAiModelProfiles(existingRecord?.profiles)
+        ? decryptAiProfilesFromStorage(existingRecord?.profiles, cryptoScope)
         : normalizeSavedAiModelProfiles(body.profiles);
     const nextProfiles = pairProfiles(settings, submittedProfiles);
     const activeProfileId = typeof body.activeProfileId === "string" ? body.activeProfileId : "";
 
     await ensureCurrentUserRecord(user);
+
+    // 落库与版本记录均存密文；仅 HTTP 响应返回明文给配置所属用户本人。
+    const storedSettings = encryptAiBundleForStorage(settings, cryptoScope);
+    const storedProfiles = encryptAiProfilesForStorage(nextProfiles, cryptoScope);
 
     await prisma.aiModelSetting.upsert({
       where: {
@@ -243,16 +240,16 @@ export async function PUT(request: Request) {
         accountId: scope.accountId,
         marketplace: scope.marketplace,
         activeProfileId,
-        settings: settings as unknown as Prisma.InputJsonValue,
-        profiles: nextProfiles as unknown as Prisma.InputJsonValue,
+        settings: storedSettings as unknown as Prisma.InputJsonValue,
+        profiles: storedProfiles as unknown as Prisma.InputJsonValue,
       },
       update: {
         organizationId: user.organizationId,
         accountId: scope.accountId,
         marketplace: scope.marketplace,
         activeProfileId,
-        settings: settings as unknown as Prisma.InputJsonValue,
-        profiles: nextProfiles as unknown as Prisma.InputJsonValue,
+        settings: storedSettings as unknown as Prisma.InputJsonValue,
+        profiles: storedProfiles as unknown as Prisma.InputJsonValue,
       },
     });
     await recordVersionSafely({
@@ -262,9 +259,9 @@ export async function PUT(request: Request) {
       action: "ai_model_setting_save",
       summary: activeProfileId || createAiProfileName(settings.text),
       payload: {
-        settings: settings.text,
-        imageSettings: settings.image,
-        profiles: nextProfiles,
+        settings: storedSettings.text,
+        imageSettings: storedSettings.image,
+        profiles: storedProfiles,
         activeProfileId,
       } as unknown as Prisma.InputJsonValue,
       scope,

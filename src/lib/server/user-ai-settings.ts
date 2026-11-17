@@ -1,11 +1,11 @@
 import {
   createDefaultAiSettingsBundle,
-  normalizeAiSettingsBundle,
   toPublicAiSettings,
   type AiModelSettings,
   type AiModelSettingsPublic,
 } from "@/lib/ai-settings";
 import { prisma } from "@/lib/db/prisma";
+import { decryptAiBundleFromStorage } from "@/lib/server/ai-settings-store";
 
 type UserScope = {
   organizationId: string;
@@ -32,7 +32,10 @@ export async function resolveUserAiTextSettings(user: UserScope, scope: Workspac
 
     if (!record) return createDefaultAiSettingsBundle().text;
 
-    return normalizeAiSettingsBundle(record.settings as Partial<{ text: AiModelSettings }>).text;
+    return decryptAiBundleFromStorage(
+      record.settings,
+      { organizationId: user.organizationId, workspaceId: scope.workspaceId },
+    ).text;
   } catch {
     return createDefaultAiSettingsBundle().text;
   }
@@ -52,7 +55,10 @@ export async function resolveUserAiImageSettings(user: UserScope, scope: Workspa
 
     if (!record) return createDefaultAiSettingsBundle().image;
 
-    return normalizeAiSettingsBundle(record.settings as Partial<{ image: AiModelSettings }>).image;
+    return decryptAiBundleFromStorage(
+      record.settings,
+      { organizationId: user.organizationId, workspaceId: scope.workspaceId },
+    ).image;
   } catch {
     return createDefaultAiSettingsBundle().image;
   }
