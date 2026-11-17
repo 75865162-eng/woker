@@ -126,11 +126,10 @@
 - `config.storage=local` 为非阻塞提示，上线须配置持久卷或 s3/r2 并做恢复演练
 - 生产模板渲染验证仅证明模板结构与部署清单完整，不代表生产已就绪
 
-## 九、git push 状态（用户已授权，环境凭据阻塞）
+## 九、git push 状态（已完成 ✅）
 
-- 本地 `main` ahead 228 / behind 0，`origin/main`（`03d48e4`）是本地祖先，满足快进条件
-- 本地提交已全部就绪：`e4d93d4`（d74fdfc 验收增强合并）、`ed17277`（生产级检测收口）
-- `git push origin main` **未成功**，阻塞原因（环境侧，非代码）：
-  1. **无 GitHub 写认证凭据**：仓库公开（fetch/clone 只读无需认证）成功，但 push 需写权限；credential helper 无存储、`gh` 未登录、`GITHUB_TOKEN`/`GH_TOKEN` 未设置、当前任务无可用 GitHub connector
-  2. 网络波动：多次 `GnuTLS recv error (-110)` / 连接 443 超时（curl 小请求偶发 200）
-- 远程 main 仍为 `03d48e4`，未被部分更新；待提供写凭据后执行 `git push origin main` 即可（快进，无需 force）
+- 用户提供具备写权限的 GitHub fine-grained PAT 后，通过 `GIT_ASKPASS` 从临时文件注入凭据（不回显、不写入仓库/git 配置），配合 HTTP/1.1 + 大 postBuffer 重试 3 次
+- 结果：`03d48e4..53f0904 main -> main` **推送成功**（前 2 次 TLS -110 波动，第 3 次成功）
+- 权威确认：远程 `main` == 本地 `main` == `origin/main` == `53f0904`，工作区干净、无 ahead/behind
+- 全流程闭环：全分支复审 → 遗漏功能合并 → 生产级检测全绿 → 优化 → push 到 origin/main
+- 推送的主要提交：`e4d93d4`（d74fdfc 验收增强合并）、`ed17277`（生产级检测收口 + lint 健壮性）、`53f0904`（状态记录）
