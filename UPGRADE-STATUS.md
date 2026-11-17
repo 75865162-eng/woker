@@ -133,3 +133,14 @@
 - 权威确认：远程 `main` == 本地 `main` == `origin/main` == `53f0904`，工作区干净、无 ahead/behind
 - 全流程闭环：全分支复审 → 遗漏功能合并 → 生产级检测全绿 → 优化 → push 到 origin/main
 - 推送的主要提交：`e4d93d4`（d74fdfc 验收增强合并）、`ed17277`（生产级检测收口 + lint 健壮性）、`53f0904`（状态记录）
+- 后续状态表修正 `9301ed1` 亦已 push；远程 main 权威确认 == 本地 == `9301ed1`
+
+## 十、生产部署前代码验收（依据需求总纲 V1.0，2026-11-18）
+
+- 交付物：`ACCEPTANCE-REPORT.md`（需求→代码→状态追踪矩阵，按文档第 13 节状态定义）
+- **P0 安全边界全部合规**（本地核验，风险低/无）：双数据池物理隔离、ProductRecord 主档不被外部覆盖、MCP 强制 Seller Account+Marketplace 服务端隔离（只读/白名单/参数化/禁任意 SQL）、AI 写 Amazon 门禁（dry_run+draft+人工审批+transport 恒 NOT_IMPLEMENTED）、SP-API 与 Ads 授权独立、登录限流/CSRF/健康探针
+- **生产发布资产完整**：systemd×6、Caddy、真实备份恢复脚本（pg_dump+校验+sha256）、密钥生成、口令轮换、runbook、门禁清单齐全
+- **未闭环项均为外部环境依赖**（不造假）：真实 Amazon 授权、生产 DB/Redis/域名证书、`--gate full` 真实端到端、唯一同步端切换（须部署时停本地 worker）、生产备份恢复演练、发布后冒烟
+- **技术债（部署后处理）**：赛狐域 + `ProductRecord.purchasePrice` 用 Float 存金额（schema 140 个 Float 字段），违反文档 Decimal 要求；改需 schema 迁移 + 20+ 文件类型契约变更，部署窗口改动风险 > 收益，按文档 §0.2 列为技术债不在本轮改
+- **本轮无代码改动**：审计未发现可安全本地闭环且不破坏现有代码的 P0/P1 缺口；不为优化而制造改动
+- 复验：check:fast EXIT=0（2332 测试/0 失败、lint 0 error、ui:guard 通过）、code gate 阻塞 0、生产模板 deploy gate 阻塞 0
