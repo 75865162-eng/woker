@@ -15,6 +15,7 @@ import { mcpTokenHash as sellfoxMcpTokenHash } from "@/lib/mcp/token";
 import { Prisma } from "@prisma/client";
 import { Pool } from "pg";
 import { prisma } from "@/lib/db/prisma";
+import { resolveSellfoxVisibleStoreIds } from "@/lib/sellfox/store-access";
 import {
   assertCredentialStores, assertCredentialTool, assertEndpointProvider, bearerToken,
   McpIsolationError, mcpAuditAction, providerOfToken,
@@ -141,6 +142,16 @@ export async function manageSellfoxMcpCredential(scope: SellfoxMcpScope, actor: 
     const stores = await tx.sellfoxStore.findMany({ where: { ...scope, ...(requestedStores.length ? { id: { in: requestedStores } } : {}) }, select: { id: true } });
     if (requestedStores.length && stores.length !== requestedStores.length) throw new McpIsolationError("店铺不在当前组织/工作区范围。", "STORE_NOT_ALLOWED", 403, "sellfox");
     const storeIds = requestedStores.length ? stores.map(store => store.id) : [];
+    // MCP credential scope must never exceed the subject member's ERP store grant.
+    // When the workspace has not enabled sellfox store scoping, this is a no-op.
+    if (storeIds.length) {
+      const targetMember = await tx.organizationMember.findUnique({ where: { organizationId_userId: { organizationId: scope.organizationId, userId } }, select: { role: true } });
+      if (!targetMember) throw new McpIsolationError("成员不属于当前组织。", "STORE_NOT_ALLOWED", 403, "sellfox");
+      const allowed = await resolveSellfoxVisibleStoreIds({ id: userId, role: targetMember.role }, { organizationId: scope.organizationId, workspaceId: scope.workspaceId }, tx);
+      if (allowed !== undefined && storeIds.some(id => !allowed.includes(id))) {
+        throw new McpIsolationError("凭证店铺范围超出成员的 ERP 数据授权。", "STORE_NOT_ALLOWED", 403, "sellfox");
+      }
+    }
     const expiresAt = action === "rotate" ? prior!.expiresAt : new Date(String(command.expiresAt));
     if (!Number.isFinite(expiresAt.getTime()) || expiresAt <= new Date() || expiresAt.getTime() > Date.now() + 90 * 86400000) {
       throw new McpIsolationError("有效期须在未来 90 天内。", "TOOL_NOT_ALLOWED", 400, "sellfox");

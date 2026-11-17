@@ -10,7 +10,7 @@ import { adsEntityBusinessFields } from "@/lib/amazon-ads/business-fields";
 
 const scope = { organizationId: "fixture-org", workspaceId: "fixture-workspace" };
 function fixture() {
-  const state = { role: "viewer", active: true, assigned: ["seller-a"], authorization: "CONFIGURED", workspace: true, credential: true };
+  const state = { role: "viewer", active: true, assigned: ["seller-a"], roleAssigned: [] as string[], authorization: "CONFIGURED", workspace: true, credential: true };
   const db = {
     organizationMember: { findUnique: async () => ({ role: state.role, user: { status: state.active ? "active" : "disabled" } }) },
     workspaceMembership: { findUnique: async () => ({ userId: "user-a" }) },
@@ -21,7 +21,12 @@ function fixture() {
       assert.equal(where.mcpEnabled, undefined); assert.equal(where.actions, undefined);
       return state.assigned.map(sellerAccountId => ({ sellerAccountId, marketplaceIds: ["old-site"], actions: [], mcpEnabled: false }));
     } },
-    amazonRoleDataAccessGrant: { findMany: async () => { throw new Error("Read must not use role grants"); } },
+    amazonRoleDataAccessGrant: { findMany: async ({ where }: { where: Record<string, unknown> }) => {
+      assert.equal(where.roleId, state.role); assert.equal(where.organizationId, scope.organizationId);
+      assert.equal(where.workspaceId, scope.workspaceId); assert.equal(where.enabled, true);
+      return state.roleAssigned.map(sellerAccountId => ({ sellerAccountId, marketplaceIds: [], actions: [], mcpEnabled: false }));
+    } },
+    sellerAccount: { findMany: async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.filter(id => id !== "seller-inactive").map(id => ({ id })) },
     organizationRosterRole: { findMany: async () => { throw new Error("Read must not use module permissions"); } },
     amazonMcpCredential: { findFirst: async () => state.credential ? { id: "credential", name: "fixture", tools: [], scopes: [] } : null },
     amazonSyncDataSource: {
@@ -38,6 +43,22 @@ test("account assignment alone grants all business reads and exports; no role/mo
     assert.deepEqual(await explicitAmazonDataAccess(scope, "user-a", db, action, true), { allSellers: false, sellerIds: ["seller-a"] });
     assert.deepEqual(await amazonDataAccess(scope, "user-a", db, action), { allSellers: false, sellerIds: ["seller-a"] });
   }
+});
+
+test("view/export union role-level grants with member grants; inactive seller does not leak", async () => {
+  const { state, db } = fixture();
+  state.assigned = [];
+  state.roleAssigned = ["seller-b", "seller-inactive"];
+  for (const action of ["view", "export"] as const) {
+    // Role grants are unioned; the inactive seller granted through role is filtered out.
+    assert.deepEqual((await explicitAmazonDataAccess(scope, "user-a", db, action)).sellerIds, ["seller-b"]);
+  }
+  // Member + role union.
+  state.assigned = ["seller-a"];
+  assert.deepEqual((await explicitAmazonDataAccess(scope, "user-a", db, "view")).sellerIds.sort(), ["seller-a", "seller-b"]);
+  // With no member and no active role grant, reads are denied.
+  state.assigned = []; state.roleAssigned = ["seller-inactive"];
+  await assert.rejects(explicitAmazonDataAccess(scope, "user-a", db, "view"), /没有已分配/);
 });
 
 test("administrator management does not grant unassigned seller reads", async () => {

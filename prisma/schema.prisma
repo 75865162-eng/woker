@@ -1512,6 +1512,43 @@ model SellfoxStore {
   @@index([organizationId, workspaceId, updatedAt])
 }
 
+// Progressive sellfox store scoping. When a workspace has ZERO grant rows of
+// either kind, sellfox browsing keeps the legacy workspace-wide behavior. Once
+// any grant exists, visible stores = (member grants UNION role grants), with
+// owner/database_admin still exempt. Scalars only (no relation) to mirror
+// AmazonRoleDataAccessGrant and avoid touching SellfoxStore relations.
+model SellfoxDataAccessGrant {
+  id             String   @id
+  organizationId String
+  workspaceId    String
+  userId         String
+  storeIds       String[] @default([])
+  actions        String[] @default(["view"])
+  enabled        Boolean  @default(true)
+  revision       Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, workspaceId, userId], map: "SellfoxAccess_member_scope_key")
+  @@index([organizationId, workspaceId, enabled], map: "SellfoxAccess_lookup_idx")
+}
+
+model SellfoxRoleDataAccessGrant {
+  id             String   @id
+  organizationId String
+  workspaceId    String
+  roleId         String
+  storeIds       String[] @default([])
+  actions        String[] @default(["view"])
+  enabled        Boolean  @default(true)
+  revision       Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, workspaceId, roleId], map: "SellfoxRoleAccess_role_scope_key")
+  @@index([organizationId, workspaceId, enabled], map: "SellfoxRoleAccess_lookup_idx")
+}
+
 model SellfoxSyncRun {
   id                String    @id
   organizationId    String

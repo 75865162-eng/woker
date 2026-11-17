@@ -169,3 +169,34 @@
 - 部分实现：O2C 回款/对账闭环（订单同步真实，但应收/回款为 `data-plan.ts` 的 `planned` 设计占位）；通用费用单（UI 预览无后端）；AI 经营复盘编排（6.5 顺序编排未实现，现有 skill 偏单域）；统一经营分析层（无独立指标/来源标注层）
 - 外部授权依赖（不可本地闭环）：FBA 写入提交（网关 `enabled:false`）、Amazon Ads 真实写入、真实端到端数据验收
 - 处理决定：缺口均为需新建表/状态机的**大功能**或外部授权依赖，本窗口强行实现会引入无真实数据验证的半成品，违反"数据真实性/最小改动"。按文档 §0.2 报告现状并列为下一批任务，不为凑数制造改动
+
+## 十二、租户边界 + 统一管理中心 + 多源接入整改（2026-11-18，依据两份参考文档，用户选"全量按文档推进"）
+
+**依据**：两份功能蓝图（多源数据接入回补 / 统一管理中心整合）。开工前先出差距清单（见会话），三阶段串行实施，全部沿用现有架构、最小改动。
+
+### 阶段一：租户边界硬伤（安全边界，最高优先）
+- **Amazon view/export 读取路径并入角色级 grant**（`src/lib/amazon-sync/data-access.ts`）：成员授权 ∪ 角色授权；角色 grant 里的店铺再经 `sellerAccount.status=active` 过滤，停用店铺不因角色授权泄漏；write/sync 路径原本已并，本次对齐读路径
+- **赛狐新增成员级 + 角色级店铺授权**（本轮最大新增能力）：
+  - 新表 `SellfoxDataAccessGrant` / `SellfoxRoleDataAccessGrant`（迁移 `20261219000000_sellfox_store_access_grants`，纯新增、可回滚）
+  - `src/lib/sellfox/store-access.ts`：`resolveSellfoxVisibleStoreIds`（渐进启用——工作区无任何授权记录时维持旧行为有 view 即全可见；一旦配置则可见店铺=成员∪角色授权，owner/database_admin 全量豁免）+ `saveSellfoxStoreGrant`（带审计、乐观锁、范围校验）
+  - `browse-store-scope.ts` 收窄 query 店铺到授权集合（越界 403），8 个赛狐只读 API 全部注入 actor；修复 `performance/export` 的 agent 分支绕过点
+  - `src/lib/sellfox/mcp.ts`：创建/轮换 MCP 凭证时校验 storeIds 不超出目标成员的 ERP 授权范围
+  - 管理接口 `src/app/api/sellfox/store-grants`
+- 遗留字段 `amazonStorePermissions`/`multiPlatformStorePermissions` 维持只读展示、不参与鉴权（未在花名册外扩散）
+- 回归测试：`tests/amazon-account-access.test.ts`（新增角色授权生效用例）、`tests/workspace-membership.test.ts`、`tests/sellfox-store-access.test.ts`（渐进启用/并集/越界/豁免）、`tests/operations-replenishment-service.test.ts`（补 role grant mock，修复本轮引入的异步挂起回归）
+
+### 阶段二：统一管理中心（原地升级，不新建路由）
+- `/accounts` 工作台从 2 Tab 扩为 **members / roles / points / mcp 四 Tab**，`?tab=` 与选中态双向同步；points/mcp 复用现有自包含面板，mcp Tab 内嵌 Lili 设备面板
+- 新增**成员详情抽屉** `account-detail-drawer.tsx`（点击成员名打开，聚合基础资料/角色与页面权限/积分/赛狐数据范围/MCP 凭证；`onOpenDetail` 为可选 prop，不破坏现有成员表契约）
+- `/settings` 的积分/MCP Tab 改为**跳转占位卡**（跳 `/accounts?tab=points|mcp`），其他 Tab 不动
+- 15 模块×5 动作权限矩阵、成员/角色/积分/凭证接口、UI 组件均沿用，无契约变更
+
+### 阶段三：多源接入与能力补齐（不臆造采集/不接线真实网络）
+- 新增统一只读目录 `/api/integrations/catalog` + `src/lib/integration-catalog.ts`：聚合三源既有静态契约，如实标注"可同步 / 未实现 / 需角色 / 平台阻断"+ 官方窗口 + 原因；`getMcpDatasetCatalog()` 给赛狐数据集补 `available` 标志与"金额按行返回、保留原币种、禁止跨币种汇总"警告，对齐 Amazon 域注释范式
+- Ads SB/SD 报告、SP-API 订单明细照既有契约标 `not_implemented` + blockers（capabilities/policy 已登记，符合"先登记再实现、未接入如实标注"），**不臆造采集实现**
+- 真实连通性校验（发外部最小只读请求）：赛狐已有 token-only 校验端点、Amazon Ads 有纯决策 probe 待接线；当前隔离环境无真实外部 API，不接线跑不通的端点，按数据真实性如实留档
+
+**验证（Node 22.19.0，本地根 .env）**：build EXIT=0；check:fast EXIT=0（**2349 测试 / 0 失败 / 0 cancelled**、lint 0 error、typecheck 通过、ui:guard 0 回退）；code gate 阻塞 0；deploy gate 其余 FAIL 均为部署时注入项（ERP_RUNTIME_MODE/NODE_ENV/EXECUTION_ROLE）属预期；本地 Docker DB 新迁移已应用、两表结构与 schema 一致
+**Verification**: check:fast EXIT=0 under Node 22.19.0 — 2349 tests pass (0 fail, 0 cancelled), lint 0 error, ui:guard 0 regression. Build EXIT=0. code gate 0 blockers. NOTE: one real regression (operations-replenishment mock missing role-grant) was found via clean-HEAD worktree diff and fixed before this result.
+**本地环境修正**：当前 shell 原用 Node 22.13.1（低于门禁 22.19），已切到系统已装的 22.19.0；production-readiness 测试随之 11/11 通过
+**未闭环（外部环境依赖，不造假）**：真实连通性校验端点接线（需真实外部 API）、Ads SB/SD 与订单明细真实采集、生产 EnvironmentFile 下的 full gate 端到端

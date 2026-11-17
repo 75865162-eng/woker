@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     if (!permission.ok) return permission.response;
     const scope = workspaceScopeFromRequest(request);
     const query = sellfoxBrowseQuery(aliasSellfoxReplicaParams(new URL(request.url)));
-    const storeIds = await sellfoxBrowseStoreIds(query, permission.user.organizationId, scope.workspaceId);
+    const storeIds = await sellfoxBrowseStoreIds(query, permission.user.organizationId, scope.workspaceId, { id: permission.user.id, role: permission.user.role });
     return NextResponse.json(await readSellfoxShipments(query, { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId }, storeIds));
   } catch (error) {
     return NextResponse.json({ error: error instanceof SellfoxBrowseError ? error.message : "读取赛狐货件失败，请稍后重试。" }, { status: error instanceof SellfoxBrowseError ? error.status : 500 });

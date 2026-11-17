@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     const scope = workspaceScopeFromRequest(request);
     const url = new URL(request.url);
     const query = sellfoxBrowseQuery(url, "sales");
-    await sellfoxBrowseStoreIds(query, permission.user.organizationId, scope.workspaceId);
+    await sellfoxBrowseStoreIds(query, permission.user.organizationId, scope.workspaceId, { id: permission.user.id, role: permission.user.role });
     return NextResponse.json(await readSellfoxWorkbench("sales", query, { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId }));
   } catch (error) {
     return NextResponse.json({ error: error instanceof SellfoxBrowseError ? error.message : "读取赛狐销量统计失败，请稍后重试。" }, { status: error instanceof SellfoxBrowseError ? error.status : 500 });

@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { useAccountWorkbookTransfer } from "./use-account-workbook-transfer";
 import { Archive, Download, Search, Upload, UserCog, UserPlus, UsersRound } from "lucide-react";
 import { AccountMembersTable } from "./account-members-table";
 import { AccountRolePanel } from "./account-role-panel";
+import { PointsPolicyPanel } from "@/components/settings/points-policy-panel";
+import { McpSettingsPanel } from "@/components/settings/mcp-settings-panel";
+import { LiliDevicesPanel } from "@/components/settings/lili-devices-panel";
 import { ListPageTemplate } from "@/components/templates/page-templates";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +20,7 @@ import { createAccountWorkbookRows } from "@/lib/accounts/account-workbook";
 import { type TeamAccountRecord } from "@/lib/accounts/team-roster";
 import { type AccountStatus, type RoleId, type Account, fieldClass, accountPageSize, getFallbackPassword, canManageAccount, withLoadedAccountState, loadAccountsFromApi, saveAccountsToApi } from "./account-workbench-api";
 import { MetricCard, ArchivedAccountsDialog, RoleDialog, RoleMembersDialog, AccountDialog, EditAccountDialog } from "./account-workbench-dialogs";
+import { AccountDetailDrawer } from "./account-detail-drawer";
 export function AccountWorkbench({
   initialAccounts,
   initialRoles: serverRoles,
@@ -38,7 +43,26 @@ export function AccountWorkbench({
     })) as Account[],
   );
   const [accountSaveError, setAccountSaveError] = useState("");
-  const [activeTab, setActiveTab] = useState<"members" | "roles">("members");
+  type WorkbenchTab = "members" | "roles" | "points" | "mcp";
+  const workbenchTabs: readonly WorkbenchTab[] = ["members", "roles", "points", "mcp"];
+  const router = useRouter();
+  const pathname = usePathname();
+  const [activeTab, setActiveTab] = useState<WorkbenchTab>("members");
+
+  useEffect(() => {
+    const syncTab = () => {
+      const requested = new URLSearchParams(window.location.search).get("tab");
+      setActiveTab(workbenchTabs.includes(requested as WorkbenchTab) ? (requested as WorkbenchTab) : "members");
+    };
+    syncTab();
+    window.addEventListener("popstate", syncTab);
+    return () => window.removeEventListener("popstate", syncTab);
+  }, []);
+
+  function selectTab(tab: WorkbenchTab) {
+    setActiveTab(tab);
+    router.replace(`${pathname}${tab === "members" ? "" : `?tab=${tab}`}`, { scroll: false });
+  }
   const [pointsByUser, setPointsByUser] = useState<Record<string, PointsRow>>({});
   const [canAdjustPoints, setCanAdjustPoints] = useState(false);
   const [pointsReloadKey, setPointsReloadKey] = useState(0);
@@ -48,6 +72,7 @@ export function AccountWorkbench({
   const [departmentFilter, setDepartmentFilter] = useState("all");
   const [newAccountOpen, setNewAccountOpen] = useState(false);
   const [editAccount, setEditAccount] = useState<Account | null>(null);
+  const [detailAccount, setDetailAccount] = useState<Account | null>(null);
   const [archivedAccountsOpen, setArchivedAccountsOpen] = useState(false);
   const [accountPage, setAccountPage] = useState(1);
   const visibleAccounts = useMemo(() => accounts.filter((account) => account.status !== "archived"), [accounts]);
@@ -217,8 +242,8 @@ export function AccountWorkbench({
     <ListPageTemplate header={<div className="space-y-[var(--gap-section)]">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="inline-flex w-fit items-center gap-1 border-b border-border" role="tablist" aria-label="账号权限视图">
-          {([ ["members", "成员"], ["roles", "角色与权限"] ] as const).map(([tab, label]) => (
-            <button key={tab} aria-selected={activeTab === tab} className={`border-b-2 px-4 py-2 text-sm font-semibold ${activeTab === tab ? "border-brand text-brand" : "border-transparent text-muted hover:text-foreground"}`} onClick={() => setActiveTab(tab)} role="tab" type="button">
+          {([ ["members", "成员账号"], ["roles", "角色与权限"], ["points", "积分额度与定价"], ["mcp", "MCP 与设备凭证"] ] as const).map(([tab, label]) => (
+            <button key={tab} aria-selected={activeTab === tab} className={`border-b-2 px-4 py-2 text-sm font-semibold ${activeTab === tab ? "border-brand text-brand" : "border-transparent text-muted hover:text-foreground"}`} onClick={() => selectTab(tab)} role="tab" type="button">
               {label}
             </button>
           ))}
@@ -303,14 +328,14 @@ export function AccountWorkbench({
               accounts={paginatedAccounts} roles={roles} pointsByUser={pointsByUser}
               total={filteredAccounts.length} page={currentAccountPage} pageCount={accountPageCount}
               firstIndex={firstAccountIndex} lastIndex={lastAccountIndex} onPageChange={setAccountPage}
-              onRoleChange={updateAccountRole} onEdit={setEditAccount}
+              onRoleChange={updateAccountRole} onEdit={setEditAccount} onOpenDetail={setDetailAccount}
               onToggleStatus={toggleAccountStatus} onArchive={archiveAccount}
             />
           </CardContent>
         </Card>
 
       </section>
-      </> : <>
+      </> : activeTab === "roles" ? <>
         <AccountRolePanel
           roles={visibleRoles} accounts={visibleAccounts} activeRole={activeRole}
           revision={roleRevision} savedAt={roleSavedAt} onSelect={setActiveRoleId}
@@ -341,7 +366,14 @@ export function AccountWorkbench({
         </CardContent>
         </Card>
       </details>
-      </>}
+      </> : activeTab === "points" ? (
+        <PointsPolicyPanel />
+      ) : (
+        <div className="space-y-[var(--gap-section)]">
+          <McpSettingsPanel />
+          <LiliDevicesPanel />
+        </div>
+      )}
 
       {newAccountOpen ? <AccountDialog roles={roles} title="新建同事账号" onClose={() => setNewAccountOpen(false)} onSubmit={createAccount} /> : null}
       {newRoleOpen ? <RoleDialog roles={availableRoleTemplates} onClose={() => setNewRoleOpen(false)} onSubmit={addRole} /> : null}
@@ -358,6 +390,15 @@ export function AccountWorkbench({
         />
       ) : null}
       {archivedAccountsOpen ? <ArchivedAccountsDialog rows={archivedAccountRows} onClose={() => setArchivedAccountsOpen(false)} /> : null}
+      {detailAccount ? (
+        <AccountDetailDrawer
+          account={detailAccount}
+          roles={roles}
+          points={pointsByUser[detailAccount.id] ?? null}
+          onClose={() => setDetailAccount(null)}
+          onEdit={(account) => { setDetailAccount(null); setEditAccount(account); }}
+        />
+      ) : null}
     </div>} />
   );
 }

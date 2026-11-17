@@ -23,6 +23,8 @@ function fixture() {
       deleteMany: async ({ where }: { where: object }) => { grants.delete(JSON.stringify(where)); },
     },
     amazonDataAccessGrant: { findMany: async () => [{ sellerAccountId: 'seller' }] },
+    amazonRoleDataAccessGrant: { findMany: async () => [] },
+    sellerAccount: { findMany: async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.map(id => ({ id })) },
     auditLog: { create: async (value: unknown) => { audit.push(value); } },
   };
   return { db: db as never, users, audit, grants };

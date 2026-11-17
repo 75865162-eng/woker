@@ -79,9 +79,26 @@
 
 ---
 
-## 六、本轮结论
+## 六、租户边界 + 统一管理中心 + 多源接入整改（两份参考文档，全量推进）
 
-- **本地可核验部分已闭环**：P0 安全边界全部合规，生产发布资产完整，构建/测试/门禁全绿。
-- **未闭环部分均为外部环境依赖**：真实授权、生产 DB/Redis、域名证书、唯一同步端切换、真实端到端——必须由操作员在目标机完成，本报告不假称完成。
-- **本轮无代码改动**：审计未发现"可安全本地闭环且不破坏现有代码"的 P0/P1 缺口；不为优化而制造改动。
-- 当前已 push 代码健康：2332 测试 / 0 失败、lint 0 error、code gate 全绿、生产模板 deploy gate 全绿、standalone 服务 health 200。
+| 阶段 | 交付项 | 证据 |
+|---|---|---|
+| 一·租户硬伤 | Amazon view/export 读路径并入角色级 grant（成员∪角色，停用店铺过滤）；赛狐新增成员/角色店铺授权两表+迁移+渐进启用服务端过滤+管理接口+MCP 凭证范围校验 | `src/lib/amazon-sync/data-access.ts`、`src/lib/sellfox/store-access.ts`、`browse-store-scope.ts`、迁移 `20261219000000`、`src/app/api/sellfox/store-grants`、`tests/sellfox-store-access.test.ts` |
+| 二·统一中心 | `/accounts` 四 Tab（members/roles/points/mcp）+ `?tab=` 同步；成员详情聚合抽屉；`/settings` 积分/MCP 改跳转占位；Lili 设备并入 mcp Tab | `src/components/accounts/account-workbench.tsx`、`account-detail-drawer.tsx`、`account-members-table.tsx`、`src/app/(erp)/settings/page.tsx` |
+| 三·多源接入 | 统一只读目录（资源/角色探测、官方窗口如实标注、available+原因）；赛狐 MCP 数据集目录补 available 与"按行返回/不跨币种汇总"警告；SB/SD、订单明细按既有契约标 not_implemented 不臆造采集 | `src/lib/integration-catalog.ts`、`src/app/api/integrations/catalog/route.ts`、`tests/integration-catalog.test.ts` |
+
+- **安全边界**：owner/database_admin 全量豁免；赛狐授权渐进启用（无授权记录零破坏）；越界店铺 403；角色 grant 店铺再经 active 状态过滤，不泄漏停用店铺
+- **回归发现并修复**：干净 HEAD worktree 对照发现本轮 data-access 改动使 `operations-replenishment-service.test.ts` 因缺 role-grant mock 异步挂起（2 cancelled），补齐 mock 后恢复 2/2 pass——证明非环境抖动而是真实回归
+- **UI 范式守卫**：成员抽屉新增 5 处 `font-bold` 触发 ui:guard +5 回退，改 `font-semibold` 后 376→376 零回退
+
+**验证（Node 22.19.0）**：check:fast EXIT=0（2349 测试 / 0 失败 / 0 cancelled；lint 0 error；typecheck/ui:guard 通过）；build EXIT=0；code gate 阻塞 0；本地 DB 新迁移已应用、结构与 schema 一致
+**未闭环（如实留档，不造假）**：真实连通性校验端点接线（需真实外部 API；赛狐已有 token-only 校验、Ads 有孤立 probe）、Ads SB/SD 与订单明细真实采集、生产 EnvironmentFile 下的 full gate 端到端。
+
+---
+
+## 七、本轮结论
+
+- **本地可核验部分已闭环**：P0 安全边界全部合规（本轮进一步加固角色授权读路径 + 赛狐店铺授权），统一管理中心四 Tab 落地，多源目录如实暴露能力边界，构建/测试/门禁全绿。
+- **未闭环部分均为外部环境依赖**：真实授权与连通校验、Ads SB/SD 采集、生产 DB/Redis/证书、full gate 端到端——必须由操作员在目标机完成，本报告不假称完成。
+- **不为凑数制造改动**：真实连通校验端点与 SB/SD 采集需外部 API，当前环境无法验证，按数据真实性原则留档而非接跑不通的端点。
+- 当前代码健康：2349 测试 / 0 失败、lint 0 error、code gate 全绿、ui:guard 零回退、build 成功。

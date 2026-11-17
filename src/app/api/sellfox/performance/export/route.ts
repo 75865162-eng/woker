@@ -30,11 +30,11 @@ export async function GET(request: Request) {
     const scope = workspaceScopeFromRequest(request);
     const url = new URL(request.url);
     let query = sellfoxBrowseQuery(url, "performance");
+    const storeIds = await sellfoxBrowseStoreIds(query, permission.user.organizationId, scope.workspaceId, { id: permission.user.id, role: permission.user.role });
     if (url.searchParams.get("agent") === "1") {
       const { rows } = await readSellfoxAgentRows("performance", query, { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId }, true);
       return new Response(sellfoxAgentCsv("performance", rows), { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="sellfox-profit-agent.csv"', "Cache-Control": "no-store" } });
     }
-    const storeIds = await sellfoxBrowseStoreIds(query, permission.user.organizationId, scope.workspaceId);
     if (query.layout || query.sortBy || url.searchParams.has("column") || url.searchParams.get("columns") === "custom" || query.fulfillment || query.buyBox || query.productTag || query.brand || query.salesperson) return await sellfoxWorkbenchExport("performance", query, { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId }, url);
     query = await resolveEffectiveReportDate("performance", query, { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId });
     const where = sellfoxSnapshotWhere(query, permission.user.organizationId, scope.workspaceId, storeIds, true);

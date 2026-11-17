@@ -25,6 +25,7 @@ test("plan persistence keeps exact inventory provenance, newer results and new-p
   let delayNextInventoryRead = false;
   const database = {
     amazonDataAccessGrant: { findMany: async () => [{ sellerAccountId: "store" }] },
+    amazonRoleDataAccessGrant: { findMany: async () => [] },
     organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) },
     organizationRosterRole: { findMany: async () => [] },
     workspaceScope: { findUnique: async () => ({ id: "ws" }) },
@@ -97,6 +98,8 @@ test("Sellfox plans use complete daily MSKU sales and current inventory, never p
   let invalidStore = false;
   let salesReads = 0;
   const database = {
+    amazonDataAccessGrant: { findMany: async () => [{ sellerAccountId: "store" }] },
+    amazonRoleDataAccessGrant: { findMany: async () => [] },
     organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) },
     organizationRosterRole: { findMany: async () => [] },
     amazonSyncDataSource: { findFirst: async () => ({ id: "source" }) },

@@ -19,11 +19,12 @@ type Props = {
   onPageChange: (page: number) => void;
   onRoleChange: (accountId: string, roleId: RoleId) => void;
   onEdit: (account: Account) => void;
+  onOpenDetail?: (account: Account) => void;
   onToggleStatus: (accountId: string) => void;
   onArchive: (accountId: string) => void;
 };
 
-export function AccountMembersTable({ accounts, roles, pointsByUser, total, page, pageCount, firstIndex, lastIndex, onPageChange, onRoleChange, onEdit, onToggleStatus, onArchive }: Props) {
+export function AccountMembersTable({ accounts, roles, pointsByUser, total, page, pageCount, firstIndex, lastIndex, onPageChange, onRoleChange, onEdit, onOpenDetail, onToggleStatus, onArchive }: Props) {
   return <>
     <div className="overflow-auto">
       <table className="w-full min-w-[960px] border-collapse text-sm">
@@ -33,7 +34,7 @@ export function AccountMembersTable({ accounts, roles, pointsByUser, total, page
         <tbody>{accounts.map(account => <tr key={account.id} className="border-t border-border">
           <td className="px-5 py-4"><div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-brand/10 text-xs font-black text-brand">{account.name.slice(0, 1)}</div>
-            <div><p className="font-bold text-foreground">{account.name}</p><p className="text-xs text-muted">{account.id}</p></div>
+            <div>{onOpenDetail ? <button type="button" className="text-left hover:underline" onClick={() => onOpenDetail(account)}>{account.name}</button> : <p className="font-bold text-foreground">{account.name}</p>}<p className="text-xs text-muted">{account.id}</p></div>
           </div></td>
           <td className="px-5 py-4 text-muted">{account.phone || account.username || account.email || "—"}</td>
           <td className="px-5 py-4"><p className="font-medium text-foreground">{account.department}</p><p className="text-xs text-muted">{account.title}</p></td>
