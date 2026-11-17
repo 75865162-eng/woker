@@ -1,6 +1,6 @@
 # 版本合并与升级状态追踪（以代码为准）
 
-> 当前 HEAD：`e1d5260`（17f3c63 主线 + 全分支功能合并 + 本地安全加固）
+> 当前 HEAD：`e4d93d4`（17f3c63 主线 + 全分支功能合并 + 本地安全加固 + d74fdfc 验收增强）
 > 基线来源：GitHub `75865162-eng/woker`，完整 clone（404 commits，含真实 git 历史）
 > 更新时间：2026-11-18
 
@@ -84,3 +84,44 @@
 - **真实外部授权链路**（赛狐/Amazon API）、生产部署、第三方选品工具：本地无法闭环，未造假
 - 所有合并均为本地操作，**未 push**（无远程写授权）
 - 数据质量 API 在无同步数据时返回 `null` 比率而非伪造 0，符合"缺失数据不补造零值"原则
+
+## 七、第二轮全分支复审（fetch 后新远程分支，2026-11-18）
+
+用户授权 push 后重新 `git fetch --all --prune`，发现远程新增 5 个分支、`tiaotiao-erp` 前进到 `d74fdfc`。逐一审计结论：
+
+| 分支 | 独有 commit | 复审结论 | 处理 |
+|---|---|---|---|
+| `codex/amazon-multistore-mcp` | 0 | 全部已在主线 | 无 |
+| `cursor/rebrand-tiaotiao-aa9a` | 0 | HEAD 即 merge-base，无新增 | 无 |
+| `codex/product-detail-159-20261101` | 2 | patch-id 已在 main（`-`） | 无 |
+| `codex/listing-gallery-159-20261111` | 7 | gallery saves 功能已由 ssh 线吸收；main 为 11-16 ui-kit 重构版，分支为 11-12 旧版，合并会回退 | 无 |
+| `codex/competitor-card-whitespace-159` | 8 | 同上 + 1 个 whitespace 微调；生产文件 main 更新或等价 | 无 |
+| `codex/sp-api-mainline-20261108` | 3 | `ad86a09` 的 35 个新符号已全部在 main；`995d455` 的"精确依赖树重启"与 main 刻意的全量重启安全设计冲突 | 无 |
+| `tiaotiao-erp`（`d74fdfc`，11-18 最新） | 1 | 隔离运行时验收增强 + Next path resolution | **部分合入** |
+
+**判定方法**：三点 diff + 两点树差异 + `git cherry -v`（patch-id）+ 内容 hash + 新符号在 main 的存在性 + commit 日期演进方向，避免仅凭 patch-id 误判。
+
+### d74fdfc 合并（commit `e4d93d4`）
+- ✅ 合入：`scripts/test-runtime-integration.mjs`（五表 fixture、workspace 头、TAP reporter、FBA 路由断言）+ `tests/next-tracing.test.ts`（baseUrl 解析测试，已适配本地方案）
+- 保留本地 `next-run.mjs` 方案：d74fdfc 用 mkdtemp 子目录 + 相对 baseUrl，与本地 `23b921b`（根目录 + `baseUrl:"."`）等价；遵循"不覆盖已批准改动"，冲突取 ours；新增测试改写为匹配本地实现并通过
+- ❌ 排除 `outputs/` 下针对特定 CI 环境（Node24/固定镜像路径/taskId）的一次性验收产物，非可复用功能
+
+## 八、生产级可部署检测与优化
+
+| 检查项 | 结果 | 说明 |
+|---|---|---|
+| `npm run build` | ✅ EXIT=0 | standalone 产物 + middleware 正常编译，全路由生成 |
+| `check:production --gate code` | ✅ 通过 10 / 阻塞 0 | 代码、构建产物、全部加密密钥、写门禁均达标 |
+| `check:production --gate deploy`（本地 .env） | ⚠️ 3 FAIL 为生产模式专属 | local 模式下 runtime_mode/node_env/execution_role 未设，属预期（本地非生产） |
+| `check:deploy`（官方模板渲染后配置） | ✅ 通过 28 / 阻塞 0 | 用 `prod:env:init` 渲染 + 合法测试值填充的临时环境文件验证，部署清单/资产全齐；不写仓库、不接真实资源 |
+| `check:fast` | ✅ 全绿 | 2332 测试 / 0 失败 + lint 0 error + typecheck + ui:guard |
+| 生产服务 `start:standalone` | ✅ Ready 218ms | health 200；登录 200、数据质量 API 200、dashboard 200、未登录 307→login |
+
+**优化项**：
+- 补齐本地 `.env`：`AMAZON_ADS_ENCRYPTION_KEY`、`SELLFOX_CREDENTIAL_ENCRYPTION_KEY`（各随机 32 字节 Base64，本地加密密钥非外部凭据）、`AMAZON_FBA_REMOTE_EXECUTION_ENABLED=false`（写门禁加固）
+- 修复 lint 健壮性缺陷：`eslint.config.mjs` 原忽略 `.next-types*/**`（目录），漏掉本地 `next-run.mjs` 生成在项目**根**的 `.next-types-*.json` / `.next-types-ambient-*.d.ts`；dev 进程存活期间这些临时文件被 eslint 扫描触发 triple-slash-reference 错误。补充根级 glob 后 lint 0 error，check:fast 在 dev 运行时也稳定全绿
+
+**如实留档**：
+- 真实外部 Amazon/Sellfox 凭据、`--gate full` 的数据库/外部接入验收：本地无真实凭据，须在目标机用生产 EnvironmentFile 完成，不造假
+- `config.storage=local` 为非阻塞提示，上线须配置持久卷或 s3/r2 并做恢复演练
+- 生产模板渲染验证仅证明模板结构与部署清单完整，不代表生产已就绪
