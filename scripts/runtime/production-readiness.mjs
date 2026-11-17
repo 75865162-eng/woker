@@ -44,7 +44,7 @@ const checks = [];
 // scope: "internal" (repo-verifiable), "asset" (deployment package files),
 // "deployment" (needs real external infrastructure / Amazon credentials).
 const internalIds = new Set([
-  "config.env_source", "config.queue_driver", "secret.auth", "gate.write_disabled",
+  "config.env_source", "config.node_version", "config.queue_driver", "secret.auth", "gate.write_disabled",
   "config.storage", "build.standalone", "build.static_assets",
   "db.connect", "db.migrations", "db.clean",
   "secret.amazon_sp_api_encryption_key", "secret.amazon_ads_encryption_key", "secret.sellfox_credential_encryption_key",
@@ -52,6 +52,7 @@ const internalIds = new Set([
 const assetIds = new Set([
   // A rendered EnvironmentFile with REPLACE:/GENERATE: leftovers is a package
   // defect, not an external dependency, so --gate deploy must catch it.
+  "config.runtime_mode", "config.node_env", "config.execution_role",
   "config.placeholders", "config.auth_origin", "config.tls_verification", "config.database_remote", "config.redis_remote",
   "deploy.env_template", "deploy.runbook", "deploy.systemd_units", "deploy.backup",
   "deploy.tls", "deploy.env_init", "deploy.password_rotation", "deploy.health_endpoint",
@@ -93,6 +94,9 @@ const hasPlaceholder = (value) => /^(REPLACE|GENERATE):/.test(String(value ?? ""
 const unresolvedKeys = Object.entries(env).filter(([, value]) => hasPlaceholder(value)).map(([key]) => key);
 
 // --- Runtime configuration -------------------------------------------------
+const [nodeMajor, nodeMinor] = process.versions.node.split(".").map(Number);
+add("config.node_version", "Node.js >=22.19", nodeMajor > 22 || (nodeMajor === 22 && nodeMinor >= 19),
+  `当前 ${process.versions.node}；最低要求 22.19`);
 const mode = env.ERP_RUNTIME_MODE ?? "local";
 add("config.runtime_mode", "ERP_RUNTIME_MODE=production", mode === "production", `当前 ${mode}；production 模式才允许远程数据库/Redis`);
 const databaseStatus = productionEndpointStatus(env.DATABASE_URL, { allowLoopback: true, protocols: ["postgres:", "postgresql:"] });

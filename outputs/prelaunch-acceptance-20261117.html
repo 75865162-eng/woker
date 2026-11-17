@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>条条 ERP 上线前验收 · 2026-11-17</title>
+<style>body{font-family:system-ui,"Microsoft YaHei",sans-serif;max-width:1100px;margin:36px auto;padding:0 24px 40px;color:#182230;line-height:1.75;background:#fafbfc}h1{font-size:28px;line-height:1.4}h2{font-size:20px;margin-top:32px}table{border-collapse:collapse;width:100%;background:#fff}td,th{border:1px solid #d9e0e8;padding:10px 12px;text-align:left;vertical-align:top}th{background:#edf2f7}.blocked{color:#a3311c}.pass{color:#176842}code{background:#eef1f5;padding:2px 4px;overflow-wrap:anywhere}a{color:#155db5}.note{padding:16px;background:#fff3e9;border-left:4px solid #b55621}.small{font-size:14px;color:#526171}li{margin-bottom:7px}</style>
+<h1>条条 ERP 上线前验收</h1>
+<p class="small">2026-11-17 · 本地工作区 woker · HEAD a371b5b8d70a08fae4539707ea508c04f9f4d898</p>
+<p class="note"><strong class="blocked">总体：BLOCKED，当前不能判定 READY。</strong><br>本地代码修复、离线门禁与下列隔离验证已有通过证据。尚缺同一冻结候选的 Linux CI 构建与发布包校验、完整 Worker 故障恢复、生产目标环境检查及用户业务验收。工作区有其他并行改动，以下结果不能当作最终发布 SHA 的统一认证。</p>
+<h2>验证矩阵</h2>
+<table><thead><tr><th>项目</th><th>结果</th><th>证据与覆盖范围</th></tr></thead><tbody>
+<tr><td>本轮 check:fast</td><td class="pass">PASS</td><td>2298/2298 单测，0失败、0跳过；lint 0错误、4既有警告；类型检查与 UI guard 通过。<a href="prelaunch-continue-check-fast-20261117.log">完整日志</a></td></tr>
+<tr><td>前轮隔离浏览器五组</td><td class="pass">PASS</td><td>三核11、同步60、商品18、运营18、赛狐44，共151个去重用例。均为内存 fixture / 路由拦截，未连接真实外部 API。</td></tr>
+<tr><td>新增隔离浏览器五组</td><td class="pass">PASS</td><td>Lili 9、Agent串联6、广告活动36、广告页25、选品14，共90个去重用例。初轮2失败已修正；Agent完整组6/6，广告两文件完整组61/61复验通过、exit 0。<a href="prelaunch-continue-browser-20261117.log">首轮及矩阵</a> · <a href="prelaunch-continue-browser-agent-chain-recheck-20261117.log">Agent复验</a> · <a href="prelaunch-continue-browser-amazon-ads-full-20261117.log">广告完整组复验</a> · <a href="prelaunch-continue-browser-typecheck-20261117.log">最终类型检查</a> · <a href="prelaunch-continue-browser-eslint-20261117.log">定向lint</a></td></tr>
+<tr><td>临时 PostgreSQL 三核集成</td><td class="pass">PASS</td><td>最终 rerun2 完整结束，18条 PASS；保留采购/财务/FBA、revision并发、跨工作区、独立审批和撤权断言。会话显式携带组织，非owner fixture显式建立工作区成员。<a href="prelaunch-three-core-general-purpose-3-rerun2-20261117.log">最终日志</a></td></tr>
+<tr><td>迁移、幂等及备份恢复</td><td class="pass">PASS</td><td>186个迁移在新库应用，核对历史及checksum；重复deploy无变化；真实pg_dump/pg_restore到新库，迁移历史、中文payload及numeric精度一致。本次临时资源已清理。<a href="prelaunch-runtime-20261117.log">日志</a></td></tr>
+<tr><td>双池实际数据库权限</td><td class="pass">PASS</td><td>本轮两实际LOGIN角色只读各自池表；注入跨池表级SELECT、列级SELECT、角色继承均被既有审计识别；撤销后基线恢复。仅临时库，不代表生产授权已实施；本次容器和匿名卷已清理。<a href="prelaunch-continue-mcp-20261117.log">正反例日志</a></td></tr>
+<tr><td>PostgreSQL 重启故障恢复</td><td class="pass">PASS</td><td>定向1/1、0跳过；验证重启时事务回滚和安全重试。完整迁移后运行，本次临时资源已清理。<a href="prelaunch-continue-pg-restart-20261117.log">日志</a></td></tr>
+<tr><td>完整 runtime / Worker 故障恢复</td><td class="blocked">BLOCKED</td><td>Windows不具备现有测试依赖的POSIX进程组、SIGTERM及无扩展shebang执行语义；完整套件仍需Linux执行。PG子集通过不能替代完整Worker生命周期验证。</td></tr>
+<tr><td>同候选CI构建与发布包校验</td><td>NOT VERIFIED</td><td>尚未取得候选SHA对应Linux CI构建、package artifact、release-check证据；GitHub CLI未登录，连接请求已跳过。生产构建按现有CI artifact流程执行。</td></tr>
+<tr><td>生产环境与用户业务验收</td><td>NOT VERIFIED</td><td>未执行生产DB/Redis连接、目标角色与迁移检查、真实API授权、Worker消费或部署；自动测试不能代替用户业务验收。</td></tr>
+<tr><td>候选冻结及diff格式</td><td class="blocked">BLOCKED</td><td>git diff --check通过；工作区含既有、并行与本轮变更，候选尚未冻结为单一SHA。</td></tr>
+</tbody></table>
+<h2>本次修复与复验</h2>
+<ul>
+<li><code>src/app/api/ai-settings/test-chat/route.ts</code>：普通上游失败及最外层异常改用固定安全提示，不回显上游正文和任意异常message；保留权限、HTTP状态、Codex专用提示、超时与成功契约。新增<code>tests/ai-test-chat-security.test.ts</code>，18项隔离路由行为回归先红后绿。</li>
+<li><code>scripts/runtime/production-readiness.mjs</code>及对应测试：将production运行模式、NODE_ENV和cloud执行角色纳入deploy gate；增加Node≥22.19检查及版本边界回归。</li>
+<li><code>tests/integration/three-core-port.integration.ts</code>：修复fixture成员和带组织身份的会话，不放宽真实服务的权限检查。</li>
+<li><code>scripts/mcp-isolation/test-temporary-postgres.mjs</code>：复用真实授权SQL和既有审计，使用随机临时容器、环境白名单及身份核验清理，完成双池实际权限正反例。</li>
+<li><code>tests/browser/agent-chain.spec.ts</code>：提供明确来源的隔离市场工具fixture，经真实上传流程补Round B证据；保留无证据NEEDS_DATA和模拟数据提示。</li>
+<li><code>tests/browser/amazon-ads.spec.ts</code>：fixture支持现有列宽偏好接口；表头定位适配列宽控件的可访问名称，并保留搜索词触发类型和不存在竞价列的断言。</li>
+<li>Lili配置页的并行作用域修改已验证：切换工作区后旧保存响应不能恢复新工作区的密钥提示或成功状态。跨标签storage事件、首次render至监听注册间的切换未覆盖，不扩大结论。</li>
+</ul>
+<h2>发布前尚需完成</h2>
+<ol>
+<li>核对并纳入最终候选全部有效改动，将候选冻结为具体SHA。</li>
+<li>在Linux CI完成该SHA的生产构建、完整runtime/Worker测试，取得发布artifact并通过release-check与deployment-plan。</li>
+<li>按现有发布审批流程检查生产配置、角色授权、迁移计划、备份和Worker消费；由用户完成关键业务操作验收。</li>
+</ol>
+<p>本轮未提交、推送或部署，未执行生产迁移及生产授权变更。保留所有用户及其他进程改动。</p>
+</html>

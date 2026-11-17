@@ -95,7 +95,7 @@ export async function POST(request: Request) {
       if (errorText.includes("only allows Codex official clients")) {
         return NextResponse.json({ error: "连接已到达 AIGOCODE，但这个 API Key 只允许 Codex 官方客户端使用，不能被当前本地 Web App 直接调用。请更换可用于 OpenAI 兼容 API 的 Key，或换成可直接调用的 Base URL。" }, { status: 403 });
       }
-      return NextResponse.json({ error: `测试失败：${response.status} ${errorText.slice(0, 500)}` }, { status: response.status });
+      return NextResponse.json({ error: `测试失败：上游服务返回 HTTP ${response.status}，请检查模型配置或稍后重试。` }, { status: response.status });
     }
 
     const data = await response.json();
@@ -112,8 +112,7 @@ export async function POST(request: Request) {
         baseUrl: settings.baseUrl,
       },
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "测试失败，请稍后重试。";
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: "测试失败，请检查模型配置或稍后重试。" }, { status: 500 });
   }
 }

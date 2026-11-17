@@ -11,10 +11,17 @@ const emptyReportsOverview: ReportsOverview = { mode: "live", executionRole: "lo
 async function setup(page: Page, mockAccounts = false, refreshTokenExpiresAt: string | null = "2027-11-05T08:00:00.000Z", syncedDataMode: "rows" | "empty" = "rows", fixtureTaskStatus = "SUCCEEDED", path = "/amazon-ads/campaigns", reportsOverview: ReportsOverview = emptyReportsOverview) {
   const errors: string[] = []; page.on("pageerror", e => errors.push(e.message));
   let boundSeller = "", boundAdvertiser = "", taskStatus = fixtureTaskStatus;
+  const columnPreferences = new Map<string, { widths: Record<string, number> }>();
   await page.route("**/*", route => {
     const url = new URL(route.request().url());
     expect(url.origin).toBe("http://127.0.0.1:43239");
     if (url.pathname.startsWith("/api/")) {
+      if (url.pathname.startsWith("/api/user-preferences/table-columns:ads%3A")) {
+        const method = route.request().method();
+        expect(["GET", "PUT"]).toContain(method);
+        if (method === "PUT") columnPreferences.set(url.pathname, route.request().postDataJSON());
+        return route.fulfill({ contentType: "application/json", body: JSON.stringify({ value: columnPreferences.get(url.pathname) ?? null }) });
+      }
       if (url.pathname === "/api/integrations/amazon/ads/reports") {
         if (route.request().method() === "POST") return route.fulfill({ contentType: "application/json", body: JSON.stringify({ tasks: [{ reportType: "campaign", created: true }, { reportType: "advertised-product", created: true }, { reportType: "search-term", created: true }, { reportType: "placement", created: true }, { reportType: "targeting", created: true }], enqueued: 5, executionRole: "cloud" }) });
         return route.fulfill({ contentType: "application/json", body: JSON.stringify(reportsOverview) });
@@ -438,10 +445,10 @@ test("campaign history keeps list-wide and other-campaign events out of detail",
 test("search term rows expose their actual trigger and omit irrelevant bid columns", async ({ page }) => {
   const errors = await setup(page);
   await page.locator(".ads-sidebar").getByRole("button", { name: "搜索词", exact: true }).click();
-  await expect(table(page).getByRole("columnheader", { name: "搜索词", exact: true })).toBeVisible();
-  await expect(table(page).getByRole("columnheader", { name: "触发关键词 / 商品投放", exact: true })).toBeVisible();
-  await expect(table(page).getByRole("columnheader", { name: "触发类型", exact: true })).toBeVisible();
-  await expect(table(page).getByRole("columnheader", { name: "竞价", exact: true })).toHaveCount(0);
+  await expect(table(page).getByRole("columnheader", { name: /^搜索词(?: 调整|$)/ })).toBeVisible();
+  await expect(table(page).getByRole("columnheader", { name: /^触发关键词 \/ 商品投放(?: 调整|$)/ })).toBeVisible();
+  await expect(table(page).getByRole("columnheader", { name: /^触发类型(?: 调整|$)/ })).toBeVisible();
+  await expect(table(page).getByRole("columnheader", { name: /^竞价(?: 调整|$)/ })).toHaveCount(0);
   await expect(table(page).locator("tbody")).toContainText("关键词");
   await page.getByLabel("查找搜索词").fill("large");
   await expect(table(page).locator("tbody")).toContainText("商品投放");

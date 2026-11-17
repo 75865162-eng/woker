@@ -17,6 +17,14 @@
 
 artifact 不包含完整项目工作区、`node_modules/`、`.git/`、`coverage/`、`tests/`、`.next/`、`.next-dev/`、`uploads/` 或 `.env`。Web standalone 内部的 traced `node_modules` 也会被删除，生产服务器使用共享的、按 `package-lock.json` SHA 校验的 `node_modules`。
 
+## 构建与浏览器回归环境
+
+- CI 的构建、性能和运行时集成 job 统一使用 Node.js `22.22.2`（满足 `undici` 要求的 `>=22.19`）；本地与生产 Node 22 也应至少为 `22.19`。生产版本调整须在发布审批中独立核验，不由本地测试升级服务器。
+- 先运行 `npm ci`，再运行 `npx playwright install --with-deps chromium`，使用 lockfile 安装的 Playwright 所对应的 Chromium。不要把系统 Chrome 的结果视为配套浏览器验证结果，也不要在文档中永久写死 Chromium revision。
+- CI 缓存 `~/.cache/ms-playwright`，缓存键包含操作系统、架构和 `package-lock.json` 哈希，不使用跨版本回退键。缓存命中后仍执行安装命令，以检查配套浏览器并安装 Linux 系统依赖；缓存不是浏览器分发包，也不进入生产 artifact。
+- 日常执行 `npm run check:fast`（单测、lint、类型与 UI guard）；UI/交互按风险追加对应 `tests/browser/*.config.ts` 的 fixture 浏览器回归。合码/上线执行 `npm run check` 与 `git diff --check`，生产构建在 CI 完成，不本机重复。具体分级以 `AGENTS.md` 为准。
+- 独立 fixture 回归不加载根 `.env`，不连接真实 API；真实 E2E 需要独立测试环境、凭据和批准。失败先记录 Playwright、Chromium、Node 版本，用配套浏览器复现后再改代码；缺浏览器或环境受阻记为 BLOCKED，不能记为产品 FAIL 或 PASS。
+
 ## GitHub Secrets
 
 生产部署需要配置：

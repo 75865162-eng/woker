@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { tx, type Locale } from "@/lib/lili/tx";
+import { workspaceScopeHeaders } from "@/lib/workspace/workspace-scope-store";
+import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
 import { defaultXiyouSettings, type XiyouPublicSettings } from "@/lib/lili/tool-config";
 import { defaultSellerSpriteMcpSettings, type SellerSpriteMcpPublicSettings } from "@/lib/integrations/sellersprite";
 
@@ -77,6 +79,17 @@ function SellerSpriteConfigCard() {
 }
 
 export function ToolConfigView({ locale }: { locale: Locale }) {
+  const [scopeVersion, setScopeVersion] = useState(0);
+  useEffect(() => {
+    const changed = () => setScopeVersion((version) => version + 1);
+    window.addEventListener(workspaceScopeChangedEventName, changed);
+    return () => window.removeEventListener(workspaceScopeChangedEventName, changed);
+  }, []);
+  return <ScopedToolConfigView key={scopeVersion} locale={locale} />;
+}
+
+function ScopedToolConfigView({ locale }: { locale: Locale }) {
+  const [scopeHeaders] = useState(() => workspaceScopeHeaders(true));
   const [settings, setSettings] = useState({ ...defaultXiyouSettings });
   const [saved, setSaved] = useState<XiyouPublicSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,7 +99,7 @@ export function ToolConfigView({ locale }: { locale: Locale }) {
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
-    fetch("/api/lili/tool-config", { cache: "no-store", signal: controller.signal })
+    fetch("/api/lili/tool-config", { headers: scopeHeaders, cache: "no-store", signal: controller.signal })
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok || !data.settings) throw new Error(data.message || "配置读取失败，请重试。");
@@ -96,13 +109,13 @@ export function ToolConfigView({ locale }: { locale: Locale }) {
       }).catch((error) => { if (!controller.signal.aborted) setMessage(error instanceof Error ? error.message : "配置读取失败。"); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [retry]);
+  }, [retry, scopeHeaders]);
 
   async function submit(test: boolean) {
     setBusy(true); setMessage("");
     try {
       const response = await fetch(`/api/lili/tool-config${test ? "/test" : ""}`, {
-        method: test ? "POST" : "PUT", headers: { "content-type": "application/json" },
+        method: test ? "POST" : "PUT", headers: scopeHeaders,
         body: JSON.stringify({ id: "xiyou", ...(!test ? { settings: {
           enabled: settings.enabled, mcpUrl: settings.mcpUrl, mcpToken: settings.mcpToken,
           openapiBase: settings.openapiBase, clientId: settings.clientId, clientSecret: settings.clientSecret,
@@ -121,7 +134,7 @@ export function ToolConfigView({ locale }: { locale: Locale }) {
 
   return <div className="lili-config mx-auto max-w-6xl space-y-5">
     <h1 className="text-xl font-bold">{tx(locale, "工具配置", "Tool configuration")}</h1>
-    <p className="text-sm text-muted">配置按组织、工作区和用户隔离，本页使用默认工作区。旧 Lili 密钥未自动导入；保存配置不会自动运行工具或工作流。</p>
+    <p className="text-sm text-muted">配置按组织、工作区和用户隔离，本页使用当前选定工作区。旧 Lili 密钥未自动导入；保存配置不会自动运行工具或工作流。</p>
     <SellerSpriteConfigCard />
     <section className="lili-card space-y-3 p-5" aria-label="西柚洞察">
       <h2 className="text-base font-bold">西柚洞察（西柚找词）</h2>

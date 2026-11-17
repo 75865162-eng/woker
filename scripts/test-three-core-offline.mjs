@@ -28,7 +28,8 @@ try {
     redisCreated=true;const endpoint=docker(["port",redisName,"6379/tcp"]);assert.match(endpoint,/^127\.0\.0\.1:\d+$/);redisUrl=`redis://${endpoint}/0`;
   }
   const url = `postgresql://postgres:fba_fixture@${port}/wms_fixture`;
-  for (let attempt = 0; attempt < 60; attempt++) {
+  const databaseReadyDeadline = Date.now() + 90_000;
+  for (; Date.now() < databaseReadyDeadline;) {
     const candidate = new Client({ connectionString: url, connectionTimeoutMillis: 1000 });
     try { await candidate.connect(); db = candidate; break; }
     catch { await candidate.end().catch(() => {}); await new Promise(resolve => setTimeout(resolve, 250)); }

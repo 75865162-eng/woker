@@ -265,7 +265,7 @@ test("bounded catalog guidance distinguishes existing full listing plans without
   const picker = page.getByRole("navigation", { name: "同步计划数据域", exact: true });
   await picker.getByRole("button", { name: "商品目录 已接入", exact: true }).click();
   await expect(page.getByRole("heading", { name: "需配置采集范围", exact: true })).toBeVisible();
-  await expect(page.getByText("商品目录仅读取来源策略明确列出的 ASIN", { exact: false })).toBeVisible();
+  await expect(page.getByText("从完整在线商品快照发现 ASIN，并分片读取", { exact: false })).toBeVisible();
   await expect(page.getByTestId("sync-plan-coverage")).toContainText("当前工作区可见计划共 1 个");
   await expect(page.getByRole("button", { name: "新建计划", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "查看在线商品全量计划", exact: true }).click();
@@ -276,7 +276,7 @@ test("bounded catalog guidance distinguishes existing full listing plans without
   await page.getByRole("button", { name: "清除店铺／站点筛选", exact: true }).click();
   await expect(page.getByRole("heading", { name: "在线商品自动计划", exact: true })).toBeVisible();
   await picker.getByRole("button", { name: "搜索词与品牌分析 已接入", exact: true }).click();
-  await expect(page.getByText("当前不自动建立品牌分析计划", { exact: false })).toBeVisible();
+  await expect(page.getByText("已有完整周期采集计划会自动执行缺失窗口", { exact: false })).toBeVisible();
   expect(calls.filter(call => call.body)).toHaveLength(0);
 });
 
@@ -403,16 +403,16 @@ test("sales read-only users can inspect facts while sync and export controls rem
 test("scope grants and revocations submit explicit revisions for approval", async ({ page }) => {
   const { calls, state } = await setup(page);
   await page.getByRole("button", { name: "店铺与授权", exact: true }).click();
-  await page.getByLabel("成员／角色", { exact: true }).selectOption("member-a");
-  await page.getByLabel("授权 Seller", { exact: true }).selectOption("store-a");
-  await page.getByRole("button", { name: "申请保存授权", exact: true }).click();
+  await page.getByLabel("ERP 用户", { exact: true }).selectOption("member-a");
+  await page.getByLabel("Amazon Seller Account", { exact: true }).selectOption("store-a");
+  await page.getByRole("button", { name: "申请分配账号", exact: true }).click();
   await expect.poll(() => calls.find(c => c.body?.action === "save-access-grant")?.body).toMatchObject({ userId: "member-a", sellerAccountId: "store-a", revision: 0, enabled: true });
   state.grants = [{ id: "grant-a", userId: "member-a", sellerAccountId: "store-a", enabled: true, revision: 3 }];
   await page.getByRole("button", { name: "刷新", exact: true }).click();
-  await page.getByLabel("成员／角色", { exact: true }).selectOption("member-a");
-  await page.getByLabel("授权 Seller", { exact: true }).selectOption("store-a");
-  await expect(page.getByRole("button", { name: "申请保存授权", exact: true })).toBeEnabled();
-  await page.getByRole("button", { name: "申请撤销范围", exact: true }).click();
+  await page.getByLabel("ERP 用户", { exact: true }).selectOption("member-a");
+  await page.getByLabel("Amazon Seller Account", { exact: true }).selectOption("store-a");
+  await expect(page.getByRole("button", { name: "申请分配账号", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "申请撤销分配", exact: true }).click();
   await expect.poll(() => calls.find(c => c.body?.action === "save-access-grant" && c.body.enabled === false)?.body).toMatchObject({ userId: "member-a", sellerAccountId: "store-a", revision: 3, enabled: false });
 });
 
@@ -639,6 +639,7 @@ test("observation read errors show retryable UI and clear stale records", async 
 test("Listing and Catalog source configuration submits only the selected bounded identifiers", async ({ page }) => {
   const { calls } = await setup(page);
   await page.getByRole("button", { name: "店铺与授权", exact: true }).click();
+  await page.getByText("高级维护：现有来源策略", { exact: true }).click();
   await page.getByLabel("ERP 店铺", { exact: true }).selectOption("store-a");
   await page.getByLabel("已验证 Marketplace", { exact: true }).selectOption("US");
   await page.getByLabel("数据域", { exact: true }).selectOption("listing_details");
@@ -651,6 +652,7 @@ test("Listing and Catalog source configuration submits only the selected bounded
 test("Catalog source configuration submits only the selected bounded ASINs", async ({ page }) => {
   const { calls } = await setup(page);
   await page.getByRole("button", { name: "店铺与授权", exact: true }).click();
+  await page.getByText("高级维护：现有来源策略", { exact: true }).click();
   await page.getByLabel("ERP 店铺", { exact: true }).selectOption("store-a");
   await page.getByLabel("已验证 Marketplace", { exact: true }).selectOption("US");
   await page.getByLabel("数据域", { exact: true }).selectOption("catalog_items");
@@ -660,10 +662,10 @@ test("Catalog source configuration submits only the selected bounded ASINs", asy
   await expect.poll(() => calls.find(c => c.body && (c.body as { resource?: string }).resource === "catalog_items")?.body).toMatchObject({ resource: "catalog_items", domainPolicy: { asins: ["B123456789", "B987654321"] } });
 });
 
-test("operations organizes existing readers and procurement into nine sections and keeps capability gaps explicit", async ({ page }) => {
+test("operations organizes existing readers and procurement into ten sections and keeps capability gaps explicit", async ({ page }) => {
   const { calls, businessCalls } = await setup(page);
   const cards = page.getByRole("region", { name: "经营中台业务板块", exact: true });
-  await expect(cards.locator(":scope > article")).toHaveCount(9);
+  await expect(cards.locator(":scope > article")).toHaveCount(10);
   const navigation = page.getByRole("navigation", { name: "业务数据导航", exact: true });
   for (const label of ["商品与 Listing", "订单与销售", "库存与仓储", "物流与履约", "价格与竞争报价", "财务、结算与税务", "经营与品牌分析", "退货、售后与账户健康"]) {
     await expect(navigation.getByRole("region", { name: label, exact: true })).toBeVisible();

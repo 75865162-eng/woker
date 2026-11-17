@@ -4,7 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 let bundle: string;
 let styles: string;
 test.beforeAll(async () => {
-  const result = await build({ entryPoints: ["tests/browser/sellfox-harness.tsx"], bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env.NODE_ENV": '"development"' } });
+  const result = await build({ entryPoints: ["tests/browser/sellfox-harness.tsx"], bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env.NODE_ENV": '"development"', "process.env": "{}" } });
   bundle = result.outputFiles[0].text;
   const [{ readFile }, { default: postcss }, { default: tailwind }] = await Promise.all([import("node:fs/promises"), import("postcss"), import("@tailwindcss/postcss")]);
   styles = (await postcss([tailwind()]).process(await readFile("src/app/globals.css", "utf8"), { from: "src/app/globals.css" })).css;
@@ -166,22 +166,23 @@ test("run polling preserves filters when switching to verified listing and adver
 
 
 test("listing current and advertising product daily browse locally and expose narrow Agent exports", async ({ page }) => {
+  test.setTimeout(60_000);
   const { calls } = await setup(page, "domain=listings");
   await expect(page.getByRole("columnheader", { name: "7天销量", exact: true })).toBeVisible();
   await expect(page.getByLabel("开始日期")).toBeEnabled();
   await expect(page.getByLabel("结束日期")).toBeEnabled();
   await expect(page.getByLabel("开始日期")).toHaveValue("");
   await expect(page.getByLabel("结束日期")).toHaveValue("");
-  expect(calls.filter(call => call.path.endsWith("/listings")).at(-1)?.query.has("from")).toBe(false);
+  await expect.poll(() => calls.filter(call => call.path.endsWith("/listings")).at(-1)?.query.has("from")).toBe(false);
   await expect(page.getByLabel("日期快捷")).toBeEnabled();
-  const dxm = page.getByLabel("DXM 发布状态", { exact: true });
+  const dxm = page.getByRole("combobox", { name: "DXM 发布状态", exact: true });
   await expect(dxm).toBeVisible(); await expect(dxm).toBeEnabled();
   await expect(dxm.locator("option")).toHaveText(["全部", "delete"]);
   await dxm.selectOption("delete");
   await expect.poll(() => calls.filter(call => call.path.endsWith("/listings")).at(-1)?.query.get("dxmPublishState")).toBe("delete");
   await expect(page).toHaveURL(/dxmPublishState=delete/);
   await expect(page.getByRole("link", { name: "CSV", exact: true })).toHaveAttribute("href", /dxmPublishState=delete/);
-  const bsrCat = page.getByLabel("BSR类目", { exact: true });
+  const bsrCat = page.getByRole("combobox", { name: "BSR类目", exact: true });
   await expect(bsrCat).toBeEnabled();
   await expect(bsrCat.locator("option")).toHaveText(["全部", "Baby"]);
   await bsrCat.selectOption("Baby");
@@ -585,25 +586,53 @@ test("reference layout keeps compact filter bands and domain-specific identity c
   await page.setViewportSize({width:1440,height:960});
   const {calls} = await setup(page, "domain=sales&from=2026-10-18&to=2026-10-24",20);
   const expected: Record<string,string[]> = {
-    sales:["图片","ASIN","店铺/站点","分析","父ASIN","MSKU","品名/SKU","标题","FBA可售","小计"],
-    performance:["图片","标题/ASIN","店铺/站点","分析","毛利润"],
-    listings:["","状态","图片","ASIN/MSKU","标题"],
-    ads:["","图片","产品信息","有效未接","服务状态未接","FBA可售","价格","广告活动","广告组"],
+    sales:["图片","ASIN","店铺/站点","分析","父ASIN","MSKU","品名/SKU","标题","商品品牌","产品标签","售价","FBA可售","小计"],
+    performance:["图片","标题/ASIN","店铺/站点","分析","父ASIN","品名/SKU","毛利润"],
+    listings:["","状态","DXM 发布状态","发货方式","图片","ASIN/MSKU","标题"],
+    ads:["","图片","产品信息","有效未接","服务状态未接","FBA可售","价格","星级","评论数","广告活动","广告组"],
   };
   for (const [domain,tab] of [["sales","销量"],["performance","销售利润"],["listings","在线商品"],["ads","广告"]]) {
     await page.getByRole("navigation", {name:"赛狐数据域"}).getByRole("button",{name:tab,exact:true}).click();
     await expect(page.getByRole("button",{name:"查看记录 row",exact:true})).toBeVisible();
     const headers=await page.locator("thead th").allTextContents();
     expect(headers.map(h=>h.replace(/星期./g,"").trim()).slice(0,expected[domain].length)).toEqual(expected[domain]);
-    const filter=await page.getByLabel("筛选区",{exact:true}).boundingBox();
-    expect(filter!.height).toBeLessThan(domain === "sales" ? 265 : domain === "ads" ? 255 : 215);
+    const filterRegion = page.getByRole("region", { name: "筛选区", exact: true });
+    const primaryFilters = page.getByTestId("sellfox-primary-filters");
+    await expect(filterRegion).toBeVisible();
+    await expect(primaryFilters).toBeVisible();
+    const filterBox = await filterRegion.boundingBox();
+    // Current range filters need five Listing rows or four advertising rows plus its quick-filter bar.
+    expect(filterBox!.height).toBeLessThan(domain === "listings" ? 330 : domain === "sales" ? 265 : domain === "ads" ? 310 : 215);
+    if (domain === "ads") {
+      expect((await primaryFilters.boundingBox())!.height).toBeLessThanOrEqual(232);
+      for (const label of ["星级", "评论数", "花费", "广告销售额", "曝光", "点击", "广告订单"]) {
+        await expect(primaryFilters.getByLabel(`${label}下限`, { exact: true })).toBeVisible();
+        await expect(primaryFilters.getByLabel(`${label}上限`, { exact: true })).toBeVisible();
+      }
+    }
+    if (domain === "listings") {
+      expect((await primaryFilters.boundingBox())!.height).toBeLessThanOrEqual(288);
+      for (const label of ["总库存", "可售", "BSR", "价格", "7天销量", "14天销量", "30天销量", "7天销售额", "14天销售额", "30天销售额", "7天广告花费", "14天广告花费", "30天广告花费", "Listing库存", "预留", "不可售", "入库中"]) {
+        await expect(primaryFilters.getByLabel(`${label}下限`, { exact: true })).toBeVisible();
+        await expect(primaryFilters.getByLabel(`${label}上限`, { exact: true })).toBeVisible();
+      }
+      const boxes = await primaryFilters.locator("input, select, button").evaluateAll(elements => elements.filter(element => element.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })).map(element => {
+        const { left, top, right, bottom } = element.getBoundingClientRect();
+        return { left, top, right, bottom, name: element.getAttribute("aria-label") ?? element.textContent };
+      }));
+      for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+        const a = boxes[i], b = boxes[j];
+        expect(Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1, JSON.stringify({ a, b })).toBe(false);
+      }
+    }
+    await expect(page.getByLabel("搜索记录", { exact: true })).toBeVisible();
     await expect(page.locator("tbody tr")).toHaveCount(20);
     if (domain === "listings" || domain === "ads") {
       await page.getByLabel("选择本页记录",{exact:true}).check();
       await expect(page.locator("footer")).toContainText("本页已选 20 条");
     }
     await page.screenshot({path:`/tmp/sellfox-layout-${domain}.png`,fullPage:true});
-    if (domain === "performance") await expect(page.getByRole("cell",{name:"-10",exact:true}).first()).toHaveClass(/text-emerald-600/);
+    if (domain === "performance") await expect(page.getByRole("cell",{name:"-10",exact:true}).first()).toHaveClass(/text-success-ink/);
     await page.setViewportSize({width:720,height:900});
     const scroller = page.getByTestId("sellfox-table-scroll");
     const identity = page.locator("thead th.sticky").last();
@@ -888,10 +917,9 @@ test("ads default image precedes product info with tags, brand and fulfillment a
     for (const name of ["图片", "星级", "评论数", "标签", "品牌", "发货方式", "Buy Box"]) await expect(page.getByRole("checkbox", { name: `显示${name}列`, exact: true })).toBeChecked();
     for (const name of ["MSKU", "标题", "店铺", "站点"]) await expect(page.getByRole("checkbox", { name: `显示${name}列`, exact: true })).not.toBeChecked();
     await page.getByText("自定义列", { exact: true }).click();
-    for (const name of ["CSV", "Excel"]) {
-      const href = await page.getByRole("link", { name, exact: true }).getAttribute("href");
-      expect(new URL(href!, page.url()).searchParams.has("column")).toBe(false);
-    }
+    await expect(page.getByRole("link", { name: "Excel", exact: true })).toHaveCount(0);
+    const href = await page.getByRole("link", { name: "CSV", exact: true }).getAttribute("href");
+    expect(new URL(href!, page.url()).searchParams.has("column")).toBe(false);
   }
   await page.getByText("自定义列", { exact: true }).click();
   await page.getByRole("checkbox", { name: "显示图片列", exact: true }).uncheck();
@@ -900,12 +928,11 @@ test("ads default image precedes product info with tags, brand and fulfillment a
     await expect(page.getByRole("columnheader", { name, exact: true })).toHaveCount(0);
   }
   await expect(page.getByRole("columnheader", { name: "图片", exact: true })).toHaveCount(0);
-  for (const name of ["CSV", "Excel"]) {
-    const href = await page.getByRole("link", { name, exact: true }).getAttribute("href");
-    const params = new URL(href!, page.url()).searchParams;
-    expect(params.get("columns")).toBe("custom");
-    for (const key of ["image", "rating", "ratingCount", "productTags", "brand", "fulfillment", "buyBoxWinner"]) expect(params.getAll("column")).not.toContain(key);
-  }
+  await expect(page.getByRole("link", { name: "Excel", exact: true })).toHaveCount(0);
+  const href = await page.getByRole("link", { name: "CSV", exact: true }).getAttribute("href");
+  const params = new URL(href!, page.url()).searchParams;
+  expect(params.get("columns")).toBe("custom");
+  for (const key of ["image", "rating", "ratingCount", "productTags", "brand", "fulfillment", "buyBoxWinner"]) expect(params.getAll("column")).not.toContain(key);
   await page.getByText("自定义列", { exact: true }).click();
   await page.getByRole("button", { name: "广告产品", exact: true }).click();
   for (const name of ["图片", "星级", "评论数", "标签", "品牌", "发货方式", "Buy Box"]) await expect(page.getByRole("columnheader", { name, exact: true })).toBeVisible();

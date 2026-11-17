@@ -27,3 +27,11 @@ services:
 volumes:
   postgres-data:
   redis-data:
+
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        # 固定子网，避开 WSL NAT 动态分配的 172.16.0.0/12 段（否则与 VM eth0 路由冲突，端口转发挂起）
+        - subnet: 172.28.0.0/24

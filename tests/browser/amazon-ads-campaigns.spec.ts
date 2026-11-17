@@ -78,7 +78,7 @@ test("生产构建拒绝演示初始视图且不提供演示回退入口", async
   await expect(page.getByRole("heading", { name: "已同步 Ads 数据" })).toBeVisible();
   await expect(page.getByText("广告表现演示数据", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /演示工作台/ })).toHaveCount(0);
-  await page.getByRole("button", { name: "广告活动工作台", exact: true }).click();
+  await page.getByRole("button", { name: "进入本地广告活动工作台", exact: true }).click();
   await expect(page.getByRole("table", { name: "本地广告活动" })).toBeVisible();
   await expect(page.getByRole("button", { name: /演示工作台/ })).toHaveCount(0);
   expect(errors).toEqual([]);

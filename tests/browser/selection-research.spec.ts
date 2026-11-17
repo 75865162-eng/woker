@@ -12,6 +12,11 @@ import { SKILLS, ToolNotDispatchedError, type Decision, type Run } from "../../s
 import { researchReadiness } from "../../src/lib/selection-research/preflight";
 import type { ProviderStatus, RuntimeTool } from "../../src/lib/lili/runtime-tools";
 
+function requiredApprovalGate(run: Run) {
+  if (!run.gate) throw new Error(`Expected an approval gate before authorization: ${run.status}`);
+  return run.gate;
+}
+
 let bundle: string;
 test.beforeAll(async () => {
   bundle = (await build({ entryPoints: ["tests/browser/selection-research-harness.tsx"], bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env.NODE_ENV": '"production"' } })).outputFiles[0].text;
@@ -308,9 +313,9 @@ test("pre-dispatch failure survives reload with zero requests and recovery requi
       async listTools() { return [{ name: "product_research", inputSchema: { type: "object", properties: { request: { type: "string" } }, required: ["request"] } }]; },
       async callTool() { if (blocked) throw new ToolNotDispatchedError("RUNTIME_TOOL_UNAVAILABLE_OR_FORBIDDEN"); dispatches++; return { requestId: "isolated" }; },
     }, { async next({ run }) { return { type: "call", tool: "product_research", arguments: { request: String(run.calls.length + 1) } }; } }, { mode: "live", authorizeLive: async () => true });
-    let run = await engine.create({ requirement: "Isolated UI non-dispatch test", marketplace: "US", skills: SKILLS.map(name => ({ name, path: "isolated", markdown: "isolated", sha256: "isolated", tools: [] })), policies: { product_research: { provider: "sellersprite", paid: true, units: 1, unit: "calls", pricingSource: "isolated", maxCalls: 1, stages: [1] } }, limits: { sellersprite: 1 } });
+    let run = await engine.create({ requirement: "Isolated UI non-dispatch test; paid research calls require prior approval.", marketplace: "US", skills: SKILLS.map(name => ({ name, path: "isolated", markdown: "isolated", sha256: "isolated", tools: [] })), policies: { product_research: { provider: "sellersprite", paid: true, units: 1, unit: "calls", pricingSource: "isolated", maxCalls: 1, stages: [1] } }, limits: { sellersprite: 1 } });
     run = await engine.step(run.id);
-    run = await engine.decide(run.id, { kind: "AUTHORIZE_TOOL", gateId: run.gate!.id, callId: run.pendingActionId });
+    run = await engine.decide(run.id, { kind: "AUTHORIZE_TOOL", gateId: requiredApprovalGate(run).id, callId: run.pendingActionId });
     run = await engine.step(run.id);
     await page.route("**/*", async route => {
       const url = new URL(route.request().url());
@@ -399,7 +404,7 @@ test("first task approval runs later paid calls within the saved limit without f
       async listTools() { return [{ name: "product_research", inputSchema: { type: "object", properties: { page: { type: "integer" } }, required: ["page"] } }]; },
       async callTool() { dispatches++; return { requestId: `isolated-${dispatches}` }; },
     }, { async next({ run }) { return { type: "call", tool: "product_research", arguments: { page: run.calls.length + 1 } }; } }, { mode: "live", authorizeLive: async () => true });
-    let run = await engine.create({ requirement: "Isolated task-level approval test", marketplace: "US", skills: SKILLS.map(name => ({ name, path: "isolated", markdown: "isolated", sha256: "isolated", tools: [] })), policies: { product_research: { provider: "sellersprite", paid: true, units: 1, unit: "calls", pricingSource: "isolated", maxCalls: 2, stages: [1] } }, limits: { sellersprite: 2 } });
+    let run = await engine.create({ requirement: "Isolated task-level approval test; paid research calls require prior approval.", marketplace: "US", skills: SKILLS.map(name => ({ name, path: "isolated", markdown: "isolated", sha256: "isolated", tools: [] })), policies: { product_research: { provider: "sellersprite", paid: true, units: 1, unit: "calls", pricingSource: "isolated", maxCalls: 2, stages: [1] } }, limits: { sellersprite: 2 } });
     run = await engine.step(run.id);
     await page.route("**/*", async route => {
       const url = new URL(route.request().url());
@@ -469,10 +474,10 @@ test("isolated receipt form converts costs, persists the original receipt and le
     const engine = new ResearchEngine(new LocalResearchStore(root), { organizationId: "mock-org", workspaceId: "default", ownerId: "mock-owner" }, {
       async listTools() { return [tool]; }, async callTool() { dispatches++; return { records: [] }; },
     }, { async next(): Promise<never> { throw new Error("NO_MODEL"); } }, { mode: "live", authorizeLive: async () => true });
-    let run = await engine.create({ executionMode: "codex", budgetMode: "uncapped", requirement: "产品方向：arrow bag quiver", marketplace: "US", skills: SKILLS.map(name => ({ name, path: "fixture", markdown: "fixture", sha256: "fixture", tools: [] })),
+    let run = await engine.create({ executionMode: "codex", budgetMode: "uncapped", requirement: "产品方向：arrow bag quiver。付费查询需先审批。", marketplace: "US", skills: SKILLS.map(name => ({ name, path: "fixture", markdown: "fixture", sha256: "fixture", tools: [] })),
       registry: [tool], policies: { [tool.name]: { provider: "sellersprite", paid: true, units: 1, unit: "calls", maxCalls: 1, stages: [1], pricingSource: "unknown" } }, limits: { sellersprite: 0 } });
     run = await engine.step(run.id, { action: { type: "call", tool: tool.name, arguments: { query: "fixture" } }, revision: run.revision });
-    run = await engine.decide(run.id, { kind: "AUTHORIZE_TOOL", gateId: run.gate!.id, callId: run.pendingActionId });
+    run = await engine.decide(run.id, { kind: "AUTHORIZE_TOOL", gateId: requiredApprovalGate(run).id, callId: run.pendingActionId });
     run = await engine.step(run.id);
     await page.route("**/*", async route => {
       const url = new URL(route.request().url());

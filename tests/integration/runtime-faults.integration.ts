@@ -29,8 +29,8 @@ const require = createRequire(import.meta.url), { Client } = require("pg");
 const execute = promisify(execFile);
 const base = { organizationId: "fixture-org", userId: "fixture-user" };
 const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-async function until(fn: () => Promise<unknown>, label: string) {
-  const deadline = Date.now() + 30_000;
+async function until(fn: () => Promise<unknown>, label: string, timeout = 30_000) {
+  const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     try { if (await fn()) return; } catch { /* Only the fixture database is restarting. */ }
     await pause(100);
@@ -148,7 +148,7 @@ main().catch(() => process.exit(1));
   }
 });
 
-test("PostgreSQL restart inside final publication rolls back and permits one safe retry", { timeout: 90_000 }, async () => {
+test("PostgreSQL restart inside final publication rolls back and permits one safe retry", { timeout: 180_000 }, async () => {
   const inspected = JSON.parse((await execute("docker", ["inspect", process.env.ERP_RUNTIME_FIXTURE_PG_ID!])).stdout)[0];
   assertFixtureContainer(inspected, {
     id: process.env.ERP_RUNTIME_FIXTURE_PG_ID!, name: pgContainer, tag: process.env.ERP_RUNTIME_FIXTURE_TAG!,
@@ -164,6 +164,7 @@ test("PostgreSQL restart inside final publication rolls back and permits one saf
     IF NEW.action = 'export_record_save' THEN PERFORM pg_advisory_xact_lock(${key}::bigint); END IF;
     RETURN NEW; END $$`);
   let processing: Promise<unknown> | undefined;
+  let primaryFailed = false;
   try {
     await prisma.$executeRawUnsafe('CREATE TRIGGER fixture_pause_audit BEFORE INSERT ON "AuditLog" FOR EACH ROW EXECUTE FUNCTION fixture_pause_final_audit()');
     processing = processImportJob(job.id).then(() => ({ ok: true }), () => ({ ok: false }));
@@ -175,7 +176,7 @@ test("PostgreSQL restart inside final publication rolls back and permits one saf
       id: inspected.Id, name: pgContainer, tag: process.env.ERP_RUNTIME_FIXTURE_TAG!, port: target.port, servicePort: 5432,
     });
     await execute("docker", ["restart", inspected.Id]);
-    await until(() => prisma.$queryRaw`SELECT 1`, "fixture PostgreSQL reconnect");
+    await until(() => prisma.$queryRaw`SELECT 1`, "fixture PostgreSQL reconnect", 90_000);
     await processing;
     const interrupted = await prisma.importJob.findUniqueOrThrow({ where: { id: job.id }, include: { file: true, exportRecords: true } });
     assert.ok(["running", "failed"].includes(interrupted.status));
@@ -196,10 +197,18 @@ test("PostgreSQL restart inside final publication rolls back and permits one saf
     assert.notEqual(result.executionToken, interrupted.executionToken);
     assert.equal(result.file.storageKey, result.resultKey); assert.equal(result.exportRecords.length, 1);
     assert.equal(await prisma.auditLog.count({ where: { entityId: job.id, action: "import_job_done" } }), 1);
+  } catch (error) {
+    primaryFailed = true;
+    throw error;
   } finally {
     await holder.end().catch(() => {});
     if (processing) await processing;
-    await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS fixture_pause_audit ON "AuditLog"');
-    await prisma.$executeRawUnsafe('DROP FUNCTION fixture_pause_final_audit()');
+    try {
+      await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS fixture_pause_audit ON "AuditLog"');
+      await prisma.$executeRawUnsafe('DROP FUNCTION fixture_pause_final_audit()');
+    } catch (error) {
+      if (!primaryFailed) throw error;
+      console.error("临时数据库清理失败，保留原始测试错误", error);
+    }
   }
 });

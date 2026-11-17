@@ -226,7 +226,7 @@ test("Amazon result rows show READY source, NEEDS_DATA inputs, urgency and expan
   const ready = page.getByRole("row").filter({ hasText: "READY-SKU" });
   await expect(ready).toContainText("READY · URGENT");
   await expect(ready).toContainText("AmazonInventorySnapshot");
-  await expect(ready.locator("span.bg-red-500")).toBeVisible();
+  await expect(ready.locator('span[data-urgency="URGENT"]')).toBeVisible();
   await ready.locator("summary").click();
   await expect(ready.getByText("库存将在到货前不足", { exact: true })).toBeVisible();
   const needs = page.getByRole("row").filter({ hasText: "NEEDS-SKU" });

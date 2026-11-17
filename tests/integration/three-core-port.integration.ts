@@ -37,6 +37,7 @@ async function main() {
   for(const actor of [scope,reviewer,third]){
     await prisma.user.create({data:{id:actor.actorUserId,email:`${actor.actorUserId}@fixture.invalid`,name:'Synthetic',passwordHash:'fixture-not-password'}});
     await prisma.organizationMember.create({data:{organizationId:scope.organizationId,userId:actor.actorUserId,role:actor.actorUserId as 'owner' | 'warehouse_supervisor' | 'finance'}});
+    await prisma.workspaceMembership.create({data:{organizationId:scope.organizationId,workspaceId:scope.workspaceId,userId:actor.actorUserId}});
     await prisma.organizationRosterRole.create({data:{organizationId:scope.organizationId,id:actor.actorUserId,name:actor.actorUserId,description:'fixture',permissions:{operations:['view','create','approve'],wms:['view','create','edit','approve'],products:['view']}}});
   }
   await financeAuxiliaryFixture(scope, reviewer);
@@ -57,7 +58,7 @@ async function main() {
     await mutateFinanceLedger(reviewer,{action:'review-voucher',voucherId:voucher.id,revision:1});
     await mutateFinanceLedger(reviewer,{action:'post-voucher',voucherId:voucher.id,revision:2});return voucher;
   }
-  const {sessionCookie: purchaseCookie}=await createSession(scope.actorUserId);
+  const {sessionCookie: purchaseCookie}=await createSession(scope.actorUserId,{id:scope.actorUserId,email:`${scope.actorUserId}@fixture.invalid`,name:'Synthetic',role:'owner',organizationId:scope.organizationId,organizationName:'Synthetic port fixture'});
   const purchaseHeaders={cookie:`${purchaseCookie.name}=${purchaseCookie.value}`,'content-type':'application/json','x-workspace-id':'default'};
   async function purchaseCreate(body:Record<string,unknown>) {
     const response=await procurementRoute.POST(new Request('http://127.0.0.1/api/operations/procurement',{method:'POST',headers:purchaseHeaders,body:JSON.stringify(body)}));
@@ -197,7 +198,7 @@ async function main() {
   console.log('PASS: V2 packing/placement/transport/delivery evidence structure, six-way replay, immutable source, independent returned-ID choice, scope and no remote/stock effect');
 
   await remoteActionFixture(scope,reviewer);
-  const {sessionCookie}=await createSession(scope.actorUserId);
+  const {sessionCookie}=await createSession(scope.actorUserId,{id:scope.actorUserId,email:`${scope.actorUserId}@fixture.invalid`,name:'Synthetic',role:'owner',organizationId:scope.organizationId,organizationName:'Synthetic port fixture'});
   const headers={cookie:`${sessionCookie.name}=${sessionCookie.value}`,'content-type':'application/json','x-workspace-id':'default'};
   assert.equal((await openItemsRoute.GET(new Request(`http://127.0.0.1/api/operations/finance-open-items?bookId=${book.id}`,{headers}))).status,200);
   assert.equal((await auxiliaryRoute.GET(new Request(`http://127.0.0.1/api/operations/finance-auxiliary?bookId=${book.id}`,{headers}))).status,200);

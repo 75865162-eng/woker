@@ -2,6 +2,7 @@ import { build } from "esbuild";
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { handleLiliRequest } from "@/lib/lili/api";
+import "@/lib/lili/tool-config-api";
 import { createRuntimeTools } from "@/lib/lili/runtime-tools";
 import { defaultXiyouSettings, mergeXiyouSettings } from "@/lib/lili/tool-config";
 import { defaultSellerSpriteMcpSettings, toPublicSellerSpriteMcpSettings } from "@/lib/integrations/sellersprite";
@@ -26,7 +27,10 @@ test.beforeAll(async () => {
 });
 
 async function setup(page: Page, path: string) {
-  const state = { failNetwork: false, configReadFailure: false, sellerTestFailure: false, sellerProbes: 0, calls: [] as string[], probes: 0 };
+  const state = { failNetwork: false, configReadFailure: false, sellerTestFailure: false, sellerProbes: 0, calls: [] as string[], probes: 0, configScopes: [] as string[] };
+  await page.addInitScript(() => {
+    localStorage.setItem("amazon_bulk_ad_workspace_scope", JSON.stringify({ workspaceId: "fixture-lili-workspace", accountId: "", marketplace: "" }));
+  });
   // Isolated protocol doubles: never resolve real credentials or database state in browser tests.
   const runtime = createRuntimeTools([
     { id: "erp", isReadOnly: () => true, transport: {
@@ -39,7 +43,7 @@ async function setup(page: Page, path: string) {
     } },
     { id: "xiyou", isReadOnly: () => false, reason: "ISOLATED_PROVIDER_NOT_CONNECTED" },
   ]);
-  let xiyou = { ...defaultXiyouSettings };
+  const xiyouByWorkspace = new Map<string, typeof defaultXiyouSettings>();
   let sellerSprite = { ...defaultSellerSpriteMcpSettings };
   await page.route("**/*", async (route) => {
     const req = route.request(); const url = new URL(req.url());
@@ -65,7 +69,18 @@ async function setup(page: Page, path: string) {
       if (state.configReadFailure && req.method() === "GET" && url.pathname.endsWith("/tool-config")) return route.fulfill({ status: 503, json: { message: "配置读取失败，请重试。" } });
       const request = new Request(url, { method: req.method(), headers: req.headers(), ...(req.postData() ? { body: req.postData() } : {}) });
       const response = await handleLiliRequest(request, url.pathname.slice("/api/lili/".length).split("/"), async () => ({ ok: true, user: { id: "fixture-user", organizationId: "fixture-org" } }), {
-        store: { async read() { return xiyou; }, async save(_scope, patch) { xiyou = mergeXiyouSettings(patch, xiyou); return xiyou; } },
+        store: {
+          async read(scope) {
+            state.configScopes.push(scope.workspaceId);
+            return xiyouByWorkspace.get(scope.workspaceId) ?? { ...defaultXiyouSettings };
+          },
+          async save(scope, patch) {
+            state.configScopes.push(scope.workspaceId);
+            const settings = mergeXiyouSettings(patch, xiyouByWorkspace.get(scope.workspaceId) ?? { ...defaultXiyouSettings });
+            xiyouByWorkspace.set(scope.workspaceId, settings);
+            return settings;
+          },
+        },
         async probe() { state.probes++; },
       }, runtime);
       return route.fulfill({ status: response.status, headers: Object.fromEntries(response.headers), body: Buffer.from(await response.arrayBuffer()) });
@@ -127,8 +142,12 @@ test("workflow detail retains source gaps and refuses automatic execution explic
   await setup(page, "/lili/v2/workflows/competitor-teardown");
   await expect(page.getByText("amazon-price-tracker：原始源码包未附此技能定义。")).toBeVisible();
   await expect(page.locator('a[href$="/amazon-price-tracker"]')).toHaveCount(0);
+  const responsePromise = page.waitForResponse((response) => response.url().endsWith("/api/lili/workflows/pack"));
   await page.getByRole("button", { name: "检查工作流执行能力" }).click();
-  await expect(page.getByText(/此独立 Lili 操作未映射/)).toBeVisible();
+  const response = await responsePromise;
+  expect(response.status()).toBe(501);
+  expect(await response.json()).toMatchObject({ error: "lili_operation_not_mapped", nextAction: { kind: "UNSUPPORTED_EXECUTOR" } });
+  await expect(page.getByText(/此步骤执行器尚未接入/)).toBeVisible();
 });
 
 test("start page and navigation omit removed entries", async ({ page }) => {
@@ -179,12 +198,62 @@ test("tool configuration restores both providers, masks secrets after save and p
   await card.getByRole("button", { name: "测试已保存连接" }).click();
   await expect(card.getByRole("status")).toContainText("西柚 MCP 初始化已响应");
   expect(state.probes).toBe(1);
+  expect(state.configScopes.length).toBeGreaterThanOrEqual(5);
+  expect(state.configScopes.every((scope) => scope === "fixture-lili-workspace")).toBe(true);
   await expect(page.locator("body")).not.toContainText("fixture-xiyou-browser-token");
+  await page.evaluate(() => {
+    localStorage.setItem("amazon_bulk_ad_workspace_scope", JSON.stringify({ workspaceId: "fixture-lili-other-workspace", accountId: "", marketplace: "" }));
+    window.dispatchEvent(new CustomEvent("amazon-bulk-ad:workspace-scope-changed"));
+  });
+  await expect(card.getByLabel("MCP Token", { exact: true })).toHaveAttribute("placeholder", "填写 MCP Token");
+  await expect(card.getByLabel("启用西柚 MCP")).not.toBeChecked();
+  await card.getByRole("button", { name: "保存西柚配置" }).click();
+  await expect(card.getByRole("status")).toContainText("已保存西柚配置");
+  expect(state.configScopes.slice(-2)).toEqual(["fixture-lili-other-workspace", "fixture-lili-other-workspace"]);
+});
+
+test("late save responses cannot restore credentials or success state after workspace changes", async ({ page }) => {
+  const state = await setup(page, "/lili/v2/tool-config");
+  const card = page.getByRole("region", { name: "西柚洞察", exact: true });
+  await card.getByLabel("MCP Token", { exact: true }).fill("fixture-old-workspace-token");
+  await card.getByLabel("启用西柚 MCP").check();
+  let releaseSave!: () => void;
+  const saveGate = new Promise<void>((resolve) => { releaseSave = resolve; });
+  let saveStarted!: () => void;
+  const started = new Promise<void>((resolve) => { saveStarted = resolve; });
+  await page.route("**/api/lili/tool-config", async (route) => {
+    if (route.request().method() === "PUT") {
+      saveStarted();
+      await saveGate;
+    }
+    await route.fallback();
+  });
+  await card.getByRole("button", { name: "保存西柚配置" }).click();
+  await started;
+  await page.evaluate(() => {
+    localStorage.setItem("amazon_bulk_ad_workspace_scope", JSON.stringify({ workspaceId: "fixture-lili-new-workspace", accountId: "", marketplace: "" }));
+    window.dispatchEvent(new CustomEvent("amazon-bulk-ad:workspace-scope-changed"));
+  });
+  await expect(card.getByRole("button", { name: "保存西柚配置" })).toBeEnabled();
+  await expect(card.getByLabel("MCP Token", { exact: true })).toHaveValue("");
+  const savedResponse = page.waitForResponse((response) => response.request().method() === "PUT" && response.url().endsWith("/api/lili/tool-config"));
+  releaseSave();
+  const response = await savedResponse;
+  expect(response.status()).toBe(200);
+  await response.finished();
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  await expect(card.getByRole("status")).toHaveText("");
+  await expect(card.getByLabel("MCP Token", { exact: true })).toHaveValue("");
+  await expect(card.getByLabel("MCP Token", { exact: true })).toHaveAttribute("placeholder", "填写 MCP Token");
+  await expect(card.getByLabel("启用西柚 MCP")).not.toBeChecked();
+  await expect(card.getByRole("button", { name: "测试已保存连接" })).toBeDisabled();
+  expect(state.configScopes.slice(-2)).toEqual(["fixture-lili-new-workspace", "fixture-lili-workspace"]);
 });
 
 test("configuration read and save failures remain visible and allow retry", async ({ page }) => {
   const state = await setup(page, "/lili/v2/tool-config");
   const card = page.getByRole("region", { name: "西柚洞察", exact: true });
+  await expect(card.getByRole("status")).toHaveText("");
   await expect(card.getByRole("button", { name: "保存西柚配置" })).toBeEnabled();
   state.failNetwork = true;
   await card.getByRole("button", { name: "保存西柚配置" }).click();

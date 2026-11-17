@@ -60,7 +60,7 @@ async function setup(page: Page, mode = "", imageAssets?: Product["imageAssets"]
 }
 
 function nameInput(page: Page) { return page.locator("label").filter({ hasText: "中文名（必填）" }).locator("input"); }
-async function savedLocally(page: Page) { await expect(page.getByRole("status")).toContainText("草稿已暂存"); }
+async function savedLocally(page: Page) { await expect(page.getByRole("status").filter({ hasText: "草稿已暂存" })).toBeVisible(); }
 
 test("商品表格复制 SKU 有成功与失败反馈", async ({ page }) => {
   await page.addInitScript(() => {

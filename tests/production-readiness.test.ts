@@ -166,6 +166,81 @@ test("deployment gate rejects insecure auth, TLS overrides and unsafe write swit
   }
 });
 
+test("代码和部署门禁拒绝低于22.19的Node并检查实际运行版本", () => {
+  const cases = [
+    { version: "20.19.0", ok: false },
+    { version: "22.18.9", ok: false },
+    { version: "22.19.0", ok: true },
+    { version: "24.0.0", ok: true },
+    { version: process.versions.node, ok: true },
+  ];
+  for (const gate of ["code", "deploy"]) {
+    for (const { version, ok } of cases) {
+      const script = `
+        ${version === process.versions.node ? "" : `Object.defineProperty(process.versions, "node", { value: ${JSON.stringify(version)} });`}
+        process.argv.push("--env", "process", "--gate", ${JSON.stringify(gate)}, "--json");
+        await import("./scripts/runtime/production-readiness.mjs");
+      `;
+      const result = spawnSync(process.execPath, ["--input-type=module", "--eval", script], {
+        cwd: process.cwd(), encoding: "utf8", env: { PATH: process.env.PATH ?? "" },
+      });
+      assert.equal(result.status, 1, "隔离的不完整配置必须保持阻塞");
+      const report = JSON.parse(result.stdout) as {
+        checks: Array<{ id: string; ok: boolean; blocking: boolean; scope: string; detail: string }>;
+        blockingFailures: Array<{ id: string }>;
+      };
+      const check = report.checks.find(row => row.id === "config.node_version");
+      assert.ok(check, `${gate}: ${version}`);
+      assert.equal(check.ok, ok, `${gate}: ${version}`);
+      assert.equal(check.blocking, true);
+      assert.equal(check.scope, "internal");
+      assert.equal(check.detail.includes(version), true);
+      assert.equal(report.blockingFailures.some(row => row.id === check.id), !ok);
+      assert.equal(report.checks.some(row => row.id.startsWith("db.")), false);
+    }
+  }
+});
+
+test("部署门禁校验生产运行配置且保留代码门禁范围", () => {
+  const settings = [
+    { key: "ERP_RUNTIME_MODE", id: "config.runtime_mode", valid: "production", invalid: "local" },
+    { key: "NODE_ENV", id: "config.node_env", valid: "production", invalid: "development" },
+    { key: "AMAZON_API_EXECUTION_ROLE", id: "config.execution_role", valid: "cloud", invalid: "local" },
+  ];
+  const validEnv = Object.fromEntries(settings.map(({ key, valid }) => [key, valid]));
+  const reportFor = (gate: string, overrides: Record<string, string | undefined> = {}) => {
+    const result = spawnSync(process.execPath, ["scripts/runtime/production-readiness.mjs", "--env", "process", "--gate", gate, "--json"], {
+      cwd: process.cwd(), encoding: "utf8",
+      env: { PATH: process.env.PATH ?? "", ...validEnv, ...overrides },
+    });
+    assert.equal(result.status, 1, "隔离的不完整配置必须保持阻塞");
+    const report = JSON.parse(result.stdout) as {
+      ready: boolean;
+      checks: Array<{ id: string; ok: boolean; blocking: boolean; scope: string }>;
+      blockingFailures: Array<{ id: string }>;
+    };
+    assert.equal(report.ready, false);
+    assert.equal(report.checks.some(row => row.id.startsWith("db.")), false);
+    return report;
+  };
+  const valid = reportFor("deploy");
+  for (const { key, id, invalid } of settings) {
+    const check = valid.checks.find(row => row.id === id);
+    assert.ok(check, id);
+    assert.equal(check.ok, true);
+    assert.equal(check.blocking, true);
+    assert.equal(check.scope, "asset");
+    assert.equal(valid.blockingFailures.some(row => row.id === id), false);
+    for (const value of [undefined, "", invalid]) {
+      const report = reportFor("deploy", { [key]: value });
+      assert.equal(report.checks.find(row => row.id === id)?.ok, false);
+      assert.equal(report.blockingFailures.some(row => row.id === id), true);
+    }
+  }
+  const code = reportFor("code", Object.fromEntries(settings.map(({ key, invalid }) => [key, invalid])));
+  for (const { id } of settings) assert.equal(code.checks.some(row => row.id === id), false);
+});
+
 test("deployment assets must exist and contain content", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "readiness-assets-"));
   try {

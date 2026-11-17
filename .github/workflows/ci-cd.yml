@@ -55,11 +55,17 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22.22.2'
           cache: npm
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ hashFiles('package-lock.json') }}
 
       - name: Install browser
         run: npx playwright install --with-deps chromium
@@ -113,7 +119,7 @@ jobs:
         if: steps.plan.outputs.release == 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22.22.2'
           cache: npm
 
       - name: Install dependencies
@@ -135,6 +141,13 @@ jobs:
       - name: UI regression guard
         if: steps.plan.outputs.release == 'true'
         run: npm run ui:guard
+
+      - name: Cache Playwright browsers
+        if: steps.plan.outputs.release == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ hashFiles('package-lock.json') }}
 
       - name: Install test browser
         if: steps.plan.outputs.release == 'true'
@@ -193,7 +206,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22.22.2'
           cache: npm
 
       - name: Install dependencies
@@ -203,6 +216,12 @@ jobs:
         env:
           DATABASE_URL: postgresql://fixture:fixture@127.0.0.1:5432/fixture
         run: npm run db:generate
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ hashFiles('package-lock.json') }}
 
       - name: Install fixture browser
         run: npx playwright install --with-deps chromium

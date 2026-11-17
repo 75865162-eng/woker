@@ -10,15 +10,41 @@ import { createSupplierAgentExecutionExecutor, createSupplierMcpAdapter, supplie
 import { createListingAgentExecutionExecutor, createListingMcpAdapter, listingAgentDefinition, listingToolDefinitions } from "@/lib/agent-platform/listing";
 import { createPpcAgentExecutionExecutor, createPpcAnalyticsAdapter, ppcAgentDefinition, ppcToolDefinitions } from "@/lib/agent-platform/ppc";
 import { createSelectionAdapter } from "@/lib/agent-platform/selection";
-import type { AgentExecutionDetail } from "@/lib/agent-platform/types";
+import type { AgentExecutionDetail, AgentToolAdapter, JsonObject } from "@/lib/agent-platform/types";
 
 import selectionSample from "../fixtures/selection/evidence.json";
 import { parseSelectionEvidence } from "@/lib/agent-platform/selection-evidence";
 
+// 仅经 Runtime 的 adapter 合同注入隔离数据，不恢复生产适配器的模拟回退。
+const marketFixtureResponses: Record<string, JsonObject> = {
+  "sellersprite.market.search": { demandStrength: 75, competitionStrength: 35, entryBarrier: 30, candidateAsins: ["B000TEST01"] },
+  "sellersprite.keyword.search": { keywordOpportunity: 70, keywords: ["desk organizer"] },
+  "sellersprite.category.analyze": { categoryGrowth: 65, concentration: 35, entryBarrier: 30 },
+  "sellersprite.competitor.analyze": { competitionStrength: 35, competitors: [{ asin: "B000TEST01" }], differentiationGaps: ["可调隔板"] },
+  "sellersprite.review.analyze": { averageReviewCount: 100, reviewBarrier: 35, painPoints: ["隔板不可调"] },
+  "sellersprite.trend.analyze": { trendScore: 70, momentum: 65, seasonality: "稳定" },
+  "sellersprite.price.analyze": { priceBand: { min: 20, max: 40 }, marginPotential: 65, entryPrice: 25 },
+  "sellersprite.sales.analyze": { estimatedSales: 500, salesVelocity: 60, demandStrength: 75 },
+  "sellersprite.competition.analyze": { competitionStrength: 35, sellerDensity: 40, entryBarrier: 30 },
+};
+function createMarketFixtureAdapter(): AgentToolAdapter {
+  return {
+    adapterId: createSellerSpriteMcpAdapter().adapterId,
+    async execute({ toolId, input }) {
+      const response = marketFixtureResponses[toolId];
+      expect(response, `未定义的浏览器 fixture 工具：${toolId}`).toBeTruthy();
+      const request = input as JsonObject;
+      expect(request.marketplace).toBe("US");
+      // 按请求回显维度，保留明确的测试来源；非 Round B 报告仍须显示模拟警告。
+      return { output: { ...request, ...response, provenance: "tests/browser/agent-chain.spec.ts#marketFixtureResponses" }, latencyMs: 0 };
+    },
+  };
+}
+
 let bundle: string;
 const surfaces = {
   orchestrator: { definition: orchestratorAgentDefinition, tools: orchestratorToolDefinitions, adapters: [createOrchestratorInternalAdapter()], executor: createOrchestratorExecutionExecutor },
-  market: { definition: marketAgentDefinition, tools: marketToolDefinitions, adapters: [createSellerSpriteMcpAdapter(), createSelectionAdapter()], executor: createMarketAgentExecutionExecutor },
+  market: { definition: marketAgentDefinition, tools: marketToolDefinitions, adapters: [createMarketFixtureAdapter(), createSelectionAdapter()], executor: createMarketAgentExecutionExecutor },
   product: { definition: productAgentDefinition, tools: productToolDefinitions, adapters: [createProductMcpAdapter()], executor: createProductAgentExecutionExecutor },
   supplier: { definition: supplierAgentDefinition, tools: supplierToolDefinitions, adapters: [createSupplierMcpAdapter()], executor: createSupplierAgentExecutionExecutor },
   listing: { definition: listingAgentDefinition, tools: listingToolDefinitions, adapters: [createListingMcpAdapter()], executor: createListingAgentExecutionExecutor },
@@ -75,7 +101,7 @@ async function setup(page: Page) {
     expect(surface).toBeTruthy();
     if (request.method() === "POST") {
       const body = request.postDataJSON(); calls.push({ stage, body });
-      const runtime = createAgentRuntime({ definitions: [surface.definition], tools: surface.tools, adapters: stage === "market" ? [createSellerSpriteMcpAdapter(), createSelectionAdapter({ loadEvidence: async (fileId) => {
+      const runtime = createAgentRuntime({ definitions: [surface.definition], tools: surface.tools, adapters: stage === "market" ? [createMarketFixtureAdapter(), createSelectionAdapter({ loadEvidence: async (fileId) => {
         expect(fileId).toBe(`selection-${request.headers()["x-workspace-id"]}`);
         return { value: selectionFiles.get(fileId), source: { fileId, sha256: "a".repeat(64) } };
       } })] : surface.adapters });
@@ -93,6 +119,7 @@ async function setup(page: Page) {
 test("actual six workbenches pass versioned payloads and approval unlocks PPC without historical rows", async ({ page }) => {
   const state = await setup(page);
   await page.goto("http://127.0.0.1:43221/agents/orchestrator");
+  await page.getByRole("textbox", { name: "目标", exact: true }).fill("研究美国站 desk organizer，复核后依次交接产品、供应、刊登和 Launch 审批");
   await page.getByRole("button", { name: "运行编排", exact: true }).click();
   await expect(page.getByText("blocked_until_launch", { exact: true })).toBeVisible();
   const blockedPpc = page.getByText("launch → PPC Agent", { exact: true }).locator("..").locator("..");
@@ -106,6 +133,17 @@ test("actual six workbenches pass versioned payloads and approval unlocks PPC wi
   await expect(page.getByText("已加载交接，运行前请复核。", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: "运行研究", exact: true }).click();
   await expect(page.getByRole("note").filter({ hasText: "模拟数据不可作为全链路验收" })).toBeVisible();
+  const marketCalls = state.latest.get("market")!.toolCalls;
+  expect(marketCalls).toHaveLength(Object.keys(marketFixtureResponses).length);
+  for (const call of marketCalls) {
+    expect(call.status).toBe("SUCCEEDED");
+    expect(call.output).toMatchObject({ provenance: "tests/browser/agent-chain.spec.ts#marketFixtureResponses" });
+  }
+  // 后续供应链路必须携带 Round B 证据；市场模拟报告不能替代来源。
+  await page.getByLabel("Round B 采集草稿", { exact: true }).setInputFiles({ name: "draft.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify({ ...selectionSample, suppliers: [{ title: "Browser chain fixture lead", shopName: "", url: "https://detail.1688.com/offer/123456.html", price: "", moq: "" }] })) });
+  await expect(page.getByText("草稿已上传，可以生成机会。", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "从 Round B 证据生成机会", exact: true }).click();
+  await expect.poll(() => (state.latest.get("market")?.output as { report?: { selectionSource?: { fileId: string } } })?.report?.selectionSource?.fileId).toBe("selection-workspace-a");
   await page.getByRole("button", { name: "发送到产品 Agent", exact: true }).click();
   await expect(page).toHaveURL(/\/agents\/product$/);
   await page.getByRole("button", { name: "运行产品 Agent", exact: true }).click();
