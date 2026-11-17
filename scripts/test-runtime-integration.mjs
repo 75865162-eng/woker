@@ -83,7 +83,8 @@ try {
     DATABASE_URL: `postgresql://postgres:fixture_password@127.0.0.1:${pgPort}/erp_fixture`, REDIS_URL: `redis://127.0.0.1:${redisPort}`,
     QUEUE_DRIVER: "redis", STORAGE_DRIVER: "local", UPLOAD_DIR: path.join(directory, "uploads"),
     AUTH_DRIVER: "database", AUTH_SECRET: "isolated-runtime-fixture-secret-at-least-32-characters", NEXT_TELEMETRY_DISABLED: "1",
-    AMAZON_DATA_CENTER_ENVIRONMENT: "local", AMAZON_SYNC_CENTER_SCOPES: "[]",
+    AMAZON_DATA_CENTER_ENVIRONMENT: "local", AMAZON_SYNC_CENTER_SCOPES: JSON.stringify([["fixture-org", "default"]]),
+    AMAZON_FBA_REMOTE_EXECUTION_ENABLED: "false",
   };
   await until(() => sql(env.DATABASE_URL, "SELECT 1"), "PostgreSQL ready");
   const config = path.join(directory, "prisma.config.ts");
@@ -105,11 +106,17 @@ try {
     INSERT INTO "User" (id,email,name,"passwordHash","updatedAt") VALUES ('fixture-user','fixture@example.invalid','Fixture','placeholder',now()), ('fixture-operations-user','operations@example.invalid','Fixture Operations','placeholder',now());
     INSERT INTO "OrganizationMember" (id,"organizationId","userId",role,"updatedAt") VALUES ('fixture-member','fixture-org','fixture-user','owner',now()), ('fixture-operations-member','fixture-org','fixture-operations-user','operations',now());`);
   await sql(env.DATABASE_URL, `UPDATE "User" SET "passwordHash"=$1 WHERE id IN ('fixture-user','fixture-operations-user')`, [passwordHash]);
-  execFileSync(process.execPath, ["node_modules/tsx/dist/cli.mjs", "--test", "--test-concurrency=1", "tests/integration/runtime-execution.integration.ts"], { cwd: root, env: { ...env, ERP_RUNTIME_EXECUTION_FIXTURE: "1" }, stdio: ["ignore", logFd, logFd] });
+  const fixtureSellerId = "fixture-seller", fixtureMarketplaceId = "ATVPDKIKX0DER";
+  await sql(env.DATABASE_URL, `INSERT INTO "SellerAccount" (id,"organizationId","workspaceId","accountKey","displayName","marketplaceCode",status,"updatedAt") VALUES ('fixture-seller','fixture-org','default','runtime-fixture','Runtime Fixture Store','US','active',now());
+    INSERT INTO "AmazonSpApiAuthorization" (id,"organizationId","workspaceId",name,"amazonSellerId","awsRegion",endpoint,"credentialsCiphertext",status,"identityVerifiedAt","updatedByUserId","updatedAt") VALUES ('fixture-auth','fixture-org','default','Runtime Fixture','fixture-seller-id','us-east-1','https://example.invalid','unusable-fixture-not-encrypted-credentials','CONFIGURED',now(),'fixture-user',now());
+    INSERT INTO "AmazonDataAccessGrant" (id,"organizationId","workspaceId","userId","sellerAccountId",enabled,"marketplaceIds",actions,"updatedAt") VALUES ('fixture-view-grant','fixture-org','default','fixture-user','fixture-seller',true,ARRAY['ATVPDKIKX0DER'],ARRAY['view'],now());
+    INSERT INTO "AmazonSyncDataSource" (id,"organizationId","workspaceId","authorizationId","sellerAccountId","marketplaceId",resource,enabled,"freshnessMinutes","updatedAt") VALUES ('fixture-source','fixture-org','default','fixture-auth','fixture-seller','ATVPDKIKX0DER','inventory',false,60,now());
+    INSERT INTO "AmazonSellerIdentity" (id,"organizationId","workspaceId","sellerAccountId","amazonSellerId","marketplaceId",region,"authorizationId","verifiedAt") VALUES ('fixture-identity','fixture-org','default','fixture-seller','fixture-seller-id','ATVPDKIKX0DER','NA','fixture-auth',now());`);
+  execFileSync(process.execPath, ["node_modules/tsx/dist/cli.mjs", "--test", "--test-reporter=tap", "--test-concurrency=1", "tests/integration/runtime-execution.integration.ts"], { cwd: root, env: { ...env, ERP_RUNTIME_EXECUTION_FIXTURE: "1" }, stdio: ["ignore", logFd, logFd] });
   results.push("durable execution claims, expiry fencing, bounded recovery and mock success publications");
   results.push("import stale publication rejected; final audit failure rolls back file/export/job/success versions");
   results.push("import pre-publication and mock image CPU gates: SIGKILL followed by bounded lease takeover publishes once");
-  execFileSync(process.execPath, ["node_modules/tsx/dist/cli.mjs", "--test", "--test-concurrency=1", "tests/integration/runtime-faults.integration.ts"], {
+  execFileSync(process.execPath, ["node_modules/tsx/dist/cli.mjs", "--test", "--test-reporter=tap", "--test-concurrency=1", "tests/integration/runtime-faults.integration.ts"], {
     cwd: root, env: { ...env, ERP_RUNTIME_EXECUTION_FIXTURE: "1", ERP_RUNTIME_FIXTURE_PG_CONTAINER: pgName, ERP_RUNTIME_FIXTURE_PG_ID: pgContainerId, ERP_RUNTIME_FIXTURE_TAG: tag }, stdio: ["ignore", logFd, logFd],
   });
   results.push("real XLSX parser SIGKILL preserves original Bulk input and recovers to one export");
@@ -123,7 +130,7 @@ try {
   const login = await fetch(base + "/api/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "fixture@example.invalid", password: "fixture_password" }) });
   assert.equal(login.status, 200);
   const cookie = login.headers.getSetCookie().map(value => value.split(";")[0]).join("; ");
-  async function health() { const response = await fetch(base + "/api/system/worker-health", { headers: { cookie }, signal: AbortSignal.timeout(15_000) }); assert.equal(response.status, 200); return response.json(); }
+  async function health() { const response = await fetch(base + "/api/system/worker-health", { headers: { cookie, "x-workspace-id": "default" }, signal: AbortSignal.timeout(15_000) }); assert.equal(response.status, 200); return response.json(); }
   results.push("isolated dev web and database login started");
   const workerIds = workerRegistry.map(item => item.id);
   const hasAllHealthyWorkers = workers => workers.length === workerIds.length
@@ -160,6 +167,11 @@ try {
   routePage.on("request", request => {
     if (request.url().startsWith(base + "/api/") && request.method() !== "GET" && request.method() !== "HEAD") routeMutations.push(`${request.method()} ${new URL(request.url()).pathname}`);
   });
+  routePage.on("response", async response => {
+    if (response.url().includes("/api/operations/sync-center") && new URL(response.url()).searchParams.get("section") === "sources") {
+      console.log(`[runtime-fixture sources] ${response.status()} ${await response.text().catch(() => "响应正文不可读")}`);
+    }
+  });
   await routePage.setViewportSize({ width: 1440, height: 1000 });
   await routePage.goto(base + "/operations");
   const navigation = routePage.getByRole("navigation", { name: "业务导航" });
@@ -186,12 +198,27 @@ try {
   await routePage.goBack();
   await routePage.waitForURL(/tab=warehouses/);
   for (const [label, view] of [["FBA 装箱", "fba-boxing"], ["头程物流", "first-mile"]]) {
+    const fbaResponse = routePage.waitForResponse(response => {
+      const url = new URL(response.url());
+      return url.pathname === "/api/operations/fba-local-plans" && response.request().method() === "GET"
+        && url.searchParams.get("sellerAccountId") === fixtureSellerId && url.searchParams.get("marketplaceId") === fixtureMarketplaceId;
+    }, { timeout: 120_000 }).then(response => ({ response }), error => ({ error }));
     await navigation.getByRole("link", { name: label, exact: true }).click();
     await routePage.waitForURL(new RegExp(`view=${view}`));
     assert.equal(new URL(routePage.url()).searchParams.get("view"), view);
     if (view === "fba-boxing") await routePage.screenshot({ path: path.join(directory, "fba-boxing-route-debug.png") });
     await routePage.getByRole("heading", { name: view === "fba-boxing" ? "FBA 装箱与箱规" : label, exact: true, level: 1 }).waitFor();
-    await routePage.getByRole("region", { name: "FBA 本地计划工作台" }).waitFor();
+    await until(async () => await routePage.getByLabel("店铺", { exact: true }).filter({ visible: true }).count() === 1, "FBA 筛选器切页完成", 60_000);
+    await routePage.getByLabel("店铺", { exact: true }).filter({ visible: true }).selectOption(fixtureSellerId, { timeout: 60_000 });
+    await routePage.getByLabel("站点", { exact: true }).filter({ visible: true }).selectOption(fixtureMarketplaceId, { timeout: 60_000 });
+    const fbaReadResult = await fbaResponse;
+    if (fbaReadResult.error) throw fbaReadResult.error;
+    const fbaRead = fbaReadResult.response;
+    assert.equal(fbaRead.status(), 200, await fbaRead.text());
+    const fbaWorkbench = routePage.getByRole("region", { name: "FBA 本地计划工作台" });
+    await fbaWorkbench.waitFor();
+    await fbaWorkbench.getByText("当前店铺和站点暂无本地计划。", { exact: true }).waitFor();
+    assert.equal(await fbaWorkbench.getByRole("alert").count(), 0);
     await routePage.getByRole("heading", { name: view === "fba-boxing" ? "FBA 本地装箱" : "FBA 本地发货计划", exact: true }).waitFor();
     assert.equal(await routePage.getByRole("status").filter({ hasText: "布局预览" }).count(), 0);
   }
@@ -222,7 +249,7 @@ try {
   // Submit synthetic invalid bulk through the real upload API. It must be consumed
   // and persist a parse failure, without calling Amazon/Sellfox/AI providers.
   const form = new FormData(); form.set("file", new File(["fixture,only\n1,2"], "fixture.csv", { type: "text/csv" }));
-  const response = await fetch(base + "/api/files/upload", { method: "POST", headers: { cookie }, body: form });
+  const response = await fetch(base + "/api/files/upload", { method: "POST", headers: { cookie, "x-workspace-id": "default" }, body: form });
   assert.equal(response.status, 200);
   const uploaded = await response.json();
   await until(async () => (await sql(env.DATABASE_URL, `SELECT status,error FROM "ImportJob" WHERE id=$1`, [uploaded.job.id])).rows[0]?.status === "failed", "synthetic task consumption");
@@ -236,7 +263,7 @@ try {
   const bulkBytes = XLSX.write(bulk, { type: "buffer", bookType: "xlsx" });
   const validForm = new FormData();
   validForm.set("file", new File([bulkBytes], "fixture-valid.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
-  const validResponse = await fetch(base + "/api/files/upload", { method: "POST", headers: { cookie }, body: validForm });
+  const validResponse = await fetch(base + "/api/files/upload", { method: "POST", headers: { cookie, "x-workspace-id": "default" }, body: validForm });
   assert.equal(validResponse.status, 200);
   const validUpload = await validResponse.json();
   const completedBulk = await until(async () => {
@@ -244,7 +271,7 @@ try {
     return ["done", "failed"].includes(job?.status) ? job : null;
   }, "successful Bulk processing");
   assert.equal(completedBulk.status, "done", completedBulk.error ?? "Valid Bulk fixture failed");
-  const download = await fetch(base + `/api/files/${validUpload.job.id}/download`, { headers: { cookie } });
+  const download = await fetch(base + `/api/files/${validUpload.job.id}/download`, { headers: { cookie, "x-workspace-id": "default" } });
   assert.equal(download.status, 200);
   const resultWorkbook = XLSX.read(await download.arrayBuffer(), { type: "array" });
   const resultRow = XLSX.utils.sheet_to_json(resultWorkbook.Sheets["Sponsored Products Campaigns"])[0];
@@ -281,13 +308,13 @@ try {
   verifyFixture(redisFixture);
   docker(["stop", redisFixture.id]);
   const deferredForm = new FormData(); deferredForm.set("file", new File(["fixture,queued\n1,2"], "deferred.csv", { type: "text/csv" }));
-  const deferredResponse = await fetch(base + "/api/files/upload", { method: "POST", headers: { cookie }, body: deferredForm, signal: AbortSignal.timeout(10_000) });
+  const deferredResponse = await fetch(base + "/api/files/upload", { method: "POST", headers: { cookie, "x-workspace-id": "default" }, body: deferredForm, signal: AbortSignal.timeout(10_000) });
   assert.equal(deferredResponse.status, 200);
   const deferred = await deferredResponse.json();
   assert.equal(deferred.dispatchDeferred, true); assert.equal(deferred.job.status, "queued");
   const imageBytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6WYAAAAAASUVORK5CYII=", "base64");
   const imageForm = new FormData(); imageForm.set("files", new File([imageBytes], "fixture.png", { type: "image/png" }));
-  const imageResponse = await fetch(base + "/api/image-upscale", { method: "POST", headers: { cookie }, body: imageForm, signal: AbortSignal.timeout(10_000) });
+  const imageResponse = await fetch(base + "/api/image-upscale", { method: "POST", headers: { cookie, "x-workspace-id": "default" }, body: imageForm, signal: AbortSignal.timeout(10_000) });
   assert.equal(imageResponse.status, 202);
   const imageBatch = await imageResponse.json(); const image = imageBatch.jobs[0];
   assert.equal(imageBatch.dispatchDeferred, true);
@@ -340,7 +367,7 @@ try {
   for (const child of children.reverse()) await stop(child);
   let cleanupFailed = false;
   for (const fixture of containers.reverse()) {
-    try { verifyFixture(fixture); docker(["rm", "-f", fixture.id]); }
+    try { verifyFixture(fixture); docker(["rm", "-f", "-v", fixture.id]); }
     catch (error) { cleanupFailed = true; console.error(`[runtime-fixture] refuse cleanup for ${fixture.name}: ${error.message}`); }
   }
   if (cleanupFailed) process.exitCode = 1;

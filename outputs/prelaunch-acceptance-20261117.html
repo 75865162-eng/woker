@@ -5,8 +5,11 @@
 <title>条条 ERP 上线前验收 · 2026-11-17</title>
 <style>body{font-family:system-ui,"Microsoft YaHei",sans-serif;max-width:1100px;margin:36px auto;padding:0 24px 40px;color:#182230;line-height:1.75;background:#fafbfc}h1{font-size:28px;line-height:1.4}h2{font-size:20px;margin-top:32px}table{border-collapse:collapse;width:100%;background:#fff}td,th{border:1px solid #d9e0e8;padding:10px 12px;text-align:left;vertical-align:top}th{background:#edf2f7}.blocked{color:#a3311c}.pass{color:#176842}code{background:#eef1f5;padding:2px 4px;overflow-wrap:anywhere}a{color:#155db5}.note{padding:16px;background:#fff3e9;border-left:4px solid #b55621}.small{font-size:14px;color:#526171}li{margin-bottom:7px}</style>
 <h1>条条 ERP 上线前验收</h1>
-<p class="small">2026-11-17 · 本地工作区 woker · HEAD a371b5b8d70a08fae4539707ea508c04f9f4d898</p>
-<p class="note"><strong class="blocked">总体：BLOCKED，当前不能判定 READY。</strong><br>本地代码修复、离线门禁与下列隔离验证已有通过证据。尚缺同一冻结候选的 Linux CI 构建与发布包校验、完整 Worker 故障恢复、生产目标环境检查及用户业务验收。工作区有其他并行改动，以下结果不能当作最终发布 SHA 的统一认证。</p>
+<p class="small">2026-11-17 · 本地工作区 woker · 当前 HEAD 17f3c6366ec8259dbaf6bf5e0352e3c1659efea7，另含未提交修复；各阶段证据不等于该候选统一认证</p>
+<p class="note"><strong class="blocked">总体：BLOCKED，当前不能判定 READY。</strong><br>本地代码修复、离线门禁与下列隔离验证已有通过证据。完整 Linux 隔离运行时／Worker 故障恢复现已通过，最终轮退出码0。尚缺同一冻结候选的 Linux CI 构建与发布包校验、生产目标环境检查及用户业务验收。工作区有其他并行改动，以下结果不能当作最终发布 SHA 的统一认证。</p>
+<h2>2026-11-18 当前候选复验</h2>
+<p><strong class="pass">PASS：</strong>当前 HEAD 17f3c63 加未提交修复执行 check:fast，2299/2299单测、0失败／跳过，lint 0错误／4既有警告，typecheck与UI guard均通过，整体退出0。<a href="prelaunch-candidate-check-fast-20261118.log">本次完整日志</a>。</p>
+<p><strong>发布条件：</strong>当前分支 tiaotiao-erp；CI push 仅监听main，直接推送当前分支不会自动触发该构建。应在具体授权提交推送后经PR或workflow_dispatch运行，deploy_production=false；手动工作流要求base_sha，生产基线尚未重新核实，不猜填。GitHub命令行未登录，本次连接被跳过，未取得远程CI或发布artifact。待批准范围为6个已修改文件及最终证据摘要；历史日志、临时目录与身份未明系统文件保留，不默认纳入应用提交。</p>
 <h2>验证矩阵</h2>
 <table><thead><tr><th>项目</th><th>结果</th><th>证据与覆盖范围</th></tr></thead><tbody>
 <tr><td>本轮 check:fast</td><td class="pass">PASS</td><td>2298/2298 单测，0失败、0跳过；lint 0错误、4既有警告；类型检查与 UI guard 通过。<a href="prelaunch-continue-check-fast-20261117.log">完整日志</a></td></tr>
@@ -16,7 +19,9 @@
 <tr><td>迁移、幂等及备份恢复</td><td class="pass">PASS</td><td>186个迁移在新库应用，核对历史及checksum；重复deploy无变化；真实pg_dump/pg_restore到新库，迁移历史、中文payload及numeric精度一致。本次临时资源已清理。<a href="prelaunch-runtime-20261117.log">日志</a></td></tr>
 <tr><td>双池实际数据库权限</td><td class="pass">PASS</td><td>本轮两实际LOGIN角色只读各自池表；注入跨池表级SELECT、列级SELECT、角色继承均被既有审计识别；撤销后基线恢复。仅临时库，不代表生产授权已实施；本次容器和匿名卷已清理。<a href="prelaunch-continue-mcp-20261117.log">正反例日志</a></td></tr>
 <tr><td>PostgreSQL 重启故障恢复</td><td class="pass">PASS</td><td>定向1/1、0跳过；验证重启时事务回滚和安全重试。完整迁移后运行，本次临时资源已清理。<a href="prelaunch-continue-pg-restart-20261117.log">日志</a></td></tr>
-<tr><td>完整 runtime / Worker 故障恢复</td><td class="blocked">BLOCKED</td><td>Windows不具备现有测试依赖的POSIX进程组、SIGTERM及无扩展shebang执行语义；完整套件仍需Linux执行。PG子集通过不能替代完整Worker生命周期验证。</td></tr>
+<tr><td>Linux runtime 执行与故障测试</td><td class="pass">PASS</td><td>临时 Linux 容器实际 execution 9/9、faults 3/3，0失败、0跳过，含 SIGKILL、中途失败不发布、PostgreSQL 重启事务回滚与重试。环境为 Node24.22.3 / Debian Bookworm，与 CI Node22.22.2 / Ubuntu24.04 不同。<a href="prelaunch-linux-runtime-20261117.log">累计日志（含失败尝试及作废空跑）</a></td></tr>
+<tr><td>完整 runtime / Worker 故障恢复</td><td class="pass">PASS（隔离环境）</td><td>最终14488015轮于2026-11-17T17:56:54.529Z完整结束，退出码0；12项TAP通过、25条非空阶段结果。覆盖真实Next登录／页面／权限、两个FBA入口GET200、五注册Worker心跳与重复启动拒绝、真实Bulk上传→Worker→下载（竞价0.8、原文件及标识保留、仅一份导出）、正常停止重启、SIGKILL后原严格无孤儿断言、Redis断连时数据库保留意图与输入、队列丢失后两类延迟任务恢复、PostgreSQL重连、custom dump恢复到独立临时库。外层加入init后原进程检查通过；不将旧轮原因未经取证断定为僵尸进程。<a href="prelaunch-linux-runtime-20261117.log">完整累计日志</a> · <a href="prelaunch-linux-runtime-14488015-tmp/erp-runtime-integration-VvDU4e/fixture.log">最终轮原始TAP及应用日志</a>。Node24／Bookworm、固定Chrome153完整包headless及内部网络代理不同于CI；HostConfig检查不证明发布端口可达，该项NOT VERIFIED，不称原始CI等价。</td></tr>
+<tr><td>Next 临时配置跨平台路径修复</td><td class="pass">PASS</td><td>修复 Linux Turbopack 将绝对 baseUrl 错误拼接到临时配置目录的问题，改用相对路径。POSIX／Windows 路径与真实 TypeScript resolver 回归通过，所属定向文件3/3；类型与定向 lint 通过，Linux真实 dev 启动并登录成功。未运行生产 build。</td></tr>
 <tr><td>同候选CI构建与发布包校验</td><td>NOT VERIFIED</td><td>尚未取得候选SHA对应Linux CI构建、package artifact、release-check证据；GitHub CLI未登录，连接请求已跳过。生产构建按现有CI artifact流程执行。</td></tr>
 <tr><td>生产环境与用户业务验收</td><td>NOT VERIFIED</td><td>未执行生产DB/Redis连接、目标角色与迁移检查、真实API授权、Worker消费或部署；自动测试不能代替用户业务验收。</td></tr>
 <tr><td>候选冻结及diff格式</td><td class="blocked">BLOCKED</td><td>git diff --check通过；工作区含既有、并行与本轮变更，候选尚未冻结为单一SHA。</td></tr>
@@ -30,11 +35,18 @@
 <li><code>tests/browser/agent-chain.spec.ts</code>：提供明确来源的隔离市场工具fixture，经真实上传流程补Round B证据；保留无证据NEEDS_DATA和模拟数据提示。</li>
 <li><code>tests/browser/amazon-ads.spec.ts</code>：fixture支持现有列宽偏好接口；表头定位适配列宽控件的可访问名称，并保留搜索词触发类型和不存在竞价列的断言。</li>
 <li>Lili配置页的并行作用域修改已验证：切换工作区后旧保存响应不能恢复新工作区的密钥提示或成功状态。跨标签storage事件、首次render至监听注册间的切换未覆盖，不扩大结论。</li>
+<li><code>scripts/next-run.mjs</code>：临时 tsconfig 的 baseUrl 改为相对项目根路径；<code>tests/next-tracing.test.ts</code> 增加 POSIX／Windows 配置生成及真实 TypeScript alias 解析回归。</li>
+<li><code>scripts/test-runtime-integration.mjs</code>：直接携带认证 cookie 的健康、上传、下载及图片请求补显式 <code>x-workspace-id: default</code>，遵循现有服务端工作区合同。FBA 五表 fixture 已补齐：active Seller、view grant、已验证的隔离授权、disabled source 和 SellerIdentity；页面真实选择店铺／站点后须通过计划读取200与无错误提示断言。同步中心仅允许临时 fixture-org/default，远程 FBA 执行关闭；完整重跑已退出0；失败尝试及最终通过证据均保留。</li>
 </ul>
+<h2>最终资源清理与追溯</h2>
+<p><a href="prelaunch-linux-runtime-14488015-summary.json">最终运行证据摘要 JSON</a>：含25条结果、TAP摘要、源码哈希、FBA响应、环境差异及清理ID。无自动同步任务的0计数来自4bf61699轮实际查询，最终14488015轮未重复该查询，来源响应仍为disabled且targets为空。</p>
+<p>最终运行：14488015，2026-11-17T17:47:42.007Z 至 17:56:54.529Z，退出码0。宿主 runtime runner SHA256：<code>e2b04df32c47183078996b056b938350d5857ec22ff0120923b62ba34731e428</code>；next-run SHA256：<code>1664c855bd06347caa48ad439d5fd70ea9fad31b42a08b18d58957b6b018eda2</code>。</p>
+<p>本次最终及失败尝试的临时容器、网络和已核实匿名卷均清理；旧浏览器准备容器及4个本次缓存镜像已删除，未执行 prune。官方基础镜像、身份不明历史卷及既有 woker-postgres-1／woker-redis-1 保留。备份与原始日志保存在最终轮取证目录，未启用生产备份。</p>
+<p>未覆盖：原生 Real-ESRGAN GPU 计算、真实外部服务调用、生产部署／重启、生产备份启用。settings 冷编译期间曾出现 ai-settings 500 随后恢复200，本轮没有完成该偶发响应的根因定位，列为待核对现象。</p>
 <h2>发布前尚需完成</h2>
 <ol>
 <li>核对并纳入最终候选全部有效改动，将候选冻结为具体SHA。</li>
-<li>在Linux CI完成该SHA的生产构建、完整runtime/Worker测试，取得发布artifact并通过release-check与deployment-plan。</li>
+<li>在Linux CI完成该SHA的生产构建与现有runtime门禁，取得发布artifact并通过release-check与deployment-plan。本轮完整隔离runtime已通过，但运行环境不同，不能替代同SHA的CI认证。</li>
 <li>按现有发布审批流程检查生产配置、角色授权、迁移计划、备份和Worker消费；由用户完成关键业务操作验收。</li>
 </ol>
 <p>本轮未提交、推送或部署，未执行生产迁移及生产授权变更。保留所有用户及其他进程改动。</p>

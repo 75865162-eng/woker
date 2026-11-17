@@ -49,7 +49,7 @@ await writeFile(typeConfig, JSON.stringify({
     resolveJsonModule: true,
     isolatedModules: true,
     jsx: "preserve",
-    baseUrl: process.cwd(),
+    baseUrl: path.relative(typeDirectory, process.cwd()).replaceAll(path.sep, "/"),
     paths: { "@/*": ["./src/*"] },
     incremental: false,
     plugins: [{ name: "next" }],

@@ -75,6 +75,34 @@ test("standalone 清理删除环境文件但保留运行文件和项目源环境
   }
 });
 
+test("隔离 Next 配置的相对 baseUrl 从配置目录解析到项目源码", async () => {
+  const ts = require("typescript") as typeof import("typescript");
+  const source = readFileSync(path.resolve("scripts/next-run.mjs"), "utf8");
+  const start = source.indexOf("await writeFile(typeConfig, JSON.stringify(");
+  const end = source.indexOf("const child = spawn", start);
+  assert.ok(start >= 0 && end > start);
+  for (const paths of [path.posix, path.win32]) {
+    const root = paths === path.win32 ? "C:\\fixture\\project" : "/fixture/project";
+    const typeDirectory = paths.join(root, ".next-types-fixture");
+    const typeConfig = paths.join(typeDirectory, "tsconfig.json");
+    let config: { compilerOptions: { baseUrl: string; paths: Record<string, string[]> } } | undefined;
+    await vm.runInNewContext(`(async () => { ${source.slice(start, end)} })()`, {
+      typeConfig, typeDirectory, ambient: paths.join(typeDirectory, "next.d.ts"),
+      distDir: ".next-dev-fixture", path: paths, process: { cwd: () => root },
+      writeFile: async (_file: string, content: string) => { config = JSON.parse(content); },
+    });
+    assert.ok(config);
+    assert.equal(paths.isAbsolute(config.compilerOptions.baseUrl), false);
+    const baseUrl = paths.resolve(typeDirectory, config.compilerOptions.baseUrl).replaceAll("\\", "/");
+    const expected = paths.join(root, "src", "fixture.ts").replaceAll("\\", "/");
+    assert.equal(baseUrl, root.replaceAll("\\", "/"));
+    const resolved = ts.resolveModuleName("@/fixture", paths.join(root, "src", "entry.ts").replaceAll("\\", "/"), {
+      baseUrl, paths: config.compilerOptions.paths, moduleResolution: ts.ModuleResolutionKind.Bundler,
+    }, { fileExists: file => file === expected, readFile: () => "export {};" });
+    assert.equal(resolved.resolvedModule?.resolvedFileName, expected);
+  }
+});
+
 test("已安装 Next 的排除匹配只移除本地文件，不误删活动 dist 下的必要 chunk", async () => {
   const posixResult = await collectFixture(path.posix);
   assert.deepEqual([...posixResult.files].sort(), [

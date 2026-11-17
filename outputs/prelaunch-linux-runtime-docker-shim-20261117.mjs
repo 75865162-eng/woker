@@ -18,9 +18,9 @@ try{
   await new Promise((resolve,reject)=>{const req=http.request({socketPath:'/tmp/runtime-proxy-control.sock',path:'/',method:'POST'},res=>{res.resume();res.on('end',()=>res.statusCode===200?resolve():reject(Error('代理失败')))});req.on('error',reject);req.end(JSON.stringify({port:Number(match[1]),service:Number(match[2]),ip}));});
   process.stdout.write(id+'\n');
  }else if(args[0]==='inspect'&&args.length===2){verified(args[1]);process.stdout.write(real(args));}
- else if(args[0]==='port'&&args.length===3){verified(args[1]);process.stdout.write(real(args));}
+ else if(args[0]==='port'&&args.length===3){const f=verified(args[1]);if(String(f.service)!==args[2])throw Error('service mismatch');process.stdout.write(real(args));}
  else if(['stop','start','restart'].includes(args[0])&&args.length===2){verified(args[1]);process.stdout.write(real(args));}
- else if(args[0]==='rm'&&args[1]==='-f'&&args.length===3){verified(args[2]);process.stdout.write(real(args));}
+ else if(args[0]==='rm'&&args[1]==='-f'&&((args.length===3)||(args.length===4&&args[2]==='-v'))){verified(args.at(-1));process.stdout.write(real(args));}
  else if(args[0]==='exec'){
  const offset=args[1]==='-i'?2:1;const fixture=verified(args[offset]);const cmd=args.slice(offset+1);const allowed=(cmd[0]==='redis-cli'&&['PING','FLUSHALL'].includes(cmd[1])&&fixture.service===6379)||(['pg_dump','pg_restore'].includes(cmd[0])&&fixture.service===5432);if(!allowed)throw Error('禁止fixture以外exec');process.stdout.write(real(args));
  }else throw Error('未授权Docker命令 '+args.join(' '));
