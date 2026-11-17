@@ -18,6 +18,7 @@ import { generateAdsProposals } from "@/lib/sellfox/ads-proposal";
 import { SellfoxRequestError, closeSellfoxClient } from "@/lib/sellfox/client";
 import { normalizeSellfoxDates, sellfoxSyncDisabledReason, SellfoxSyncInputError, SellfoxSyncUnavailableError, type SellfoxSyncResource } from "@/lib/sellfox/sync-contract";
 import { planSellfoxEndpointAuto, handleSellfoxAdaptiveSplits } from "@/lib/sellfox/sync-orchestrator";
+import { getSellfoxWindowConfig } from "@/lib/sellfox/window-config";
 
 const workerName = process.env.SELLFOX_SYNC_WORKER_NAME?.trim() || `${sellfoxSyncQueueName}-${process.pid}`;
 const workerId = process.env.SELLFOX_SYNC_WORKER_ID?.trim() || `${workerName}-${process.pid}`;
@@ -73,7 +74,7 @@ async function recoverAndSchedule() {
             AND resource=${schedule.resource} AND status IN ('queued','running')
             AND COALESCE(summary->>'trigger','') <> 'manual_backfill' LIMIT 1`;
         if (active.length) return;
-        const history = await sellfoxScheduledBackfill(tx, schedule, now, Math.min(90, Math.max(1, Math.floor(Number(process.env.SELLFOX_BACKFILL_DAYS_PER_RUN) || 7))));
+        const history = await sellfoxScheduledBackfill(tx, schedule, now, getSellfoxWindowConfig().backfillDaysPerRun);
         const runId = `sellfox-sync-${randomUUID()}`;
         await tx.sellfoxSyncRun.create({ data: { id: runId, organizationId: schedule.organizationId, workspaceId: schedule.workspaceId, userId: schedule.userId, resource: schedule.resource, status: "queued", summary: { trigger: "schedule", scheduleId: schedule.id, ...history, ...normalizeSellfoxDates(schedule.resource as SellfoxSyncResource, {}, now), datesFrozen: true, requestVersion: 2 } } });
         await tx.sellfoxSyncSchedule.update({ where: { id: schedule.id }, data: { lastEnqueuedAt: now } });

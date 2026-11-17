@@ -1342,6 +1342,15 @@ test("performance fee columns are numeric and available; empty browse guidance f
   assert.equal(sellfoxColumnValue(fees[1], { giftWrapFee: "0" }), "0");
   assert.match(browseEmptyMessage("sales", { workerOnline: false } as never) ?? "", /Worker.*离线.*立即同步/);
   assert.match(browseEmptyMessage("performance", { workerOnline: true, latestSuccessByResource: {} } as never) ?? "", /尚无销售利润同步成功记录/);
+});
+
+test("已有同步记录但筛选无数据时，空态提示带最早可查日期；无日期时回退通用文案", () => {
+  const withSync = { workerOnline: true, latestSuccessByResource: { sales: { id: "run-1" } } };
+  const withEarliest = browseEmptyMessage("sales", { ...withSync, earliestReportDate: { sales: "2026-01-01" } } as never) ?? "";
+  assert.match(withEarliest, /最早可查日期为 2026-01-01/);
+  const withoutEarliest = browseEmptyMessage("sales", withSync as never) ?? "";
+  assert.match(withoutEarliest, /可调整日期范围/);
+  assert.doesNotMatch(withoutEarliest, /最早可查日期/);
   assert.match(browseEmptyMessage("sales", { workerOnline: true, latestSuccessByResource: { sales: { id: "r", resource: "sales", status: "done", startedAt: "2026-10-26" } } } as never) ?? "", /调整日期范围.*补数/);
 });
 

@@ -182,7 +182,7 @@ test("代码和部署门禁拒绝低于22.19的Node并检查实际运行版本",
         await import("./scripts/runtime/production-readiness.mjs");
       `;
       const result = spawnSync(process.execPath, ["--input-type=module", "--eval", script], {
-        cwd: process.cwd(), encoding: "utf8", env: { PATH: process.env.PATH ?? "" },
+        cwd: process.cwd(), encoding: "utf8", env: { PATH: process.env.PATH ?? "" } as unknown as NodeJS.ProcessEnv,
       });
       assert.equal(result.status, 1, "隔离的不完整配置必须保持阻塞");
       const report = JSON.parse(result.stdout) as {
@@ -211,7 +211,7 @@ test("部署门禁校验生产运行配置且保留代码门禁范围", () => {
   const reportFor = (gate: string, overrides: Record<string, string | undefined> = {}) => {
     const result = spawnSync(process.execPath, ["scripts/runtime/production-readiness.mjs", "--env", "process", "--gate", gate, "--json"], {
       cwd: process.cwd(), encoding: "utf8",
-      env: { PATH: process.env.PATH ?? "", ...validEnv, ...overrides },
+      env: { PATH: process.env.PATH ?? "", ...validEnv, ...overrides } as unknown as NodeJS.ProcessEnv,
     });
     assert.equal(result.status, 1, "隔离的不完整配置必须保持阻塞");
     const report = JSON.parse(result.stdout) as {

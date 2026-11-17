@@ -15,6 +15,7 @@ import { syncSellfoxSnapshotStores, type SnapshotCheckpoint } from "@/lib/sellfo
 import { withSellfoxCredentialScope } from "./credential-context";
 import { buildRunShards, recordSellfoxShards, refreshSellfoxCoverage } from "@/lib/sellfox/sync-shards";
 import { syncSellfoxGenericEndpoint, type SellfoxEndpointConfig } from "@/lib/sellfox/generic-endpoint-sync";
+import { buildSellfoxReconciliation } from "@/lib/sellfox/reconciliation";
 
 function endpointConfig(row: {
   code: string; label: string; path: string; dateMode: string; scopeMode: string;
@@ -298,7 +299,8 @@ export async function processSellfoxSyncRun(runId: string) {
         const next = new Date(Date.parse(`${request.backfillTo}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
         await tx.sellfoxSyncSchedule.updateMany({ where: { id: request.scheduleId, organizationId: input.organizationId, workspaceId: input.workspaceId, backfillNextDate: request.backfillFrom }, data: { backfillNextDate: next } });
       }
-      await finishSellfoxRun(lease, { status: "done", summary: { ...asRecord(current?.summary), result } as Prisma.InputJsonValue }, tx);
+      const reconciliation = buildSellfoxReconciliation(result, asRecord(current?.summary)?.progress);
+      await finishSellfoxRun(lease, { status: "done", summary: { ...asRecord(current?.summary), result, reconciliation } as Prisma.InputJsonValue }, tx);
     });
     // 分片与覆盖度是记账，不是业务数据：失败只打日志，不把成功的同步改判为失败。
     try {

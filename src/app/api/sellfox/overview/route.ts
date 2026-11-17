@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
+import { deriveSellfoxWatermarks } from "@/lib/sellfox/watermark";
 
 export const runtime = "nodejs";
 
@@ -13,6 +14,11 @@ export async function GET(request: Request) {
 
     const scope = workspaceScopeFromRequest(request);
     const where = { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId };
+    // 最早可查日期：供空态提示使用；查不到保留 null（不补零值、不伪造日期）。
+    const [earliestSalesRow, earliestPerformanceRow] = await Promise.all([
+      prisma.sellfoxSalesDailySnapshot.findFirst({ where, orderBy: { reportDate: "asc" }, select: { reportDate: true } }),
+      prisma.sellfoxProductDailySnapshot.findFirst({ where: { ...where, onlySettle: false }, orderBy: { reportDate: "asc" }, select: { reportDate: true } }),
+    ]);
     const [stores, hourlyCount, inventoryCount, salesCount, performanceCount, inventoryCoverage, salesCoverage, latestRun, latestHourlyRun, latestPerformanceRun, latestMetric, latestRuns, latestSuccessRuns, heartbeat] = await Promise.all([
       prisma.sellfoxStore.findMany({ where, select: { id: true, externalId: true, name: true, marketplace: true, country: true, status: true, lastSyncedAt: true }, orderBy: { name: "asc" } }),
       prisma.sellfoxHourlyMetric.count({ where }),
@@ -46,6 +52,15 @@ export async function GET(request: Request) {
         return Math.max(0, Number(summary?.storeOffset) || 0) + Math.max(1, Number(summary?.storeLimit) || 1);
       })(),
       latestMetricAt: latestMetric?.syncedAt ?? null,
+      // 三元组水位线（resource × 店铺）可观测样本，派生自最近成功 run；不参与游标推进。
+      watermarks: Array.from(deriveSellfoxWatermarks(latestRuns).entries()).map(([key, value]) => {
+        const [resource, shopExternalId] = key.split("\u0000");
+        return { resource, shopExternalId, lastSuccessAt: value.lastSuccessAt?.toISOString() ?? null, lastReportDate: value.lastReportDate };
+      }),
+      earliestReportDate: {
+        sales: earliestSalesRow?.reportDate ?? null,
+        performance: earliestPerformanceRow?.reportDate ?? null,
+      },
     });
   } catch {
     return NextResponse.json({ error: "读取赛狐概览失败，请稍后重试。" }, { status: 500 });

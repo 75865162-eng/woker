@@ -32,6 +32,12 @@ export function isBootstrapAdminEmail(email?: string | null) {
   return (email ?? "").trim().toLowerCase() === getBootstrapAdminEmail();
 }
 
+/**
+ * 注意：BOOTSTRAP_ADMIN_* 默认值 "1" 仅供 local auth driver 的本地开发登录使用。
+ * 生产环境由 getAuthDriver() 强制 AUTH_DRIVER=database，local 登录路径不生效，因此这些默认值不会暴露到生产。
+ * 部署自检可调用 getProductionBootstrapWarnings() 提前发现误配。
+ */
+
 const PLACEHOLDER_AUTH_SECRETS = new Set([
   "local-development-auth-secret",
   "change-this-local-secret-before-production",
@@ -47,13 +53,25 @@ export function getAuthSecret(): string {
 
   return secret;
 }
-
 export function getBootstrapAdminPassword() {
   const configured = process.env.BOOTSTRAP_ADMIN_PASSWORD;
   if (process.env.NODE_ENV === "production" && (!configured || configured.length < 10 || configured === "replace-with-a-strong-password")) {
     throw new Error("BOOTSTRAP_ADMIN_PASSWORD must be a real password with at least 10 characters in production.");
   }
   return configured || "1"; // dev-only convenience; production throws above
+}
+
+/** 生产自检：local driver 专用默认凭据不应被带入生产配置。返回问题清单，空数组表示通过。 */
+export function getProductionBootstrapWarnings(): string[] {
+  if (process.env.NODE_ENV !== "production") return [];
+  const warnings: string[] = [];
+  if (!process.env.BOOTSTRAP_ADMIN_EMAIL || getBootstrapAdminEmail() === "1") {
+    warnings.push("BOOTSTRAP_ADMIN_EMAIL 未配置为非默认值。");
+  }
+  if (!process.env.BOOTSTRAP_ADMIN_PASSWORD || process.env.BOOTSTRAP_ADMIN_PASSWORD === "1") {
+    warnings.push("BOOTSTRAP_ADMIN_PASSWORD 未配置为非默认值。");
+  }
+  return warnings;
 }
 
 export function getBootstrapOrganizationName() {

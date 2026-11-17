@@ -30,5 +30,6 @@ test("Listing promoted fields, NULL and unsupported gray fields remain distinct"
   // Tags are now supported: a missing value is not an unsupported field.
   await expect(page.getByRole("columnheader", { name: "产品标签", exact: true })).not.toHaveAttribute("title", "赛狐有、API/本地无");
   await expect(page.getByRole("columnheader", { name: "业务员", exact: true })).toHaveAttribute("title", "赛狐有、API/本地无");
+
   expect(remote).toEqual([]);
 });

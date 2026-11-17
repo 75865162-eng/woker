@@ -175,6 +175,7 @@ test("listing current and advertising product daily browse locally and expose na
   await expect(page.getByLabel("结束日期")).toHaveValue("");
   await expect.poll(() => calls.filter(call => call.path.endsWith("/listings")).at(-1)?.query.has("from")).toBe(false);
   await expect(page.getByLabel("日期快捷")).toBeEnabled();
+
   const dxm = page.getByRole("combobox", { name: "DXM 发布状态", exact: true });
   await expect(dxm).toBeVisible(); await expect(dxm).toBeEnabled();
   await expect(dxm.locator("option")).toHaveText(["全部", "delete"]);
@@ -590,6 +591,7 @@ test("reference layout keeps compact filter bands and domain-specific identity c
     performance:["图片","标题/ASIN","店铺/站点","分析","父ASIN","品名/SKU","毛利润"],
     listings:["","状态","DXM 发布状态","发货方式","图片","ASIN/MSKU","标题"],
     ads:["","图片","产品信息","有效未接","服务状态未接","FBA可售","价格","星级","评论数","广告活动","广告组"],
+
   };
   for (const [domain,tab] of [["sales","销量"],["performance","销售利润"],["listings","在线商品"],["ads","广告"]]) {
     await page.getByRole("navigation", {name:"赛狐数据域"}).getByRole("button",{name:tab,exact:true}).click();
@@ -626,6 +628,7 @@ test("reference layout keeps compact filter bands and domain-specific identity c
       }
     }
     await expect(page.getByLabel("搜索记录", { exact: true })).toBeVisible();
+
     await expect(page.locator("tbody tr")).toHaveCount(20);
     if (domain === "listings" || domain === "ads") {
       await page.getByLabel("选择本页记录",{exact:true}).check();
@@ -918,6 +921,7 @@ test("ads default image precedes product info with tags, brand and fulfillment a
     for (const name of ["MSKU", "标题", "店铺", "站点"]) await expect(page.getByRole("checkbox", { name: `显示${name}列`, exact: true })).not.toBeChecked();
     await page.getByText("自定义列", { exact: true }).click();
     await expect(page.getByRole("link", { name: "Excel", exact: true })).toHaveCount(0);
+
     const href = await page.getByRole("link", { name: "CSV", exact: true }).getAttribute("href");
     expect(new URL(href!, page.url()).searchParams.has("column")).toBe(false);
   }
@@ -933,6 +937,7 @@ test("ads default image precedes product info with tags, brand and fulfillment a
   const params = new URL(href!, page.url()).searchParams;
   expect(params.get("columns")).toBe("custom");
   for (const key of ["image", "rating", "ratingCount", "productTags", "brand", "fulfillment", "buyBoxWinner"]) expect(params.getAll("column")).not.toContain(key);
+
   await page.getByText("自定义列", { exact: true }).click();
   await page.getByRole("button", { name: "广告产品", exact: true }).click();
   for (const name of ["图片", "星级", "评论数", "标签", "品牌", "发货方式", "Buy Box"]) await expect(page.getByRole("columnheader", { name, exact: true })).toBeVisible();

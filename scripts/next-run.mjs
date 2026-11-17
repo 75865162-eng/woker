@@ -73,6 +73,13 @@ const child = spawn(process.execPath, [command, ...args], {
   stdio: "inherit",
 });
 
+async function cleanupTypeFiles() {
+  await Promise.all([
+    rm(typeConfig, { force: true }),
+    rm(ambient, { force: true }),
+  ]);
+}
+
 async function cleanupStandaloneOutput() {
   if (args[0] !== "build") {
     return;
@@ -116,13 +123,6 @@ async function cleanupStandaloneOutput() {
         }),
       ),
   );
-}
-
-async function cleanupTypeFiles() {
-  await Promise.all([
-    rm(typeConfig, { force: true }),
-    rm(ambient, { force: true }),
-  ]);
 }
 
 for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => child.kill(signal));

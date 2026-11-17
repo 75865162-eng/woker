@@ -3,6 +3,7 @@ import { roleCanPerformAction, type PermissionAction } from "@/lib/accounts/perm
 import { type CurrentUser } from "@/lib/auth/session";
 import { getAuthorizationContext } from "@/lib/auth/authorization-context";
 import { assertWorkspaceAccess } from "@/lib/workspace/access";
+import { recordAccessDenied } from "@/lib/audit/access-denied";
 
 export type ApiPermissionResult =
   | {
@@ -72,6 +73,14 @@ export async function requireApiPermission(moduleId: string, action: PermissionA
   const permissions = authorization!.permissions;
 
   if (!roleCanPerformAction(user.role, moduleId, action, permissions)) {
+    await recordAccessDenied({
+      organizationId: user.organizationId,
+      userId: user.id,
+      reason: "role_action_denied",
+      moduleId,
+      action,
+      path: request ? new URL(request.url).pathname : undefined,
+    });
     return {
       ok: false,
       response: NextResponse.json({ error: "Forbidden." }, { status: 403 }),
@@ -106,6 +115,14 @@ export async function requireApiPermission(moduleId: string, action: PermissionA
     const checked = new Set<string>();
     for (const value of workspaceIds) {
       if (typeof value !== "string") {
+        await recordAccessDenied({
+          organizationId: user.organizationId,
+          userId: user.id,
+          reason: "workspace_access_denied",
+          moduleId,
+          action,
+          path: new URL(request.url).pathname,
+        });
         return { ok: false, response: NextResponse.json({ error: "Forbidden." }, { status: 403 }) };
       }
       const workspaceId = value.trim();
@@ -113,9 +130,27 @@ export async function requireApiPermission(moduleId: string, action: PermissionA
       checked.add(workspaceId);
       // 四个选择器位置已足够；拒绝重复 query 参数放大数据库查询。
       if (checked.size > 4) {
+        await recordAccessDenied({
+          organizationId: user.organizationId,
+          userId: user.id,
+          reason: "workspace_access_denied",
+          moduleId,
+          action,
+          path: new URL(request.url).pathname,
+          requestedWorkspaceId: workspaceId,
+        });
         return { ok: false, response: NextResponse.json({ error: "Forbidden." }, { status: 403 }) };
       }
       if (!(await assertWorkspaceAccess(user.organizationId, workspaceId, user.id, undefined, request))) {
+        await recordAccessDenied({
+          organizationId: user.organizationId,
+          userId: user.id,
+          reason: "workspace_access_denied",
+          moduleId,
+          action,
+          path: new URL(request.url).pathname,
+          requestedWorkspaceId: workspaceId,
+        });
         return { ok: false, response: NextResponse.json({ error: "Forbidden." }, { status: 403 }) };
       }
     }

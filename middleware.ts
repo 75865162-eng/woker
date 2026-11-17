@@ -18,7 +18,7 @@ async function verifySignature(payload: string, signature: string) {
   const secret = getAuthSecret();
   const key = await crypto.subtle.importKey(
     "raw",
-    new TextEncoder().encode(secret),
+    new TextEncoder().encode(secret || "local-development-auth-secret"),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["verify"],

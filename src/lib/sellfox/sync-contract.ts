@@ -1,3 +1,5 @@
+import { getSellfoxWindowConfig } from "./window-config";
+
 export const sellfoxSyncResources = ["stores", "inventory", "sales", "performance", "hourly", "listings", "orders", "fba_shipments", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const;
 export type SellfoxSyncResource = (typeof sellfoxSyncResources)[number];
 
@@ -35,7 +37,7 @@ export function isSellfoxDate(value: unknown): value is string {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
-export function nextSellfoxPage(rowsOnPage: number, pageNo: number, totalPages: number | null, pageSize = 100, maxPages = 10_000) {
+export function nextSellfoxPage(rowsOnPage: number, pageNo: number, totalPages: number | null, pageSize = 100, maxPages = getSellfoxWindowConfig().maxPages) {
   if (totalPages !== null && pageNo >= totalPages) return null;
   if (rowsOnPage < pageSize) {
     if (totalPages !== null && pageNo < totalPages) throw new SellfoxSyncInputError("赛狐分页未达到声明的末页，响应不完整。");
@@ -87,11 +89,12 @@ export function normalizeSellfoxDates(resource: SellfoxSyncResource, input: Reco
   }
   const from = String(startDate ?? endDate ?? reportDate ?? sellfoxDateAt(now, -1));
   const to = String(endDate ?? startDate ?? reportDate ?? from);
+  const window = getSellfoxWindowConfig();
   const days = (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000 + 1;
-  if (days < 1 || days > 90) throw new SellfoxSyncInputError("日期范围最多 90 个自然日，结束日期不得早于开始日期。");
+  if (days < 1 || days > window.maxReportDays) throw new SellfoxSyncInputError(`日期范围最多 ${window.maxReportDays} 个自然日，结束日期不得早于开始日期。`);
   if (resource === "hourly") {
-    if (days !== 1 || from < sellfoxDateAt(now, -59) || from > sellfoxDateAt(now)) {
-      throw new SellfoxSyncInputError("小时样本只能指定最近 60 天内的单日。");
+    if (days !== 1 || from < sellfoxDateAt(now, -(window.hourlyLookbackDays - 1)) || from > sellfoxDateAt(now)) {
+      throw new SellfoxSyncInputError(`小时样本只能指定最近 ${window.hourlyLookbackDays} 天内的单日。`);
     }
     return { reportDate: from };
   }
@@ -101,6 +104,7 @@ export function normalizeSellfoxDates(resource: SellfoxSyncResource, input: Reco
 export function sellfoxReportDates(start: string, end: string) {
   if (!isSellfoxDate(start) || !isSellfoxDate(end)) throw new SellfoxSyncInputError("报表日期无效。");
   const count = (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000 + 1;
-  if (count < 1 || count > 90) throw new SellfoxSyncInputError("日期范围最多 90 个自然日。");
+  const maxReportDays = getSellfoxWindowConfig().maxReportDays;
+  if (count < 1 || count > maxReportDays) throw new SellfoxSyncInputError(`日期范围最多 ${maxReportDays} 个自然日。`);
   return Array.from({ length: count }, (_, index) => new Date(Date.parse(`${start}T00:00:00Z`) + index * 86_400_000).toISOString().slice(0, 10));
 }

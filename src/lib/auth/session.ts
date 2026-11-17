@@ -49,6 +49,7 @@ export { isSecureRequest } from "@/lib/auth/request-security";
  */
 const rolePermissionsCookieMaxAgeSeconds = 60 * 60 * 24;
 
+
 function base64UrlJson(value: unknown) {
   return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
 }

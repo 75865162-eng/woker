@@ -72,6 +72,7 @@ function fixture(route: typeof routes[number]) {
     "@/lib/accounts/permissions": { roleCanPerformAction: () => true },
     "@/lib/auth/authorization-context": { getAuthorizationContext: async () => ({ user: { id: "user-a", organizationId: "org-a", role: "owner" }, permissions: {} }) },
     "@/lib/workspace/access": access,
+    "@/lib/audit/access-denied": { recordAccessDenied: async () => true },
   });
   const storage = {
     putFile: async ({ key, file }: { key: string; file: File }) => { effects.push({ kind: "storage.putFile" }); return { key, size: file.size, contentType: file.type }; },

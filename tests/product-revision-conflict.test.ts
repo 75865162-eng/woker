@@ -65,7 +65,7 @@ test("loads the latest scoped revision without saving and restores edited fields
   assert.equal(h.base.revision, 3);
   assert.equal(h.draft.revision, 3);
   assert.equal(h.draft.englishName, "My edit");
-  assert.deepEqual(h.draft.competitors, ["b"]);
+  assert.deepEqual((h.draft as unknown as { competitors?: unknown }).competitors, ["b"]);
   assert.equal(conflict.conflict.current, null);
   assert.match(h.error, /未自动保存/);
 });
