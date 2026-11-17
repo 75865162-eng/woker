@@ -20,7 +20,7 @@ const directory = mkdtempSync(path.join(tmpdir(), "erp-runtime-integration-"));
 const pgName = `erp-runtime-pg-${tag}`, redisName = `erp-runtime-redis-${tag}`;
 const dist = `.next-dev-runtime-${tag}`;
 const containers = [], children = [];
-let pgPort, redisPort, pgContainerId, redisContainerId;
+let pgPort, redisPort, pgContainerId;
 const pgFixture = { name: pgName, port: null, servicePort: 5432, id: null };
 const redisFixture = { name: redisName, port: null, servicePort: 6379, id: null };
 const baselineTsconfig = readFileSync(path.join(root, "tsconfig.json"), "utf8");
@@ -74,7 +74,7 @@ try {
   containers.push(pgFixture);
   redisFixture.id = docker(["run", "--pull=never", "-d", "--name", redisName, "--label", "codex.task=erp-runtime-fixture", "--label", `erp.fixture.run=${tag}`, "--memory=128m", "--cpus=0.5", "-p", `127.0.0.1:${redisPort}:6379`, "redis:7", "redis-server", "--save", "", "--appendonly", "no"]);
   containers.push(redisFixture);
-  pgContainerId = pgFixture.id; redisContainerId = redisFixture.id;
+  pgContainerId = pgFixture.id;
   verifyFixture(pgFixture); verifyFixture(redisFixture);
   assert.ok(docker(["port", pgFixture.id, "5432"]).endsWith(":" + pgPort));
   assert.ok(docker(["port", redisFixture.id, "6379"]).endsWith(":" + redisPort));
@@ -298,6 +298,7 @@ try {
   verifyFixture(redisFixture);
   docker(["start", redisFixture.id]);
   await until(() => docker(["exec", redisFixture.id, "redis-cli", "PING"]) === "PONG", "fixture Redis restart");
+  verifyFixture(redisFixture);
   docker(["exec", redisFixture.id, "redis-cli", "FLUSHALL"]);
   verifyFixture(redisFixture);
   docker(["restart", redisFixture.id]);

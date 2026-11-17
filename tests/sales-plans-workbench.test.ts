@@ -10,8 +10,8 @@ const origin = "http://127.0.0.1:43247";
 function plan(id: string, status = "ACTIVE") {
   return {
     plan: { id, name: `真实计划${id}`, marketplace: "DE", currency: "EUR", periodType: "QUARTER", periodStart: "2026-10-01", periodEnd: "2026-12-31", status, revision: 7, forecastWindowDays: 28, seasonalityBp: 12500, notes: `备注${id}` },
-    lines: [{ id: `line-${id}`, sellerSku: `SKU-${id}`, asin: `ASIN-${id}`, targetQty: 42, targetRevenue: "1234.56", unitCost: "12.34", historyDailyAvg: "2", forecastQty: 50, actualQty: 3, actualRevenue: 100, completionBp: 714, gap: -39 }],
-    totals: { targetQty: 42, actualQty: 3, forecastQty: 50 },
+    lines: [{ id: `line-${id}`, sellerSku: `SKU-${id}`, asin: `ASIN-${id}`, targetQty: 42, targetRevenue: "1234.56", unitCost: "12.34", historyDailyAvg: id === "B" ? null : "2", forecastQty: id === "B" ? null : 50, actualQty: id === "B" ? null : 3, actualRevenue: id === "B" ? null : 100, completionBp: id === "B" ? null : 714, gap: id === "B" ? null : -39, actualState: id === "B" ? "NEEDS_DATA" : "READY", forecastState: id === "B" ? "NEEDS_DATA" : "READY" }],
+    totals: { targetQty: 42, actualQty: id === "B" ? null : 3, forecastQty: id === "B" ? null : 50, actualState: id === "B" ? "NEEDS_DATA" : "READY", forecastState: id === "B" ? "NEEDS_DATA" : "READY" },
   };
 }
 
@@ -92,6 +92,10 @@ test("销售计划真实详情回填、失败和关闭阻断、乱序载入与�
     await reply("A");
     assert.equal(await page.getByLabel("计划名称", { exact: true }).inputValue(), "真实计划B");
     assert.equal(await editor.locator("tbody input").first().inputValue(), "SKU-B");
+    const execution = page.locator("section").filter({ has: page.getByRole("heading", { name: "执行偏差 · 真实计划B" }) });
+    await expect(execution.getByText("待补数据", { exact: true }).first()).toBeVisible();
+    await expect(execution.getByRole("cell", { name: "待补数据", exact: true })).toHaveCount(4);
+    await expect(execution.getByRole("cell", { name: "0.0%", exact: true })).toHaveCount(0);
 
     await load("FAIL").click();
     await reply("FAIL", { error: "隔离测试读取失败" } as unknown as ReturnType<typeof plan>, 500);

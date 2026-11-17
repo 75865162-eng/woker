@@ -5,7 +5,7 @@ import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-err
 import { prisma } from "@/lib/db/prisma";
 import { loadPendingWorkflowNotifications } from "@/lib/notifications/pending-workflow-notifications";
 import { roleCanAccessModule } from "@/lib/accounts/permissions";
-import { getOrganizationRolePermissionsSnapshot } from "@/lib/accounts/role-permissions-server";
+import { getAuthorizationContext } from "@/lib/auth/authorization-context";
 
 export const runtime = "nodejs";
 
@@ -50,8 +50,9 @@ export async function GET(request: Request) {
           },
         }),
         (async () => {
-          const snapshot = await getOrganizationRolePermissionsSnapshot(user.organizationId);
-          return roleCanAccessModule(user.role, "products", snapshot.permissions)
+          // 统一走 authorization-context，不再与 role-permissions-server 快照双轨判定。
+          const authorization = await getAuthorizationContext(request);
+          return authorization && roleCanAccessModule(authorization.user.role, "products", authorization.permissions)
             ? loadPendingWorkflowNotifications(user.organizationId, user.id)
             : [];
         })(),

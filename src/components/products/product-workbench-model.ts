@@ -4,22 +4,22 @@ import type { ProductImageAsset } from "@/lib/products/types";
 export const storageKey = "amazon-bulk-ad-products-v2";
 export const trialStorageKey = "amazon-bulk-ad-trial-products-v1";
 export const pageSizeOptions = [20, 50, 100];
-export const emptySize: ProductSizeCm = { length: 0, width: 0, height: 0 };
+export const emptySize: ProductSizeCm = { length: null, width: null, height: null };
 export const overdueThresholdDays = 7;
 
 export type ProductStatusFilter = "all" | "overdue" | "development_phase" | "design_in_progress" | "operations_progress" | ProductStatus;
 
 export type TrialPriceRow = {
   name: string;
-  lengthCm: number;
-  widthCm: number;
-  heightCm: number;
-  actualWeightKg: number;
-  suggestedPrice: number;
-  purchaseCost: number;
-  oceanFreightUnitPrice: number;
-  fbaFee: number;
-  exchangeRate: number;
+  lengthCm: number | null;
+  widthCm: number | null;
+  heightCm: number | null;
+  actualWeightKg: number | null;
+  suggestedPrice: number | null;
+  purchaseCost: number | null;
+  oceanFreightUnitPrice: number | null;
+  fbaFee: number | null;
+  exchangeRate: number | null;
 };
 
 export type TrialCompetitorRow = {
@@ -57,8 +57,8 @@ export type TrialSupplierRow = {
   certifications: string;
   patentCountry: string;
   packagingMethod: string;
-  cost100: number;
-  cost300: number;
+  cost100: number | null;
+  cost300: number | null;
   taxPoint: string;
   invoiceName: string;
   invoiceSpecUnit: string;
@@ -103,9 +103,9 @@ export type TrialImprovement = {
 
 export type TrialKeywordRow = {
   keyword: string;
-  cpc: number;
-  monthlySearches: number;
-  abaRank: number;
+  cpc: number | null;
+  monthlySearches: number | null;
+  abaRank: number | null;
 };
 
 export type TrialProductDraft = {

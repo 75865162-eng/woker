@@ -78,7 +78,7 @@ export async function parseProductWorkbookFile(file: File, products: Array<Pick<
     englishName: "",
     asin: detail.competitors[0]?.asin ?? "",
     developer,
-    purchasePrice: detail.pricingRows[0]?.purchaseCost ?? 0,
+    purchasePrice: detail.pricingRows[0]?.purchaseCost ?? null,
     status: "pending",
     supplierName: detail.suppliers[0]?.factoryName ?? "",
     supplierUrl: detail.suppliers[0]?.productUrl ?? "",
@@ -91,17 +91,17 @@ export async function parseProductWorkbookFile(file: File, products: Array<Pick<
     hsCode: "",
     images: [],
     competitorAsins: detail.competitors.map((competitor) => competitor.asin.trim()).filter(Boolean),
-    productWeightG: Math.round((detail.pricingRows[0]?.actualWeightKg ?? 0) * 1000),
-    packageWeightG: Math.round((detail.pricingRows[0]?.actualWeightKg ?? 0) * 1000),
+    productWeightG: detail.pricingRows[0]?.actualWeightKg == null ? null : Math.round(detail.pricingRows[0].actualWeightKg * 1000),
+    packageWeightG: detail.pricingRows[0]?.actualWeightKg == null ? null : Math.round(detail.pricingRows[0].actualWeightKg * 1000),
     productSizeCm: {
-      length: detail.pricingRows[0]?.lengthCm ?? 0,
-      width: detail.pricingRows[0]?.widthCm ?? 0,
-      height: detail.pricingRows[0]?.heightCm ?? 0,
+      length: detail.pricingRows[0]?.lengthCm ?? null,
+      width: detail.pricingRows[0]?.widthCm ?? null,
+      height: detail.pricingRows[0]?.heightCm ?? null,
     },
     packageSizeCm: {
-      length: detail.pricingRows[0]?.lengthCm ?? 0,
-      width: detail.pricingRows[0]?.widthCm ?? 0,
-      height: detail.pricingRows[0]?.heightCm ?? 0,
+      length: detail.pricingRows[0]?.lengthCm ?? null,
+      width: detail.pricingRows[0]?.widthCm ?? null,
+      height: detail.pricingRows[0]?.heightCm ?? null,
     },
     selectionOwner: developer,
     workflowStage: "selection_pending",
@@ -130,7 +130,7 @@ export function createProductShellFromListItem(product: ProductListPreview): Pro
     image: product.image,
     asin: product.asin ?? "",
     developer: "",
-    purchasePrice: product.purchasePrice ?? 0,
+    purchasePrice: product.purchasePrice ?? null,
     status: product.status,
     supplierName: product.supplierName ?? "",
     supplierUrl: "",
@@ -143,10 +143,10 @@ export function createProductShellFromListItem(product: ProductListPreview): Pro
     hsCode: "",
     images: [],
     competitorAsins: [],
-    productWeightG: 0,
-    packageWeightG: 0,
-    productSizeCm: emptySize,
-    packageSizeCm: emptySize,
+    productWeightG: null,
+    packageWeightG: null,
+    productSizeCm: { ...emptySize },
+    packageSizeCm: { ...emptySize },
     selectionOwner: product.selectionOwner ?? "",
     opsAssignee: product.opsAssignee ?? "",
     opsAssignees: [],
@@ -173,7 +173,7 @@ function parsePricingRows(rows: string[][], headerIndex: number, endIndex: numbe
     purchaseCost: parseNumber(row[7]),
     oceanFreightUnitPrice: 12,
     fbaFee: parseNumber(row[8]),
-    exchangeRate: parseNumber(row[13]) || 6.9,
+    exchangeRate: parseNumber(row[13]) ?? 6.9,
   })).filter((row) => row.name);
 }
 
@@ -344,8 +344,9 @@ function cleanText(value: unknown) {
 
 function parseNumber(value: unknown) {
   const text = cleanText(value).replace(/[$,%]/g, "").replace(/,/g, "");
+  if (!text) return null;
   const number = Number(text);
-  return Number.isFinite(number) ? number : 0;
+  return Number.isFinite(number) ? number : null;
 }
 
 function findRowIndex(rows: string[][], label: string) {
@@ -477,7 +478,7 @@ export function productToDraft(product: Product | null, products: Array<Pick<Pro
     englishName: "",
     asin: "",
     developer: "",
-    purchasePrice: 0,
+    purchasePrice: null,
     status: "pending",
     supplierName: "",
     supplierUrl: "",
@@ -492,10 +493,10 @@ export function productToDraft(product: Product | null, products: Array<Pick<Pro
     images: [],
     imageAssets: [],
     competitorAsins: ["", ""],
-    productWeightG: 0,
-    packageWeightG: 0,
-    productSizeCm: emptySize,
-    packageSizeCm: emptySize,
+    productWeightG: null,
+    packageWeightG: null,
+    productSizeCm: { ...emptySize },
+    packageSizeCm: { ...emptySize },
     workflowStage: "selection_pending",
     opsAssignees: [],
     designerAssignees: [],
@@ -939,14 +940,14 @@ function createEspressoMirrorDetail(): TrialProductDraft {
 function createBlankWorkbookDetail(): TrialProductDraft {
   const blankPriceRow: TrialPriceRow = {
     name: "",
-    lengthCm: 0,
-    widthCm: 0,
-    heightCm: 0,
-    actualWeightKg: 0,
-    suggestedPrice: 0,
-    purchaseCost: 0,
+    lengthCm: null,
+    widthCm: null,
+    heightCm: null,
+    actualWeightKg: null,
+    suggestedPrice: null,
+    purchaseCost: null,
     oceanFreightUnitPrice: 12,
-    fbaFee: 0,
+    fbaFee: null,
     exchangeRate: 6.9,
   };
 
@@ -983,8 +984,8 @@ function createBlankWorkbookDetail(): TrialProductDraft {
     certifications: "",
     patentCountry: "",
     packagingMethod: "",
-    cost100: 0,
-    cost300: 0,
+    cost100: null,
+    cost300: null,
     taxPoint: "",
     invoiceName: "",
     invoiceSpecUnit: "",

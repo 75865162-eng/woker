@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
-import { roleCanPerformAction, defaultRolePermissionMap, type RolePermissionMap } from "@/lib/accounts/permissions";
-import { normalizeRolePermissions, normalizeRolePermissionMap } from "@/lib/accounts/role-permissions-utils";
+import { assertWorkspaceAccess } from "@/lib/workspace/access";
+import { roleCanPerformAction } from "@/lib/accounts/permissions";
+import { readOrganizationRolePermissions } from "@/lib/accounts/role-catalog-server";
 import { parseDailyMetricsFilters } from "./read-models";
 import { inventorySnapshotStatus } from "./readiness";
 import { readPpcDataset, suggestPpc, summarizePpc } from "./ppc-read";
@@ -53,16 +54,10 @@ export function opsIdentity(command: OpsCommand, env: Record<string, string | un
 export async function authorizeOps(db: Prisma.TransactionClient, identity: OpsIdentity, command: OpsCommand) {
   const { organizationId, workspaceId, actorUserId } = identity;
   const member = await db.organizationMember.findFirst({ where: { organizationId, userId: actorUserId, user: { status: "active" } } });
-  const workspace = await db.workspaceScope.findUnique({ where: { organizationId_id: { organizationId, id: workspaceId } } });
+  const workspace = await assertWorkspaceAccess(organizationId, workspaceId, actorUserId, db);
   if (!member || !workspace) throw new OpsError("FORBIDDEN", "Active organization member and workspace required.", 3);
   if (!command.command.startsWith("ppc ")) return;
-  const roles = await db.organizationRosterRole.findMany({ where: { organizationId }, select: { id: true, permissions: true } });
-  let permissions: RolePermissionMap;
-  if (roles.length) permissions = Object.fromEntries(roles.map((row) => [row.id, { ...defaultRolePermissionMap[row.id], ...normalizeRolePermissions(row.permissions) }]));
-  else {
-    const legacy = await db.organizationRolePermission.findUnique({ where: { organizationId } });
-    permissions = normalizeRolePermissionMap(legacy?.permissions);
-  }
+  const permissions = await readOrganizationRolePermissions(db, organizationId);
   const modules = ["operations", ...(command.command.startsWith("ppc ") ? ["workspace", "agents"] : [])];
   if (modules.some((module) => !roleCanPerformAction(member.role, module, "view", permissions))) throw new OpsError("FORBIDDEN", "Missing module view permission.", 3);
 }

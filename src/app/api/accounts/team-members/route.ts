@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { getBootstrapAdminEmail, isBootstrapAdminEmail } from "@/lib/auth/constants";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
-import { normalizeAccountRoleId, normalizeTeamAccounts, toOrganizationRoleId, type TeamAccountRecord } from "@/lib/accounts/team-roster";
+import { normalizeAccountRoleId, normalizeTeamAccounts, organizationRoleIds, toOrganizationRoleId, type TeamAccountRecord } from "@/lib/accounts/team-roster";
 import { syncRosterLoginUsers } from "@/lib/accounts/roster-auth-sync";
 import { getTeamRosterSnapshot } from "@/lib/accounts/team-roster-server";
 import { prisma } from "@/lib/db/prisma";
@@ -35,13 +34,12 @@ const rosterSaveMaxAttempts = 3;
 const rosterSaveTransactionMaxWaitMs = 10_000;
 const rosterSaveTransactionTimeoutMs = 60_000;
 
-function toAccountRecord(member: RosterAccountRow): TeamAccountRecord {
+function toAccountRecord(member: Omit<RosterAccountRow, "updatedAt">): TeamAccountRecord {
   return {
     id: member.id,
     username: member.username ?? undefined,
     name: member.name,
     email: member.email,
-    password: member.password ?? undefined,
     department: member.department,
     title: member.title,
     roleId: normalizeAccountRoleId(member.roleId),
@@ -58,13 +56,12 @@ function toAccountRecord(member: RosterAccountRow): TeamAccountRecord {
 
 function toRosterWriteData(account: RosterSaveAccount) {
   const status: "active" | "pending" | "disabled" | "archived" =
-    account.status === "pending" || account.status === "active" || account.status === "archived" ? account.status : "disabled";
+    account.status === "pending" || account.status === "active" || account.status === "archived" || account.status === "disabled" ? account.status : "disabled";
 
   return {
     username: account.username ?? null,
     name: account.name,
     email: account.email,
-    ...(typeof account.password === "string" && account.password.trim() ? { password: account.password.trim() } : {}),
     department: account.department,
     title: account.title,
     roleId: account.roleId,
@@ -84,54 +81,12 @@ function mapAccountRoleToOrganizationRole(roleId: TeamAccountRecord["roleId"]) {
   return toOrganizationRoleId(roleId);
 }
 
-function isDefaultSuperAccount(
-  account: Pick<TeamAccountRecord, "id"> & Partial<Pick<TeamAccountRecord, "email" | "username">>,
-  defaultSuperAccountIds: Set<string>,
-) {
-  return (
-    account.id === "local-admin" ||
-    defaultSuperAccountIds.has(account.id) ||
-    isBootstrapAdminEmail(account.email) ||
-    account.username?.trim().toLowerCase() === "1"
-  );
+function isProtectedAccount(account: Pick<TeamAccountRecord, "id">, protectedAccountIds: Set<string>) {
+  return protectedAccountIds.has(account.id.trim().toLowerCase());
 }
 
-function lockDefaultSuperAccount<T extends TeamAccountRecord | RosterSaveAccount>(account: T, defaultSuperAccountIds: Set<string>): T {
-  if (!isDefaultSuperAccount(account, defaultSuperAccountIds)) return account;
-
-  return {
-    ...account,
-    email: getBootstrapAdminEmail(),
-    roleId: "owner",
-    status: "active",
-  };
-}
-
-async function getDefaultSuperAccountIds(client: typeof prisma | Prisma.TransactionClient, organizationId: string) {
-  const bootstrapUser = await client.user.findUnique({
-    where: {
-      email: getBootstrapAdminEmail(),
-    },
-    select: {
-      id: true,
-    },
-  });
-
-  if (!bootstrapUser) return new Set<string>();
-
-  const membership = await client.organizationMember.findUnique({
-    where: {
-      organizationId_userId: {
-        organizationId,
-        userId: bootstrapUser.id,
-      },
-    },
-    select: {
-      userId: true,
-    },
-  });
-
-  return new Set(membership ? [membership.userId] : []);
+function getProtectedAccountIds() {
+  return new Set((process.env.PROTECTED_SUPER_ACCOUNT_IDS ?? "").split(",").map((id) => id.trim().toLowerCase()).filter(Boolean));
 }
 
 function shouldProtectAccountFromUser(
@@ -139,8 +94,8 @@ function shouldProtectAccountFromUser(
   account: Pick<TeamAccountRecord, "id" | "roleId"> & Partial<Pick<TeamAccountRecord, "email" | "username">>,
   defaultSuperAccountIds: Set<string>,
 ) {
-  if (isDefaultSuperAccount(account, defaultSuperAccountIds)) return true;
-  if (user.role !== "operations_supervisor") return false;
+  if (isProtectedAccount(account, defaultSuperAccountIds)) return true;
+  if (user.role === "owner") return false;
 
   return account.id === user.id || account.roleId === "owner" || account.roleId === "database_admin";
 }
@@ -157,9 +112,9 @@ function mergeProtectedAccounts(
 
   const protectedAccounts = currentAccounts.filter(shouldProtectAccount);
   const protectedIds = new Set(protectedAccounts.map((account) => account.id));
-  const editableAccounts = submittedAccounts.filter((account) => !protectedIds.has(account.id) && !isDefaultSuperAccount(account, defaultSuperAccountIds));
+  const editableAccounts = submittedAccounts.filter((account) => !protectedIds.has(account.id) && !isProtectedAccount(account, defaultSuperAccountIds));
   const preservedAccounts = protectedAccounts.map((account) => ({
-    ...lockDefaultSuperAccount(account, defaultSuperAccountIds),
+    ...account,
     organizationId,
     sortOrder: 0,
   }));
@@ -237,14 +192,16 @@ export async function PUT(request: Request) {
       sortOrder: index,
     }));
 
-    if (!process.env.DATABASE_URL) {
-      const localAccounts = normalized.map((account) => lockDefaultSuperAccount(account, new Set<string>()));
+    if (normalized.some((account) => !organizationRoleIds.includes(account.roleId as (typeof organizationRoleIds)[number]))) {
+      return NextResponse.json({ error: "账号角色必须使用受支持的正式角色标识。" }, { status: 400 });
+    }
 
+    if (!process.env.DATABASE_URL) {
+      if (user.role !== "owner" && normalized.some((account) => account.roleId === "owner" || account.roleId === "database_admin")) {
+        return NextResponse.json({ error: "仅组织所有者可以分配管理角色。" }, { status: 403 });
+      }
       return NextResponse.json({
-        accounts: localAccounts.map((account) => ({
-          ...account,
-          lastActiveAt: account.lastActiveAt ?? undefined,
-        })),
+        accounts: normalized.map(toAccountRecord),
         revision: "local",
       });
     }
@@ -259,15 +216,56 @@ export async function PUT(request: Request) {
               where: {
                 organizationId: user.organizationId,
               },
+              omit: { password: true },
               orderBy: {
                 sortOrder: "asc",
               },
             })
           ).map(toAccountRecord);
-          const defaultSuperAccountIds = await getDefaultSuperAccountIds(tx, user.organizationId);
+          const memberships = await tx.organizationMember.findMany({
+            where: { organizationId: user.organizationId },
+            select: { role: true, user: { select: { id: true, name: true, email: true, status: true } } },
+          });
+          for (const membership of memberships) {
+            const existing = currentMembers.find((account) => account.id === membership.user.id);
+            if (existing) {
+              existing.roleId = membership.role;
+              if (membership.user.status === "disabled") existing.status = "disabled";
+            } else {
+              currentMembers.push({
+                id: membership.user.id,
+                name: membership.user.name,
+                email: membership.user.email,
+                roleId: membership.role,
+                status: membership.user.status === "disabled" ? "disabled" : "active",
+                department: "未分配",
+                title: "注册用户",
+              });
+            }
+          }
+          const defaultSuperAccountIds = getProtectedAccountIds();
+          for (const account of currentMembers) {
+            if (isProtectedAccount(account, defaultSuperAccountIds) && !memberships.some((membership) => membership.user.id === account.id)) {
+              account.roleId = "viewer";
+              account.status = "disabled";
+            }
+          }
+          const protectedIds = new Set(currentMembers.filter((account) => shouldProtectAccountFromUser(user, account, defaultSuperAccountIds)).map((account) => account.id));
+          if (user.role !== "owner" && normalized.some((account) => !protectedIds.has(account.id) && (account.roleId === "owner" || account.roleId === "database_admin"))) {
+            return { error: "仅组织所有者可以分配管理角色。" } as const;
+          }
+          const scopedAccounts = mergeProtectedAccounts(user, user.organizationId, normalized, currentMembers, defaultSuperAccountIds);
+          const editableLoginAccounts = scopedAccounts.filter((account) => !shouldProtectAccountFromUser(user, account, defaultSuperAccountIds));
+          const existingUsers = await tx.user.findMany({
+            where: { id: { in: editableLoginAccounts.map((account) => account.id) } },
+            select: { id: true, memberships: { select: { organizationId: true } } },
+          });
+          if (existingUsers.some((existing) => !existing.memberships.some((membership) => membership.organizationId === user.organizationId)
+            || existing.memberships.some((membership) => membership.organizationId !== user.organizationId))) {
+            return { error: "不能通过团队账号管理修改组织外或跨组织共享的登录账号。" } as const;
+          }
           const currentRoleByAccountId = new Map(currentMembers.map((account) => [account.id, account.roleId]));
 
-          const scopedAccounts = mergeProtectedAccounts(user, user.organizationId, normalized, currentMembers, defaultSuperAccountIds);
           const scopedAccountIds = scopedAccounts.map((account) => account.id);
 
           await tx.teamRosterMember.deleteMany({
@@ -287,6 +285,7 @@ export async function PUT(request: Request) {
             const data = toRosterWriteData(account);
 
             await tx.teamRosterMember.upsert({
+              omit: { password: true },
               where: {
                 organizationId_id: {
                   organizationId: user.organizationId,
@@ -302,7 +301,7 @@ export async function PUT(request: Request) {
             });
           }
 
-          for (const account of scopedAccounts) {
+          for (const account of editableLoginAccounts) {
             await tx.organizationMember.updateMany({
               where: {
                 organizationId: user.organizationId,
@@ -315,11 +314,16 @@ export async function PUT(request: Request) {
           }
 
           await syncRosterLoginUsers(
-            tx,
-            scopedAccounts.map((account) => ({
+            {
+              user: tx.user,
+              organizationMember: { upsert: (input) => tx.organizationMember.upsert(input) },
+              $executeRaw: tx.$executeRaw.bind(tx),
+            } as Prisma.TransactionClient,
+            editableLoginAccounts.map((account) => ({
               ...account,
               roleId: normalizeAccountRoleId(account.roleId),
             })),
+            "manage",
           );
 
           const roleChanges = scopedAccounts
@@ -364,13 +368,14 @@ export async function PUT(request: Request) {
             where: {
               organizationId: user.organizationId,
             },
+            omit: { password: true },
             orderBy: {
               sortOrder: "asc",
             },
           });
 
           return {
-            accounts: members.map(toAccountRecord).map((account) => lockDefaultSuperAccount(account, defaultSuperAccountIds)),
+            accounts: members.map(toAccountRecord),
             revision: buildRosterRevision(members),
           };
         },
@@ -381,6 +386,8 @@ export async function PUT(request: Request) {
         },
       ),
     );
+
+    if ("error" in result) return NextResponse.json({ error: result.error }, { status: 403 });
 
     return NextResponse.json({
       accounts: result.accounts,

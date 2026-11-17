@@ -1,24 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthDriver, publicApiPrefixes, publicRoutes, sessionCookieName } from "@/lib/auth/constants";
+import { getAuthDriver, getAuthSecret, publicApiPrefixes, publicRoutes, sessionCookieName } from "@/lib/auth/constants";
 import { evaluateCsrf } from "@/lib/auth/csrf";
 import { getPublicOrigin } from "@/lib/auth/request-security";
 
-// Mirrors src/lib/auth/session.ts getAuthSecret(). The two must agree: a
-// production deployment must never accept cookies signed with a local fallback.
-function getAuthSecret() {
-  const secret = process.env.AUTH_SECRET;
-  if (process.env.NODE_ENV === "production") {
-    if (
-      !secret
-      || secret === "change-this-local-secret-before-production"
-      || secret === "replace-with-a-random-secret-at-least-32-characters"
-      || secret.length < 32
-    ) {
-      throw new Error("AUTH_SECRET must be a non-placeholder value with at least 32 characters in production.");
-    }
-  }
-  return secret || "local-development-auth-secret";
-}
+// getAuthSecret is shared with the Node session signer (see constants.ts) so
+// signing and verification can never diverge; production rejects weak secrets.
 
 function base64UrlToBytes(value: string) {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
@@ -78,6 +64,12 @@ export async function middleware(request: NextRequest) {
   const isPublicRoute = publicRoutes.includes(pathname);
   const isPublicApi = publicApiPrefixes.some((prefix) => pathname.startsWith(prefix));
 
+  // Browser-session bypass below is scoped to endpoints that carry their OWN
+  // authentication (personal MCP bearer, OAuth2 token/pairing flow, or a
+  // one-time device-pairing code). Requiring a browser cookie here would break
+  // external MCP clients that never have one. Each handler remains responsible
+  // for verifying its bearer/OAuth credentials and scoping private data; the
+  // middleware only skips the cookie gate, never the endpoint's own auth.
   // This exact endpoint authenticates every request with its personal MCP bearer.
   // Requiring a browser session here prevents external MCP clients from reaching it.
   if (pathname === "/api/mcp/amazon") {
@@ -88,6 +80,10 @@ export async function middleware(request: NextRequest) {
   if (pathname === "/api/mcp/sellfox" || pathname === "/api/mcp") {
     return NextResponse.next();
   }
+  // OAuth 2.0 endpoints and RFC 9728/8414 discovery documents must be reachable
+  // before a browser session exists. They implement their own client registration,
+  // authorization and token validation in @/lib/lili/oauth; the .well-known
+  // documents are static metadata that disclose no private data.
   if (["/api/lili/oauth/authorize", "/api/lili/oauth/token", "/api/lili/oauth/register", "/api/lili/oauth/revoke", "/.well-known/oauth-authorization-server", "/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/api/lili/mcp"].includes(pathname)) return NextResponse.next();
   // Public MCP connection/Skill discovery requires no browser session. The
   // handler still authenticates every private-data operation; neighboring APIs stay protected.

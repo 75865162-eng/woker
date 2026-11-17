@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { cache } from "react";
 import { measureServerOperation } from "@/lib/server/performance";
 import { prisma } from "@/lib/db/prisma";
-import { getAuthDriver, sessionCookieName, sessionMaxAgeSeconds } from "@/lib/auth/constants";
+import { getAuthDriver, getAuthSecret, sessionCookieName, sessionMaxAgeSeconds } from "@/lib/auth/constants";
 import { rolePermissionsCookieName } from "@/lib/accounts/permissions";
 import { getOrganizationRolePermissionsSnapshot, type RolePermissionsSnapshot } from "@/lib/accounts/role-permissions-server";
 
@@ -14,6 +14,7 @@ type SessionPayload = {
   token: string;
   expiresAt: string;
   localUser?: CurrentUser;
+  organizationId?: string;
   sessionUser?: Pick<CurrentUser, "id" | "email" | "name" | "role" | "organizationId" | "organizationName">;
 };
 
@@ -40,22 +41,13 @@ export type AuthCookie = {
 
 export { isSecureRequest } from "@/lib/auth/request-security";
 
-function getAuthSecret() {
-  const secret = process.env.AUTH_SECRET;
-
-  if (process.env.NODE_ENV === "production") {
-    if (
-      !secret
-      || secret === "change-this-local-secret-before-production"
-      || secret === "replace-with-a-random-secret-at-least-32-characters"
-      || secret.length < 32
-    ) {
-      throw new Error("AUTH_SECRET must be a non-placeholder value with at least 32 characters in production.");
-    }
-  }
-
-  return secret || "local-development-auth-secret";
-}
+/**
+ * Client-readable role-permission snapshot used for UI gating only. It is
+ * intentionally NOT HttpOnly (the app shell reads it in the browser), but it
+ * carries no authority: every server-side authorization re-reads the DB
+ * snapshot. A short lifetime prevents a stale snapshot from lingering.
+ */
+const rolePermissionsCookieMaxAgeSeconds = 60 * 60 * 24;
 
 function base64UrlJson(value: unknown) {
   return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
@@ -113,7 +105,7 @@ async function getCurrentUserFromPayload(payload: SessionPayload): Promise<Curre
     return payload.localUser;
   }
 
-  if (payload.driver !== getAuthDriver()) {
+  if (payload.driver !== getAuthDriver() || !payload.organizationId) {
     return undefined;
   }
 
@@ -134,13 +126,11 @@ async function getCurrentUserFromPayload(payload: SessionPayload): Promise<Curre
           name: true,
           status: true,
           memberships: {
+            where: { organizationId: payload.organizationId },
             select: {
               role: true,
               organizationId: true,
               organization: { select: { name: true } },
-            },
-            orderBy: {
-              createdAt: "asc",
             },
             take: 1,
           },
@@ -184,6 +174,7 @@ export async function createSession(
     sessionId: session.id,
     driver: "database",
     userId,
+    organizationId: sessionUser?.organizationId,
     token,
     expiresAt: expiresAt.toISOString(),
     sessionUser,
@@ -213,8 +204,9 @@ export async function createSession(
       value: encodeURIComponent(JSON.stringify(snapshot.permissions)),
       options: {
         sameSite: "lax",
+        // Secure in production/HTTPS; left readable by the client by design.
         secure: secureCookie,
-        maxAge: 60 * 60 * 24 * 365,
+        maxAge: rolePermissionsCookieMaxAgeSeconds,
         path: "/",
       },
     };
@@ -230,6 +222,7 @@ export async function createLocalSession(user: CurrentUser, secureCookie = proce
     driver: "local",
     sessionId: `local-${Date.now()}`,
     userId: user.id,
+    organizationId: user.organizationId,
     token,
     expiresAt: expiresAt.toISOString(),
     localUser: user,

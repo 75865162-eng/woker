@@ -9,6 +9,7 @@ import { getAccessiblePathOrFallback, type RolePermissionMap } from "@/lib/accou
 type AuthMode = "login" | "register";
 type AuthResponse = {
   error?: string;
+  organizations?: Array<{ id: string; name: string }>;
   user?: {
     role?: string;
   };
@@ -22,6 +23,8 @@ export default function LoginPage() {
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [organizations, setOrganizations] = useState<Array<{ id: string; name: string }>>([]);
+  const [organizationId, setOrganizationId] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -31,6 +34,8 @@ export default function LoginPage() {
     setMode(nextMode);
     setError("");
     setConfirmPassword("");
+    setOrganizations([]);
+    setOrganizationId("");
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -50,11 +55,17 @@ export default function LoginPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(isRegister ? { email, name, password, confirmPassword } : { email, password }),
+        body: JSON.stringify(isRegister ? { email, name, password, confirmPassword } : { email, password, ...(organizationId ? { organizationId } : {}) }),
       });
       const payload = (await response.json()) as AuthResponse;
 
       if (!response.ok) {
+        if (!isRegister && response.status === 409 && payload.organizations?.length) {
+          setOrganizations(payload.organizations);
+          setOrganizationId("");
+          setError(payload.error ?? "请选择要进入的组织。");
+          return;
+        }
         setError(payload.error ?? (isRegister ? "注册失败。" : "登录失败。"));
         return;
       }
@@ -150,6 +161,21 @@ export default function LoginPage() {
               className="mt-2 h-10 w-full rounded-md border border-border px-3 text-sm outline-none focus:border-brand"
               required
             />
+          </label>
+        ) : null}
+
+        {!isRegister && organizations.length > 1 ? (
+          <label className="mb-4 block text-sm font-semibold text-foreground">
+            组织
+            <select
+              value={organizationId}
+              onChange={(event) => setOrganizationId(event.target.value)}
+              className="mt-2 h-10 w-full rounded-md border border-border bg-surface px-3 text-sm outline-none focus:border-brand"
+              required
+            >
+              <option value="" disabled>请选择组织</option>
+              {organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}
+            </select>
           </label>
         ) : null}
 

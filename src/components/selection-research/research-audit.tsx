@@ -6,7 +6,7 @@ import type { Decision, Run } from "@/lib/selection-research/types";
 
 const decisionLabels: Record<Decision["kind"], string> = {
   SELECT: "第一次业务确认", CONFIRM: "第二次业务确认", AUTHORIZE_TOOL: "付费请求授权",
-  RECONCILE: "请求结果与费用核对", INCREASE_BUDGET: "提高调用上限",
+  INCREASE_BUDGET: "提高调用上限",
 };
 
 /** Display saved decisions only. Status changes never substitute for a human approval record. */

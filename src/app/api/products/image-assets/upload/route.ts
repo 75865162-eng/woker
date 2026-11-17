@@ -5,9 +5,10 @@ import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import { getStorageDriver, getStorageType } from "@/lib/storage";
+import { assertUploadWorkspaceAccess } from "@/lib/workspace/access";
 import { PRODUCT_ATTACHMENT_MAX_BYTES } from "@/lib/products/file-assets";
 import { createProductImagePreview } from "@/lib/products/image-preview";
-import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
+import { WorkspaceScopeError, workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
 
@@ -33,13 +34,16 @@ export async function POST(request: Request) {
     }
     const { user } = permission;
 
-    const formData = await request.formData();
+    const formData = await request.formData().catch(() => {
+      throw new WorkspaceScopeError("Invalid upload form.", 400);
+    });
     const file = formData.get("file");
     const scope = workspaceScopeFromRequest(request, {
       workspaceId: formData.get("workspaceId"),
       accountId: formData.get("accountId"),
       marketplace: formData.get("marketplace"),
     });
+    await assertUploadWorkspaceAccess(user.organizationId, formData, scope.workspaceId, user.id, request);
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "缺少商品图片文件。" }, { status: 400 });
@@ -137,6 +141,6 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "商品图片上传失败。";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: error instanceof WorkspaceScopeError ? error.status : 500 });
   }
 }

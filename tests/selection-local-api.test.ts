@@ -17,11 +17,11 @@ test("local APIs enforce login, roles, organization/workspace binding, bounded i
   const env = Object.fromEntries(keys.map(k => [k, process.env[k]]));
   delete process.env.DATABASE_URL; process.env.SELECTION_ORGANIZATION_ID = "org"; process.env.SELECTION_WORKSPACE_ID = "workspace";
   process.env.SELECTION_ACTOR_USER_ID = "actor"; process.env.SELECTION_ERP_COOKIE = "private-cookie"; process.env.SELECTION_ERP_URL = "https://private.example.test";
-  let databaseAccess = 0;
+  const databaseAccess = 0;
   global.prisma = {
     workspaceScope: { findUnique: async ({ where }: { where: { organizationId_id: { organizationId: string; id: string } } }) => where.organizationId_id.id === "workspace" ? { id: "workspace" } : null },
     organization: { findMany: async () => [{ id: "org" }] },
-    organizationMember: { findUnique: async () => { databaseAccess++; throw new Error("MUST_NOT_WRITE"); } },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) },
   } as unknown as PrismaClient;
   const slug = `web-api-test-${randomUUID()}`; const dir = path.resolve("selections", slug); const asin = "B012345678";
   try {

@@ -149,7 +149,7 @@ function isCoreKeywordCandidate(row: PerformanceRow) {
   );
 }
 
-function getConditionActualValue(context: RuleEvaluationContext, condition: Condition): number | undefined {
+function getConditionActualValue(context: RuleEvaluationContext, condition: Condition): number | null | undefined {
   const dataSource = condition.dataSource ?? "bulk";
 
   if (dataSource === "overall") {
@@ -194,7 +194,7 @@ function getConditionActualValue(context: RuleEvaluationContext, condition: Cond
     const bulkValue = enrichMetric(context.bulkRow, condition.compareMetric ?? condition.metric);
     const overallValue = getOverallMetric(context.overallRow, condition.metric);
 
-    if (bulkValue === 0 || bulkValue === undefined || overallValue === undefined) {
+    if (bulkValue === 0 || bulkValue == null || overallValue === undefined) {
       return undefined;
     }
 
@@ -207,7 +207,7 @@ function getConditionActualValue(context: RuleEvaluationContext, condition: Cond
 function evaluateCondition(context: RuleEvaluationContext, condition: Condition): boolean {
   const actual = getConditionActualValue(context, condition);
 
-  if (actual === undefined || Number.isNaN(actual)) {
+  if (actual == null || Number.isNaN(actual)) {
     return false;
   }
 

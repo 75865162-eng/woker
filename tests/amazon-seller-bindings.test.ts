@@ -3,8 +3,7 @@ import test from "node:test";
 import { GET, PUT } from "@/app/api/integrations/amazon/sp-api/bindings/route";
 import { PUT as saveCredentials } from "@/app/api/integrations/amazon/sp-api/credentials/route";
 import { createLocalSession } from "@/lib/auth/session";
-import { validateAmazonConnection } from "@/lib/operations/readiness";
-import type { CurrentUser } from "@/lib/auth/session";
+import { getOperationsReadiness } from "@/lib/operations/readiness";
 import { decryptAmazonSpApiCredentials, encryptAmazonSpApiCredentials, mergeAmazonSpApiSettings } from "@/lib/amazon/integration-secrets";
 import { parseSellerBindings, resolveSellerBindingSource, validateSellerBindingRows, type AmazonSellerBinding } from "@/lib/amazon/seller-bindings";
 
@@ -64,7 +63,7 @@ test("operations editors cannot read or write settings-only Amazon bindings", as
   }
 });
 
-test("retired connection validation never calls the external API or writes connection state", async () => {
+test("readiness without configured storage never calls external APIs or writes connection state", async () => {
   const envKeys = ["DATABASE_URL", "AMAZON_SP_API_LWA_CLIENT_ID", "AMAZON_SP_API_LWA_CLIENT_SECRET", "AMAZON_SP_API_REFRESH_TOKEN", "AMAZON_SP_API_AWS_ACCESS_KEY_ID", "AMAZON_SP_API_AWS_SECRET_ACCESS_KEY", "AMAZON_SP_API_ALLOWED_ORGANIZATION_ID", "AMAZON_SP_API_ALLOWED_WORKSPACE_ID"];
   const priorEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
   const globalObject = globalThis as typeof globalThis & { prisma?: unknown };
@@ -92,8 +91,11 @@ test("retired connection validation never calls the external API or writes conne
     ? new Response(JSON.stringify({ access_token: "test-access-token", expires_in: 3600 }), { status: 200 })
     : new Response(JSON.stringify({ payload: [{ marketplace: { id: "ATVPDKIKX0DER", countryCode: "US" } }] }), { status: 200 });
   try {
-    const user: CurrentUser = { id: "user-1", organizationId: "org-1", organizationName: "ERP", role: "owner", email: "owner@example.test", name: "Owner" };
-    await assert.rejects(() => validateAmazonConnection({ user, scope: { workspaceId: "workspace-1", accountId: "", marketplace: "" } }), /旧验证入口已退役/);
+    delete process.env.DATABASE_URL;
+    globalThis.fetch = async () => { throw new Error("不应发起外部请求"); };
+    const readiness = await getOperationsReadiness({ organizationId: "org-1", actorUserId: "user-1", scope: { workspaceId: "workspace-1", accountId: "", marketplace: "" } });
+    assert.equal(readiness.inventory.status, "NOT_SYNCED");
+    assert.equal(readiness.connection.status, "NOT_CONFIGURED");
     assert.equal(writes.length, 0);
   } finally {
     for (const key of envKeys) {

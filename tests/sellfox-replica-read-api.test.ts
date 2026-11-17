@@ -25,7 +25,7 @@ test("order, shipment and restock routes return replica rows, pagination and fac
     itemAmount: 19.99, revenue: 5, promo: null, shipServiceLevel: "Standard", fulfillmentChannel: "AFN", SellfoxStore: { name: "店铺", marketplace: "US", externalId: "shop-a" },
   };
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: scope.workspaceId }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: scope.workspaceId }) },
     sellfoxStore: { findMany: async () => [{ id: "store", externalId: "shop-a", name: "店铺" }], findFirst: async () => null },
     sellfoxSyncRun: { findFirst: async () => ({ id: "run", status: "failed", error: null, summary: { progress: { orders: { "shop-b": { error: "赛狐接口调用失败（HTTP 403 / 40021，访问的接口暂无权限）。" } }, fba_shipments: { "shop-b": { error: "货件响应缺少商品行 items。" } } } } }) },
     sellfoxOrderSnapshot: {

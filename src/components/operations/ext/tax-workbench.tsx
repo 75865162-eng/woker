@@ -38,14 +38,15 @@ export function TaxWorkbench() {
   }
 
   const summary = invoices.data?.summary;
+  const taxValue = (value: number | null | undefined) => value === null || value === undefined ? "无数据" : money(value);
   return <WorkbenchPageTemplate context={<Notice error={error || invoices.error || periods.error || ""} notice={notice} />} main={<div className="space-y-6">
     <Tabs value={tab} onChange={value => setTab(value as "INVOICE" | "PERIOD")} tabs={[{ id: "INVOICE", label: "发票台账", count: invoices.data?.items.length }, { id: "PERIOD", label: "申报期", count: periods.data?.items.length }]} />
 
     {tab === "INVOICE" && <>
       <Kpis items={[
-        { label: "销项税", value: money(summary?.OUTPUT.tax ?? 0), hint: `计税 ${money(summary?.OUTPUT.taxable ?? 0)}` },
-        { label: "进项税", value: money(summary?.INPUT.tax ?? 0), hint: `计税 ${money(summary?.INPUT.taxable ?? 0)}` },
-        { label: "应缴税额", value: money(summary?.payable ?? 0), tone: (summary?.payable ?? 0) > 0 ? "warn" : "good" },
+        { label: "销项税", value: taxValue(summary?.OUTPUT.tax), hint: `计税 ${taxValue(summary?.OUTPUT.taxable)}` },
+        { label: "进项税", value: taxValue(summary?.INPUT.tax), hint: `计税 ${taxValue(summary?.INPUT.taxable)}` },
+        { label: "应缴税额", value: taxValue(summary?.payable), tone: summary?.payable == null ? "muted" : summary.payable > 0 ? "warn" : "good" },
         { label: "发票数", value: String(invoices.data?.items.length ?? 0) },
       ]} />
 

@@ -43,10 +43,10 @@ export type OperationsInventorySnapshotSummary = {
   syncRunId: string | null;
   capturedAt: string | null;
   snapshotCount: number;
-  fulfillableQuantity: number;
-  inboundQuantity: number;
-  reservedQuantity: number;
-  unfulfillableQuantity: number;
+  fulfillableQuantity: number | null;
+  inboundQuantity: number | null;
+  reservedQuantity: number | null;
+  unfulfillableQuantity: number | null;
 };
 
 export type DomainFreshnessStatus = "NOT_SYNCED" | "FRESH" | "STALE" | "BLOCKED" | "FAILED" | "SYNCING" | "DISABLED";

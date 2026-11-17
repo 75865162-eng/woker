@@ -96,49 +96,8 @@ export function subtractProductListSummaries(left: ProductListSummary, right: Pr
   };
 }
 
-export function getProductListSummarySourceContribution(
-  product: ProductListSummarySource | null | undefined,
-  source: ProductListSource,
-  now = new Date(),
-) {
-  if (!product) {
-    return createEmptyProductListSummary();
-  }
-
-  return createProductListSummaryContribution(product, now);
-}
-
-function toSummary(total: number, developing: number, opsReview: number, designInProgress: number, operationsProgress: number, overdue: number): ProductListSummary {
-  return {
-    total,
-    developing,
-    opsReview,
-    designInProgress,
-    operationsProgress,
-    overdue,
-  };
-}
-
 function toNumber(value: unknown) {
   return typeof value === "bigint" ? Number(value) : Number(value ?? 0);
-}
-
-function mapSummaryRecord(record: {
-  total: number;
-  developing: number;
-  opsReview: number;
-  designInProgress: number;
-  operationsProgress: number;
-  overdue: number;
-}) {
-  return {
-    total: record.total,
-    developing: record.developing,
-    opsReview: record.opsReview,
-    designInProgress: record.designInProgress,
-    operationsProgress: record.operationsProgress,
-    overdue: record.overdue,
-  };
 }
 
 function toProductListSummaryBundle(rows: Array<{
@@ -155,7 +114,14 @@ function toProductListSummaryBundle(rows: Array<{
   for (const row of rows) {
     if (row.source === "all" || row.source === "dashboard") {
       const source = row.source as ProductListSource;
-      bundle[source] = mapSummaryRecord(row);
+      bundle[source] = {
+        total: row.total,
+        developing: row.developing,
+        opsReview: row.opsReview,
+        designInProgress: row.designInProgress,
+        operationsProgress: row.operationsProgress,
+        overdue: row.overdue,
+      };
     }
   }
 
@@ -240,22 +206,22 @@ async function rebuildProductListSummaryBundleFromProducts(
   `);
 
   return {
-    all: toSummary(
-      toNumber(row?.allTotal),
-      toNumber(row?.allDeveloping),
-      toNumber(row?.allOpsReview),
-      toNumber(row?.allDesignInProgress),
-      toNumber(row?.allOperationsProgress),
-      toNumber(row?.allOverdue),
-    ),
-    dashboard: toSummary(
-      toNumber(row?.dashboardTotal),
-      toNumber(row?.dashboardDeveloping),
-      toNumber(row?.dashboardOpsReview),
-      toNumber(row?.dashboardDesignInProgress),
-      toNumber(row?.dashboardOperationsProgress),
-      toNumber(row?.dashboardOverdue),
-    ),
+    all: {
+      total: toNumber(row?.allTotal),
+      developing: toNumber(row?.allDeveloping),
+      opsReview: toNumber(row?.allOpsReview),
+      designInProgress: toNumber(row?.allDesignInProgress),
+      operationsProgress: toNumber(row?.allOperationsProgress),
+      overdue: toNumber(row?.allOverdue),
+    },
+    dashboard: {
+      total: toNumber(row?.dashboardTotal),
+      developing: toNumber(row?.dashboardDeveloping),
+      opsReview: toNumber(row?.dashboardOpsReview),
+      designInProgress: toNumber(row?.dashboardDesignInProgress),
+      operationsProgress: toNumber(row?.dashboardOperationsProgress),
+      overdue: toNumber(row?.dashboardOverdue),
+    },
   };
 }
 
@@ -285,8 +251,8 @@ function summaryBundleDelta(input: {
       createProductListSummaryContribution(input.before ?? null, now),
     ),
     dashboard: subtractProductListSummaries(
-      getProductListSummarySourceContribution(input.after ?? null, "dashboard", now),
-      getProductListSummarySourceContribution(input.before ?? null, "dashboard", now),
+      createProductListSummaryContribution(input.after ?? null, now),
+      createProductListSummaryContribution(input.before ?? null, now),
     ),
   };
 }

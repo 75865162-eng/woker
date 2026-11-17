@@ -2,10 +2,9 @@ import { type Prisma } from "@prisma/client";
 import { cache } from "react";
 import { measureServerOperation } from "@/lib/server/performance";
 import { buildDefaultRoleCatalog, type RoleCatalogItem } from "@/lib/accounts/role-catalog";
-import { defaultRolePermissionMap } from "@/lib/accounts/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
-import { normalizeRolePermissionMap, normalizeRolePermissions } from "@/lib/accounts/role-permissions-utils";
+import { normalizeRolePermissions } from "@/lib/accounts/role-permissions-utils";
 
 export type RoleCatalogSnapshot = {
   roles: RoleCatalogItem[];
@@ -23,6 +22,11 @@ type RoleRow = {
 
 const defaultRoleCatalog = buildDefaultRoleCatalog();
 
+/** 无任何已知快照时的最小权限集合：保留角色身份，但清空全部授权（fail-closed）。 */
+function minimalRoleCatalog(): RoleCatalogItem[] {
+  return defaultRoleCatalog.map(role => ({ ...role, permissions: {} }));
+}
+
 function buildRevision(rows: Pick<RoleRow, "id" | "updatedAt">[]) {
   const latestUpdatedAt = rows.reduce((latest, row) => Math.max(latest, row.updatedAt.getTime()), 0);
 
@@ -30,10 +34,7 @@ function buildRevision(rows: Pick<RoleRow, "id" | "updatedAt">[]) {
 }
 
 function normalizeRoleRow(row: RoleRow): RoleCatalogItem {
-  const permissions = {
-    ...(defaultRolePermissionMap[row.id] ?? {}),
-    ...normalizeRolePermissions(row.permissions),
-  };
+  const permissions = normalizeRolePermissions(row.permissions);
 
   return {
     id: row.id,
@@ -44,14 +45,6 @@ function normalizeRoleRow(row: RoleRow): RoleCatalogItem {
   };
 }
 
-async function readLegacyPermissions(client: typeof prisma | Prisma.TransactionClient, organizationId: string) {
-  const legacy = await client.organizationRolePermission.findUnique({
-    where: { organizationId },
-  });
-
-  return normalizeRolePermissionMap(legacy?.permissions);
-}
-
 async function seedOrganizationRoles(client: typeof prisma | Prisma.TransactionClient, organizationId: string) {
   const existingCount = await client.organizationRosterRole.count({
     where: { organizationId },
@@ -59,24 +52,28 @@ async function seedOrganizationRoles(client: typeof prisma | Prisma.TransactionC
 
   if (existingCount > 0) return;
 
-  const legacyPermissions = await readLegacyPermissions(client, organizationId);
-  const mergedRoles = defaultRoleCatalog.map((role) => ({
+  const initialRoles = defaultRoleCatalog.map((role) => ({
     organizationId,
     id: role.id,
     name: role.name,
     description: role.description,
-    permissions: legacyPermissions[role.id] ?? role.permissions,
+    permissions: role.permissions,
     sortOrder: role.sortOrder,
   }));
 
   await client.organizationRosterRole.createMany({
-    data: mergedRoles,
+    data: initialRoles,
     skipDuplicates: true,
   });
 }
 
 export const getOrganizationRoleCatalogSnapshot = cache(async (organizationId: string): Promise<RoleCatalogSnapshot> => {
   if (!process.env.DATABASE_URL) {
+    // 本地开发保留默认权限；生产缺少 DATABASE_URL 属于配置错误，按最小权限 fail-closed。
+    if (process.env.NODE_ENV === "production") {
+      console.warn("[role-catalog] 生产环境未配置 DATABASE_URL，按最小权限处理。");
+      return { roles: minimalRoleCatalog(), revision: "no-database-minimal" };
+    }
     return {
       roles: defaultRoleCatalog,
       revision: "local-default",
@@ -101,22 +98,31 @@ export const getOrganizationRoleCatalogSnapshot = cache(async (organizationId: s
       })) as RoleRow[];
     }
 
-    return {
+    const snapshot: RoleCatalogSnapshot = {
       roles: roles.map(normalizeRoleRow),
       revision: buildRevision(roles),
     };
+    return snapshot;
   } catch (error) {
     if (isDatabaseUnavailableError(error)) {
-      console.warn(`[role-catalog] Falling back to default roles for ${organizationId}:`, error);
+      console.warn(`[role-catalog] 数据库不可用，按最小权限处理 ${organizationId}:`, error);
       return {
-        roles: defaultRoleCatalog,
-        revision: "database-unavailable",
+        roles: minimalRoleCatalog(),
+        revision: "database-unavailable-minimal",
       };
     }
 
     throw error;
   }
 });
+
+export async function readOrganizationRolePermissions(client: Prisma.TransactionClient, organizationId: string) {
+  const roles = await client.organizationRosterRole.findMany({ where: { organizationId } });
+  return Object.fromEntries(roles.map(role => {
+    const normalized = normalizeRoleRow(role as RoleRow);
+    return [normalized.id, normalized.permissions];
+  }));
+}
 
 export async function saveOrganizationRoleCatalog(organizationId: string, roles: RoleCatalogItem[]): Promise<RoleCatalogSnapshot> {
   if (!process.env.DATABASE_URL) {

@@ -13,7 +13,8 @@ const configured = { ...defaultXiyouSettings, enabled: true, mcpToken: token, cl
 const authorize: LiliAuthorize = async () => ({ ok: true, user });
 function request(method: string, body?: unknown, query = "") {
   return new Request(`http://lili.invalid/api/lili/tool-config${query}`, { method,
-    ...(body === undefined ? {} : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }) });
+    headers: { ...(query ? {} : { "x-workspace-id": scope.workspaceId }), ...(body === undefined ? {} : { "content-type": "application/json" }) },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 }
 function fixture() {
   const rows = new Map<string, typeof configured>();
@@ -85,6 +86,19 @@ test("read-only, foreign-origin, unauthorized workspace and anonymous requests c
   assert.equal((await handleLiliRequest(request("GET", undefined, "?workspaceId=other"), ["tool-config"], deny, fx.dependencies)).status, 403);
   assert.equal((await handleLiliRequest(request("GET"), ["tool-config"], async () => ({ ok: true }), fx.dependencies)).status, 403);
   assert.deepEqual(fx.counts(), { writes: 0, probes: 0 }); assert.equal(fx.reads.length, 0);
+});
+
+test("missing workspace is rejected before configuration reads, writes or probes", async () => {
+  const fx = fixture();
+  for (const [method, parts] of [["GET", ["tool-config"]], ["PUT", ["tool-config"]], ["POST", ["tool-config", "test"]]] as const) {
+    const input = request(method, method === "GET" ? undefined : { id: "xiyou", settings: configured });
+    input.headers.delete("x-workspace-id");
+    const response = await handleLiliRequest(input, [...parts], authorize, fx.dependencies);
+    assert.equal(response.status, 400);
+    assert.match((await response.json()).message, /workspaceId/);
+  }
+  assert.deepEqual(fx.counts(), { writes: 0, probes: 0 });
+  assert.equal(fx.reads.length, 0);
 });
 
 test("server-derived identity and workspace determine every repository access", async () => {

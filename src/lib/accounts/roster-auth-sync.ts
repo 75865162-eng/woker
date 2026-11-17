@@ -37,8 +37,12 @@ export function isRosterBootstrapAccount(account: Pick<RosterLoginAccount, "id" 
   return account.id === "local-admin" || isBootstrapAdminEmail(loginName) || loginName === "1";
 }
 
-export function getRosterInitialPassword(account: Pick<RosterLoginAccount, "id" | "email" | "username" | "phone">) {
-  return isRosterBootstrapAccount(account) ? "1" : "12345678";
+export function getRosterInitialPassword(account: Pick<RosterLoginAccount, "password">) {
+  const password = account.password?.trim();
+  if (!password || password.length < 8 || password === "12345678") {
+    throw new Error("新建或重置登录账号必须显式提供至少8位且非默认口令的密码。");
+  }
+  return password;
 }
 
 function getUserStatus(account: Pick<RosterLoginAccount, "status">) {
@@ -48,20 +52,19 @@ function getUserStatus(account: Pick<RosterLoginAccount, "status">) {
 export async function syncRosterLoginUsers(
   client: Prisma.TransactionClient | PrismaClient,
   accounts: RosterLoginAccountWithOrg[],
+  mode: "incremental" | "manage" = "incremental",
 ) {
-  const currentAccountIds = new Set(accounts.map((account) => account.id));
   const existingUsers = await client.user.findMany({
     select: {
       id: true,
       email: true,
+      name: true,
+      status: true,
+      passwordHash: true,
     },
   });
-  const usedLoginNames = new Set(
-    existingUsers
-      .filter((user) => !currentAccountIds.has(user.id))
-      .map((user) => user.email.trim().toLowerCase())
-      .filter(Boolean),
-  );
+  const existingById = new Map(existingUsers.map((user) => [user.id, user]));
+  const loginNameOwners = new Map(existingUsers.map((user) => [user.email.trim().toLowerCase(), user.id]));
   const sortedAccounts = [...accounts].sort((left, right) => {
     const leftScore = getRosterLoginPriority(left);
     const rightScore = getRosterLoginPriority(right);
@@ -72,27 +75,48 @@ export async function syncRosterLoginUsers(
   });
 
   for (const account of sortedAccounts) {
-    const loginName = getRosterLoginCandidates(account).find((candidate) => !usedLoginNames.has(candidate)) ?? account.id.toLowerCase();
-    usedLoginNames.add(loginName);
+    const existing = existingById.get(account.id);
+    const loginName = mode === "incremental" && existing?.email.trim()
+      ? existing.email
+      : getRosterLoginCandidates(account).find((candidate) => !loginNameOwners.has(candidate) || loginNameOwners.get(candidate) === account.id);
+    if (!loginName) throw new Error("账号登录名已被占用。");
+    loginNameOwners.set(loginName.trim().toLowerCase(), account.id);
     const hasExplicitPassword = Boolean(account.password?.trim());
-    const password = hasExplicitPassword ? account.password!.trim() : getRosterInitialPassword(account);
+    const password = hasExplicitPassword ? account.password!.trim() : existing ? undefined : getRosterInitialPassword(account);
+    const passwordHash = password ? hashPassword(password) : undefined;
+    const nextPasswordHash = passwordHash ?? (existing ? undefined : hashPassword(getRosterInitialPassword(account)));
     const isBootstrapAccount = isRosterBootstrapAccount(account);
-    const nextName = isBootstrapAccount ? "Super Admin" : account.name;
-    const nextStatus = isBootstrapAccount ? "active" : getUserStatus(account);
+    const nextName = account.name;
+    const nextStatus = getUserStatus(account);
+
+    // 后台只补缺；显式管理员保存才更新资料、登录状态与密码。
+    const incrementalUpdate: Prisma.UserUpdateInput = existing
+      ? mode === "manage"
+        ? {
+            email: loginName,
+            name: account.name,
+            status: getUserStatus(account),
+            ...(passwordHash ? { passwordHash } : {}),
+          }
+        : {
+            ...(!existing.email?.trim() ? { email: loginName } : {}),
+            ...(!existing.name?.trim() ? { name: nextName } : {}),
+          }
+      : {
+          email: loginName,
+          name: nextName,
+          passwordHash: nextPasswordHash!,
+          status: nextStatus,
+        };
 
     await client.user.upsert({
       where: { id: account.id },
-      update: {
-        email: loginName,
-        name: nextName,
-        status: nextStatus,
-        ...(hasExplicitPassword ? { passwordHash: hashPassword(password) } : {}),
-      },
+      update: incrementalUpdate,
       create: {
         id: account.id,
         email: loginName,
         name: nextName,
-        passwordHash: hashPassword(password),
+        passwordHash: nextPasswordHash!,
         status: nextStatus,
       },
     });
@@ -104,9 +128,9 @@ export async function syncRosterLoginUsers(
           userId: account.id,
         },
       },
-      update: {
-        role: toOrganizationRoleId(account.roleId) as OrganizationRole,
-      },
+      // Preserve a manual role adjustment on an existing membership; the role
+      // from the roster is applied only when the membership is created.
+      update: {},
       create: {
         organizationId: account.organizationId,
         userId: account.id,

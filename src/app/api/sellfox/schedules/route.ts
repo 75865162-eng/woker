@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
-import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
+import { WorkspaceScopeError, workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { isSellfoxDate, sellfoxSyncDisabledReason } from "@/lib/sellfox/sync-contract";
 
 export const runtime = "nodejs";
@@ -14,7 +14,12 @@ type ScheduledResource = keyof typeof intervals;
 export async function GET(request: Request) {
   const permission = await requireApiPermission("sellfox", "view", request);
   if (!permission.ok) return permission.response;
-  const scope = workspaceScopeFromRequest(request);
+  let scope: ReturnType<typeof workspaceScopeFromRequest>;
+  try { scope = workspaceScopeFromRequest(request); }
+  catch (error) {
+    if (error instanceof WorkspaceScopeError) return NextResponse.json({ error: error.message }, { status: error.status });
+    throw error;
+  }
   const schedules = await prisma.sellfoxSyncSchedule.findMany({ where: { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId } });
   const now = new Date();
   const heartbeat = await prisma.workerHeartbeat.findFirst({ where: { queueName: "sellfox-sync-jobs" }, orderBy: { lastSeenAt: "desc" }, select: { lastSeenAt: true, status: true } });
@@ -28,13 +33,18 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const permission = await requireApiPermission("sellfox", "create", request);
   if (!permission.ok) return permission.response;
+  let scope: ReturnType<typeof workspaceScopeFromRequest>;
+  try { scope = workspaceScopeFromRequest(request); }
+  catch (error) {
+    if (error instanceof WorkspaceScopeError) return NextResponse.json({ error: error.message }, { status: error.status });
+    throw error;
+  }
   if (process.env.QUEUE_DRIVER !== "redis") return NextResponse.json({ error: "赛狐 Redis Worker 尚未启用。" }, { status: 503 });
   const body = await request.json().catch(() => null) as { resource?: unknown; enabled?: unknown; backfillStart?: unknown } | null;
   if (typeof body?.resource !== "string" || !Object.prototype.hasOwnProperty.call(intervals, body.resource) || typeof body.enabled !== "boolean") {
     return NextResponse.json({ error: "无效的定时同步设置。" }, { status: 400 });
   }
-  if (body.enabled && !(await getSellfoxCredentialStatus({ organizationId: permission.user.organizationId, workspaceId: workspaceScopeFromRequest(request).workspaceId })).configured) return NextResponse.json({ error: "服务端未配置赛狐凭据或已保存配置不可用，请在设置的集成页检查。" }, { status: 503 });
-  const scope = workspaceScopeFromRequest(request);
+  if (body.enabled && !(await getSellfoxCredentialStatus({ organizationId: permission.user.organizationId, workspaceId: scope.workspaceId })).configured) return NextResponse.json({ error: "服务端未配置赛狐凭据或已保存配置不可用，请在设置的集成页检查。" }, { status: 503 });
   const resource = body.resource as ScheduledResource;
   const disabledReason = sellfoxSyncDisabledReason(resource);
   if (body.enabled && disabledReason) return NextResponse.json({ error: disabledReason }, { status: 409 });

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
+import { mkdtemp, mkdir, writeFile, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 import path from "node:path";
 import vm from "node:vm";
@@ -43,6 +45,35 @@ async function collectFixture(paths: typeof path.win32) {
   });
   return { references, files: JSON.parse(files.get(trace)!).files as string[] };
 }
+
+test("standalone 清理删除环境文件但保留运行文件和项目源环境文件", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "erp-standalone-boundary-"));
+  try {
+    const distDir = ".next-build";
+    const standalone = path.join(root, distDir, "standalone");
+    await mkdir(standalone, { recursive: true });
+    await writeFile(path.join(root, ".env"), "SOURCE_FIXTURE_ONLY=1");
+    for (const name of [".env", ".env.local", ".env.production", ".env.example", "server.js", "package.json"]) {
+      await writeFile(path.join(standalone, name), "fixture");
+    }
+    for (const name of [distDir, "node_modules", ".git", "tmp", "uploads", "tools", ".next-old"]) {
+      await mkdir(path.join(standalone, name));
+    }
+    const source = readFileSync(path.resolve("scripts/next-run.mjs"), "utf8");
+    const start = source.indexOf("async function cleanupStandaloneOutput()");
+    const end = source.indexOf('\nfor (const signal', start);
+    assert.ok(start >= 0 && end > start);
+    const cleanup = vm.runInNewContext(`(${source.slice(start, end).trim()})`, {
+      args: ["build"], distDir, process: { cwd: () => root },
+      path, existsSync, readdir, rm,
+    }) as () => Promise<void>;
+    await cleanup();
+    assert.deepEqual((await readdir(standalone)).sort(), [distDir, "node_modules", "package.json", "server.js"].sort());
+    assert.equal(readFileSync(path.join(root, ".env"), "utf8"), "SOURCE_FIXTURE_ONLY=1");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test("已安装 Next 的排除匹配只移除本地文件，不误删活动 dist 下的必要 chunk", async () => {
   const posixResult = await collectFixture(path.posix);

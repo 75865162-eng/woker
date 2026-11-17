@@ -38,7 +38,7 @@ import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-
 import { roleCanPerformAction } from "@/lib/accounts/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { assertWorkspaceAccess } from "@/lib/workspace/access";
-import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
+import { WorkspaceScopeError, workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { syncDomains, syncCenterEnabled, SyncInputError, requireSyncCenter, requiredText } from "@/lib/amazon-sync/policy";
 import { readTaskSnapshot } from "@/lib/amazon-sync/snapshots";
 import { listSources, readOverview, readTasks, taskSummary } from "@/lib/amazon-sync/read";
@@ -47,16 +47,17 @@ import { requestChange, approvalSelect } from "@/lib/amazon-sync/change-approval
 export const runtime = "nodejs";
 function json(value: unknown, status = 200) { return NextResponse.json(value, { status, headers: { "Cache-Control": "no-store" } }); }
 function fail(error: unknown) {
+  if (error instanceof WorkspaceScopeError) return json({ error: error.message }, error.status);
   if (error instanceof SyncInputError) return json({ error: error.message, ...(error instanceof AmazonReadError ? { code: error.businessCode } : error instanceof AmazonCloudExecutionError || error instanceof AmazonCloudRelayError ? { code: error.code } : error.code ? { code: error.code } : {}) }, error.status);
   if (error && typeof error === "object" && "code" in error && error.code === "P2002") return json({ error: "数据已存在或有活动任务冲突，请刷新。" }, 409);
   return json({ error: "同步中心请求失败，请检查数据库、加密配置或 Amazon 授权。未返回内部错误或凭证。" }, 500);
 }
 export async function GET(request: Request) {
-  const permission = await requireAmazonReadSession(request);
-  if (!permission.ok) return permission.response;
   try {
+    const permission = await requireAmazonReadSession(request);
+    if (!permission.ok) return permission.response;
     const scope = { organizationId: permission.user.organizationId, workspaceId: workspaceScopeFromRequest(request).workspaceId };
-    if (process.env.DATABASE_URL && !(await assertWorkspaceAccess(scope.organizationId, scope.workspaceId))) return json({ error: "Forbidden." }, 403);
+    if (process.env.DATABASE_URL && !(await assertWorkspaceAccess(scope.organizationId, scope.workspaceId, permission.user.id, undefined, request))) return json({ error: "Forbidden." }, 403);
     if (!syncCenterEnabled(scope)) return json({ error: "该范围尚未启用同步中心。", code: "SYNC_CENTER_DISABLED" }, 409);
     if (!process.env.DATABASE_URL) return json({ error: "数据库未配置。" }, 503);
     const actor = permission.user.id;
@@ -147,16 +148,20 @@ export async function GET(request: Request) {
   } catch (error) { return fail(error); }
 }
 export async function POST(request: Request) {
-  let body: Record<string, unknown>;
-  try { const value: unknown = await request.json(); if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(); body = value as Record<string, unknown>; }
-  catch { return json({ error: "请求须为 JSON 对象。" }, 400); }
-  const action = body.action;
-  const config = ["save-authorization", "validate-authorization", "disable-authorization", "save-source", "save-access-grant", "adopt-identity", "recover-finance-window", "recover-report"].includes(String(action));
-  const permission = await requireApiPermission(config ? "settings" : "operations", config || action === "save-plan" || action === "control-task" ? "edit" : "create", request);
-  if (!permission.ok) return permission.response;
   try {
+    const permission = await requireAmazonReadSession(request);
+    if (!permission.ok) return permission.response;
+    let body: Record<string, unknown>;
+    try { const value: unknown = await request.clone().json(); if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(); body = value as Record<string, unknown>; }
+    catch { return json({ error: "请求须为 JSON 对象。" }, 400); }
+    const action = body.action;
+    const config = ["save-authorization", "validate-authorization", "disable-authorization", "save-source", "save-access-grant", "adopt-identity", "recover-finance-window", "recover-report"].includes(String(action));
+    const operationAction = action === "save-plan" || action === "control-task" ? "edit" : "create";
+    if (!process.env.DATABASE_URL) return json({ error: "数据库未配置。" }, 503);
+    const writePermission = await requireApiPermission(config ? "settings" : "operations", config ? "edit" : operationAction, request);
+    if (!writePermission.ok) return writePermission.response;
     const scope = { organizationId: permission.user.organizationId, workspaceId: workspaceScopeFromRequest(request, body).workspaceId };
-    if (process.env.DATABASE_URL && !(await assertWorkspaceAccess(scope.organizationId, scope.workspaceId))) return json({ error: "Forbidden." }, 403);
+    if (process.env.DATABASE_URL && !(await assertWorkspaceAccess(scope.organizationId, scope.workspaceId, permission.user.id, undefined, request))) return json({ error: "Forbidden." }, 403);
     requireSyncCenter(scope);
     if (!process.env.DATABASE_URL) return json({ error: "数据库未配置。" }, 503);
     const actor = permission.user.id;

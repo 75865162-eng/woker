@@ -6,7 +6,8 @@ import { prisma } from "@/lib/db/prisma";
 import { getStorageDriver, getStorageType } from "@/lib/storage";
 import type { ProductFileAsset } from "@/lib/products/types";
 import { PRODUCT_ATTACHMENT_MAX_BYTES } from "@/lib/products/file-assets";
-import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
+import { assertUploadWorkspaceAccess } from "@/lib/workspace/access";
+import { WorkspaceScopeError, workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
 
@@ -31,13 +32,16 @@ export async function POST(request: Request) {
     }
     const { user } = permission;
 
-    const formData = await request.formData();
+    const formData = await request.formData().catch(() => {
+      throw new WorkspaceScopeError("Invalid upload form.", 400);
+    });
     const file = formData.get("file");
     const scope = workspaceScopeFromRequest(request, {
       workspaceId: formData.get("workspaceId"),
       accountId: formData.get("accountId"),
       marketplace: formData.get("marketplace"),
     });
+    await assertUploadWorkspaceAccess(user.organizationId, formData, scope.workspaceId, user.id, request);
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "缺少结论 Excel 文件。" }, { status: 400 });
@@ -83,6 +87,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ file: asset });
   } catch (error) {
     const message = error instanceof Error ? error.message : "结论 Excel 上传失败。";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: error instanceof WorkspaceScopeError ? error.status : 500 });
   }
 }

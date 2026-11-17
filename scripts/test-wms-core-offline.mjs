@@ -6,7 +6,9 @@ import { createRequire } from "node:module";
 import assert from "node:assert/strict";
 const { Client } = createRequire(import.meta.url)("pg");
 
-if (process.argv.slice(2).some(arg => !["--browser"].includes(arg))) throw Error("Supported flags: --browser");
+if (process.argv.slice(2).some(arg => !["--browser", "--workflow"].includes(arg))) throw Error("Supported flags: --browser, --workflow");
+const workflow = process.argv.includes("--workflow");
+if (workflow && process.argv.includes("--browser")) throw Error("--workflow already runs the full browser workflow; do not combine it with --browser");
 const tag = randomUUID(), name = `wms-core-fixture-${tag}`;
 const docker = args => execFileSync("docker", args, { encoding: "utf8", env: { PATH: process.env.PATH }, stdio: ["ignore", "pipe", "pipe"] }).trim();
 let created = false, db;
@@ -39,7 +41,7 @@ try {
   assert.equal((await db.query(`SELECT count(*)::int AS n FROM pg_tables WHERE schemaname='public' AND tablename LIKE 'Wms%'`)).rows[0].n,36);
   console.log("PASS: additive upgrades preserve existing warehouse/location rows and create 36 scoped WMS target tables");
   console.log("PASS: full migration chain including additive WMS core tables in an empty disposable database");
-  execFileSync(process.execPath, ["--import", "./tests/helpers/wms-process-preload.mjs", "node_modules/tsx/dist/cli.mjs", "tests/integration/wms-core.integration.ts"], {
+  execFileSync(process.execPath, ["--import", "./tests/helpers/wms-process-preload.mjs", "node_modules/tsx/dist/cli.mjs", workflow ? "tests/integration/wms-first-loop.integration.ts" : "tests/integration/wms-core.integration.ts"], {
     env: { PATH: process.env.PATH, DATABASE_URL: url, WMS_OFFLINE_FIXTURE: "1", AUTH_DRIVER: "database", WMS_CORE_BROWSER: process.argv.includes("--browser") ? "1" : "0", AUTH_SECRET: "wms-core-fixture-secret-32-characters" }, stdio: "inherit",
   });
 } finally {

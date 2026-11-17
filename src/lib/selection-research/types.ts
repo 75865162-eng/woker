@@ -33,8 +33,8 @@ export interface Claim {
 }
 export interface StageResult { landedCostScenarios?: LandedCostScenario[]; decisionAnalysis?: DecisionAnalysis; reviewEvidence?: ReviewEvidence[]; reviewProblems?: ReviewProblem[]; summary: string; claims: Claim[]; candidates?: { id: string; name: string }[]; verdict?: "GO" | "NO_GO" | "NEEDS_VALIDATION" }
 export type Action = { type: "call"; tool: string; arguments: ObjectJson } | { type: "complete"; result: StageResult };
-export interface Gate { id: string; kind: "NICHE" | "FINAL" | "BUDGET" | "BILLING" | "MCP_CALL"; reason: string }
-export interface Decision { confirmation?: { channel: "chat"; text: string }; gateId: string; kind: "SELECT" | "CONFIRM" | "INCREASE_BUDGET" | "RECONCILE" | "AUTHORIZE_TOOL"; candidateId?: string; limits?: Record<string, number>; toolMaxCalls?: Record<string, number>; callId?: string; authorizationId?: string; units?: number; receipt?: string }
+export interface Gate { id: string; kind: "NICHE" | "FINAL" | "BUDGET" | "MCP_CALL"; reason: string }
+export interface Decision { confirmation?: { channel: "chat"; text: string }; gateId: string; kind: "SELECT" | "CONFIRM" | "INCREASE_BUDGET" | "AUTHORIZE_TOOL"; candidateId?: string; limits?: Record<string, number>; toolMaxCalls?: Record<string, number>; callId?: string; authorizationId?: string }
 export interface PaidCallAuthorization {
   budgetMode?: "reviewed" | "uncapped";
   consentId?: string;

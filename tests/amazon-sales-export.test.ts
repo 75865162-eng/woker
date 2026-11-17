@@ -18,6 +18,7 @@ test("export service freezes the displayed version and filters, enforces idempot
     amazonSyncDataSource: { findMany: async () => [{ id: "source", authorization: { status: "CONFIGURED", identityVerifiedAt: new Date() } }] },
     amazonRoleDataAccessGrant: { findMany: async () => [] },
     amazonDataAccessGrant: { findMany: async () => assigned ? [{ sellerAccountId: "seller" }] : [] },
+    workspaceMembership: { findUnique: async () => ({ userId: "actor" }) },
     workspaceScope: { findUnique: async () => ({ id: scope.workspaceId }) },
     organizationMember: { findUnique: async () => ({ role, user: { status: "active" } }) },
     organizationRosterRole: { findMany: async () => [{ id: "read_only", permissions: { operations: ["view"] } }] },

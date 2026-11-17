@@ -32,6 +32,7 @@ docker compose version >/dev/null
 systemctl enable --now docker
 
 install -d -m 0755 "$APP_DIR" "$RELEASES_DIR"
+bash "$(dirname "$0")/../deploy/systemd/prepare-runtime-user.sh" --initialize
 
 if [ ! -f "$APP_DIR/.env" ]; then
   database_password="$(openssl rand -hex 32)"
@@ -53,7 +54,7 @@ PRODUCT_OUTBOX_WORKER_CONCURRENCY=1
 IMAGE_UPSCALE_WORKER_CONCURRENCY=1
 AMAZON_SYNC_WORKER_CONCURRENCY=1
 STORAGE_DRIVER=local
-UPLOAD_DIR=uploads
+UPLOAD_DIR=/var/lib/amazon-erp/uploads
 BOOTSTRAP_ORG_NAME=Amazon Operations
 BOOTSTRAP_ORG_SLUG=amazon-ops
 BOOTSTRAP_ADMIN_EMAIL=admin@example.com

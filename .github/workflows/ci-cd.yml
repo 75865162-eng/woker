@@ -43,7 +43,7 @@ concurrency:
 
 jobs:
   performance-regression:
-    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.deploy_production && !inputs.initial_deployment)
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && (!inputs.initial_deployment || !inputs.deploy_production))
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:

@@ -100,7 +100,7 @@ function calcCtr(row: Pick<PerformanceRow | OverallAdDataRow, "clicks" | "impres
 }
 
 function calcAcos(row: Pick<PerformanceRow | OverallAdDataRow, "spend" | "sales"> & { acos?: number }) {
-  return row.acos ?? (row.sales > 0 ? (row.spend / row.sales) * 100 : 0);
+  return row.acos ?? (row.sales > 0 ? (row.spend / row.sales) * 100 : null);
 }
 
 function calcCpc(row: Pick<PerformanceRow | OverallAdDataRow, "spend" | "clicks"> & { cpc?: number }) {
@@ -121,8 +121,8 @@ function MetricCompareCell({
   recent,
   format = "number",
 }: {
-  current: number;
-  recent?: number;
+  current: number | null | undefined;
+  recent?: number | null;
   format?: "number" | "currency" | "percent";
 }) {
   const formatValue = (value: number) => {
@@ -139,8 +139,8 @@ function MetricCompareCell({
 
   return (
     <div className="metric-tabular text-right leading-tight">
-      <div className="font-semibold text-foreground">{formatValue(current)}</div>
-      {recent !== undefined && <div className="mt-1 text-label font-semibold text-brand">{formatValue(recent)}</div>}
+      <div className="font-semibold text-foreground">{current === null || current === undefined ? "无数据" : formatValue(current)}</div>
+      {recent !== undefined && recent !== null && <div className="mt-1 text-label font-semibold text-brand">{formatValue(recent)}</div>}
     </div>
   );
 }
@@ -733,6 +733,7 @@ export function AdjustmentTable() {
                 const keyword = draft?.keyword ?? performanceRow?.keyword ?? overallRow?.keyword ?? "-";
                 const target = draft?.target ?? performanceRow?.target ?? overallRow?.target ?? "-";
                 const matchType = performanceRow?.matchType ?? overallRow?.matchType ?? "-";
+                const currentBid = toFiniteNumber(draft?.oldValue ?? draft?.currentBid ?? performanceRow?.currentBid);
                 return (
                 <tr
                   key={draft?.id ?? overallRow?.id ?? performanceRow?.id}
@@ -796,40 +797,40 @@ export function AdjustmentTable() {
                     {target}
                   </td>
                   <td className="px-4 py-3">
-                    <MetricCompareCell current={performanceRow?.impressions ?? 0} recent={overallRow?.impressions} />
+                    <MetricCompareCell current={performanceRow?.impressions} recent={overallRow?.impressions} />
                   </td>
                   <td className="px-4 py-3">
-                    <MetricCompareCell current={performanceRow?.clicks ?? 0} recent={overallRow?.clicks} />
+                    <MetricCompareCell current={performanceRow?.clicks} recent={overallRow?.clicks} />
                   </td>
                   <td className="px-4 py-3">
                     <MetricCompareCell
-                      current={performanceRow ? calcCtr(performanceRow) : 0}
+                      current={performanceRow ? calcCtr(performanceRow) : undefined}
                       recent={overallRow ? calcCtr(overallRow) : undefined}
                       format="percent"
                     />
                   </td>
                   <td className="px-4 py-3">
-                    <MetricCompareCell current={performanceRow?.spend ?? 0} recent={overallRow?.spend} format="currency" />
+                    <MetricCompareCell current={performanceRow?.spend} recent={overallRow?.spend} format="currency" />
                   </td>
                   <td className="px-4 py-3">
                     <MetricCompareCell
-                      current={performanceRow ? calcCpc(performanceRow) : 0}
+                      current={performanceRow ? calcCpc(performanceRow) : undefined}
                       recent={overallRow ? calcCpc(overallRow) : undefined}
                       format="currency"
                     />
                   </td>
                   <td className="px-4 py-3">
-                    <MetricCompareCell current={performanceRow?.orders ?? 0} recent={overallRow?.orders} />
+                    <MetricCompareCell current={performanceRow?.orders} recent={overallRow?.orders} />
                   </td>
                   <td className="px-4 py-3">
                     <MetricCompareCell
-                      current={performanceRow ? calcAcos(performanceRow) : 0}
+                      current={performanceRow ? calcAcos(performanceRow) : undefined}
                       recent={overallRow ? calcAcos(overallRow) : undefined}
                       format="percent"
                     />
                   </td>
                   <td className="metric-tabular px-4 py-3 text-right">
-                    {performanceRow || draft ? `$${Number(draft?.oldValue ?? draft?.currentBid ?? performanceRow?.currentBid ?? 0).toFixed(2)}` : "-"}
+                    {currentBid === undefined ? "无数据" : `$${currentBid.toFixed(2)}`}
                   </td>
                   <td className="metric-tabular px-4 py-3 text-right font-bold text-brand">
                     {draft ? `$${Number(draft.newValue ?? draft.suggestedBid).toFixed(2)}` : "-"}

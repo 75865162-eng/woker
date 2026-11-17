@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import type { Product, ProductFileAsset, ProductImageAsset } from "@/lib/products/types";
+import { requireProductPurchasePrice } from "@/lib/products/product-record-index";
 import {
   getProductRecordCurrentOwner,
   getProductRecordSource,
@@ -392,13 +393,13 @@ export async function projectProductCenter(
       organizationId: input.organizationId,
       workspaceId: input.workspaceId,
       costType: "purchase",
-      amount: product.purchasePrice,
+      amount: requireProductPurchasePrice(product),
       currency: "CNY",
       sourceRevision: input.sourceRevision,
       sourceUpdatedAt,
     },
     update: {
-      amount: product.purchasePrice,
+      amount: requireProductPurchasePrice(product),
       currency: "CNY",
       sourceRevision: input.sourceRevision,
       sourceUpdatedAt,

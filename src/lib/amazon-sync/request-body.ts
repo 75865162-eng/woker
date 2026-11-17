@@ -6,7 +6,7 @@ export async function boundedRequestText(request: Request, limit: number) {
   const reader = request.body.getReader(), chunks: Uint8Array[] = [];
   let size = 0;
   try {
-    for (;;) { const { value, done } = await reader.read(); if (done) break; size += value.byteLength; if (size > limit) { await reader.cancel(); throw new SyncInputError("请求过大。", 413); } chunks.push(value); }
+    for (;;) { const { value, done } = await reader.read(); if (done) break; size += value.byteLength; if (size > limit) { void reader.cancel().catch(() => undefined); throw new SyncInputError("请求过大。", 413); } chunks.push(value); }
   } finally { reader.releaseLock(); }
   return Buffer.concat(chunks).toString("utf8");
 }

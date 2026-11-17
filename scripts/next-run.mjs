@@ -28,7 +28,7 @@ const runtimeEnv = applyRuntimeEnvironment({ build: args[0] === "build" });
 // Next validates only this invocation's generated routes, never old dist outputs.
 // Turbopack requires its tsconfig path to remain inside the project root.
 await mkdir(path.join(process.cwd(), "tmp"), { recursive: true });
-const typeDirectory = await mkdtemp(path.join(process.cwd(), "tmp", "erp-next-types-"));
+const typeDirectory = await mkdtemp(path.join(process.cwd(), ".next-types-"));
 const typeConfig = path.join(typeDirectory, "tsconfig.json");
 const ambient = path.join(typeDirectory, "next.d.ts");
 await writeFile(ambient, `/// <reference path=${JSON.stringify(path.relative(typeDirectory, path.resolve(distDir, "types/routes.d.ts")))} />
@@ -36,8 +36,24 @@ await writeFile(ambient, `/// <reference path=${JSON.stringify(path.relative(typ
 /// <reference types="next/image-types/global" />
 `);
 await writeFile(typeConfig, JSON.stringify({
-  extends: path.relative(typeDirectory, path.join(process.cwd(), "tsconfig.json")),
-  compilerOptions: { incremental: false, baseUrl: process.cwd() },
+  compilerOptions: {
+    target: "ES2020",
+    lib: ["dom", "dom.iterable", "esnext"],
+    allowJs: true,
+    skipLibCheck: true,
+    strict: true,
+    noEmit: true,
+    esModuleInterop: true,
+    module: "esnext",
+    moduleResolution: "bundler",
+    resolveJsonModule: true,
+    isolatedModules: true,
+    jsx: "preserve",
+    baseUrl: process.cwd(),
+    paths: { "@/*": ["./src/*"] },
+    incremental: false,
+    plugins: [{ name: "next" }],
+  },
   include: [ambient, ...["*.ts", "*.mts", "src/**/*.ts", "src/**/*.tsx", "scripts/**/*.ts", "scripts/**/*.mts", "tests/**/*.ts", "tests/**/*.tsx", `${distDir}/types/**/*.ts`].map(p => path.resolve(p))],
   exclude: [path.join(process.cwd(), "node_modules"), path.join(process.cwd(), "next-env.d.ts")],
 }, null, 2));
@@ -70,6 +86,11 @@ async function cleanupStandaloneOutput() {
   await Promise.all(
     entries
       .filter((entry) => {
+        // Runtime configuration is supplied by the host, never by the artifact.
+        if (entry.name === ".env" || entry.name.startsWith(".env.")) {
+          return true;
+        }
+
         if (!entry.isDirectory()) {
           return false;
         }

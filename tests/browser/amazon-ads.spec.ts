@@ -2,7 +2,7 @@ import { build } from "esbuild";
 import { expect, test, type Page } from "@playwright/test";
 let bundle: string, styles: string;
 test.beforeAll(async () => {
-  bundle = (await build({ entryPoints: ["tests/browser/amazon-ads-harness.tsx"], bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env.NODE_ENV": '"production"' } })).outputFiles[0].text;
+  bundle = (await build({ entryPoints: ["tests/browser/amazon-ads-harness.tsx"], bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env.NODE_ENV": '"development"' } })).outputFiles[0].text;
   const [{ readFile }, { default: postcss }, { default: tailwind }] = await Promise.all([import("node:fs/promises"), import("postcss"), import("@tailwindcss/postcss")]);
   styles = (await postcss([tailwind()]).process(await readFile("src/app/globals.css", "utf8"), { from: "src/app/globals.css" })).css + await readFile("src/components/amazon-ads/amazon-ads.css", "utf8");
 });

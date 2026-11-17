@@ -2,15 +2,37 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { setImmediate } from "node:timers/promises";
+import { withSellfoxCredentialScope } from "@/lib/sellfox/credential-context";
+import { encryptSellfoxCredentials } from "@/lib/sellfox/credential-crypto";
+import { randomBytes } from "node:crypto";
+import { Prisma, type PrismaClient } from "@prisma/client";
+import { Client } from "pg";
 
 test("Sellfox HTTP client uses official token, signature, retry and queue contracts without network", async (t) => {
   const previousFetch = globalThis.fetch;
-  const previousEnv = { DATABASE_URL: process.env.DATABASE_URL, SELLFOX_CLIENT_ID: process.env.SELLFOX_CLIENT_ID, SELLFOX_CLIENT_SECRET: process.env.SELLFOX_CLIENT_SECRET };
-  process.env.SELLFOX_CLIENT_ID = "fixture-client";
-  process.env.SELLFOX_CLIENT_SECRET = "fixture-secret";
-  delete process.env.DATABASE_URL;
+  const previousEnv = { DATABASE_URL: process.env.DATABASE_URL, SELLFOX_CLIENT_ID: process.env.SELLFOX_CLIENT_ID, SELLFOX_CLIENT_SECRET: process.env.SELLFOX_CLIENT_SECRET, SELLFOX_CREDENTIAL_ENCRYPTION_KEY: process.env.SELLFOX_CREDENTIAL_ENCRYPTION_KEY, AUTH_SECRET: process.env.AUTH_SECRET, SELLFOX_RATE_LIMIT_MODE: process.env.SELLFOX_RATE_LIMIT_MODE, SELLFOX_REQUEST_SPACING_MS: process.env.SELLFOX_REQUEST_SPACING_MS };
+  delete process.env.SELLFOX_CLIENT_ID;
+  delete process.env.SELLFOX_CLIENT_SECRET;
+  process.env.DATABASE_URL = "postgresql://fixture:fixture@127.0.0.1:1/fixture";
+  t.mock.method(Client.prototype, "connect", async () => undefined);
+  t.mock.method(Client.prototype, "query", async () => ({ rows: [{ ok: true }] }));
+  t.mock.method(Client.prototype, "end", async () => undefined);
+  process.env.SELLFOX_RATE_LIMIT_MODE = "path";
+  process.env.SELLFOX_REQUEST_SPACING_MS = "1050";
+  process.env.AUTH_SECRET = "sellfox-client-fixture-auth-secret-at-least-32-characters";
+  process.env.SELLFOX_CREDENTIAL_ENCRYPTION_KEY = randomBytes(32).toString("base64");
+  const credentialEnv = process.env.SELLFOX_CREDENTIAL_ENCRYPTION_KEY;
+  const tenant = { organizationId: "fixture-org-client-test", workspaceId: "fixture-workspace-client-test" };
+  const globals = globalThis as unknown as { prisma?: PrismaClient };
+  const previousPrisma = globals.prisma;
+  let revision = 1, credentialSecret = "fixture-secret";
+  const encrypted = () => encryptSellfoxCredentials({ clientId: "fixture-client", clientSecret: credentialSecret }, tenant, { SELLFOX_CREDENTIAL_ENCRYPTION_KEY: credentialEnv! });
+  let credentialsCiphertext = encrypted();
+  globals.prisma = { sellfoxIntegrationCredential: { findUnique: async ({ where }: { where: { organizationId_workspaceId: typeof tenant } }) => where.organizationId_workspaceId.organizationId === tenant.organizationId && where.organizationId_workspaceId.workspaceId === tenant.workspaceId ? { credentialsCiphertext, revision } : null } } as unknown as PrismaClient;
   t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_800_000_000_000 });
-  const { sellfoxPost } = await import("@/lib/sellfox/client");
+  const db = { sellfoxIntegrationCredential: { findUnique: async ({ where }: { where: { organizationId_workspaceId: typeof tenant } }) => where.organizationId_workspaceId.organizationId === tenant.organizationId && where.organizationId_workspaceId.workspaceId === tenant.workspaceId ? { credentialsCiphertext, revision } : null }, workspaceScope: { findUnique: async () => ({ id: tenant.workspaceId }) }, organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceMembership: { findUnique: async () => null } } as unknown as Prisma.TransactionClient & { workspaceMembership: Prisma.TransactionClient["workspaceMembership"] };
+  const { sellfoxPost, closeSellfoxClient } = await import("@/lib/sellfox/client");
+  const runScoped = <T>(operation: () => Promise<T>) => withSellfoxCredentialScope(tenant, operation, db);
   type Call = { url: URL; init?: RequestInit; at: number };
   let calls: Call[] = [];
   let respond: (call: Call) => unknown = () => ({ data: { accepted: true } });
@@ -44,6 +66,7 @@ test("Sellfox HTTP client uses official token, signature, retry and queue contra
   function reset() {
     t.mock.timers.tick(2 * 86_400_000);
     calls = []; tokenTtl = 86_400_000; tokenCount = 0; tokenCode = 0;
+    credentialSecret = "fixture-secret"; revision += 1; credentialsCiphertext = encrypted();
     respond = () => ({ code: 0, data: { accepted: true } });
   }
   try {
@@ -65,7 +88,7 @@ test("Sellfox HTTP client uses official token, signature, retry and queue contra
       };
       respond = slowRespond;
       // 限流按接口 path 分桶：不同接口并行，不再全局串行（赛狐每接口 1 req/s）。
-      await drive(Promise.all([sellfoxPost("/api/test/a.json", { shopIdList: ["shop-a"] }), sellfoxPost("/api/test/b.json", { shopIdList: ["shop-a"] })]));
+      await withSellfoxCredentialScope(tenant, async () => drive(Promise.all([sellfoxPost("/api/test/a.json", { shopIdList: ["shop-a"] }), sellfoxPost("/api/test/b.json", { shopIdList: ["shop-a"] })])), db);
       assert.equal(tokenCount, 1);
       assert.equal(calls.length, 3);
       assert.ok(Math.abs(starts[1] - starts[0]) < 1100, "不同 path 应并行发出");
@@ -74,24 +97,24 @@ test("Sellfox HTTP client uses official token, signature, retry and queue contra
       reset();
       respond = slowRespond;
       starts.length = 0; ends.length = 0;
-      await drive(Promise.all([sellfoxPost("/api/test/a.json", { shopIdList: ["shop-a"] }), sellfoxPost("/api/test/a.json", { shopIdList: ["shop-a"] })]));
+      await withSellfoxCredentialScope(tenant, async () => drive(Promise.all([sellfoxPost("/api/test/a.json", { shopIdList: ["shop-a"] }), sellfoxPost("/api/test/a.json", { shopIdList: ["shop-a"] })])), db);
       assert.equal(starts.length, 2);
       assert.ok(starts[1] - starts[0] >= 1100, "同一 path 至少间隔 1.1 秒");
       assert.ok(starts[1] >= ends[0], "同一 path 等待前一次响应完成");
     });
     await t.test("expires_in is milliseconds; expired cache refreshes without a 1000x extension", async () => {
       reset(); tokenTtl = 10_000;
-      await drive(sellfoxPost("/api/test.json", {}));
-      await drive(sellfoxPost("/api/test.json", {}));
+      await runScoped(async () => drive(sellfoxPost("/api/test.json", {})));
+      await runScoped(async () => drive(sellfoxPost("/api/test.json", {})));
       assert.equal(tokenCount, 1);
       t.mock.timers.tick(10_000);
-      await drive(sellfoxPost("/api/test.json", {}));
+      await runScoped(async () => drive(sellfoxPost("/api/test.json", {})));
       assert.equal(tokenCount, 2);
     });
     await t.test("zero, missing and invalid TTLs never send a business API request", async () => {
       for (const ttl of [0, undefined, -1, "86400000"]) {
         reset(); tokenTtl = ttl;
-        await assert.rejects(drive(sellfoxPost("/api/test.json", {})), /毫秒有效期/);
+        await assert.rejects(withSellfoxCredentialScope(tenant, async () => drive(sellfoxPost("/api/test.json", {})), db), /毫秒有效期/);
         assert.equal(calls.length, 1);
       }
     });
@@ -99,18 +122,18 @@ test("Sellfox HTTP client uses official token, signature, retry and queue contra
       reset();
       let attempts = 0;
       respond = () => ++attempts === 1 ? { code: 40001 } : { data: { accepted: true } };
-      await drive(sellfoxPost("/api/test.json", {}));
+      await runScoped(async () => drive(sellfoxPost("/api/test.json", {})));
       assert.equal(tokenCount, 2);
       const businessCalls = calls.filter((call) => !call.url.pathname.includes("/api/oauth/"));
       assert.notEqual(businessCalls[0].url.searchParams.get("access_token"), businessCalls[1].url.searchParams.get("access_token"));
       reset(); respond = () => ({ code: 40001 });
-      await assert.rejects(drive(sellfoxPost("/api/test.json", {})), /40001/);
+      await assert.rejects(withSellfoxCredentialScope(tenant, async () => drive(sellfoxPost("/api/test.json", {})), db), /40001/);
       assert.equal(tokenCount, 2);
       assert.equal(calls.length, 4);
     });
     await t.test("rate limits use bounded exponential backoff and never expose upstream messages", async () => {
       reset(); respond = () => ({ code: 40019, msg: "private upstream credentials" });
-      await assert.rejects(drive(sellfoxPost("/api/test.json", {})), (error: Error) => error.message.includes("40019") && !error.message.includes("private"));
+      await assert.rejects(withSellfoxCredentialScope(tenant, async () => drive(sellfoxPost("/api/test.json", {})), db), (error: Error) => error.message.includes("40019") && !error.message.includes("private"));
       const attempts = calls.filter((call) => !call.url.pathname.includes("/api/oauth/"));
       assert.equal(attempts.length, 4);
       for (let i = 1; i < attempts.length; i += 1) assert.ok(attempts[i].at - attempts[i - 1].at >= 2000 * 2 ** (i - 1));
@@ -118,11 +141,11 @@ test("Sellfox HTTP client uses official token, signature, retry and queue contra
     await t.test("permanent parameter, permission, whitelist and signature errors are not retried", async () => {
       for (const code of [40005, 40011, 40014, 40021]) {
         reset(); respond = () => ({ code, msg: "private upstream credentials" });
-        await assert.rejects(drive(sellfoxPost("/api/test.json", {})), (error: Error) => error.message.includes(String(code)) && !error.message.includes("private") && (code !== 40005 || error.message.includes("白名单")));
+        await assert.rejects(withSellfoxCredentialScope(tenant, async () => drive(sellfoxPost("/api/test.json", {})), db), (error: Error) => error.message.includes(String(code)) && !error.message.includes("private") && (code !== 40005 || error.message.includes("白名单")));
         assert.equal(calls.length, 2);
       }
       reset(); tokenCode = 40005;
-      await assert.rejects(drive(sellfoxPost("/api/test.json", {})), /40005/);
+      await assert.rejects(withSellfoxCredentialScope(tenant, async () => drive(sellfoxPost("/api/test.json", {})), db), /40005/);
       assert.equal(calls.length, 1);
     });
     await t.test("network and non-JSON 503 responses retry; non-JSON success fails closed", async () => {
@@ -134,19 +157,21 @@ test("Sellfox HTTP client uses official token, signature, retry and queue contra
         if (attempts === 2) return new Response("temporary outage", { status: 503 });
         return { data: { accepted: true } };
       };
-      assert.deepEqual(await drive(sellfoxPost("/api/test.json", {})), { accepted: true });
+      assert.deepEqual(await runScoped(async () => drive(sellfoxPost("/api/test.json", {}))), { accepted: true });
       assert.equal(attempts, 3);
       reset(); respond = () => new Response("invalid upstream body");
-      await assert.rejects(drive(sellfoxPost("/api/test.json", {})), /非 JSON/);
+      await assert.rejects(withSellfoxCredentialScope(tenant, async () => drive(sellfoxPost("/api/test.json", {})), db), /非 JSON/);
       assert.equal(calls.length, 2);
     });
     await t.test("task creation transport is sent once when the result is ambiguous", async () => {
       reset(); respond = () => new Error("private timeout URL");
-      await assert.rejects(drive(sellfoxPost("/api/cpc/download/createTask.json", {}, { retry: false })));
+      await assert.rejects(withSellfoxCredentialScope(tenant, async () => drive(sellfoxPost("/api/cpc/download/createTask.json", {}, { retry: false })), db));
       assert.equal(calls.filter((call) => call.url.pathname.includes("createTask")).length, 1);
     });
   } finally {
+    await closeSellfoxClient();
     globalThis.fetch = previousFetch;
+    globals.prisma = previousPrisma;
     t.mock.timers.reset();
     for (const [key, value] of Object.entries(previousEnv)) {
       if (value === undefined) delete process.env[key]; else process.env[key] = value;

@@ -79,13 +79,6 @@ async function main() {
     const body = await crossDataset.json() as { error?: { data?: { businessCode?: string } } };
     assert(body.error?.data?.businessCode === "DATASET_NOT_ALLOWED", `应返回 DATASET_NOT_ALLOWED，实际 ${body.error?.data?.businessCode}`);
     console.log("OK HTTP provider binding + tools/list namespace + dataset fence");
-
-    if (process.env.MCP_HTTP_TOKEN && process.env.MCP_ORG_ID && process.env.MCP_DISABLE_SHARED_TOKEN !== "true") {
-      const shared = await authenticateSellfoxMcp(`Bearer ${process.env.MCP_HTTP_TOKEN}`);
-      assert(shared.kind === "shared-env", "兼容共享令牌应解析为 shared-env 身份");
-      assert(shared.organizationId === process.env.MCP_ORG_ID, "共享令牌必须绑定 MCP_ORG_ID");
-      console.log("OK legacy shared token is sellfox-only and org-bound");
-    }
   } finally {
     await manageSellfoxMcpCredential(scope, owner.id, { action: "revoke", id: created.credential.id, revision: created.credential.revision });
   }

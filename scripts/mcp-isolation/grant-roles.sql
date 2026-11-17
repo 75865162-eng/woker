@@ -1,90 +1,130 @@
--- 双池数据库角色隔离（DDL，需 DBA 在维护窗口手动执行；本仓库不会自动执行）
---
--- 背景（2026-11-15 实测）：MCP_PG_READONLY_URL 使用的角色 sellfox_mcp_ro
--- 对 62 张 Amazon* 表持有 SELECT，数据库层没有双池隔离；目前仅靠应用层
--- assertProviderTable 的 Amazon*/Sellfox* 前缀封闭清单挡住跨池误用。
---
--- 执行顺序：先备份 → DBA 用强密码创建 amazon_mcp_ro → 执行本脚本
--- → 把 AMAZON_MCP_PG_READONLY_URL 配到 .env
--- → 运行 `node scripts/mcp-isolation/audit-roles.mjs` 复核（应输出 0 越权）。
--- 新增 Amazon*/Sellfox* 表后需重跑本脚本（没有自动 default privileges，避免过宽授权）。
+-- DBA 审阅后在维护窗口执行；任何异常使整笔事务回滚。不会创建角色或设置密码。
+BEGIN;
+SET LOCAL search_path = pg_catalog;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '60s';
 
--- 1) Amazon 独立只读登录必须由 DBA 现场创建。脚本绝不内置弱口令占位，
---    也绝不把密码写进版本库；角色不存在时直接报错，不会悄悄建一个弱口令角色。
---    DBA 先执行（密码现场替换）：
---      CREATE ROLE amazon_mcp_ro LOGIN PASSWORD '<强密码>';
-DO $do$
+DO $isolation$
+DECLARE
+  r record;
+  t record;
+  s record;
+  allowed boolean;
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'amazon_mcp_ro') THEN
-    RAISE EXCEPTION '缺少 amazon_mcp_ro：请先由 DBA 用强密码创建只读登录，再执行本脚本。';
+  -- PUBLIC 的权限不能对单个登录做 DENY；不自动撤销共享权限，以免破坏业务。
+  -- DBA 必须先将业务授权迁移至专用角色，再移除 PUBLIC 表/列权限和 CREATE。
+  IF EXISTS (
+    SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace,
+      LATERAL aclexplode(c.relacl) a
+    WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+      AND n.nspname !~ '^pg_' AND a.grantee = 0
+  ) OR EXISTS (
+    SELECT 1 FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid
+      JOIN pg_namespace n ON n.oid = c.relnamespace,
+      LATERAL aclexplode(a.attacl) x
+    WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+      AND n.nspname !~ '^pg_' AND x.grantee = 0
+  ) THEN
+    RAISE EXCEPTION 'PUBLIC 仍有应用对象表/列权限；请 DBA 显式迁移业务授权并撤销 PUBLIC 后重试';
   END IF;
-END
-$do$;
 
-GRANT USAGE ON SCHEMA public TO amazon_mcp_ro;
+  FOR r IN SELECT * FROM pg_roles WHERE rolname IN ('amazon_mcp_ro', 'sellfox_mcp_ro') LOOP
+    IF r.rolsuper OR r.rolcreatedb OR r.rolcreaterole OR r.rolreplication OR r.rolbypassrls
+      OR NOT r.rolcanlogin THEN
+      RAISE EXCEPTION '角色 % 属性不安全；请 DBA 先修正高权限属性及 LOGIN', r.rolname;
+    END IF;
+    -- NOINHERIT 不能阻止 SET ROLE；任何成员关系均拒绝，包含间接关系的起点。
+    IF EXISTS (SELECT 1 FROM pg_auth_members WHERE member = r.oid) THEN
+      RAISE EXCEPTION '角色 % 仍是其他角色成员；请 DBA 撤销成员关系（NOINHERIT 不足以隔离）', r.rolname;
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_shdepend WHERE refclassid = 'pg_authid'::regclass
+      AND refobjid = r.oid AND deptype = 'o') THEN
+      RAISE EXCEPTION '角色 % 拥有对象；请 DBA 转移所有权后重试', r.rolname;
+    END IF;
+    IF EXISTS (
+      SELECT 1 FROM pg_default_acl d, LATERAL aclexplode(d.defaclacl) a
+      WHERE a.grantee IN (0, r.oid)
+    ) OR EXISTS (
+      -- 无全局函数默认 ACL 时，PostgreSQL 隐含向 PUBLIC 授予未来函数 EXECUTE。
+      -- schema 级 REVOKE 不能取消该全局默认值，必须针对每个实际对象 owner 撤销。
+      SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname !~ '^pg_'
+        AND NOT EXISTS (SELECT 1 FROM pg_default_acl d
+          WHERE d.defaclrole = c.relowner AND d.defaclnamespace = 0 AND d.defaclobjtype = 'f')
+    ) THEN
+      RAISE EXCEPTION '角色 % 或 PUBLIC 存在未来对象默认授权；请 DBA 按 owner/schema 清理默认权限', r.rolname;
+    END IF;
+    IF has_database_privilege(r.oid, current_database(), 'CREATE')
+      OR has_database_privilege(r.oid, current_database(), 'TEMP') THEN
+      RAISE EXCEPTION '角色 % 有数据库 CREATE/TEMP（可能来自 PUBLIC）；请 DBA 迁移并撤销后重试', r.rolname;
+    END IF;
+    FOR s IN SELECT * FROM pg_namespace
+      WHERE nspname NOT IN ('pg_catalog', 'information_schema') AND nspname !~ '^pg_' LOOP
+      IF has_schema_privilege(r.oid, s.oid, 'CREATE') THEN
+        RAISE EXCEPTION '角色 % 可在 schema % 创建对象；请 DBA 撤销 CREATE 后重试', r.rolname, s.nspname;
+      END IF;
+    END LOOP;
+    IF EXISTS (
+      SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname !~ '^pg_'
+        AND has_function_privilege(r.oid, p.oid, 'EXECUTE')
+    ) THEN
+      RAISE EXCEPTION '角色 % 可执行应用函数/过程；请 DBA 审核并撤销直接或 PUBLIC EXECUTE 后重试', r.rolname;
+    END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_roles WHERE rolname IN ('amazon_mcp_ro', 'sellfox_mcp_ro')) <> 2 THEN
+    RAISE EXCEPTION '缺少 amazon_mcp_ro 或 sellfox_mcp_ro；请 DBA 使用安全凭证预建角色';
+  END IF;
 
--- 2) 只给 Amazon 角色授 Amazon* 表，不授 ALL TABLES。
-DO $do$
-DECLARE t record;
-BEGIN
-  FOR t IN SELECT tablename FROM pg_tables
-           WHERE schemaname = current_schema() AND tablename LIKE 'Amazon%' LOOP
-    EXECUTE format('GRANT SELECT ON %I TO amazon_mcp_ro', t.tablename);
+  FOR r IN SELECT * FROM pg_roles WHERE rolname IN ('amazon_mcp_ro', 'sellfox_mcp_ro') LOOP
+    EXECUTE format('ALTER ROLE %I SET default_transaction_read_only = on', r.rolname);
+    EXECUTE format('ALTER ROLE %I SET statement_timeout = %L', r.rolname, '30s');
+    EXECUTE format('GRANT CONNECT ON DATABASE %I TO %I', current_database(), r.rolname);
+    EXECUTE format('GRANT USAGE ON SCHEMA public TO %I', r.rolname);
+    FOR t IN SELECT c.*, n.nspname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname !~ '^pg_'
+        AND c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S') LOOP
+      IF t.relkind = 'S' THEN
+        EXECUTE format('REVOKE ALL PRIVILEGES ON SEQUENCE %I.%I FROM %I', t.nspname, t.relname, r.rolname);
+      ELSE
+        EXECUTE format('REVOKE ALL PRIVILEGES ON TABLE %I.%I FROM %I', t.nspname, t.relname, r.rolname);
+        -- 表级 REVOKE 不会移除列级授权。
+        FOR s IN SELECT attname FROM pg_attribute WHERE attrelid = t.oid AND attnum > 0 AND NOT attisdropped LOOP
+          EXECUTE format('REVOKE ALL PRIVILEGES (%I) ON TABLE %I.%I FROM %I', s.attname, t.nspname, t.relname, r.rolname);
+        END LOOP;
+        allowed := t.nspname = 'public' AND t.relkind IN ('r', 'p') AND
+          ((r.rolname = 'amazon_mcp_ro' AND t.relname LIKE 'Amazon%') OR
+           (r.rolname = 'sellfox_mcp_ro' AND t.relname LIKE 'Sellfox%'));
+        IF allowed THEN
+          EXECUTE format('GRANT SELECT ON TABLE %I.%I TO %I', t.nspname, t.relname, r.rolname);
+        END IF;
+      END IF;
+    END LOOP;
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
+        AND ((r.rolname = 'amazon_mcp_ro' AND c.relname LIKE 'Amazon%') OR
+             (r.rolname = 'sellfox_mcp_ro' AND c.relname LIKE 'Sellfox%'))
+        AND has_table_privilege(r.oid, c.oid, 'SELECT')
+    ) THEN
+      RAISE EXCEPTION '角色 % 没有可读的本提供方表；拒绝空结果验收', r.rolname;
+    END IF;
+    IF EXISTS (
+      SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname !~ '^pg_'
+        AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+        AND (
+          has_table_privilege(r.oid, c.oid, 'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+          OR has_any_column_privilege(r.oid, c.oid, 'INSERT,UPDATE,REFERENCES')
+          OR ((has_table_privilege(r.oid, c.oid, 'SELECT') OR has_any_column_privilege(r.oid, c.oid, 'SELECT'))
+            AND NOT (n.nspname = 'public' AND c.relkind IN ('r', 'p') AND
+              ((r.rolname = 'amazon_mcp_ro' AND c.relname LIKE 'Amazon%') OR
+               (r.rolname = 'sellfox_mcp_ro' AND c.relname LIKE 'Sellfox%'))))
+        )
+    ) THEN
+      RAISE EXCEPTION '角色 % 授权后有效权限仍越界，事务回滚；请 DBA 排查共享授权', r.rolname;
+    END IF;
   END LOOP;
 END
-$do$;
-
--- 3) 撤销赛狐角色对 Amazon* 表的越权读取。
-DO $do$
-DECLARE t record;
-BEGIN
-  FOR t IN SELECT tablename FROM pg_tables
-           WHERE schemaname = current_schema() AND tablename LIKE 'Amazon%' LOOP
-    EXECUTE format('REVOKE SELECT ON %I FROM sellfox_mcp_ro', t.tablename);
-  END LOOP;
-END
-$do$;
-
--- 4) PUBLIC 若仍持有任一侧表的 SELECT，角色级 REVOKE 都会失效（PUBLIC 权限对所有人可见），
---    必须两侧一并撤销。若 ERP 业务角色依赖 PUBLIC 授权，请先显式 GRANT 给这些业务角色。
-DO $do$
-DECLARE t record;
-BEGIN
-  FOR t IN SELECT DISTINCT table_name AS tablename FROM information_schema.role_table_grants
-           WHERE grantee = 'PUBLIC' AND table_schema = current_schema()
-             AND (table_name LIKE 'Amazon%' OR table_name LIKE 'Sellfox%') AND privilege_type = 'SELECT' LOOP
-    EXECUTE format('REVOKE SELECT ON %I FROM PUBLIC', t.tablename);
-  END LOOP;
-END
-$do$;
-
--- 5) 防御：Amazon 角色不得读任何 Sellfox* 表。
-DO $do$
-DECLARE t record;
-BEGIN
-  FOR t IN SELECT tablename FROM pg_tables
-           WHERE schemaname = current_schema() AND tablename LIKE 'Sellfox%' LOOP
-    EXECUTE format('REVOKE ALL ON %I FROM amazon_mcp_ro', t.tablename);
-  END LOOP;
-END
-$do$;
-
--- 6) 只读检查：其他角色 / PUBLIC 是否仍持有跨池 SELECT，以及 schema 默认权限。
---    这里只输出，不自动撤销业务角色；输出非空时需 DBA 判断该角色是否应看到两个数据池。
-SELECT grantee::text AS grantee, table_schema,
-       count(*) FILTER (WHERE table_name LIKE 'Amazon%')::int AS amazon_select,
-       count(*) FILTER (WHERE table_name LIKE 'Sellfox%')::int AS sellfox_select
-FROM information_schema.role_table_grants
-WHERE table_schema = current_schema() AND privilege_type = 'SELECT'
-  AND (table_name LIKE 'Amazon%' OR table_name LIKE 'Sellfox%')
-  AND grantee NOT IN ('sellfox_mcp_ro', 'amazon_mcp_ro')
-GROUP BY grantee, table_schema
-ORDER BY grantee;
-
-SELECT defaclrole::regrole::text AS owner, defaclnamespace::regnamespace::text AS schema,
-       defaclobjtype AS object_type, defaclacl AS default_privileges
-FROM pg_default_acl
-WHERE defaclnamespace = current_schema()::regnamespace;
-
--- 配置示例（.env，勿提交真实密码）：
--- AMAZON_MCP_PG_READONLY_URL=postgresql://amazon_mcp_ro:<password>@127.0.0.1:5432/<db>
+$isolation$;
+COMMIT;

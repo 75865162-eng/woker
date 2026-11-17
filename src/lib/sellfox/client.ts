@@ -1,7 +1,7 @@
 import { createHmac, randomInt } from "node:crypto";
 import { Client } from "pg";
 import { currentSellfoxCredentials } from "./credential-context";
-import { legacySellfoxCredentials, type SellfoxResolvedCredentials } from "./credential-store";
+import type { SellfoxResolvedCredentials } from "./credential-store";
 
 const baseUrl = "https://openapi.sellfox.com";
 const requestTimeoutMs = Math.min(Math.max(Number(process.env.SELLFOX_REQUEST_TIMEOUT_MS) || 30_000, 5_000), 120_000);
@@ -65,8 +65,13 @@ export class SellfoxRequestError extends Error {
 }
 
 async function credentials() {
-  try { return await (currentSellfoxCredentials() ?? legacySellfoxCredentials()); }
-  catch { throw new SellfoxRequestError("赛狐凭据未配置或不可用，未发送请求。", false); }
+  try {
+    const current = currentSellfoxCredentials();
+    if (!current) throw new Error("missing credential scope");
+    return await current;
+  } catch {
+    throw new SellfoxRequestError("赛狐凭据作用域未配置或不可用，未发送请求。", false);
+  }
 }
 
 const officialErrorText: Record<number, string> = {

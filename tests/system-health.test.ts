@@ -19,13 +19,19 @@ import {
 } from "@/lib/notifications/wecom";
 import { nextAppVersionLabel, normalizeAppVersionLabel } from "@/lib/app-version";
 import { getProductListImage } from "@/lib/products/image-assets";
-import { productToDraft } from "@/components/products/product-workbench-data";
+import { productToDraft, parseProductWorkbookFile } from "@/components/products/product-workbench-data";
 import { createProductShellFromListItem } from "@/components/products/product-workbench-data";
-import { buildAmazonLink, buildAmazonSearchLink, nextSku } from "@/components/products/product-workbench-utils";
+import { buildAmazonLink, buildAmazonSearchLink, calculateExcelPricing, calculateTrialPricing, parseOptionalProductNumber, nextSku } from "@/components/products/product-workbench-utils";
+import type { TrialPriceRow } from "@/components/products/product-workbench-model";
 import { runRuleEngine } from "@/lib/rule-engine/engine";
 import { normalizeWorkspaceScope, workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import type { CampaignGroup, PerformanceRow, Rule } from "@/lib/types";
 import type { Product } from "@/lib/products/types";
+import { buildProductRecordIndex, ProductPurchasePriceValidationError, requireProductPurchasePrice } from "@/lib/products/product-record-index";
+import { createProductRecordData, saveProductRecord } from "@/lib/products/product-record-repository";
+import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { buildProductSummaryProjection, productRecordPayloadToProduct } from "@/lib/products/product-projection";
 
 function createPerformanceRow(overrides: Partial<PerformanceRow> = {}): PerformanceRow {
   return {
@@ -244,6 +250,134 @@ test("productToDraft tolerates legacy products with missing array fields", () =>
   assert.deepEqual(draft.images, []);
   assert.deepEqual(draft.competitorAsins, [""]);
   assert.deepEqual(draft.workflowHistory, []);
+});
+
+test("商品列表壳与新建草稿保留缺失数值并区分真实零", () => {
+  const item = { id: "null-product", sku: "NULL-1", chineseName: "空值商品", englishName: "", status: "pending" } satisfies Pick<Product, "id" | "sku" | "chineseName" | "englishName" | "status">;
+  for (const purchasePrice of [undefined, 0, 12.5]) {
+    const shell = createProductShellFromListItem({ ...item, purchasePrice });
+    const draft = productToDraft(shell, []);
+    assert.equal(draft.purchasePrice, purchasePrice ?? null);
+    assert.equal(draft.productWeightG, null);
+    assert.equal(draft.packageWeightG, null);
+    assert.deepEqual(draft.productSizeCm, { length: null, width: null, height: null });
+    assert.deepEqual(draft.packageSizeCm, { length: null, width: null, height: null });
+  }
+  const blank = productToDraft(null, []);
+  assert.equal(blank.purchasePrice, null);
+  assert.equal(blank.workbookDetail.pricingRows[0].purchaseCost, null);
+  const product = { ...createProductShellFromListItem(item), purchasePrice: 0, productWeightG: 0, packageWeightG: 120, productSizeCm: null, packageSizeCm: { length: 0, width: null, height: 3 } };
+  const draft = productToDraft(product, []);
+  assert.equal(draft.purchasePrice, 0);
+  assert.equal(draft.productWeightG, 0);
+  assert.equal(draft.packageWeightG, 120);
+  assert.equal(draft.productSizeCm, null);
+  assert.deepEqual(draft.packageSizeCm, product.packageSizeCm);
+});
+
+test("实际选品工作簿导入区分缺失零与正常商品数值", async () => {
+  const XLSX = await import("xlsx");
+  for (const value of ["", 0, 2.5]) {
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+      ["品名", "长", "宽", "高", "重量"],
+      ["导入测试", value, value, value, value, "", 20, value, 3],
+      ["ASIN"],
+      ["供应商产品链接"],
+      ["使用人群"],
+      [""],
+      ["关键词"],
+    ]), "选品");
+    const bytes: ArrayBuffer = XLSX.write(workbook, { type: "array", bookType: "xlsx" });
+    const product = await parseProductWorkbookFile(new File([bytes], "import.xlsx"), [], "IMPORT-1");
+    assert.equal(product.purchasePrice, value === "" ? null : value);
+    const expectedWeight = typeof value === "number" ? value * 1000 : null;
+    assert.equal(product.productWeightG, expectedWeight);
+    assert.equal(product.packageWeightG, expectedWeight);
+    assert.deepEqual(product.productSizeCm, { length: value === "" ? null : value, width: value === "" ? null : value, height: value === "" ? null : value });
+  }
+});
+
+test("采购价存储边界拒绝缺失且保留真实零", () => {
+  assert.throws(() => requireProductPurchasePrice({ purchasePrice: null }), ProductPurchasePriceValidationError);
+  assert.throws(() => requireProductPurchasePrice({ purchasePrice: Number.NaN }), ProductPurchasePriceValidationError);
+  assert.equal(requireProductPurchasePrice({ purchasePrice: 0 }), 0);
+  assert.equal(requireProductPurchasePrice({ purchasePrice: 12.5 }), 12.5);
+});
+
+test("无效采购价在任何事务访问前抛明确业务错误", async () => {
+  const client = new PrismaClient({ adapter: new PrismaPg({ connectionString: "postgresql://fixture:fixture@127.0.0.1:1/never_connect" }) });
+  let accesses = 0;
+  const tx = new Proxy(client, { get() { accesses += 1; throw new Error("测试禁止任何事务访问"); } });
+  const scope = { organizationId: "fixture-org", workspaceId: "fixture-workspace", accountId: "fixture-account", marketplace: "US" };
+  const user = { id: "fixture-user", organizationId: scope.organizationId };
+  const shell = createProductShellFromListItem({ id: "transaction-guard", sku: "GUARD-1", chineseName: "事务前校验", englishName: "", status: "pending" });
+  for (const purchasePrice of [null, Number.NaN, Number.POSITIVE_INFINITY]) {
+    await assert.rejects(saveProductRecord(tx, { product: { ...shell, purchasePrice }, user, scope }), ProductPurchasePriceValidationError);
+    assert.equal(accesses, 0);
+  }
+});
+
+test("商品实际持久化映射拒绝缺失且保留零与有效采购价", () => {
+  const shell = createProductShellFromListItem({ id: "price-boundary", sku: "PRICE-1", chineseName: "采购价边界", englishName: "", status: "pending" });
+  const scope = { organizationId: "fixture-org", workspaceId: "fixture-workspace", accountId: "fixture-account", marketplace: "US" };
+  const user = { id: "fixture-user", organizationId: scope.organizationId };
+  for (const purchasePrice of [null, Number.NaN, Number.POSITIVE_INFINITY, 0, 12.5]) {
+    const candidate = { ...shell, purchasePrice };
+    const buildRecord = () => createProductRecordData(candidate, user, scope);
+    const buildIndex = () => buildProductRecordIndex(candidate);
+    const buildSummary = () => buildProductSummaryProjection({ product: candidate, ...scope, sourceRevision: 1 });
+    if (purchasePrice === null || !Number.isFinite(purchasePrice)) {
+      assert.throws(buildRecord, ProductPurchasePriceValidationError);
+      assert.throws(buildIndex, ProductPurchasePriceValidationError);
+      assert.throws(buildSummary, ProductPurchasePriceValidationError);
+    } else {
+      const record = buildRecord();
+      assert.equal(record.purchasePrice, purchasePrice);
+      assert.equal(buildIndex().purchasePrice, purchasePrice);
+      assert.equal(buildSummary().purchasePrice, purchasePrice);
+      assert.equal(JSON.parse(JSON.stringify(record.payload)).purchasePrice, purchasePrice);
+    }
+  }
+});
+
+test("历史商品JSON缺失采购价可读取且草稿不伪造零值", () => {
+  for (const payload of [
+    { id: "legacy-missing", sku: "LEGACY-MISSING", chineseName: "历史缺失", englishName: "", status: "pending", createdAt: "2026-11-01" },
+    { id: "legacy-null", sku: "LEGACY-NULL", chineseName: "历史空值", englishName: "", status: "pending", createdAt: "2026-11-01", purchasePrice: null },
+  ]) {
+    const product = productRecordPayloadToProduct(payload);
+    assert.equal(product.purchasePrice, payload.purchasePrice);
+    const draft = productToDraft(product, []);
+    assert.equal(draft.purchasePrice, payload.purchasePrice);
+    assert.notEqual(draft.purchasePrice, 0);
+  }
+});
+
+test("商品数值输入解析保留空白与真实零", () => {
+  for (const value of [null, undefined, "", "   ", "invalid", Number.NaN]) assert.equal(parseOptionalProductNumber(value), null);
+  assert.equal(parseOptionalProductNumber("0"), 0);
+  assert.equal(parseOptionalProductNumber(0), 0);
+  assert.equal(parseOptionalProductNumber("12.5"), 12.5);
+});
+
+test("商品真实试算函数区分缺失零和正常输入", () => {
+  const row: TrialPriceRow = { name: "测试", lengthCm: 10, widthCm: 10, heightCm: 6, actualWeightKg: 0.2, suggestedPrice: 20, purchaseCost: 7, oceanFreightUnitPrice: 12, fbaFee: 3, exchangeRate: 7 };
+  for (const calculate of [calculateExcelPricing, calculateTrialPricing]) {
+    assert.equal(calculate(row).volumeWeightKg, 0.1);
+    assert.ok(Number.isFinite(calculate(row).profit));
+    const normalProfit = calculate(row).profit;
+    const zeroCostProfit = calculate({ ...row, purchaseCost: 0 }).profit;
+    assert.notEqual(normalProfit, null);
+    assert.notEqual(zeroCostProfit, null);
+    assert.ok(normalProfit !== null && zeroCostProfit !== null && zeroCostProfit > normalProfit);
+    assert.equal(calculate({ ...row, lengthCm: 0 }).volumeWeightKg, 0);
+    for (const key of ["lengthCm", "widthCm", "heightCm", "actualWeightKg", "suggestedPrice", "purchaseCost", "oceanFreightUnitPrice", "fbaFee", "exchangeRate"] as const) {
+      assert.ok(Object.values(calculate({ ...row, [key]: null })).every((value) => value === null), key);
+    }
+    assert.equal(calculate({ ...row, exchangeRate: 0 }).profit, null);
+    assert.equal(calculate({ ...row, purchaseCost: Number.NaN }).profit, null);
+  }
 });
 
 test("product list shells preserve lightweight thumbnails for the table view", () => {

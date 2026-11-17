@@ -227,7 +227,7 @@ export interface MetricSnapshot {
   batchId: string;
   sales: number;
   spend: number;
-  acos: number;
+  acos: number | null;
   roas: number;
   ctr: number;
   cpc: number;

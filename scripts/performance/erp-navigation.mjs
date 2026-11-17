@@ -104,6 +104,7 @@ try {
     await db.query('INSERT INTO "WorkspaceScope" ("organizationId",id,name,"isDefault","updatedAt") VALUES ($1,\'default\',$1,true,now())', [org]);
     await db.query('INSERT INTO "User" (id,email,name,"passwordHash","updatedAt") VALUES ($1,$2,$1,$3,now())', [user, `${user}@fixture.invalid`, passwordHash]);
     await db.query('INSERT INTO "OrganizationMember" (id,"organizationId","userId",role,"updatedAt") VALUES ($1,$2,$3,\'viewer\',now())', [`${org}-member`, org, user]);
+    await db.query('INSERT INTO "WorkspaceMembership" ("organizationId","workspaceId","userId") VALUES ($1,\'default\',$2)', [org, user]);
     await db.query('INSERT INTO "OrganizationRosterRole" ("organizationId",id,name,description,permissions,"sortOrder","updatedAt") VALUES ($1,\'viewer\',\'Viewer\',\'Fixture\',$2,0,now())', [org, JSON.stringify({ listingAi: ["view"], logistics: ["view"], history: ["view"], workspace: ["view"], products: ["view"], operations: ["view"], agents: ["view"], searchMerge: ["view"], tasks: ["view"], sellfox: ["view"], versions: ["view"], accounts: ["view"], settings: ["view"], imageUpscale: ["view"] })]);
   }
   const socket = createServer(); await new Promise(r => socket.listen(0, "127.0.0.1", r));
@@ -176,6 +177,11 @@ try {
   await pause(1800);
   publicRequests.length = 0;
   await page.evaluate(() => performance.clearResourceTimings());
+  const workspaceRequest = () => context.request.get(base + "/api/listing-ai/workspace?workspaceId=default");
+  await db.query('DELETE FROM "WorkspaceMembership" WHERE "organizationId"=\'perf-org\' AND "userId"=\'perf-user\'');
+  assert.equal((await workspaceRequest()).status(), 403, "workspace revocation takes effect on the next request");
+  await db.query('INSERT INTO "WorkspaceMembership" ("organizationId","workspaceId","userId") VALUES (\'perf-org\',\'default\',\'perf-user\')');
+  assert.equal((await workspaceRequest()).status(), 200, "explicit workspace grant restores access");
   // Real-time role revocation must win over both layout state and any permission cache.
   await db.query('UPDATE "OrganizationRosterRole" SET permissions=\'{"listingAi":[],"logistics":[],"workspace":[],"products":[],"operations":[],"agents":[],"searchMerge":[],"tasks":[],"sellfox":[],"versions":[],"accounts":[],"settings":[],"imageUpscale":[]}\',"updatedAt"=now() WHERE "organizationId"=\'perf-org\'');
   const revokedPermission = await context.request.get(base + "/api/listing-ai/workspace");
@@ -197,7 +203,7 @@ try {
   const result = { schemaVersion: 1, mode, bundler: mode === "dev" ? "turbopack" : "webpack", fixtureOnly: true, capturedAt: new Date().toISOString(), node: process.version,
     routes: pages.map(p => p.path), loginColdMs: loginCold, loginMs: summary(loginSamples), coldPages: cold,
     warmNavigationMs: summary(warm), rsc: serverResponses, shellPersisted, publicRequests: navigationRequests,
-    checks: ["role revocation", "cross-organization identity", "disabled user"],
+    checks: ["workspace membership revocation", "role revocation", "cross-organization identity", "disabled user"],
     limitations: ["Disposable database and synthetic accounts; not production acceptance", "External font loading excluded; CSS scan bounded to src in both measurements", "Cold page navigation includes networkidle settle time", "Selected real routes, not a full ERP benchmark"],
   };
   mkdirSync(path.dirname(output), { recursive: true }); writeFileSync(output, JSON.stringify(result, null, 2) + "\n");

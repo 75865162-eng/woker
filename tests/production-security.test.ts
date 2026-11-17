@@ -45,9 +45,10 @@ test("CSRF: non-browser clients with neither signal are allowed", () => {
   assert.deepEqual(evaluateCsrf({ ...base, origin: null, secFetchSite: null }), { ok: true });
 });
 
-test("rate limit: boundary is inclusive and Retry-After is derived from TTL", () => {
-  assert.deepEqual(evaluateRateLimit(loginRateLimit.perIdentity, 60_000, loginRateLimit.perIdentity, loginRateLimit.windowSeconds), { allowed: true, retryAfterSeconds: 0 });
-  const blocked = evaluateRateLimit(loginRateLimit.perIdentity + 1, 60_000, loginRateLimit.perIdentity, loginRateLimit.windowSeconds);
+test("rate limit: limit is exclusive (count>=limit blocks) and Retry-After is derived from TTL", () => {
+  // limit 是窗口内允许的最大失败次数；达到 limit 即封锁，不能多放行第 limit+1 次。
+  assert.deepEqual(evaluateRateLimit(loginRateLimit.perIdentity - 1, 60_000, loginRateLimit.perIdentity, loginRateLimit.windowSeconds), { allowed: true, retryAfterSeconds: 0 });
+  const blocked = evaluateRateLimit(loginRateLimit.perIdentity, 60_000, loginRateLimit.perIdentity, loginRateLimit.windowSeconds);
   assert.equal(blocked.allowed, false);
   assert.equal(blocked.retryAfterSeconds, 60);
 });

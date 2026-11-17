@@ -2,113 +2,66 @@
 
 **结论：NO-GO，不得部署生产。**
 
-本报告只记录本轮实际操作和证据。未把执行环境拒绝、已有测试或静态检查冒充为生产验收。生产数据库、外部授权和正式服务器均未连接；没有部署、迁移或生产数据修改。
+本轮只执行本地静态/单元检查与代码修复；未连接生产数据库、未执行生产迁移、未部署、未提交或推送。验收对象是 Commit `55d5c51affd503e641bc9aa7a5f023d6d0118b94` 加上当时未提交工作树，不是干净的单 Commit。工作树在本轮开始时已有约 230 项状态行（约 140 个 tracked 修改、90 个未跟踪文件）；期间 HEAD 曾从 `0f05efb` 前进到 `55d5c51`，因此不声称达到“同一固定 Commit 的完整最终验收”。
 
-## 续轮验证记录（2026-11-16，进行中）
+## 本轮证据（2026-11-16）
 
-以下为续轮当前证据；后文第一轮记录保留用于追溯，不代表当前候选版本的最终状态。
-
-- 续轮起始与 10:39 UTC 复核 HEAD 均为 `0d973c6b1f2e93e162a771c39c2d42d0c1d8a591`。本轮修改未提交，不能把 HEAD 单独视作最终候选内容。
-- 全量测试启动于 `2026-11-16T10:19:39.214Z`，结束于 `2026-11-16T10:38:59.410Z`，退出码 1：1,967 tests、1,966 pass、1 fail、0 cancelled、0 skipped、0 todo；Node 报告耗时 1,156,135.5773 ms。完整证据为 `outputs/erp-closeout-unit.tap`。
-- 唯一失败是 `tests/amazon-ads-capabilities.test.ts` 的 CLI 子进程 `ETIMEDOUT`，该测试执行时尚未应用续轮修复。未沿用第一轮 48 项失败数字作为当前结果。
-- 修复能力目录 CLI 测试：子进程只继承必要系统变量，直接使用 `node --import tsx` 启动，保留 10 秒超时与所有能力/权限断言。`node --import tsx --test tests/amazon-ads-capabilities.test.ts` 定向复测退出码 0：4 pass、0 fail、0 skipped，耗时 9,677.9725 ms；局部 ESLint 退出码 0。
-- `npm run typecheck` 退出码 0；`npm run lint` 退出码 0（0 errors、2 个既有 `<img>` warning）；`node scripts/runtime/ui-guard.mjs` 退出码 0，所有指标相对基线无增加。修改仍在进行，以上不是最终冻结候选的全套回归。
-- 当前机器另有独立全量校验进程；未停止或修改该进程。其结果不自动纳入本报告。
-- 容器身份接线、发布验证子进程边界与 WMS 全链路入口仍在核查/修复。Docker 缺失仍阻断数据库、浏览器业务闭环、故障恢复、迁移、备份恢复与性能实测。最终判定保持 **NO-GO**。
-
-## 基线与工作区（第一轮历史记录）
-
-- 初始 HEAD：`80dc88cdfd8c159d452757a1434812d7374f4910`。
-- 检查期间观察到 HEAD 自动变化为 `2cbb962502c51c2e635c658d8a2c2a2fd297ee7a`（merge commit）。该变更不是本轮执行的，且测试跨越了 HEAD 变化，因此本轮结果不属于固定单一 Commit 的验收证据。
-- 最终工作区：`src/components/app-shell/app-shell-client.tsx` 有本轮修改；未提交。未提交、未推送。
-- 最初状态中存在的多个用户修改和未跟踪测试文件在测试期间消失，同时 HEAD 变化。无法确认其来源及同步机制。本轮没有执行 reset、clean、stash 或 checkout；建议先由用户核实该外部工作区变更，再固定候选 commit。
-- 所有记录均为本机隔离检查，不代表线上环境。
-
-## 实际修改
-
-修复 `src/components/app-shell/app-shell-client.tsx` 中导航项已渲染 `<Icon>` 却未在该循环绑定 `item.icon` 的错误，增加 `const Icon = item.icon`。
-
-验证：该文件单独 ESLint 通过；`npm run typecheck` 通过；全站 ESLint 复跑通过（0 errors，2 个既有 `<img>` 优化 warning）。没有改动其它代码。
-
-## 测试记录
-
-观察时间约为 2026-11-16 17:46–18:03（UTC+8）。环境提供的起始 HEAD 为 `80dc88c`，最终检查时 HEAD 为 `2cbb962`。因测试过程中 HEAD 变化，下列结果不能归属到唯一 commit。
-
-| 命令 | 结果 | 数量/说明 |
+| 检查 | 命令/范围 | 结果 |
 |---|---|---|
-| `npm run typecheck`（初次） | 退出码 0 | 类型检查通过 |
-| `npx prisma validate --schema prisma/schema.prisma` | 退出码 0 | Prisma schema 静态校验通过，不连接数据库 |
-| `npx eslint src/components/app-shell/app-shell-client.tsx` | 退出码 0 | 修复文件通过 |
-| `npm run typecheck`（修改后） | 退出码 0 | 通过 |
-| `npm run lint`（修复后全站） | 退出码 0 | 0 errors，2 warnings：`amazon-products-panel.tsx`、`replica-workbench.tsx` 使用 `<img>` |
-| `npm run test` | 退出码 1，耗时约 526.5 秒 | 1,672 项：1,624 pass、48 fail、0 skipped、0 todo。失败明细输出存取被权限拒绝，无法复核失败名称；不得声称全量测试通过 |
-| `git diff --check` | 退出码 0 | 通过；早先对已有清单文件仅有 LF/CRLF 警告，最终 diff 无 whitespace error |
-| `npm run test:runtime:integration` | 未运行 | Docker CLI 不存在；脚本需要新建受限 PostgreSQL/Redis 临时容器 |
-| `scripts/test-wms-core-offline.mjs --browser` | 未运行 | 依赖 Docker 临时 PostgreSQL；WMS 全链路未验证 |
-| `npm run performance:dev` / `performance:build` | 未运行 | 依赖 Docker PostgreSQL fixture；无法取得本轮基线或回归结果 |
-| 真实迁移历史 / `migrate deploy` | 未运行 | 真实库操作需独立授权；隔离迁移脚本又因 Docker 缺失无法启动 |
-| 浏览器 E2E / 生产构建 | 未运行 | Chromium 已安装；标准构建使用已存在的 `.next-build`，为避免覆盖未知现有产物未启动。E2E 还需数据库 fixture |
+| Git 基线 | `git rev-parse HEAD` | `55d5c51affd503e641bc9aa7a5f023d6d0118b94`；执行中外部推进，未执行任何提交操作 |
+| TypeScript | `npm --prefix C:/Users/jingbao12/Desktop/条条/woker run typecheck` | 退出码 0 |
+| ESLint | `npm --prefix C:/Users/jingbao12/Desktop/条条/woker run lint` | 退出码 0，0 errors，7 warnings（2 个 `<img>`、5 个未使用符号） |
+| 全量单测（使用隔离 AUTH_SECRET / AUTH_DRIVER） | `AUTH_SECRET=<isolated> AUTH_DRIVER=local npm --prefix ... test` | 退出码 1；2,100 tests，2,090 pass、10 fail、0 skipped，425,029 ms。详细 TAP：`outputs/erp-final-unit-2026-11-16.tap` |
+| 全量单测失败归因 | 同上日志 | 失败涉及 sync center 工作区 scope、Lili tool-config 工作区/API 状态、选品 API 状态码、Sellfox 权限/工作区上下文；不是单纯密钥问题。未修完/未完成复验，不能报全量通过 |
+| runtime fixture 密钥 | `node --import tsx --test tests/runtime-unification.test.ts`，隔离密钥 | 退出码 0；21/21 通过。修正运行态 fixture 仅 31 字符密钥，满足会话签名至少 32 字符契约 |
+| 定向接口回归尝试 | 6 个测试文件；`node --import tsx --test ...` | 退出码 1；17 项中 11 pass、6 fail。发现 `npm run test` 脚本把额外过滤参数追加到 glob 后，仍运行全量；不将其当作成功定向验证 |
+| Docker | `command -v docker` / PowerShell 查询 | Docker CLI 不可用；没有 Docker daemon/隔离容器证据 |
+| Playwright Chromium | 检查 `chromium.executablePath()` | 当前会话对应 Chromium 文件不存在 |
+| diff whitespace | `git diff --check` | 全量工作树退出码 2，报告已有的 `src/components/ui/card.tsx` EOF 空行；本轮相关文件的定向 diff 检查通过 |
 
-本机只读网络检查：3000、5432、6379 正在监听；3017、55439、6399 未监听。由于 Docker 不可用，不能识别或复用这些现有服务；未停止、重启或注入故障。检查时 Git HEAD 从 `80dc88c` 变更为 `2cbb962`。
+上述全量单测是在同一代码工作树，但执行期间有外部工作树/HEAD活动；日志记录的是运行开始时实际加载的源码快照，不能替代最新稳定候选的重跑结果。执行时间以宿主通知的结束时间约 `2026-11-16 21:42 GMT+8` 为参考；具体测试耗时按 TAP 报告记载。
 
-## 模块验收状态
+## 本轮代码变更
 
-普通测试覆盖了一部分纯函数/API 逻辑与权限、租户边界、迁移策略、队列恢复、WMS 规则；它们不等于真实服务联调。
+- `scripts/runtime/fixture-safety.mjs`、`scripts/test-runtime-integration.mjs`：将隔离运行态认证密钥从 31 字符提升到满足验证边界的随机测试专用常量，并加强 Redis 操作后的容器身份复核。
+- `tests/runtime-unification.test.ts`：增加测试确认 runner 的隔离密钥可经实际 `getAuthSecret()` 校验，且不继承外部认证凭据。
+- `src/app/api/operations/sync-center/route.ts`：将认证与工作区解析包含在规范化错误边界内，缺失/无效 workspace 返回明确 scope 错误。
+- `src/app/api/sellfox/sync/route.ts`、`src/app/api/sellfox/schedules/route.ts`：规范化 WorkspaceScopeError，避免异常泄漏，并复用已解析 scope。
+- `tests/lili-tool-config.test.ts`：请求加入明确 workspace header，并补缺失工作区拒绝及零读写/探测副作用测试。
 
-| 范围 | 本轮结论 |
-|---|---|
-| 用户/权限/租户隔离 | 有单元测试覆盖；无最终版本真实浏览器与数据库联调 |
-| 商品、采购、订单、供应商 | 部分单元测试覆盖；完整新增/编辑/审核/撤销/查询业务 E2E 未验收 |
-| WMS 质检作业 | 规则测试存在；两用户浏览器全链路未运行，未验收 |
-| FBA、物流、库存 | 部分规则/纯逻辑测试存在；端到端数据库闭环未验收 |
-| 财务、结算、费用分摊 | 部分精确计算与隔离测试通过；真实持久化/审批闭环未验收 |
-| Amazon SP-API / Ads | 离线协议与权限测试有覆盖；没有真实授权、Amazon 请求或真实数据验证。Ads 写入能力不得推断为已具备 |
-| Lili / MCP / Skills / AI 查询 | 单元测试有覆盖；外部服务授权和真实租户数据查询未验收 |
-| 文件导入导出 | 部分单测通过；真实 worker、对象存储与浏览器完整闭环未验收 |
-| 调度、队列、恢复 | 模拟/单测覆盖部分行为；真实 PostgreSQL/Redis 故障矩阵与恢复未运行 |
-| 全站导航与工作台 | AppShell 图标错误已修；针对该文件 lint 和类型检查通过；全站 E2E 未运行 |
+说明：上述 API 修改来自进行中的并行处理，部分仍与当前回归失败对应；不可视为修复完成。禁止继续以降低安全断言或改成宽松状态码来“修绿”。
 
-## 未完成项与部署阻断
+## 模块与核心闭环状态
 
-1. **必须恢复可识别的隔离执行环境。** 安装/启动经团队批准的 Docker Desktop/Engine，并准备 `postgres:16-alpine`、`redis:7`、Playwright Chromium。不要复用当前 5432/6379 服务；隔离脚本须自行分配 loopback 端口和随机容器标签。
-2. **固定最终候选 commit。** 先调查 HEAD 自动变化和用户修改消失的来源；提交动作需用户授权。本轮不创建 commit。随后所有验收必须对同一个 commit 执行并保存原始日志、退出码、通过/失败/跳过数。
-3. **复核 48 个单测失败。** 需要在可读日志的位置重跑 `npm run test`，输出 TAP 到获准的工作区日志路径，逐项定位并修复；当前失败明细不可访问，不能断言是环境错误或代码错误。
-4. **真实隔离端到端。** 运行 `npm run test:runtime:integration`，覆盖完整迁移链、重复部署幂等、运行态故障、真实 App Router 浏览、API 持久化、Worker/Redis/PostgreSQL 恢复及独立空库备份恢复。该脚本的部分任务内容为合成 fixture，不能代表外部供应商或生产数据验收。
-5. **WMS 浏览器全链路（入口静态复核修正，尚未执行）。** Docker 可用后运行 `node scripts/test-wms-schema-offline.mjs`（不带筛选参数）：其默认入口 `wms-first-loop.integration.ts` 调用 `verifyWmsHttp`，再由 `wms-http.integration.ts` 不传 focused 参数调用 `verifyWmsBrowser`，进入 `wms-browser-workflow.ts` 的双会话收货、分批质检和上架流程。旧 Schema fixture 若因当前模型依赖失败，应修复后复测，不将入口存在视为通过。另运行 `node scripts/test-wms-core-offline.mjs --browser` 验证 focused 调拨、转换和计价流程；该命令当前不会进入通用质检工作流，不能单独作为质检全链路证据。保留实际 Playwright 日志和双会话审批、执行、库存/状态转换证据；任何失败须修复并复测。本项修正仅澄清命令覆盖范围，不改变上述历史未运行事实。
-6. **Workspace 性能门禁。** 在同模式、同机器的认可基线上分别运行 dev/Turbopack 与 production fixture，并比较登录和热切页 P50/P95、导航请求、DOM 持久性及撤权/禁用账号断言。当前无本轮数据，不能判定 SLO 达标。
-7. **迁移历史。** 在隔离空 PostgreSQL 上执行仓库完整 `migrate deploy`、核对 checksum/历史并重复执行验证幂等。生产目标库的 `_prisma_migrations` 及零步迁移历史必须在单独批准的目标环境中只读核实；禁止擅自执行生产迁移。
-8. **最终完整回归。** 同一固定 commit 上按 CI 流程执行 typecheck、lint、全量单测、集成、浏览器 E2E、production build、迁移、权限隔离、并发/幂等/故障恢复、性能与资源压测及数据库备份恢复。当前没有这些完整证据。
-9. **外部配置和授权缺失。** `deploy/production.env.example` 中仍有 `REPLACE:`、`GENERATE:` 或空值。需由正式运维方在服务器密钥管理边界内生成并配置 DATABASE_URL、REDIS_URL、认证/站点 URL、加密密钥、组织/工作区绑定、SP-API/Ads OAuth 凭据、Seller/站点身份、同步授权、持久存储及必要的 Sellfox/AI/MCP 凭据。不要把值写入本报告或提交到仓库。
-10. **备份/恢复和运维能力未验收。** 文档明确备份 timer 尚未启用；本轮没有数据库 dump 的独立空库恢复演练，也没有上传文件/密钥的异机恢复证据。还缺生产资源容量、队列 SLO、告警接收方与 TLS/代理的真实验收。
-11. **生产 readiness 未执行。** 不连接目标生产数据库，不运行会进行完整数据库连接的 `check:production --gate full`，不执行部署。正式发布仍须按 CI artifact + deployment-plan 流程并取得另行审批。
+现有单测覆盖若干权限/租户边界、Amazon 协议解析、精确金额、任务幂等、WMS 规则、工作簿解析和部分队列逻辑；这些单元级结果不是真实浏览器、数据库或外部账号闭环。当前没有本轮证据证明任一全站模块已通过最终前端→API→数据库持久化→查询→前端的 E2E。
 
-以上事项都阻止生产 GO；不是非阻断优化。
+- 用户/权限/租户：有大量单测；当前全量仍失败，未完成真实浏览器及数据库隔离验收。
+- 商品、采购、订单、供应商、FBA、物流、库存、财务、结算：部分纯逻辑与边界测试；本轮无完整真实数据 E2E。
+- WMS 质检作业：未运行双会话浏览器收货/分批质检/上架链路。
+- Amazon SP-API / Ads：离线协议和能力测试不代表真实授权或真实账号联调；写操作需保持审批门禁。
+- Lili / MCP / Skills / AI 查询：本轮 Lili 测试仍有失败；无真实授权数据闭环证据。
+- 文件导入导出、后台任务、调度及恢复：部分代码/单测覆盖；本轮未进行数据库/Redis故障及恢复演练。
+- 全局导航、工作台：类型检查通过；无本轮完整浏览器导航验收。
 
-## 生产配置与授权清单
+## 阻断项（均阻止生产部署）
 
-权威变量模板：`deploy/production.env.example`。不要在本报告复制任何真实密钥。至少需要明确：
+1. 当前全量单测有 10 项失败，相关工作区权限、状态码与异常映射尚未逐项修复并复验。
+2. 工作树很脏且发生外部 HEAD 前进；需由负责人稳定并审阅单一候选，再在其上完整重跑所有测试。本轮未 commit/push。
+3. Docker CLI/Engine 未就绪，阻断真实隔离 PostgreSQL/Redis、完整迁移历史、故障矩阵、数据库备份恢复、WMS 浏览器和性能 fixture。
+4. Chromium 未安装，阻断 Playwright 浏览器验收。
+5. 未执行 E2E、全站 API 联调、生产构建、CI artifact 校验、权限与数据隔离集成、并发/故障恢复压力测试、备份恢复演练。
+6. 生产数据库迁移状态未核对；任何真实目标库只读核验或迁移均需独立授权，本轮未连接。
+7. 生产环境必填变量、Amazon SP-API/Ads、Sellfox、AI/MCP 等外部授权和正式账号状态未核实；不能虚构配置就绪。
+8. 生产服务器资源、SLO、告警接收端、异机备份、恢复密钥和部署失败演练无本轮证据。
 
-- 运行环境：`NODE_ENV`、`ERP_RUNTIME_MODE`、`PORT`、`HOSTNAME`、`ERP_HSTS_ENABLED`。
-- 数据库/队列：TLS PostgreSQL `DATABASE_URL`、TLS Redis `REDIS_URL`、`QUEUE_DRIVER=redis`、事务超时；数据库身份和网络策略需由运维核验。
-- 身份认证：`AUTH_DRIVER=database`、独立 `AUTH_SECRET`、首次管理员组织/邮箱/强口令、`AUTH_PUBLIC_ORIGIN`、`AUTH_TRUSTED_PROXY`、`LILI_PUBLIC_ORIGIN`。
-- 加密密钥：SP-API、Ads、Sellfox 各自 32 字节 Base64 密钥；必须独立备份，轮换会使已存凭据无法解密。
-- Amazon SP-API：LWA client ID/secret/refresh token、实际 endpoint/region、准确 organization/workspace 绑定、seller 身份及启用的数据源。AWS SigV4 字段为可选，不能凭空补值。
-- Amazon Ads：LWA client ID/secret、精确 OAuth redirect URI、授权 profile 与允许的 report scope。Ads/FBA 写开关维持 false，除非经过单独安全审批。
-- Worker：并发、资源 freshness、精确 organization/workspace 同步范围；所有已注册 Worker 同一生产连接目标。
-- 文件存储：持久挂载的 `UPLOAD_DIR` 或经配置验证的 S3/R2 端点、bucket 与专用凭据；多主机场景不能依赖单机本地目录。
-- 可选集成：按启用能力配置 Sellfox、AI provider、MCP 只读数据库与授权范围。空值应保持功能关闭，不得伪报 ready。
-- 主机与运维：受支持 Node 运行时、systemd services、Caddy/TLS、数据库/Redis 容量、队列监控与告警接收方、磁盘/对象存储容量、异机备份及恢复密钥。
+## 生产配置、部署与回滚
 
-现有模板明确禁止复用本地 `.env`。只由运维在服务器受控环境填入真实值。
+生产变量以 `deploy/production.env.example` 为准，至少包含环境/监听配置、TLS PostgreSQL `DATABASE_URL`、TLS Redis `REDIS_URL`、`QUEUE_DRIVER=redis`、数据库认证 `AUTH_DRIVER=database`、强随机 `AUTH_SECRET`、站点 URL/可信代理、独立加密密钥、组织/工作区范围、按启用模块配置的 Amazon/Sellfox/AI/MCP OAuth/凭据、持久文件存储、Worker 并发、备份与监控参数。真实值仅由运维写入受控 Secret/EnvironmentFile，不写入报告或仓库。
 
-## 部署与回滚
+正式发布遵循 `docs/ci-cd.md`、`deploy/PRODUCTION-CHECKLIST.md` 与 `scripts/deployment-plan.mjs`：固定候选 → CI 测试和构建 → 核验 artifact/manifest/commit/hash → readiness 检查 → 审批后切换应用 release → 健康、登录、关键读写及审计检查。不得绕过 CI artifact 流程。
 
-权威发布步骤：`docs/ci-cd.md`、`deploy/PRODUCTION-CHECKLIST.md` 及 `scripts/deployment-plan.mjs`。不在此重写脚本，也不执行部署。
-
-生产步骤摘要：固定并审查单一候选 commit → CI 对该 commit 运行测试、Lint、类型检查、性能对比和生产构建 → 生成并核验 CI artifact、manifest、release metadata、commit 与 SHA → 核对服务器独立 EnvironmentFile 与 readiness 阻断项 → 经审批按 deployment-plan 下载/校验 artifact → 只在 schema/migration 确认且获批时按流程向前迁移 → 切换 release 与 systemd services → `/api/health`、登录、认证 worker-health、关键业务读写与审计核验 → 保存 `RELEASE-RESULT.json`、日志和审批证据。
-
-回滚按 `docs/ci-cd.md`：发布失败只回滚应用 release/current symlink、systemd 进程及适用的 Caddy 配置；**数据库 migration 不自动回滚**，不得运行 `migrate down`、删除表或覆盖生产库。数据恢复只能在事故评估和单独批准后从验证过的备份恢复到经确认目标；同时处理上传对象与独立加密密钥。当前没有本轮备份恢复证据，因此回滚操作条件尚未满足。
+应用回滚按既有 CI/CD 手册切回上一 release 并恢复服务/代理配置。数据库迁移不自动回滚；不得执行未经审批的 down/drop。数据恢复必须在目标确认、事故评估与单独审批后使用已演练备份，并同时恢复上传对象和对应加密密钥。本轮未证明这些步骤可执行。
 
 ## 最终判定
 
-**NO-GO。** 有一个代码缺陷已修复，类型检查和 Lint 通过，但全量测试有 48 项失败；最终 commit 不固定；Docker 及隔离 PostgreSQL/Redis 缺失；WMS 浏览器、运行态故障、真实迁移历史、性能门禁、生产构建和备份恢复均未完成；生产外部授权及环境配置也未提供。满足这些阻断条件前，不得宣称已完成最终集成或生产就绪。
+**NO-GO。** 类型检查、Lint 和运行态 fixture 密钥定向测试通过，但全量单测有 10 项失败，Docker/Chromium 不可用，完整迁移、WMS、故障恢复、性能、E2E、备份恢复及生产配置/授权验收均缺当前版本证据。不得将阶段性检查包装成生产完成，也未进行生产部署、生产数据修改、Git 提交或推送。

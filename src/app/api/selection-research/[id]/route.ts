@@ -19,7 +19,7 @@ export async function GET(request: Request, context: Context) {
 }
 export async function POST(request: Request, context: Context) {
   try {
-    const body = await boundedJsonObject(request, 64_000);
+    const body = await boundedJsonObject(request.clone(), 64_000);
     const action = ["decide", "record-charge"].includes(String(body.operation)) ? "approve" : body.operation === "export" ? "export" : "edit";
     const id = (await context.params).id;
     const access = await researchAccess(request, action, { ...body, runId: id }); if (!access.ok) return access.response;

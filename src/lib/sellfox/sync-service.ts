@@ -148,6 +148,22 @@ async function syncSnapshots(input: SyncInput) {
   return { startDate: dates[0], endDate: dates[dates.length - 1], storeCount, writes };
 }
 
+export function parseSellfoxHourlyMetric(metric: RecordLike) {
+  const required = (keys: string[], integer = false, max = Number.MAX_SAFE_INTEGER) => {
+    const value = num(metric, ...keys);
+    if (value === null || value < 0 || value > max || (integer && !Number.isInteger(value))) {
+      throw new SellfoxSyncInputError(`NEEDS_DATA：小时广告 ${keys[0]} 缺失或无效。`);
+    }
+    return value;
+  };
+  return {
+    hour: required(["hour", "reportHour", "timeHour"], true, 23),
+    impressions: required(["impressions"], true), clicks: required(["clicks"], true),
+    cost: required(["cost", "costs", "spend"]), sales: required(["sales", "salesAmount"]),
+    orders: required(["orders", "purchases"], true),
+  };
+}
+
 async function syncHourly(input: SyncInput) {
   const stores = await storesFor(input); let count = 0; const reportDate = input.reportDate ?? defaultSellfoxReportDate();
   for (const store of stores) {
@@ -156,14 +172,14 @@ async function syncHourly(input: SyncInput) {
       const campaignId = field(campaign, "campaignId", "id"); if (!campaignId) continue;
       const metrics = rowsFrom(await sellfoxPost<unknown>("/api/cpc/hourData/spCampaign.json", { aggregationType: "campaign", shopId: store.externalId, date: reportDate, campaignId }));
       for (const metric of metrics) {
-        const rawHour = num(metric, "hour", "reportHour", "timeHour") ?? 0;
-        const hour = Math.min(Math.max(Math.floor(rawHour), 0), 23); const now = new Date();
+        const { hour, ...observed } = parseSellfoxHourlyMetric(metric);
+        const now = new Date();
         await prisma.$transaction(async (tx) => {
           await fenceSellfoxRun(input.lease, tx);
           await tx.sellfoxHourlyMetric.upsert({
           where: { storeId_reportDate_hour_adType_entityType_entityId: { storeId: store.id, reportDate, hour, adType: "sp", entityType: "campaign", entityId: campaignId } },
-          create: { id: `sellfox-hourly-${store.id}-${reportDate}-${hour}-sp-campaign-${campaignId}`, organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: store.id, reportDate, hour, adType: "sp", entityType: "campaign", entityId: campaignId, entityName: field(campaign, "campaignName", "name"), impressions: Math.floor(num(metric, "impressions") ?? 0), clicks: Math.floor(num(metric, "clicks") ?? 0), cost: num(metric, "cost", "costs", "spend") ?? 0, sales: num(metric, "sales", "salesAmount") ?? 0, orders: Math.floor(num(metric, "orders", "purchases") ?? 0), payload: metric as Prisma.InputJsonValue },
-          update: { impressions: Math.floor(num(metric, "impressions") ?? 0), clicks: Math.floor(num(metric, "clicks") ?? 0), cost: num(metric, "cost", "costs", "spend") ?? 0, sales: num(metric, "sales", "salesAmount") ?? 0, orders: Math.floor(num(metric, "orders", "purchases") ?? 0), payload: metric as Prisma.InputJsonValue, syncedAt: now },
+          create: { id: `sellfox-hourly-${store.id}-${reportDate}-${hour}-sp-campaign-${campaignId}`, organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: store.id, reportDate, hour, adType: "sp", entityType: "campaign", entityId: campaignId, entityName: field(campaign, "campaignName", "name"), ...observed, payload: metric as Prisma.InputJsonValue },
+          update: { ...observed, payload: metric as Prisma.InputJsonValue, syncedAt: now },
           });
         }); count += 1;
       }

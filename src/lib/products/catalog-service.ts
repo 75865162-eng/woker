@@ -11,7 +11,7 @@ function field(value: unknown, label: string, max: number, required = false) {
   return value.trim();
 }
 export async function queryProductCatalog(scope: ProductCatalogScope, params: URLSearchParams) {
-  if (!await assertWorkspaceAccess(scope.organizationId, scope.workspaceId)) throw new ProductManagementError('工作区不可访问。', 403);
+  if (!await assertWorkspaceAccess(scope.organizationId, scope.workspaceId, scope.actor)) throw new ProductManagementError('工作区不可访问。', 403);
   const search = (params.get('search') ?? '').trim();
   if (search.length > 100) throw new ProductManagementError('搜索词过长。');
   const kind = params.get('kind');
@@ -31,7 +31,7 @@ export async function saveProductCatalog(scope: ProductCatalogScope, body: Recor
   const color = field(body.color, '颜色', 10), notes = field(body.notes, '备注', 500);
   if (color && !/^#[0-9a-fA-F]{6}$/.test(color) || typeof body.enabled !== 'boolean') throw new ProductManagementError('颜色/启用状态无效。');
   return prisma.$transaction(async tx => {
-    if (!await assertWorkspaceAccess(scope.organizationId, scope.workspaceId, tx)) throw new ProductManagementError('工作区不可访问。', 403);
+    if (!await assertWorkspaceAccess(scope.organizationId, scope.workspaceId, scope.actor, tx)) throw new ProductManagementError('工作区不可访问。', 403);
     const where = { organizationId: scope.organizationId, workspaceId: scope.workspaceId };
     const data = { kind, code, name, color, notes, enabled: body.enabled as boolean };
     const id = body.id === undefined ? randomUUID() : field(body.id, '字典 ID', 200, true);

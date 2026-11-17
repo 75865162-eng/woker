@@ -13,6 +13,6 @@ export async function requireAmazonReadSession(request: Request): Promise<ApiPer
     try { body = await request.clone().json(); } catch { /* The bounded route parser owns malformed input. */ }
   }
   const { workspaceId } = workspaceScopeFromRequest(request, body);
-  if (process.env.DATABASE_URL && !await assertWorkspaceAccess(user.organizationId, workspaceId)) return { ok: false, response: NextResponse.json({ error: "Forbidden." }, { status: 403 }) };
+  if (process.env.DATABASE_URL && !await assertWorkspaceAccess(user.organizationId, workspaceId, user.id, undefined, request)) return { ok: false, response: NextResponse.json({ error: "Forbidden." }, { status: 403 }) };
   return { ok: true, user };
 }

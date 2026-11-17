@@ -50,7 +50,7 @@ export function changeView(row: AmazonDataCenterChangeRequest) {
   return Object.fromEntries(Object.keys(approvalSelect).map(k => [k, row[k as keyof AmazonDataCenterChangeRequest]]));
 }
 export async function assertChangePermission(scope: SyncScope, actor: string, action: ChangeOperation | "approve" | "view" | "export", tx: Prisma.TransactionClient) {
-  if (!await assertWorkspaceAccess(scope.organizationId, scope.workspaceId, tx)) throw new SyncInputError("工作区不可访问。", 403);
+  if (!await assertWorkspaceAccess(scope.organizationId, scope.workspaceId, actor, tx)) throw new SyncInputError("工作区不可访问。", 403);
   const member = await tx.organizationMember.findUnique({ where: { organizationId_userId: { organizationId: scope.organizationId, userId: actor } }, include: { user: { select: { status: true } } } });
   const config = ["save-authorization", "disable-authorization", "save-source", "validate-authorization", "save-access-grant", "adopt-identity", "recover-finance-window", "recover-report"].includes(action);
   const moduleId = config ? "settings" : "operations";

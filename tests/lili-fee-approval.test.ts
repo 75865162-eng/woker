@@ -38,8 +38,19 @@ test('fee policy respects explicit English and Chinese instructions, negation an
 test('explicit Skill fee approval remains and does not dispatch before confirmation',async()=>{
  const f=await fixture('任何会产生费用或修改店铺的步骤，先把预览给运营确认。');try{const r=await f.engine.step(f.run.id);assert.equal(r.gate?.kind,'MCP_CALL');assert.equal(f.sent(),0);}finally{await rm(f.root,{recursive:true,force:true});}
 });
-test('legacy billing pause can resume with unknown fees, no forged receipt and no dispatch',async()=>{
- const f=await fixture();try{let r=await f.engine.step(f.run.id);await f.store.transaction(r.id,async(saved,save)=>{saved.status='WAITING_FOR_USER';saved.gate={id:'legacy',kind:'BILLING',reason:'unknown fee'};saved.skills[0].markdown='费用核对必须先确认。';saved.calls[0].status='UNKNOWN';await save();});r=await f.engine.resume(r.id);assert.equal(r.gate,undefined);assert.equal(r.status,'RESUMABLE');assert.equal(r.calls[0].billing,'UNKNOWN');assert.equal(r.calls[0].knownUnits,undefined);assert.equal(f.sent(),1);assert.equal(r.decisions.length,0);}finally{await rm(f.root,{recursive:true,force:true});}
+test('显式审批节点在暂停恢复和普通推进后仍保留，不能隐式授权', async()=>{
+ const f=await fixture('付费请求必须先批准。');try{
+ let r=await f.engine.step(f.run.id);assert.equal(r.gate?.kind,'MCP_CALL');
+ const gate=structuredClone(r.gate);const pendingId=r.pendingActionId;
+ await f.engine.pause(r.id);r=await f.engine.resume(r.id);
+ assert.deepEqual(r.gate,gate);assert.equal(r.pendingActionId,pendingId);assert.equal(r.pendingActionApproved,false);assert.equal(f.sent(),0);
+ r=await f.engine.step(r.id);assert.deepEqual(r.gate,gate);assert.equal(r.status,'WAITING_FOR_USER');assert.equal(f.sent(),0);
+ r=await f.engine.decide(r.id,{kind:'AUTHORIZE_TOOL',gateId:r.gate!.id,callId:r.pendingActionId});
+ r=await f.engine.step(r.id);assert.equal(f.sent(),1);assert.equal(r.gate,undefined);
+ }finally{await rm(f.root,{recursive:true,force:true});}
+});
+test('saved pause resumes without reconciling unknown fees or dispatching',async()=>{
+ const f=await fixture();try{let r=await f.engine.step(f.run.id);r=await f.engine.pause(r.id);assert.ok(r.pausedAt);r=await f.engine.resume(r.id);assert.equal(r.pausedAt,undefined);assert.equal(r.gate,undefined);assert.equal(r.status,'RESUMABLE');assert.equal(r.calls[0].billing,'UNKNOWN');assert.equal(r.calls[0].knownUnits,undefined);assert.equal(f.sent(),1);assert.equal(r.decisions.length,0);}finally{await rm(f.root,{recursive:true,force:true});}
 });
 
 test('explicit Skill approval never reintroduces billing pauses after an unsafe paid response', async()=>{
@@ -50,10 +61,10 @@ test('explicit Skill approval never reintroduces billing pauses after an unsafe 
  r=await f.engine.step(r.id);assert.equal(f.sent(),2);assert.equal(r.gate,undefined);assert.equal(r.calls[1].status,'SUCCEEDED');assert.equal(r.calls[1].billing,'UNKNOWN');assert.equal(r.decisions.length,1);
  }finally{await rm(f.root,{recursive:true,force:true});}
 });
-test('step releases historical billing gates even under explicit Skill requirements',async()=>{
+test('interrupted requests remain unknown and are not replayed when other research continues',async()=>{
  const f=await fixture();try{
  let r=await f.engine.step(f.run.id);
- await f.store.transaction(r.id,async(saved,save)=>{saved.skills[0].markdown='费用核对必须先确认。';saved.status='WAITING_FOR_USER';saved.gate={id:'legacy',kind:'BILLING',reason:'unknown'};saved.calls[0].status='IN_FLIGHT';await save();});
- r=await f.engine.step(r.id);assert.notEqual(r.gate?.kind,'BILLING');assert.equal(r.calls[0].billing,'UNKNOWN');assert.equal(r.calls[0].errorCode,'OUTCOME_UNVERIFIED_NOT_REPLAYED');assert.equal(f.sent(),1);assert.equal(r.decisions.length,0);
+ await f.store.transaction(r.id,async(saved,save)=>{saved.calls[0].status='IN_FLIGHT';await save();});
+ r=await f.engine.step(r.id);assert.equal(r.gate,undefined);assert.equal(r.calls[0].billing,'UNKNOWN');assert.equal(r.calls[0].errorCode,'OUTCOME_UNVERIFIED_NOT_REPLAYED');assert.equal(f.sent(),2);assert.equal(r.decisions.length,0);
  }finally{await rm(f.root,{recursive:true,force:true});}
 });

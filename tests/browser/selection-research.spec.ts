@@ -344,7 +344,7 @@ test("pre-dispatch failure survives reload with zero requests and recovery requi
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-for (const outcome of ["lost-response", "interrupted"] as const) test(`free ERP read review survives reload and never replays: ${outcome}`, async ({ page }) => {
+for (const outcome of ["lost-response", "interrupted"] as const) test(`free ERP read failure survives reload and never replays: ${outcome}`, async ({ page }) => {
   const root = await mkdtemp(path.join(tmpdir(), "research-free-review-browser-"));
   try {
     let dispatches = 0;
@@ -365,28 +365,26 @@ for (const outcome of ["lost-response", "interrupted"] as const) test(`free ERP 
       if (!url.pathname.startsWith("/api/")) return route.fulfill({ contentType: "text/html", body: `<div id="root"></div><script>${bundle}</script>` });
       if (route.request().method() === "GET") return route.fulfill({ json: url.pathname === "/api/selection-research" ? { runs: [] } : { run: await engine.inspect(run.id) } });
       const body = route.request().postDataJSON();
-      if (body.operation === "decide") {
-        expect(body.decision.units).toBe(0);
-        run = await engine.decide(run.id, body.decision);
-      } else if (body.operation === "step") run = await engine.step(run.id);
+      if (body.operation === "step") run = await engine.step(run.id);
       else throw new Error("UNEXPECTED_OPERATION");
       return route.fulfill({ json: { run } });
     });
     await page.goto(`http://selection.invalid/?runId=${run.id}`);
-    await expect(page.getByLabel("读取核对说明", { exact: true })).toBeVisible();
+    const restoredStatus = outcome === "interrupted" ? "FAILED" : "RESUMABLE";
+    await expect(page.getByRole("heading", { name: `第 1 / 5 阶段 · ${restoredStatus}`, exact: true })).toBeVisible();
     await page.reload();
-    await expect(page.getByLabel("读取核对说明", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: `第 1 / 5 阶段 · ${restoredStatus}`, exact: true })).toBeVisible();
+    await expect(page.getByLabel("读取核对说明", { exact: true })).toHaveCount(0);
     await expect(page.getByLabel("实际扣费单位", { exact: true })).toHaveCount(0);
-    await expect(page.locator("body")).toContainText(`待核对：erp__read_product · 请求 ${run.calls[0].id}`);
-    const confirm = page.getByRole("button", { name: "确认结果未核实，保留记录并继续", exact: true });
-    await expect(confirm).toBeDisabled();
-    await page.getByLabel("读取核对说明", { exact: true }).fill("Isolated review: request outcome remains unverified");
-    await confirm.click();
+    expect(run.calls[0].errorCode).toBe(outcome === "interrupted" ? "OUTCOME_UNVERIFIED_NOT_REPLAYED" : "TRANSPORT_OR_UNSAFE_RESPONSE");
+    expect(run.decisions).toHaveLength(0);
+    expect(dispatches).toBe(1);
+    if (outcome === "lost-response") await page.getByRole("button", { name: "继续到下一确认节点", exact: true }).click();
     await expect(page.getByRole("alert")).toContainText("检测到重复请求");
     expect(dispatches).toBe(1);
     expect(run.calls[0].status).toBe("FAILED");
     expect(run.calls[0].rawResponse).toBeUndefined();
-    expect(run.decisions[0].decision.units).toBe(0);
+    expect(run.decisions).toHaveLength(0);
     await page.reload();
     await expect(page.getByRole("alert")).toContainText("检测到重复请求");
     expect(dispatches).toBe(1);

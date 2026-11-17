@@ -1,0 +1,5 @@
+ALTER TABLE "SalesPlanLine"
+  ALTER COLUMN "historyDailyAvg" DROP DEFAULT,
+  ALTER COLUMN "historyDailyAvg" DROP NOT NULL,
+  ALTER COLUMN "forecastQty" DROP DEFAULT,
+  ALTER COLUMN "forecastQty" DROP NOT NULL;

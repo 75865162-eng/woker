@@ -1,4 +1,3 @@
-import { getBootstrapAdminEmail, isBootstrapAdminEmail } from "@/lib/auth/constants";
 import { prisma } from "@/lib/db/prisma";
 import { normalizeAccountRoleId, type TeamAccountRecord } from "@/lib/accounts/team-roster";
 
@@ -44,7 +43,6 @@ function toAccountRecord(member: RosterAccountRow): TeamAccountRecord {
     username: member.username ?? undefined,
     name: member.name,
     email: member.email,
-    password: member.password ?? undefined,
     department: member.department,
     title: member.title,
     roleId: normalizeAccountRoleId(member.roleId),
@@ -59,21 +57,19 @@ function toAccountRecord(member: RosterAccountRow): TeamAccountRecord {
   };
 }
 
-function lockDefaultSuperAccount(account: TeamAccountRecord, defaultSuperAccountIds: Set<string>) {
-  const isDefaultSuperAccount =
-    account.id === "local-admin"
-    || defaultSuperAccountIds.has(account.id)
-    || isBootstrapAdminEmail(account.email)
-    || account.username?.trim().toLowerCase() === "1";
+/**
+ * Protected super accounts are an explicit operator-controlled allowlist
+ * (comma-separated user ids), empty by default. There is no implicit lock for
+ * bootstrap/local-admin/"1" ids any more: an unconfigured deployment protects
+ * nobody, so the previous unrevocable hardcoding is gone.
+ */
+function getProtectedSuperAccountIds(): Set<string> {
+  const raw = process.env.PROTECTED_SUPER_ACCOUNT_IDS ?? "";
+  return new Set(raw.split(",").map((id) => id.trim().toLowerCase()).filter(Boolean));
+}
 
-  if (!isDefaultSuperAccount) return account;
-
-  return {
-    ...account,
-    email: getBootstrapAdminEmail(),
-    roleId: "owner",
-    status: "active" as const,
-  };
+function isProtectedSuperAccount(account: TeamAccountRecord, protectedIds: Set<string>) {
+  return protectedIds.has(account.id.trim().toLowerCase());
 }
 
 function buildRosterRevision(members: Pick<RosterAccountRow, "id" | "updatedAt">[]) {
@@ -90,6 +86,7 @@ export async function getTeamRosterSnapshot(organizationId: string): Promise<Tea
   const [members, userMemberships] = await Promise.all([
     prisma.teamRosterMember.findMany({
       where: { organizationId },
+      omit: { password: true },
       orderBy: { sortOrder: "asc" },
     }) as Promise<RosterAccountRow[]>,
     prisma.organizationMember.findMany({
@@ -110,9 +107,7 @@ export async function getTeamRosterSnapshot(organizationId: string): Promise<Tea
   ]);
 
   const existingRosterIds = new Set(members.map((member) => member.id));
-  const defaultSuperAccountIds = new Set(
-    userMemberships.filter((membership) => isBootstrapAdminEmail(membership.user.email)).map((membership) => membership.user.id),
-  );
+  const protectedSuperAccountIds = getProtectedSuperAccountIds();
   const missingAccounts = userMemberships
     .filter((membership) => !existingRosterIds.has(membership.user.id))
     .map((membership) => ({
@@ -121,15 +116,29 @@ export async function getTeamRosterSnapshot(organizationId: string): Promise<Tea
       email: membership.user.email,
       department: "未分配",
       title: "注册用户",
-      roleId: isBootstrapAdminEmail(membership.user.email) ? "owner" : normalizeAccountRoleId(membership.role),
-      status: isBootstrapAdminEmail(membership.user.email) || membership.user.status !== "disabled" ? "active" as const : "disabled" as const,
+      roleId: normalizeAccountRoleId(membership.role),
+      status: membership.user.status === "disabled" ? "disabled" as const : "active" as const,
       lastActiveAt: membership.user.lastLoginAt ? membership.user.lastLoginAt.toLocaleString("zh-CN", { hour12: false }) : "已注册",
     } satisfies TeamAccountRecord));
 
+  const membershipByUserId = new Map(userMemberships.map((membership) => [membership.user.id, membership]));
   const accounts = [
-    ...members.map(toAccountRecord),
+    ...members.map(toAccountRecord).map((account) => {
+      const membership = membershipByUserId.get(account.id);
+      if (membership) {
+        return {
+          ...account,
+          roleId: normalizeAccountRoleId(membership.role),
+          status: membership.user.status === "disabled" ? "disabled" as const : account.status,
+        };
+      }
+      if (isProtectedSuperAccount(account, protectedSuperAccountIds)) {
+        return { ...account, roleId: "viewer" as const, status: "disabled" as const };
+      }
+      return account;
+    }),
     ...missingAccounts,
-  ].map((account) => lockDefaultSuperAccount(account, defaultSuperAccountIds));
+  ];
 
   return {
     accounts,

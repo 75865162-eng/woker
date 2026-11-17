@@ -1,0 +1,22 @@
+export type DomainReportState = {
+  reportId?: string;
+  documentId?: string;
+  archiveTaskId?: string;
+  archivePage?: number;
+  offset?: number;
+  rows?: number;
+  totalRows?: number;
+  publishedRows?: number;
+  reportIds?: Array<{ reportId: string; createdTime: string | null }>;
+  reportIndex?: number;
+  discoveryToken?: string;
+  creating?: boolean;
+  polls?: number;
+  reportCreatedAt?: string | null;
+  requestedAt?: string;
+  documentSaved?: boolean;
+  marketplaceIds?: string[];
+  reconcileToken?: string;
+  reconcileCandidates?: Array<{ reportId: string; createdTime: string | null }>;
+  feePreviewWindow?: { dataStartTime: string; dataEndTime: string };
+};

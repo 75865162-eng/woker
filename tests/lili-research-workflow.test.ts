@@ -53,9 +53,6 @@ test("ASIN workflow composes Skill, ERP and two market adapters, requires two hu
         run = await engine().step(run.id);
         if (run.gate?.kind === "MCP_CALL") {
           run = await engine().decide(run.id, { gateId: run.gate.id, kind: "AUTHORIZE_TOOL", callId: run.pendingActionId });
-        } else if (run.gate?.kind === "BILLING") {
-          const call = run.calls.at(-1)!;
-          run = await engine().decide(run.id, { gateId: run.gate.id, kind: "RECONCILE", callId: call.id, units: 0, receipt: "isolated test receipt" });
         } else if (run.status === "WAITING_FOR_USER") return;
         else assert.notEqual(run.status, "FAILED", JSON.stringify(run.failure));
       }

@@ -12,7 +12,7 @@
  *  3. catalog    - tool names and dataset/table names are closed allow-lists;
  *                  every tool is namespaced with its provider.
  *  4. storage    - each provider reads through its own read-only Postgres role
- *                  (mcp_amazon_ro / mcp_sellfox_ro) and its own table prefix.
+ *                  (amazon_mcp_ro / sellfox_mcp_ro) and its own table prefix.
  *
  * This module is pure: no database, no environment, safe to import from the UI.
  */
@@ -49,7 +49,7 @@ export const mcpProviderPolicies: Record<McpProvider, McpProviderPolicy> = {
     tablePrefix: "Amazon",
     toolNamespace: "amazon.",
     foreignDatasetMarkers: ["sellfox", "Sellfox"],
-    dbRole: "mcp_amazon_ro",
+    dbRole: "amazon_mcp_ro",
     dbRoleEnv: "AMAZON_MCP_PG_READONLY_URL",
     readonlyRoleEnv: "AMAZON_MCP_READONLY",
     auditPrefix: "amazon.mcp",
@@ -64,7 +64,7 @@ export const mcpProviderPolicies: Record<McpProvider, McpProviderPolicy> = {
     tablePrefix: "Sellfox",
     toolNamespace: "sellfox.",
     foreignDatasetMarkers: ["amazon", "Amazon", "ads_report_daily", "ads_entities", "Lili"],
-    dbRole: "mcp_sellfox_ro",
+    dbRole: "sellfox_mcp_ro",
     dbRoleEnv: "MCP_PG_READONLY_URL",
     readonlyRoleEnv: "SELLFOX_MCP_READONLY",
     auditPrefix: "sellfox.mcp",

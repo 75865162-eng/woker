@@ -36,7 +36,7 @@
     "setup:realesrgan:linux": "bash scripts/setup-realesrgan-ncnn-linux.sh",
     "lint": "eslint",
     "typecheck": "node scripts/runtime/typecheck.mjs",
-    "test": "tsx --test tests/*.test.ts",
+    "test": "node scripts/runtime/run-unit-tests.mjs",
     "verify:acceptance": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/acceptance-run.ts",
     "verify:acceptance:local": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/acceptance-run.ts --in-place",
     "verify:assembly": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/smoke-assembly.ts",
@@ -82,7 +82,6 @@
     "verify:points:usage": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/smoke-points-usage.ts",
     "ui:guard": "node scripts/runtime/ui-guard.mjs",
     "ui:guard:update": "node scripts/runtime/ui-guard.mjs --update",
-    "products:upgrade-image-thumbs-250": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/upgrade-product-image-thumbs.ts",
     "test:settlement-allocation:integration": "node scripts/test-three-core-offline.mjs --settlement-allocation"
   },
   "dependencies": {

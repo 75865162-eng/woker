@@ -55,6 +55,48 @@ restart_forecast_worker=false
 runtime_config=false
 caddy_reload=false
 infra_update=false
+shared_config_backup="${release_dir}.shared-backup"
+shared_config_prepared=false
+
+prepare_shared_config() {
+  local relative
+  mkdir -p "$shared_config_backup"
+  for relative in docker-compose.yml deploy/caddy; do
+    if [ "$INITIAL_DEPLOYMENT" != "true" ]; then
+      if [ "$relative" = docker-compose.yml ] && [ "$infra_update" != "true" ]; then continue; fi
+      if [ "$relative" = deploy/caddy ] && [ "$caddy_reload" != "true" ]; then continue; fi
+    fi
+    if [ -e "$APP_DIR/$relative" ]; then
+      mkdir -p "$shared_config_backup/$(dirname "$relative")"
+      cp -a "$APP_DIR/$relative" "$shared_config_backup/$relative"
+    fi
+  done
+  shared_config_prepared=true
+  if [ "$infra_update" = "true" ] || [ "$INITIAL_DEPLOYMENT" = "true" ]; then
+    cp "$extract_dir/docker-compose.yml" "$APP_DIR/docker-compose.yml"
+  fi
+  if [ "$caddy_reload" = "true" ] || [ "$INITIAL_DEPLOYMENT" = "true" ]; then
+    mkdir -p "$APP_DIR/deploy"
+    rm -rf "$APP_DIR/deploy/caddy"
+    cp -a "$extract_dir/deploy/caddy" "$APP_DIR/deploy/caddy"
+  fi
+}
+
+restore_shared_config() {
+  local relative
+  if [ "$shared_config_prepared" != "true" ]; then return 0; fi
+  for relative in docker-compose.yml deploy/caddy; do
+    if [ "$INITIAL_DEPLOYMENT" != "true" ]; then
+      if [ "$relative" = docker-compose.yml ] && [ "$infra_update" != "true" ]; then continue; fi
+      if [ "$relative" = deploy/caddy ] && [ "$caddy_reload" != "true" ]; then continue; fi
+    fi
+    rm -rf "$APP_DIR/$relative" || return 1
+    if [ -e "$shared_config_backup/$relative" ]; then
+      mkdir -p "$APP_DIR/$(dirname "$relative")" || return 1
+      cp -a "$shared_config_backup/$relative" "$APP_DIR/$relative" || return 1
+    fi
+  done
+}
 
 read_previous_version() {
   node - "$VERSION_STATE_FILE" "$CURRENT_LINK/RELEASE.json" <<'NODE'
@@ -176,6 +218,13 @@ assert_service_release() {
 
 restart_runtime_service() {
   local service="$1" runtime_release="$2"
+  # 检查合并 drop-in 后的身份，防止旧 unit/root 覆盖绕过账号切换。
+  if [ "$(systemctl show "$service" --property=User --value)" != amazon-erp ] \
+    || [ "$(systemctl show "$service" --property=Group --value)" != amazon-erp ]; then
+    echo "拒绝启动非专用身份服务：$service" >&2
+    return 1
+  fi
+  systemctl enable "$service" || return 1
   systemctl restart "$service" || return 1
   assert_service_release "$service" "$runtime_release" || return 1
 }
@@ -183,11 +232,11 @@ restart_runtime_service() {
 install_runtime_from_release() {
   local runtime_release="$1"
   if [ "$runtime_config" = "true" ] || [ "$INITIAL_DEPLOYMENT" = "true" ]; then
-    install -m 0644 "$runtime_release/deploy/systemd/amazon-web.service" /etc/systemd/system/amazon-web.service
-    install -m 0644 "$runtime_release/deploy/systemd/amazon-worker.service" /etc/systemd/system/amazon-worker.service
-    install -m 0644 "$runtime_release/deploy/systemd/amazon-image-upscale-worker.service" /etc/systemd/system/amazon-image-upscale-worker.service
+    install -m 0644 "$runtime_release/deploy/systemd/amazon-web.service" /etc/systemd/system/amazon-web.service || return 1
+    install -m 0644 "$runtime_release/deploy/systemd/amazon-worker.service" /etc/systemd/system/amazon-worker.service || return 1
+    install -m 0644 "$runtime_release/deploy/systemd/amazon-image-upscale-worker.service" /etc/systemd/system/amazon-image-upscale-worker.service || return 1
     if [ -f "$runtime_release/deploy/systemd/amazon-sync-worker.service" ]; then
-      install -m 0644 "$runtime_release/deploy/systemd/amazon-sync-worker.service" /etc/systemd/system/amazon-sync-worker.service
+      install -m 0644 "$runtime_release/deploy/systemd/amazon-sync-worker.service" /etc/systemd/system/amazon-sync-worker.service || return 1
     else
       systemctl disable --now amazon-sync-worker 2>/dev/null || true
       rm -f /etc/systemd/system/amazon-sync-worker.service
@@ -201,21 +250,18 @@ install_runtime_from_release() {
       rm -f /etc/systemd/system/amazon-forecast-worker.service
       restart_forecast_worker=false
     fi
-    systemctl daemon-reload
+    systemctl daemon-reload || return 1
   fi
   if [ "$restart_web" = "true" ]; then restart_runtime_service amazon-web "$runtime_release" || return 1; fi
   if [ "$restart_worker" = "true" ]; then restart_runtime_service amazon-worker "$runtime_release" || return 1; fi
   if [ "$restart_image_worker" = "true" ]; then restart_runtime_service amazon-image-upscale-worker "$runtime_release" || return 1; fi
   if [ "$restart_amazon_sync_worker" = "true" ]; then
-    systemctl enable amazon-sync-worker || return 1
     restart_runtime_service amazon-sync-worker "$runtime_release" || return 1
   fi
   if [ "$restart_sellfox_sync_worker" = "true" ]; then
-    systemctl enable amazon-sellfox-sync-worker || return 1
     restart_runtime_service amazon-sellfox-sync-worker "$runtime_release" || return 1
   fi
   if [ "$restart_forecast_worker" = "true" ]; then
-    systemctl enable amazon-forecast-worker || return 1
     restart_runtime_service amazon-forecast-worker "$runtime_release" || return 1
   fi
   if [ "$caddy_reload" = "true" ] || [ "$INITIAL_DEPLOYMENT" = "true" ]; then sh "$runtime_release/deploy/caddy/run-caddy.sh"; fi
@@ -233,6 +279,12 @@ rollback_application_release() {
     result_path="${RELEASE_RESULT_FILE:-$RELEASES_DIR/${release_id}.RELEASE-RESULT.json}"
   fi
   mkdir -p "$(dirname "$result_path")"
+
+  if ! restore_shared_config; then
+    write_release_log rollback_failed "$failed_phase: shared configuration restore failed; database not rolled back"
+    write_release_result "$result_path" "failed" "$failed_phase" "failed" "" "$failure_message; shared configuration restore failed" "failed"
+    return 1
+  fi
 
   if [ "$release_switched" != "true" ]; then
     cleanup_failed_release
@@ -348,9 +400,11 @@ NODE
 read -r requires_migration requires_generate restart_web restart_worker restart_image_worker restart_amazon_sync_worker restart_sellfox_sync_worker restart_forecast_worker runtime_config caddy_reload infra_update <<< "$plan_flags"
 
 package_lock_checksum="$(sha256sum "$extract_dir/package-lock.json" | awk '{print $1}')"
-cached_package_lock_checksum="$(cat "$APP_DIR/node_modules/.package-lock.sha256" 2>/dev/null || true)"
+dependency_source="${previous_release_dir:-$APP_DIR}/node_modules"
+cached_package_lock_checksum="$(cat "$dependency_source/.package-lock.sha256" 2>/dev/null || true)"
+ln -sfn "$APP_DIR/.env" "$extract_dir/.env"
 
-if [ ! -d "$APP_DIR/node_modules" ] || [ "$package_lock_checksum" != "$cached_package_lock_checksum" ]; then
+if [ ! -d "$dependency_source" ] || [ "$package_lock_checksum" != "$cached_package_lock_checksum" ]; then
   plan_install="$(node -e 'const p=require(process.argv[1]); if(typeof p.requiresInstall!=="boolean") process.exit(1); process.stdout.write(String(p.requiresInstall))' "$extract_dir/deployment-plan.json")"
   if [ "$plan_install" != "true" ] && [ "$INITIAL_DEPLOYMENT" != "true" ]; then
     echo "Dependency mismatch without a lockfile change in deployment plan; stop for review." >&2
@@ -362,37 +416,32 @@ if [ ! -d "$APP_DIR/node_modules" ] || [ "$package_lock_checksum" != "$cached_pa
     exit 1
   fi
 
-  cp "$extract_dir/package.json" "$APP_DIR/package.json"
-  cp "$extract_dir/package-lock.json" "$APP_DIR/package-lock.json"
-  npm ci
-  echo "$package_lock_checksum" > "$APP_DIR/node_modules/.package-lock.sha256"
+  (cd "$extract_dir" && npm ci)
+else
+  # 复制而非链接：Prisma generate 不得改写仍在运行的旧版本。
+  mkdir -p "$extract_dir/node_modules"
+  cp -a "$dependency_source/." "$extract_dir/node_modules/"
 fi
+echo "$package_lock_checksum" > "$extract_dir/node_modules/.package-lock.sha256"
 
-cp "$extract_dir/package.json" "$APP_DIR/package.json"
-cp "$extract_dir/package-lock.json" "$APP_DIR/package-lock.json"
-cp "$extract_dir/prisma.config.ts" "$APP_DIR/prisma.config.ts"
-rm -rf "$APP_DIR/prisma" "$APP_DIR/scripts" "$APP_DIR/deploy"
-cp -a "$extract_dir/prisma" "$APP_DIR/prisma"
-cp -a "$extract_dir/scripts" "$APP_DIR/scripts"
-cp -a "$extract_dir/deploy" "$APP_DIR/deploy"
-cp "$extract_dir/docker-compose.yml" "$APP_DIR/docker-compose.yml"
+# 每个版本生成自己的 client；standalone 包不包含 worker/CLI 的完整依赖。
+(cd "$extract_dir" && npm run db:generate)
+# 在任何迁移或运行配置改动之前确认非 root 账号和持久写路径。
+bash "$extract_dir/deploy/systemd/prepare-runtime-user.sh" --prepare-release "$extract_dir" "$APP_DIR"
+prepare_shared_config
 if [ "$infra_update" = "true" ] || [ "$INITIAL_DEPLOYMENT" = "true" ]; then docker compose up -d postgres redis; fi
 
-if [ "$requires_generate" = "true" ] || [ "$INITIAL_DEPLOYMENT" = "true" ]; then npm run db:generate; fi
 if [ "$requires_migration" = "true" ] || [ "$INITIAL_DEPLOYMENT" = "true" ]; then
   migration_status=started
-  npm run db:migrate
+  (cd "$extract_dir" && node deploy/systemd/run-migration.mjs "$APP_DIR/.env")
   migration_status=passed
 fi
 
 if [ "$RUN_BOOTSTRAP_SEED" = "true" ] || [ "$INITIAL_DEPLOYMENT" = "true" ]; then
-  node --env-file="$APP_DIR/.env" scripts/seed-admin.mjs
+  (cd "$extract_dir" && node --env-file="$APP_DIR/.env" scripts/seed-admin.mjs)
 else
   echo "Skipping bootstrap admin seed. Set RUN_BOOTSTRAP_SEED=true to run it."
 fi
-
-ln -sfn "$APP_DIR/node_modules" "$extract_dir/node_modules"
-ln -sfn "$APP_DIR/.env" "$extract_dir/.env"
 
 escaped_release_id="$(json_escape "$release_id")"
 escaped_source_branch="$(json_escape "$SOURCE_BRANCH")"
@@ -409,14 +458,6 @@ cat > "$extract_dir/RELEASE.json" <<JSON
   "appVersion": "$escaped_app_version_label",
   "appDir": "$escaped_app_dir",
   "source": "ci-artifact"
-}
-JSON
-
-cat > "$VERSION_STATE_FILE" <<JSON
-{
-  "appVersion": "$escaped_app_version_label",
-  "releaseId": "$escaped_release_id",
-  "updatedAt": "$release_started_at"
 }
 JSON
 
@@ -465,6 +506,16 @@ if [ "$runtime_status" != "passed" ]; then
   rollback_application_release "runtime_status" "one or more runtime services are not healthy"
   exit 1
 fi
+cat > "${VERSION_STATE_FILE}.tmp" <<JSON
+{
+  "appVersion": "$escaped_app_version_label",
+  "releaseId": "$escaped_release_id",
+  "updatedAt": "$release_started_at"
+}
+JSON
+mv "${VERSION_STATE_FILE}.tmp" "$VERSION_STATE_FILE"
+rm -rf "$shared_config_backup"
+
 result_path="${RELEASE_RESULT_FILE:-$release_dir/RELEASE-RESULT.json}"
 cat > "$result_path" <<JSON
 {

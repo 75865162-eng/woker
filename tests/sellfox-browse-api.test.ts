@@ -19,7 +19,7 @@ test("sales always browses workbench aggregates, preserving scope, permissions a
   const date = "2026-10-25";
   const totals = [{ currency: "USD", subtotal: 109, daily: { [date]: 109 } }];
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: scope.workspaceId }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: scope.workspaceId }) },
     sellfoxStore: {
       findMany: async ({ where }: { where: Record<string, unknown> }) => {
         assert.equal(where.organizationId, scope.organizationId); assert.equal(where.workspaceId, scope.workspaceId);
@@ -123,7 +123,7 @@ test("list/export filters agree, cross-workspace stores fail and exports never s
   };
   globals.prisma = {
     $queryRaw: async () => overflow ? Array.from({ length: 10001 }, () => snapshot) : [snapshot],
-    workspaceScope: { findUnique: async () => ({ id: "workspace-a" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "workspace-a" }) },
     sellfoxStore: { findMany: async () => foreign ? [] : [{ id: "store-a" }] },
     sellfoxSnapshotHead: { findMany: async () => [{ storeId: "store-a", capturedAt: new Date("2026-10-24T00:00:00Z") }] },
     sellfoxFbaInventorySnapshot: snapshotTable, sellfoxProductDailySnapshot: snapshotTable,
@@ -171,7 +171,7 @@ test("fulfillment reaches browse and CSV/XLSX/Agent export SQL, including withou
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [];
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [] }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -215,7 +215,7 @@ test("buyBox reaches browse and CSV/XLSX/Agent export SQL, including without lay
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [], facets = { productTags: ["新品"], brands: ["品牌"] };
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -272,7 +272,7 @@ test("productTag reaches browse facets and CSV/XLSX/Agent export with and withou
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [], facets = { productTags: ["1年以内产品", "新标签、完整"], brands: ["Goghost-乐器", "Nvaav"] };
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -325,7 +325,7 @@ test("brand reaches browse facets and CSV/XLSX/Agent export with and without lay
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [], facets = { productTags: ["1年以内产品", "新标签、完整"], brands: ["Goghost-乐器", "Nvaav"] };
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -383,7 +383,7 @@ test("ads productTag alone reaches browse/facets and CSV/XLSX; explicit Agent ex
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [], facets = { productTags: ["新品", "标签、完整"] };
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -430,7 +430,7 @@ test("ads fulfillment alone reaches six-tab browse and CSV/XLSX without changing
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [];
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets: { productTags: ["新品"] } }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -482,7 +482,7 @@ test("ads brand alone routes six-tab browse and CSV/XLSX through workbench while
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [], facets = { productTags: ["新品"], brands: ["00123", "品牌"] };
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -537,7 +537,7 @@ test("ads Buy Box alone routes six-tab browse and CSV/XLSX before rollup while A
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [], facets = { productTags: ["新品"], brands: ["00123", "品牌"] };
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -592,7 +592,7 @@ test("listings Buy Box alone routes browse and CSV/XLSX through workbench; NULL/
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [], facets = { productTags: ["新品"], brands: ["品牌"] };
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -657,7 +657,7 @@ test("ads default image and selected Listing columns reach CSV/XLSX exports acro
   const calls: Prisma.Sql[] = [];
   const rows = [{ id: "matched", rating: "4.4", ratingCount: 128, productTags: "新品、重点", brand: "品牌", fulfillment: "AFN", buyBoxWinner: "是", mainImage: "https://example.test/product.jpg" }, { id: "unmatched", rating: null, ratingCount: null, productTags: null, brand: null, fulfillment: null, buyBoxWinner: null, mainImage: null }, { id: "zero", rating: null, ratingCount: 0, productTags: null, brand: "00123", fulfillment: "MFN", buyBoxWinner: "否", mainImage: null }, { id: "unknown", rating: null, ratingCount: null, productTags: null, brand: "", fulfillment: "未知", buyBoxWinner: null, mainImage: null }];
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => { calls.push(sql); return [{ total: rows.length, totals: [], rows: structuredClone(rows) }]; },
   } as unknown as PrismaClient;
   try {
@@ -754,7 +754,7 @@ test("legacy browse shells apply validated server ordering with filters and pagi
   const calls: Array<{ where: Record<string, unknown>; orderBy: unknown; skip: number; take: number }> = [];
   const sortedSql: Prisma.Sql[] = [];
   const model = { count: async () => 51, findMany: async (args: typeof calls[number]) => { calls.push(args); return []; } };
-  globals.prisma = { workspaceScope: { findUnique: async () => ({ id: "ws" }) }, sellfoxStore: model, sellfoxSyncRun: model, sellfoxHourlyMetric: model, sellfoxFbaInventorySnapshot: model,
+  globals.prisma = { organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) }, sellfoxStore: model, sellfoxSyncRun: model, sellfoxHourlyMetric: model, sellfoxFbaInventorySnapshot: model,
     sellfoxSnapshotHead: { findMany: async () => [] },
     $queryRaw: async (sql: Prisma.Sql) => { sortedSql.push(sql); return [{ total: 0, rows: [], totals: [] }]; },
   } as unknown as PrismaClient;
@@ -802,7 +802,7 @@ test("salesperson reaches performance browse and CSV/XLSX/Agent exports; sales i
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [], facets = { productTags: [], brands: [], salespersons: ["温见清", "陈馨"] };
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -847,7 +847,7 @@ test("selected profit quantity and ad channel exports reach typed workbench CSV/
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [];
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     sellfoxStore: { findMany: async () => [] },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
@@ -899,7 +899,7 @@ test("listings DXM publish state alone routes browse/facets and CSV/XLSX through
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [], facets = { productTags: ["新品"], brands: ["品牌"], dxmPublishStates: ["delete", "raw-state"] };
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -960,7 +960,7 @@ test("listings firstSale bounds reach workbench and Agent browse/exports without
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [];
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets: {} }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -1015,7 +1015,7 @@ test("listings bsrCategory alone routes browse/facets and CSV/XLSX through workb
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [], facets = { productTags: ["新品"], brands: ["品牌"], dxmPublishStates: ["delete"], bsrCategories: ["Baby", "Musical Instruments"] };
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -1076,7 +1076,7 @@ test("listings totalInventory min/max browse and export use inventory_current su
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [];
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets: {} }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -1127,7 +1127,7 @@ test("listings bsrRank min/max browse and export use typed bsrRank SQL and rejec
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [];
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets: {} }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -1177,7 +1177,7 @@ test("listings fulfillable min/max browse and export use typed fulfillable SQL a
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [];
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets: {} }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -1227,7 +1227,7 @@ test("listings sales7 min/max browse and export use typed sales7 SQL and reject 
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [];
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets: {} }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -1277,7 +1277,7 @@ test("listings sales14 min/max browse and export use typed sales14 SQL and rejec
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [];
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets: {} }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -1327,7 +1327,7 @@ test("listings sales30 min/max browse and export use typed sales30 SQL and rejec
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [];
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets: {} }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -1377,7 +1377,7 @@ test("listings listingQuantity min/max browse and export use typed listingQuanti
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [];
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets: {} }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -1427,7 +1427,7 @@ test("listings price min/max browse and export use typed price SQL and reject ba
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [];
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets: {} }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -1477,7 +1477,7 @@ test("listings revenue7 min/max browse and export use typed revenue7 SQL and rej
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [];
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets: {} }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -1527,7 +1527,7 @@ test("listings revenue14 min/max browse and export use typed revenue14 SQL and r
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [];
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets: {} }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -1577,7 +1577,7 @@ test("listings revenue30 min/max browse and export use typed revenue30 SQL and r
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [];
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets: {} }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -1627,7 +1627,7 @@ test("listings adSpend7 min/max browse and export use typed adSpend7 SQL and rej
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [];
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets: {} }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -1677,7 +1677,7 @@ test("listings adSpend14 min/max browse and export use typed adSpend14 SQL and r
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [];
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets: {} }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -1727,7 +1727,7 @@ test("listings adSpend30 min/max browse and export use typed adSpend30 SQL and r
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [];
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets: {} }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -1777,7 +1777,7 @@ test("listings reservedQty min/max browse and export use typed reservedQty SQL a
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [];
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets: {} }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -1827,7 +1827,7 @@ test("listings unsellable min/max browse and export use typed unsellable SQL and
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [];
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets: {} }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -1877,7 +1877,7 @@ test("listings warehousing min/max browse and export use typed warehousing SQL a
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [];
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets: {} }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -1927,7 +1927,7 @@ test("ads rating min/max routes six-tab browse and CSV/XLSX through workbench wh
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [], facets = { productTags: ["新品"], brands: ["00123", "品牌"] };
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -1995,7 +1995,7 @@ test("ads cost min/max routes six-tab browse and CSV/XLSX through workbench; Age
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [], facets = { productTags: ["新品"], brands: ["00123", "品牌"] };
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -2071,7 +2071,7 @@ test("ads adSales min/max routes six-tab browse and CSV/XLSX through workbench; 
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [], facets = { productTags: ["新品"], brands: ["00123", "品牌"] };
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -2147,7 +2147,7 @@ test("ads impressions min/max routes six-tab browse and CSV/XLSX through workben
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [], facets = { productTags: ["新品"], brands: ["00123", "品牌"] };
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -2223,7 +2223,7 @@ test("ads clicks min/max routes six-tab browse and CSV/XLSX through workbench; A
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [], facets = { productTags: ["新品"], brands: ["00123", "品牌"] };
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -2299,7 +2299,7 @@ test("ads adOrders min/max routes six-tab browse and CSV/XLSX through workbench;
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [], facets = { productTags: ["新品"], brands: ["00123", "品牌"] };
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
@@ -2375,7 +2375,7 @@ test("ads ratingCount min/max routes six-tab browse and CSV/XLSX through workben
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [], facets = { productTags: ["新品"], brands: ["00123", "品牌"] };
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
       return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];

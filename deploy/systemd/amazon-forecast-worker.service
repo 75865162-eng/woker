@@ -17,7 +17,13 @@ Restart=always
 RestartSec=5
 KillSignal=SIGINT
 TimeoutStopSec=30
-User=root
+User=amazon-erp
+Group=amazon-erp
+NoNewPrivileges=true
+CapabilityBoundingSet=
+UMask=0077
+Environment=HOME=/var/lib/amazon-erp
+UnsetEnvironment=MIGRATION_DATABASE_URL POSTGRES_PASSWORD
 
 [Install]
 WantedBy=multi-user.target

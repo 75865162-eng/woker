@@ -364,7 +364,7 @@ export function ProductTable({
                         <p className="truncate" title={product.asin || "--"}>{product.asin || "--"}</p>
                         {product.amazonSnapshotError ? <p className="text-label text-warning-ink" title={product.amazonSnapshotError}>Amazon 快照暂不可读</p> : product.amazonSnapshots ? product.amazonSnapshots.length ? <div className="space-y-0.5">{product.amazonSnapshots.map((row) => <a key={`${row.sellerAccountId}:${row.marketplaceId}`} href={`/operations?${new URLSearchParams({ view: "catalog", sku: row.sellerSku, sellerAccountId: row.sellerAccountId, marketplaceId: row.marketplaceId })}`} className="block truncate text-label text-brand" title={`${row.sellerAccountId}/${row.marketplaceId}: ${row.listingStatus ?? "刊登未同步"} · 可售 ${row.available ?? "未知"} · ${row.freshness} · 库存更新 ${row.inventoryUpdatedAt ?? "未同步"} · ${row.lastError ?? ""}`}>{row.marketplaceId} · 可售 {row.available ?? "未知"} · 查看快照</a>)}</div> : <span className="text-label text-muted">Amazon 未同步</span> : null}
                       </td>
-                      <td className="px-3 font-semibold metric-tabular">{product.purchasePrice.toFixed(2)}</td>
+                      <td className="px-3 font-semibold metric-tabular">{product.purchasePrice?.toFixed(2) ?? "—"}</td>
                       <td className="px-3">
                         <Badge tone={productStatusTones[product.status]}>{productStatusLabels[product.status]}</Badge>
                         {overdue ? <p className="mt-1 text-xs font-semibold text-danger">已超时</p> : null}

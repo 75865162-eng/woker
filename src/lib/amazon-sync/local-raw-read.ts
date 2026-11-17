@@ -1,6 +1,5 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { prisma } from "@/lib/db/prisma";
 import { SyncInputError } from "./policy";
 import {
   amazonLocalRawDisclosure, amazonLocalRawExcluded, amazonLocalRawTables, amazonLocalRawUnscoped,
@@ -12,9 +11,10 @@ import {
  * Amazon 本地承接池原始落地行的只读服务。
  *
  * 复用仓库既有的只读事务边界（SET TRANSACTION READ ONLY + RepeatableRead）。
- * 配置了 AMAZON_MCP_PG_READONLY_URL 时走独立只读角色连接；否则回退主连接，
- * 只读仍由事务强制，绝不回退到无事务写入路径。调用方负责先完成账号授权校验；
- * 这里再强制做一次 organizationId / workspaceId / 单账号单站点围栏。
+ * 必须配置 AMAZON_MCP_PG_READONLY_URL 才走独立只读角色连接；未配置时直接拒绝服务，
+ * 绝不回退主连接（与 sellfox/mcp.ts 的 pool() 行为对齐，fail-closed）。
+ * 调用方负责先完成账号授权校验；这里再强制做一次
+ * organizationId / workspaceId / 单账号单站点围栏。
  */
 export type AmazonLocalScope = { organizationId: string; workspaceId: string };
 /** tenantWide 由调用方在完成全店铺授权校验后传入；复用现有 allSellers，不新增权限体系。 */
@@ -24,10 +24,12 @@ const MAX_PAGE_SIZE = 1000;
 const MAX_PAGE = 10_000;
 
 const globalForAmazonRo = globalThis as unknown as { amazonMcpReadonlyClient?: PrismaClient };
-/** 双池连接隔离：有独立只读角色就用它，没有则沿用主连接 + 只读事务。 */
+/** 双池连接隔离：必须使用独立只读角色；未配置只读 DSN 时拒绝服务，不回退主连接。 */
 function amazonReadClient() {
   const url = process.env.AMAZON_MCP_PG_READONLY_URL?.trim();
-  if (!url) return prisma;
+  if (!url) {
+    throw new SyncInputError("Amazon 只读数据库连接未配置（AMAZON_MCP_PG_READONLY_URL），原始行读取已拒绝。", 503, "READONLY_DSN_NOT_CONFIGURED");
+  }
   // Prisma 7 用 driver adapter；连接本身即只读，事务里再强制一次 READ ONLY。
   globalForAmazonRo.amazonMcpReadonlyClient ??= new PrismaClient({
     adapter: new PrismaPg({ connectionString: url, options: "-c default_transaction_read_only=on -c statement_timeout=15000" }),

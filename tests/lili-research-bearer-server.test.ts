@@ -24,6 +24,7 @@ test("production permission resolver, credential grants and saved-run boundary u
   const db = {
     externalIntegrationSetting: { findUnique: async () => null },
     organizationMember: { findUnique: async () => member() },
+    workspaceMembership: { findUnique: async () => ({ userId: "fixture-user" }) },
     workspaceScope: { findUnique: async () => workspace ? { id: scope.workspaceId } : null },
     organizationRosterRole: { findMany: async () => { if (rolesUnavailable) throw new Error("fixture-role-store-unavailable"); return []; } },
     amazonDataAccessGrant: { findMany: async () => [{ sellerAccountId: "fixture-seller", marketplaceIds: ["fixture-site"], actions: ["view"] }] },

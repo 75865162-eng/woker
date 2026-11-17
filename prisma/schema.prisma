@@ -159,7 +159,20 @@ model UserPreference {
   @@index([userId])
 }
 
+model WorkspaceMembership {
+  organizationId String
+  workspaceId    String
+  userId         String
+  createdAt      DateTime @default(now())
+  workspace      WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Cascade, map: "WorkspaceMembership_workspace_fkey")
+  member         OrganizationMember @relation(fields: [organizationId, userId], references: [organizationId, userId], onDelete: Cascade, map: "WorkspaceMembership_member_fkey")
+
+  @@id([organizationId, workspaceId, userId])
+  @@index([organizationId, userId])
+}
+
 model WorkspaceScope {
+  memberships WorkspaceMembership[]
   productCatalogEntries          ProductCatalogEntry[]
   wmsWarehouseTypes              WmsWarehouseType[]
   wmsWarehouseAddresses          WmsWarehouseAddress[]
@@ -234,6 +247,7 @@ model SellfoxIntegrationCredential {
 }
 
 model OrganizationMember {
+  workspaceMemberships   WorkspaceMembership[]
   id                     String                          @id @default(cuid())
   organizationId         String
   userId                 String
@@ -1308,11 +1322,11 @@ model SellfoxHourlyMetric {
   entityType     String
   entityId       String
   entityName     String       @default("")
-  impressions    Int          @default(0)
-  clicks         Int          @default(0)
-  cost           Float        @default(0)
-  sales          Float        @default(0)
-  orders         Int          @default(0)
+  impressions    Int
+  clicks         Int
+  cost           Float
+  sales          Float
+  orders         Int
   payload        Json
   syncedAt       DateTime     @default(now())
   SellfoxStore   SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
@@ -6673,12 +6687,12 @@ model StorePerformanceSnapshot {
   marketplace            String         @default("US")
   periodStart            DateTime       @db.Date
   periodEnd              DateTime       @db.Date
-  totalOrders            Int            @default(0)
-  orderDefectRateBp      Int            @default(0)
-  lateShipmentRateBp     Int            @default(0)
-  cancellationRateBp     Int            @default(0)
-  validTrackingRateBp    Int            @default(0)
-  negativeFeedbackRateBp Int            @default(0)
+  totalOrders            Int
+  orderDefectRateBp      Int
+  lateShipmentRateBp     Int
+  cancellationRateBp     Int
+  validTrackingRateBp    Int
+  negativeFeedbackRateBp Int
   policyReference        String         @default("")
   /// CAPTURED 已固化 / SUPERSEDED 被新快照替代
   status                 String         @default("CAPTURED")
@@ -6815,8 +6829,8 @@ model SalesPlanLine {
   targetQty       Int
   targetRevenue   Decimal        @db.Decimal(20, 6)
   unitCost        Decimal        @default(0) @db.Decimal(20, 6)
-  historyDailyAvg Decimal        @default(0) @db.Decimal(20, 6)
-  forecastQty     Int            @default(0)
+  historyDailyAvg Decimal?       @db.Decimal(20, 6)
+  forecastQty     Int?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
   plan            SalesPlan      @relation(fields: [organizationId, workspaceId, planId], references: [organizationId, workspaceId, id], onDelete: Cascade)

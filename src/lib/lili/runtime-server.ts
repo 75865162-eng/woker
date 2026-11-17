@@ -39,7 +39,7 @@ export async function createErpResearchTransport(scope: { organizationId: string
 
 export async function runtimeToolsForUser(user: { id: string; organizationId: string }, request: Request, body: Record<string, unknown> = {}) {
   const { workspaceId } = workspaceScopeFromRequest(request, body);
-  if (!await assertWorkspaceAccess(user.organizationId, workspaceId)) throw new Error("RESEARCH_SCOPE_DENIED");
+  if (!await assertWorkspaceAccess(user.organizationId, workspaceId, user.id)) throw new Error("RESEARCH_SCOPE_DENIED");
   const scope = { organizationId: user.organizationId, userId: user.id, workspaceId };
   const settingsScope = { workspaceId, accountId: "", marketplace: "" };
   const assertMarketAccess = async () => {
@@ -54,7 +54,7 @@ export async function runtimeToolsForUser(user: { id: string; organizationId: st
   try {
     const erp = await createErpResearchTransport(scope, undefined, async () => {
       const current = await getCurrentUserFromRequest(request);
-      if (!current || current.id !== scope.userId || current.organizationId !== scope.organizationId || !await assertWorkspaceAccess(scope.organizationId, scope.workspaceId)) throw new SyncInputError("ERP 登录会话已失效，请重新登录。", 401);
+      if (!current || current.id !== scope.userId || current.organizationId !== scope.organizationId || !await assertWorkspaceAccess(scope.organizationId, scope.workspaceId, scope.userId)) throw new SyncInputError("ERP 登录会话已失效，请重新登录。", 401);
     });
     erpCredentialId = erp.credentialId;
     providers.push({ id: "erp", ...erp, isReadOnly: tool => tool.annotations?.readOnlyHint === true });

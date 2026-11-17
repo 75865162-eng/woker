@@ -29,7 +29,7 @@ async function failedLogin(ip: string, email: string) {
 export async function POST(request: Request) {
   try {
     const clientIp = getTrustedClientIp(request);
-    const body = (await request.json()) as { email?: string; password?: string };
+    const body = (await request.json()) as { email?: string; password?: string; organizationId?: string };
     const email = body.email?.trim().toLowerCase();
     const password = body.password ?? "";
 
@@ -77,7 +77,10 @@ export async function POST(request: Request) {
         },
         select: {
           id: true, email: true, name: true, status: true, passwordHash: true,
-          memberships: { select: { organizationId: true, role: true } },
+          memberships: {
+            select: { organizationId: true, role: true, organization: { select: { name: true } } },
+            orderBy: { createdAt: "asc" },
+          },
         },
       }));
 
@@ -85,13 +88,21 @@ export async function POST(request: Request) {
         return failedLogin(clientIp, email);
       }
 
-      await clearLoginFailures(clientIp, email);
-
       if (user.memberships.length === 0) {
         return NextResponse.json({ error: "账号尚未加入任何组织。" }, { status: 403 });
       }
+      if (user.memberships.length > 1 && !body.organizationId) {
+        return NextResponse.json({
+          error: "请选择要进入的组织。",
+          organizations: user.memberships.map(({ organizationId, organization }) => ({ id: organizationId, name: organization.name })),
+        }, { status: 409 });
+      }
 
-      const membership = user.memberships[0];
+      const membership = body.organizationId
+        ? user.memberships.find(item => item.organizationId === body.organizationId)
+        : user.memberships[0];
+      if (!membership) return NextResponse.json({ error: "所选组织不可访问。" }, { status: 403 });
+      await clearLoginFailures(clientIp, email);
       const rolePermissionsSnapshotPromise = getOrganizationRolePermissionsSnapshot(membership.organizationId);
       const loginAt = new Date();
       const loginAtText = loginAt.toLocaleString("zh-CN", { hour12: false });
@@ -132,7 +143,9 @@ export async function POST(request: Request) {
           name: user.name,
           role: membership.role,
         },
-        rolePermissions: rolePermissionsSnapshot.permissions,
+        // Only the revision is exposed. The full permission map is never part
+        // of the login response: the browser consumes the snapshot cookie for
+        // UI gating, and every server authorization re-reads the DB snapshot.
         rolePermissionsRevision: rolePermissionsSnapshot.revision,
       });
       response.cookies.set(sessionCookie.name, sessionCookie.value, sessionCookie.options);

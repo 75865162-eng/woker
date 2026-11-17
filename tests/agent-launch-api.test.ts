@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { PrismaClient } from "@prisma/client";
 import { createLocalSession } from "@/lib/auth/session";
+import { defaultRolePermissionMap } from "@/lib/accounts/permissions";
 import { POST as approve } from "@/app/api/agents/approvals/[approvalId]/route";
 import { POST as execute } from "@/app/api/agents/[agentId]/executions/route";
 
@@ -9,7 +10,7 @@ test("real route rejects forged or missing launch authority, scopes decisions an
   const previousUrl = process.env.DATABASE_URL;
   const globals = globalThis as unknown as { prisma?: PrismaClient };
   const previousClient = globals.prisma;
-  delete process.env.DATABASE_URL;
+  process.env.DATABASE_URL = "postgresql://agent-launch-test.invalid/isolated";
   let status = "REQUESTED";
   let workspaceId = "workspace";
   let expiresAt: Date | null = new Date(Date.now() + 60_000);
@@ -21,7 +22,15 @@ test("real route rejects forged or missing launch authority, scopes decisions an
     method: "POST", headers: { "Content-Type": "application/json", "x-workspace-id": workspace, cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` }, body: JSON.stringify(body),
   });
   globals.prisma = {
+    userSession: { findFirst: async () => ({ user: { id: "actor", email: "actor@example.test", name: "Actor", status: "active", memberships: [{ role: "owner", organizationId: "org", organization: { name: "Fixture" } }] } }) },
+    organizationRosterRole: { findMany: async () => Object.entries(defaultRolePermissionMap).map(([id, permissions]) => ({ id, permissions, name: id, description: "fixture", sortOrder: 0, updatedAt: new Date() })) },
+    agentDefinition: {},
+    agentTool: {},
+    agentMemory: {},
+    agentToolCall: {},
     workspaceScope: { findUnique: async () => ({ id: "workspace" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) },
+    workspaceMembership: { findUnique: async () => ({ userId: "actor" }) },
     agentApproval: {
       findFirst: async () => ({
         id: "approval", organizationId: "org", executionId: "execution", status, action: { type: "orchestrator.launch.approve", target: "launch", payload: { planId: "plan" } }, recommendation: {}, requestedAt: new Date(), expiresAt,

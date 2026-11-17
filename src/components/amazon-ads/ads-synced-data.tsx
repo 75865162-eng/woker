@@ -95,11 +95,11 @@ function entityExpression(row: EntityRecord) {
   return row.targetingExpression ?? (row.payload && typeof row.payload === "object" ? (row.payload as Record<string, unknown>).expression : null);
 }
 
-export function AdsSyncedData(props: { onBack: () => void; onCampaigns?: () => void }) {
+export function AdsSyncedData(props: { onBack?: () => void; onCampaigns?: () => void }) {
   return <AdsScopeBoundary><AdsSyncedDataBody {...props} /></AdsScopeBoundary>;
 }
 
-function AdsSyncedDataBody({ onBack, onCampaigns }: { onBack: () => void; onCampaigns?: () => void }) {
+function AdsSyncedDataBody({ onBack, onCampaigns }: { onBack?: () => void; onCampaigns?: () => void }) {
   const [kind, setKind] = useState<DataKind>("entities");
   const [entityType, setEntityType] = useState("");
   const [profileId, setProfileId] = useState("");
@@ -173,7 +173,7 @@ function AdsSyncedDataBody({ onBack, onCampaigns }: { onBack: () => void; onCamp
   return <div className="ads-synced-view">
     <header className="ads-synced-heading">
       <div>
-        <button type="button" className="ads-link ads-synced-back" onClick={onBack}><ArrowLeft size={15} />返回演示工作台</button>
+        {onBack && <button type="button" className="ads-link ads-synced-back" onClick={onBack}><ArrowLeft size={15} />返回演示工作台</button>}
         <h1>已同步 Ads 数据</h1>
         <p>读取当前工作区 PostgreSQL 中已保存的 Amazon Ads 事实；此页面不会发起 Amazon 请求。当前只读，广告修改尚未启用。</p>
         {onCampaigns && <button type="button" className="ads-link ads-synced-enter" onClick={onCampaigns}>进入本地广告活动工作台</button>}

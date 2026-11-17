@@ -45,6 +45,14 @@ function daysUntil(target: Date, from: Date): number {
   return Math.max(0, Math.ceil((target.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)));
 }
 
+/** 单人视图与组织总览共用同一套周期额度口径，缺失一律补 0。 */
+export function computePointsPeriodQuotaFields(periodRow: { baseQuota: number; carriedIn: number; extraGranted: number; consumed: number } | null | undefined) {
+  const baseQuota = periodRow?.baseQuota ?? 0;
+  const carriedIn = periodRow?.carriedIn ?? 0;
+  const extraGranted = periodRow?.extraGranted ?? 0;
+  return { baseQuota, carriedIn, extraGranted, consumed: periodRow?.consumed ?? 0, totalQuota: baseQuota + carriedIn + extraGranted };
+}
+
 /** 当前用户的自助视图：会触发本周期初始化（幂等），保证首次打开就有额度。 */
 export async function getMyPointsSummary(organizationId: string, userId: string): Promise<PointsSummary> {
   const now = new Date();
@@ -88,18 +96,12 @@ export async function getMyPointsSummary(organizationId: string, userId: string)
     });
   }
 
-  const totalQuota = (periodRow?.baseQuota ?? 0) + (periodRow?.carriedIn ?? 0) + (periodRow?.extraGranted ?? 0);
-
   return {
     period,
     periodLabel: period,
     balance: account?.balance ?? 0,
     reserved: account?.reserved ?? 0,
-    baseQuota: periodRow?.baseQuota ?? 0,
-    carriedIn: periodRow?.carriedIn ?? 0,
-    extraGranted: periodRow?.extraGranted ?? 0,
-    consumed: periodRow?.consumed ?? 0,
-    totalQuota,
+    ...computePointsPeriodQuotaFields(periodRow),
     warnPercent: policy.warnPercent,
     expiresAt: end.toISOString(),
     grants: grants.map((grant) => ({
@@ -193,7 +195,6 @@ export async function getOrganizationPointsOverview(
   const rows: OrgPointsRow[] = roster.map((member) => {
     const account = accountByUser.get(member.id);
     const periodRow = periodByUser.get(member.id);
-    const totalQuota = (periodRow?.baseQuota ?? 0) + (periodRow?.carriedIn ?? 0) + (periodRow?.extraGranted ?? 0);
 
     return {
       userId: member.id,
@@ -204,11 +205,7 @@ export async function getOrganizationPointsOverview(
       status: member.status,
       balance: account?.balance ?? 0,
       reserved: account?.reserved ?? 0,
-      baseQuota: periodRow?.baseQuota ?? 0,
-      carriedIn: periodRow?.carriedIn ?? 0,
-      extraGranted: periodRow?.extraGranted ?? 0,
-      consumed: periodRow?.consumed ?? 0,
-      totalQuota,
+      ...computePointsPeriodQuotaFields(periodRow),
       pendingRequests: pendingByUser.get(member.id) ?? 0,
     };
   });

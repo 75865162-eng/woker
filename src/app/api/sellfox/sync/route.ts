@@ -6,28 +6,26 @@ import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { enqueueSellfoxSyncRun } from "@/lib/queue";
 import { prisma } from "@/lib/db/prisma";
 import { isSellfoxSyncResource, normalizeSellfoxDates, sellfoxSyncDisabledReason } from "@/lib/sellfox/sync-contract";
-import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
+import { WorkspaceScopeError, workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   const permission = await requireApiPermission("sellfox", "create", request);
   if (!permission.ok) return permission.response;
-  if (!(await getSellfoxCredentialStatus({ organizationId: permission.user.organizationId, workspaceId: workspaceScopeFromRequest(request).workspaceId })).configured) {
-    return NextResponse.json({ error: "服务端未配置赛狐凭据或已保存配置不可用，请在设置的集成页检查。" }, { status: 503 });
+  const body = await request.clone().json().catch(() => null) as Record<string, unknown> | null;
+  let scope: ReturnType<typeof workspaceScopeFromRequest>;
+  try { scope = workspaceScopeFromRequest(request, body); }
+  catch (error) {
+    if (error instanceof WorkspaceScopeError) return NextResponse.json({ error: error.message }, { status: error.status });
+    throw error;
   }
-  if (process.env.QUEUE_DRIVER !== "redis") {
-    return NextResponse.json({ error: "赛狐异步同步 Worker 未启用，请联系管理员。" }, { status: 503 });
-  }
-
-  const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   const resource = body?.resource;
   if (!isSellfoxSyncResource(resource)) {
     return NextResponse.json({ error: "请选择有效的赛狐同步资源。" }, { status: 400 });
   }
   if (body?.adTypes !== undefined && (!["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(resource) || !Array.isArray(body.adTypes) || !body.adTypes.length || body.adTypes.some((item) => !["sp", "sb", "sd"].includes(String(item))))) return NextResponse.json({ error: "adTypes 必须为 sp/sb/sd 数组。" }, { status: 400 });
   const adTypes = ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(resource) ? [...new Set((body?.adTypes as string[] | undefined) ?? ["sp"])] : undefined;
-  const scope = workspaceScopeFromRequest(request);
   if (body?.shopExternalIds !== undefined && (!Array.isArray(body.shopExternalIds) || body.shopExternalIds.some((value) => typeof value !== "string" || !value.trim()))) {
     return NextResponse.json({ error: "shopExternalIds 必须是非空店铺 ID 数组。" }, { status: 400 });
   }
@@ -35,6 +33,12 @@ export async function POST(request: Request) {
   let dates: ReturnType<typeof normalizeSellfoxDates>;
   try { dates = normalizeSellfoxDates(resource, body ?? {}); }
   catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "同步日期无效。" }, { status: 400 }); }
+  if (!(await getSellfoxCredentialStatus({ organizationId: permission.user.organizationId, workspaceId: scope.workspaceId })).configured) {
+    return NextResponse.json({ error: "服务端未配置赛狐凭据或已保存配置不可用，请在设置的集成页检查。" }, { status: 503 });
+  }
+  if (process.env.QUEUE_DRIVER !== "redis") {
+    return NextResponse.json({ error: "赛狐异步同步 Worker 未启用，请联系管理员。" }, { status: 503 });
+  }
   if (shopExternalIds?.length) {
     const count = await prisma.sellfoxStore.count({ where: { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId, externalId: { in: shopExternalIds } } });
     if (count !== shopExternalIds.length) return NextResponse.json({ error: "所选店铺不属于当前工作区。" }, { status: 403 });

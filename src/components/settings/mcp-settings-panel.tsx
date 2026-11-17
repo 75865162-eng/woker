@@ -27,7 +27,7 @@ type Payload = {
   sellfox: {
     credentials: Credential[]; stores: Array<{ id: string; name: string; marketplace: string | null; country: string | null }>;
     tools: ToolEntry[]; datasets: Dataset[]; catalogSize: number; readonlyRoleConfigured: boolean;
-    sharedTokenEnabled: boolean; activeCount: number; lastUsedAt: string | null;
+    activeCount: number; lastUsedAt: string | null;
   };
 };
 

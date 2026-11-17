@@ -10,6 +10,7 @@ import {
 } from "@/lib/products/list-query";
 import { getProductWorkflowStage, normalizeAssigneeList } from "@/lib/products/workflow";
 import { productRecordPayloadToProduct } from "@/lib/products/product-projection";
+import { requireProductPurchasePrice } from "@/lib/products/product-record-index";
 import {
   assertKnownProductStatus,
   assertProductStatusTransition,
@@ -53,7 +54,7 @@ export function createProductRecordData(
     status: product.status,
     source: getProductRecordSource(),
     supplierName: product.supplierName,
-    purchasePrice: product.purchasePrice,
+    purchasePrice: requireProductPurchasePrice(product),
     selectionOwner: product.selectionOwner || product.developer || "",
     opsAssignee: product.opsAssignee || normalizeAssigneeList(undefined, product.opsAssignees).join("、"),
     designerAssignee: product.designerAssignee || normalizeAssigneeList(undefined, product.designerAssignees).join("、"),
@@ -92,6 +93,7 @@ export async function saveProductRecord(
     existingRecord?: Awaited<ReturnType<typeof findProductRecordBySku>> | null;
   },
 ) {
+  requireProductPurchasePrice(input.product);
   const existingRecord =
     input.existingRecord === undefined
       ? await findProductRecordBySku(tx, input.scope, input.product.sku)

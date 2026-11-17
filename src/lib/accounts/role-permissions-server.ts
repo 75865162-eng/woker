@@ -18,8 +18,6 @@ function buildDefaultSnapshot() {
 
 // No cross-request permission cache: the organization revision is read afresh per render.
 export const getOrganizationRolePermissionsSnapshot = cache(async (organizationId: string): Promise<RolePermissionsSnapshot> => {
-  if (!process.env.DATABASE_URL) return buildDefaultSnapshot();
-
   const snapshot = await getOrganizationRoleCatalogSnapshot(organizationId);
 
   return buildRolePermissionsSnapshot(

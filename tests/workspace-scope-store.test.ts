@@ -33,10 +33,10 @@ test("选择器写入的主键优先于历史键", () => {
   }
 });
 
-test("主键缺失时回退历史键，避免升级后老草稿消失", () => {
+test("历史键不再被读取，唯一来源只有主键", () => {
   const restore = withStorage({ [legacyKey]: JSON.stringify({ workspaceId: "ws-legacy" }) });
   try {
-    assert.equal(readWorkspaceScopeId(), "ws-legacy");
+    assert.equal(readWorkspaceScopeId(), "default");
   } finally {
     restore();
   }

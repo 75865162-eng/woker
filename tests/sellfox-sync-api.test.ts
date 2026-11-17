@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { PrismaClient } from "@prisma/client";
+import { randomBytes } from "node:crypto";
+import { encryptSellfoxCredentials } from "@/lib/sellfox/credential-crypto";
 import { POST as sync } from "@/app/api/sellfox/sync/route";
 import { POST as schedule } from "@/app/api/sellfox/schedules/route";
 import { GET as snapshots } from "@/app/api/sellfox/[domain]/route";
@@ -33,7 +35,7 @@ test("Sellfox permissions, configuration and response-contract gates reject befo
   globalThis.fetch = async () => { networkCalls += 1; throw new Error("No transport allowed in this test"); };
   async function request(role: string, body: unknown) {
     const session = await createLocalSession({ id: "actor", organizationId: "org-a", organizationName: "Fixture", role, email: "actor@example.test", name: "Actor" });
-    return new Request("http://localhost/api/sellfox/sync", { method: "POST", headers: { "Content-Type": "application/json", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` }, body: JSON.stringify(body) });
+    return new Request("http://localhost/api/sellfox/sync", { method: "POST", headers: { "Content-Type": "application/json", "x-workspace-id": "workspace", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` }, body: JSON.stringify(body) });
   }
   try {
     assert.equal((await sync(new Request("http://localhost/api/sellfox/sync", { method: "POST" }))).status, 401);
@@ -79,11 +81,17 @@ test("snapshot browsing remains an independent authenticated route", async () =>
 test("manual sync rejects an active resource without losing the requested scope or sending transport", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient };
   const previous = globals.prisma;
-  const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER, SELLFOX_CLIENT_ID: process.env.SELLFOX_CLIENT_ID, SELLFOX_CLIENT_SECRET: process.env.SELLFOX_CLIENT_SECRET, QUEUE_DRIVER: process.env.QUEUE_DRIVER };
-  delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local"; process.env.QUEUE_DRIVER = "redis";
+  const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER, SELLFOX_CLIENT_ID: process.env.SELLFOX_CLIENT_ID, SELLFOX_CLIENT_SECRET: process.env.SELLFOX_CLIENT_SECRET, QUEUE_DRIVER: process.env.QUEUE_DRIVER, SELLFOX_CREDENTIAL_ENCRYPTION_KEY: process.env.SELLFOX_CREDENTIAL_ENCRYPTION_KEY };
+  process.env.DATABASE_URL = "postgresql://fixture:fixture@127.0.0.1:1/fixture"; process.env.AUTH_DRIVER = "local"; process.env.QUEUE_DRIVER = "redis";
+  process.env.SELLFOX_CREDENTIAL_ENCRYPTION_KEY = randomBytes(32).toString("base64");
   process.env.SELLFOX_CLIENT_ID = "fixture-id"; process.env.SELLFOX_CLIENT_SECRET = "fixture-secret";
   let lockAcquired = false;
+  const credentialsCiphertext = encryptSellfoxCredentials({ clientId: "fixture-id", clientSecret: "fixture-secret" }, { organizationId: "org-a", workspaceId: "default" });
   globals.prisma = {
+    sellfoxIntegrationCredential: { findUnique: async () => ({ credentialsCiphertext, revision: 1, updatedAt: new Date(0) }) },
+    organizationRosterRole: { findMany: async () => [{ id: "owner", name: "组织管理员", description: "测试角色", sortOrder: 0, updatedAt: new Date(0), permissions: { sellfox: ["view", "create"] } }] },
+    workspaceScope: { findUnique: async ({ where }: { where: { organizationId_id: { organizationId: string; id: string } } }) => where.organizationId_id.organizationId === "org-a" && ["default", "workspace"].includes(where.organizationId_id.id) ? { id: where.organizationId_id.id } : null },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) },
     $transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback({
       $executeRaw: async () => { lockAcquired = true; },
       sellfoxSyncRun: { findFirst: async ({ where }: { where: Record<string, unknown> }) => {
@@ -95,7 +103,7 @@ test("manual sync rejects an active resource without losing the requested scope 
   } as unknown as PrismaClient;
   try {
     const session = await createLocalSession({ id: "actor", organizationId: "org-a", organizationName: "Fixture", role: "owner", email: "actor@example.test", name: "Actor" });
-    const response = await sync(new Request("http://localhost/api/sellfox/sync", { method: "POST", headers: { "Content-Type": "application/json", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` }, body: JSON.stringify({ resource: "sales", reportDate: "2026-10-24" }) }));
+    const response = await sync(new Request("http://localhost/api/sellfox/sync", { method: "POST", headers: { "Content-Type": "application/json", "x-workspace-id": "default", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` }, body: JSON.stringify({ resource: "sales", reportDate: "2026-10-24" }) }));
     assert.equal(response.status, 409);
     const payload = await response.json();
     assert.equal(payload.runId, "existing-run"); assert.match(payload.error, /等待完成/);

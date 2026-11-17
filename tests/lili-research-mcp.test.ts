@@ -122,12 +122,12 @@ test("invalid native payloads and encoded credentials never reach the research r
  assert.throws(() => normalizeResearchAction({ type: "complete", result: {}, arguments: {} }), /INVALID_EXTERNAL/);
 });
 
-test("legacy billing gates always return continuation even when Skill requires fee confirmation", async () => {
+test("当前Skill要求费用审批时明确请求人工确认", async () => {
   const result = await callResearchMcpTool(new Request("http://localhost/api/lili/mcp"), "research_read", { runId: "owned", workspaceId: "isolated" }, async () => Response.json({ run: {
-    id: "owned", status: "WAITING_FOR_USER", stage: 1, requirement: "Research", gate: { id: "old", kind: "BILLING", reason: "unknown fee" },
+    id: "owned", status: "WAITING_FOR_USER", stage: 1, requirement: "Research", gate: { id: "pending", kind: "MCP_CALL", reason: "付费调用需要确认" },
     budgetMode: "uncapped", skills: [{ name: "research", sha256: "fixture", markdown: "费用核对必须先确认。" }], policies: {}, registry: [], limits: {}, calls: [], results: [],
   } }));
-  assert.equal(result.feeApprovalRequired, true, "pre-call policy is independent from billing recovery");
-  assert.equal(result.nextAction?.kind, "CONTINUE");
-  assert.match(result.nextAction!.message!, /research_resume/);
+  assert.equal(result.feeApprovalRequired, true);
+  assert.equal(result.nextAction?.kind, "HUMAN_REVIEW");
+  assert.match(result.nextAction!.message!, /research_confirm/);
 });

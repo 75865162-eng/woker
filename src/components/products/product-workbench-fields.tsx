@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowUpRight, ExternalLink } from "lucide-react";
-import { buildAmazonLink, buildAmazonSearchLink } from "./product-workbench-utils";
+import { buildAmazonLink, buildAmazonSearchLink, parseOptionalProductNumber } from "./product-workbench-utils";
 
 export function LabeledInput({
   label,
@@ -36,7 +36,7 @@ export function LabeledInput({
         className={`mt-1 ${heightClass} w-full rounded-md border border-border bg-surface px-3 text-body text-foreground outline-none transition-colors hover:border-border-strong focus:border-brand`}
         type={isNumberInput ? "text" : type}
         inputMode={isNumberInput ? "decimal" : undefined}
-        value={isNumberInput ? numberText : value}
+        value={isNumberInput ? numberText : value ?? ""}
         placeholder={placeholder}
         onChange={(event) => {
           if (isNumberInput) {
@@ -60,8 +60,8 @@ export function LabeledInput({
   );
 }
 
-export function ReadonlyMetric({ value }: { value: string | number }) {
-  const text = typeof value === "number" ? value.toFixed(2) : value;
+export function ReadonlyMetric({ value }: { value: string | number | null | undefined }) {
+  const text = typeof value === "number" ? value.toFixed(2) : value ?? "—";
   return <td className="px-2 py-2 font-semibold text-muted metric-tabular">{text}</td>;
 }
 
@@ -71,17 +71,17 @@ export function SmallInput({
   type = "text",
   compact = false,
 }: {
-  value: string | number;
+  value: string | number | null | undefined;
   onChange: (value: string) => void;
   type?: string;
   compact?: boolean;
 }) {
   const isNumberInput = type === "number";
-  const [numberText, setNumberText] = useState(String(value));
+  const [numberText, setNumberText] = useState(String(value ?? ""));
 
   useEffect(() => {
     if (isNumberInput) {
-      setNumberText(String(value));
+      setNumberText(String(value ?? ""));
     }
   }, [isNumberInput, value]);
 
@@ -90,7 +90,7 @@ export function SmallInput({
       className={`h-8 rounded-md border border-border bg-surface px-2 text-xs text-foreground outline-none focus:border-brand ${compact ? "w-[60px] min-w-[60px]" : "w-full min-w-[88px]"}`}
       type={isNumberInput ? "text" : type}
       inputMode={isNumberInput ? "decimal" : undefined}
-      value={isNumberInput ? numberText : value}
+      value={isNumberInput ? numberText : value ?? ""}
       onChange={(event) => {
         if (isNumberInput) {
           setNumberText(event.target.value);
@@ -117,20 +117,21 @@ export function DecimalInput({
   onChange,
   compact = false,
 }: {
-  value: number;
-  onChange: (value: number) => void;
+  value: number | null | undefined;
+  onChange: (value: number | null) => void;
   compact?: boolean;
 }) {
-  const [text, setText] = useState(String(value));
+  const [text, setText] = useState(String(value ?? ""));
 
   useEffect(() => {
-    setText(String(value));
+    setText(String(value ?? ""));
   }, [value]);
 
   function commit(nextText: string) {
     const normalized = nextText.trim();
-    const parsed = normalized === "" ? 0 : Number(normalized);
-    onChange(Number.isFinite(parsed) ? parsed : value);
+    const parsed = parseOptionalProductNumber(normalized);
+    if (!normalized || parsed !== null) onChange(parsed);
+    else setText(String(value ?? ""));
   }
 
   return (
@@ -156,7 +157,7 @@ export function SmallTextarea({
   size = "default",
   disabled = false,
 }: {
-  value: string | number;
+  value: string | number | null | undefined;
   onChange: (value: string) => void;
   size?: "default" | "compact" | "negative" | "supplierCompact" | "supplierMedium" | "supplierWide";
   disabled?: boolean;
@@ -177,7 +178,7 @@ export function SmallTextarea({
   return (
     <textarea
       className={`${sizeClass} rounded-md border border-border px-2 py-2 text-xs outline-none focus:border-brand ${disabled ? "cursor-not-allowed bg-surface-muted text-muted" : "bg-surface text-foreground"}`}
-      value={value}
+      value={value ?? ""}
       disabled={disabled}
       onChange={(event) => onChange(event.target.value)}
     />

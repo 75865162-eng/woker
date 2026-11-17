@@ -108,7 +108,7 @@ export async function readWorkspaceDraftRunHistory(): Promise<{
   try {
     const response = await fetch("/api/workspace/draft-runs?limit=100", { cache: "no-store" });
 
-    if (response.status === 401 || response.status === 404) {
+    if (response.status === 404) {
       return { exportHistoryRecords: [], ruleRunHistoryRecords: [] };
     }
 
@@ -123,8 +123,8 @@ export async function readWorkspaceDraftRunHistory(): Promise<{
       ruleRunHistoryRecords: draftRuns.map(draftRunToRuleRunHistoryRecord),
       exportHistoryRecords: draftRuns.flatMap(draftRunToExportHistoryRecord),
     };
-  } catch {
-    return { exportHistoryRecords: [], ruleRunHistoryRecords: [] };
+  } catch (error) {
+    throw error instanceof Error ? error : new Error("读取数据库草稿运行历史失败。");
   }
 }
 
@@ -158,10 +158,6 @@ export async function writeWorkspaceDraftRun(input: {
     }),
   });
 
-  if (response.status === 401) {
-    return;
-  }
-
   if (!response.ok) {
     const data = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error || "保存数据库草稿运行历史失败。");
@@ -172,7 +168,7 @@ async function readRemoteWorkspaceSnapshot<T>(): Promise<WorkspaceSnapshotApiRec
   try {
     const response = await fetch("/api/workspace/snapshot");
 
-    if (response.status === 401 || response.status === 404) {
+    if (response.status === 404) {
       return undefined;
     }
 
@@ -198,8 +194,8 @@ async function readRemoteWorkspaceSnapshot<T>(): Promise<WorkspaceSnapshotApiRec
       savedAt: data.savedAt ?? new Date().toISOString(),
       snapshot: hydratedSnapshot,
     };
-  } catch {
-    return undefined;
+  } catch (error) {
+    throw error instanceof Error ? error : new Error("读取数据库 Workspace Snapshot 失败。");
   }
 }
 
@@ -213,10 +209,6 @@ async function writeRemoteWorkspaceSnapshot<T>(snapshot: T) {
     }),
   });
 
-  if (response.status === 401) {
-    return;
-  }
-
   if (!response.ok) {
     const data = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error || "保存数据库 Workspace Snapshot 失败。");
@@ -227,10 +219,6 @@ async function deleteRemoteWorkspaceSnapshot() {
   const response = await fetch("/api/workspace/snapshot", {
     method: "DELETE",
   });
-
-  if (response.status === 401) {
-    return;
-  }
 
   if (!response.ok) {
     const data = (await response.json().catch(() => ({}))) as { error?: string };

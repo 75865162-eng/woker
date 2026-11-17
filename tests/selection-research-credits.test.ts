@@ -84,12 +84,12 @@ test("uncapped tasks require explicit scope approval, pass 30 calls, never pause
     assert.equal(dispatches, 35);
     const outsider = new ResearchEngine(store, { ...scope, ownerId: "other" }, transport, { async next(): Promise<never> { throw new Error("NO_MODEL"); } }, { mode: "live" });
     await assert.rejects(outsider.recordCharge(run.id, { ...command, expectedRevision: run.revision }), /SCOPE_DENIED/);
-    await store.transaction(run.id, async (saved, save) => { saved.status = "WAITING_FOR_USER"; saved.gate = { id: "unresolved", kind: "BILLING", reason: "unknown outcome" }; await save(); });
+    await store.transaction(run.id, async (saved, save) => { saved.status = "WAITING_FOR_USER"; saved.gate = { id: "choose", kind: "NICHE", reason: "选择研究方向" }; await save(); });
     run = await engine.inspect(run.id);
     run = await engine.recordCharge(run.id, { ...command, expectedRevision: run.revision, charge: receipt });
-    assert.equal(run.gate?.kind, "BILLING", "cost entry remains separate from recovery");
+    assert.equal(run.gate?.kind, "NICHE", "费用记录不能代替业务确认");
     run = await engine.resume(run.id);
-    assert.equal(run.gate, undefined); assert.equal(dispatches, 35);
+    assert.equal(run.gate?.kind, "NICHE"); assert.equal(dispatches, 35);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

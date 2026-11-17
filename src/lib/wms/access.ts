@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { assertWorkspaceAccess } from "@/lib/workspace/access";
 import { type PermissionAction } from "@/lib/accounts/permissions";
 import { normalizeRolePermissions } from "@/lib/accounts/role-permissions-utils";
 import { WmsInputError } from "./rules";
@@ -75,10 +76,7 @@ export async function assertWmsAccess(
   const permissions = normalizeRolePermissions(roles[0].permissions);
   if (!permissions.wms?.includes(input.action)) throw new WmsInputError("当前账号没有此 WMS 操作权限。", 403);
 
-  const workspace = await tx.workspaceScope.findUnique({
-    where: { organizationId_id: { organizationId: input.organizationId, id: input.workspaceId } },
-    select: { id: true },
-  });
+  const workspace = await assertWorkspaceAccess(input.organizationId, input.workspaceId, input.userId, tx);
   if (!workspace) throw new WmsInputError("工作区不存在。", 403);
   return { roleId, permissions };
 }

@@ -20,7 +20,7 @@ test("scoped upload and read sanitize research fields, reject unauthorized/overs
   localStorageDriver.getBuffer = async (key) => { reads++; return objects.get(key)!; };
   localStorageDriver.delete = async (key) => { objects.delete(key); };
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "workspace" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: "workspace" }) },
     fileObject: {
       create: async ({ data }: { data: Record<string, unknown> }) => { assert.equal(data.organizationId, "org"); assert.equal(data.workspaceId, "workspace"); if (failDb) throw new Error("private failure"); file = { ...data, id: "file" }; return file; },
       findFirst: async ({ where }: { where: { id: string; organizationId: string; workspaceId: string } }) => file?.id === where.id && file?.organizationId === where.organizationId && file?.workspaceId === where.workspaceId ? file : null,

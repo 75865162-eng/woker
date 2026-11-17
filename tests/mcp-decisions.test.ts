@@ -16,7 +16,6 @@ const schema = read("../prisma/schema.prisma");
 const sellfoxMcp = read("../src/lib/sellfox/mcp.ts");
 const amazonRegistry = read("../src/lib/amazon-sync/mcp-tool-registry.ts");
 const amazonRead = read("../src/lib/amazon-sync/local-raw-read.ts");
-const isolationPage = read("../src/app/api/operations/mcp-isolation/route.ts");
 
 test("决策 1：data_sync_start 保留，但只能是审批申请，不能伪装成只读或写业务表", () => {
   const definition = amazonMcpToolDefinitions.find(tool => tool.name === "data_sync_start");
@@ -27,10 +26,32 @@ test("决策 1：data_sync_start 保留，但只能是审批申请，不能伪�
   assert.match(amazonRegistry, /action === "sync" \? "APPROVAL_REQUEST"/);
 });
 
-test("决策 2：共享令牌保留可一键关闭，认证链与隔离页必须同时尊重开关（不擅自改 .env）", () => {
-  assert.match(sellfoxMcp, /process\.env\.MCP_DISABLE_SHARED_TOKEN === "true"/, "认证链必须真正拒绝共享令牌，不能只改展示文案");
-  assert.match(isolationPage, /MCP_DISABLE_SHARED_TOKEN !== "true"/, "隔离页状态必须与实际认证行为一致");
-  // 不在测试里读取或断言 .env 值：是否关闭部署侧共享令牌由运维决定。
+test("环境共享令牌不能认证，持久化个人凭证保留组织工作区与店铺范围", async () => {
+  const { authenticateSellfoxMcp } = await import("../src/lib/sellfox/mcp");
+  const { mcpTokenHash } = await import("../src/lib/mcp/token");
+  const globals = globalThis as typeof globalThis & { prisma?: unknown };
+  const previousDb = globals.prisma, previousToken = process.env.MCP_HTTP_TOKEN;
+  let reads = 0, updates = 0;
+  const token = "sfmcp_personal-fixture";
+  const row = { id: "credential", organizationId: "org", workspaceId: "workspace", userId: "owner", name: "个人只读凭证", tokenPrefix: "sfmcp_", tools: [], storeIds: ["store"], scopes: [], status: "ACTIVE", revision: 1, expiresAt: new Date(Date.now() + 60000), lastUsedAt: null };
+  globals.prisma = { auditLog: { create: async () => ({}) }, sellfoxMcpCredential: { findUnique: async ({ where }: { where: { tokenHash: string } }) => { reads++; return where.tokenHash === mcpTokenHash(token) ? row : null; }, update: async () => { updates++; return row; } } };
+  process.env.MCP_HTTP_TOKEN = "shared-fixture";
+  try {
+    await assert.rejects(authenticateSellfoxMcp("Bearer shared-fixture"));
+    assert.equal(reads, 0);
+    process.env.MCP_HTTP_TOKEN = "sfmcp_unpersisted-shared";
+    await assert.rejects(authenticateSellfoxMcp("Bearer sfmcp_unpersisted-shared"));
+    assert.equal(updates, 0);
+    const identity = await authenticateSellfoxMcp(`Bearer ${token}`);
+    assert.equal(identity.kind, "credential");
+    assert.deepEqual(identity.storeScope, ["store"]);
+    assert.equal(identity.organizationId, "org");
+    assert.equal(identity.workspaceId, "workspace");
+    assert.equal(updates, 1);
+  } finally {
+    globals.prisma = previousDb;
+    if (previousToken === undefined) delete process.env.MCP_HTTP_TOKEN; else process.env.MCP_HTTP_TOKEN = previousToken;
+  }
 });
 
 test("决策 3：赛狐 API 授权维持组织+工作区粒度，不按店铺拆表", () => {

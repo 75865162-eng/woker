@@ -16,6 +16,7 @@ test("scope grants require a live member, workspace and exact seller; admins als
     amazonRoleDataAccessGrant: { findMany: async () => [] },
     organizationRosterRole: { findMany: async () => [{ id: "operations", permissions: { operations: ["view"] } }] },
     organizationMember: { findUnique: async (arg: { where: { organizationId_userId: { organizationId: string } } }) => { assert.equal(arg.where.organizationId_userId.organizationId, scope.organizationId); return { role, user: { status: active ? "active" : "disabled" } }; } },
+    workspaceMembership: { findUnique: async () => ({ userId: "user" }) },
     workspaceScope: { findUnique: async (arg: { where: { organizationId_id: object } }) => { assert.deepEqual(arg.where.organizationId_id, { organizationId: scope.organizationId, id: scope.workspaceId }); return workspace ? { id: scope.workspaceId } : null; } },
     amazonDataAccessGrant: { findMany: async (arg: { where: object }) => { assert.deepEqual(arg.where, { ...scope, userId: "user", enabled: true, seller: { status: "active" } }); return sellers.map(sellerAccountId => ({ sellerAccountId })); } },
   };
@@ -34,6 +35,7 @@ test("grant writes require approval, scoped membership and the current revision 
   let revision = 2, enabled = true, audits = 0, sellerExists = true;
   const db = {
     organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) },
+    workspaceMembership: { findUnique: async () => ({ userId: "user" }) },
     workspaceScope: { findUnique: async () => ({ id: scope.workspaceId }) },
     sellerAccount: { findFirst: async () => sellerExists ? { id: "seller-a" } : null },
     amazonDataAccessGrant: {
@@ -107,6 +109,7 @@ test("narrowed grants cannot download an export that was created with wider perm
   process.env.AMAZON_SYNC_CENTER_SCOPES = JSON.stringify([[scope.organizationId, scope.workspaceId]]);
   const tx = {
     amazonSyncDataSource: { findMany: async () => [{ authorization: { status: "CONFIGURED", identityVerifiedAt: new Date() } }] },
+    workspaceMembership: { findUnique: async () => ({ userId: "user" }) },
     workspaceScope: { findUnique: async () => ({ id: scope.workspaceId }) },
     organizationMember: { findUnique: async () => ({ role: "operations", user: { status: "active" } }) },
     amazonRoleDataAccessGrant: { findMany: async () => [] },

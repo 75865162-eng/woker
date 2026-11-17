@@ -1,15 +1,10 @@
 "use client";
 
-import type { ReactNode } from "react";
+import React, { type ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { Surface, SurfaceHeader } from "./surface";
 
-/**
- * 区块容器与区块头。统一 dashboard 的卡片语言：
- * 容器 rounded-lg border-border bg-surface，头部 border-b px-4 py-3。
- *
- * 注意：现有 ui/card.tsx 使用 px-5 py-4，与表格工具条的 px-4 py-3 不一致。
- * 为不影响 46 个既有调用点，P0 阶段不动 card.tsx，新代码统一用 Section。
- */
+export { SurfaceBody as SectionBody } from "./surface";
 export function Section({
   children,
   className,
@@ -20,9 +15,9 @@ export function Section({
   as?: "section" | "div";
 }) {
   return (
-    <Tag className={cn("min-w-0 overflow-hidden rounded-lg border border-border bg-surface", className)}>
+    <Surface as={Tag} className={cn("min-w-0 overflow-hidden", className)}>
       {children}
-    </Tag>
+    </Surface>
   );
 }
 
@@ -41,11 +36,8 @@ export function SectionHeader({
   className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3",
-        className,
-      )}
+    <SurfaceHeader
+      className={cn("flex flex-wrap items-center justify-between gap-3", className)}
     >
       <div className="min-w-0">
         <p className={size === "lg" ? "text-title text-foreground" : "text-sm font-bold text-foreground"}>
@@ -54,10 +46,6 @@ export function SectionHeader({
         {description ? <p className="mt-1 text-xs text-muted">{description}</p> : null}
       </div>
       {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
-    </div>
+    </SurfaceHeader>
   );
-}
-
-export function SectionBody({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("px-4 py-3", className)}>{children}</div>;
 }

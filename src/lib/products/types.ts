@@ -13,9 +13,9 @@ export type ProductStatus =
   | "patent_risk";
 
 export type ProductSizeCm = {
-  length: number;
-  width: number;
-  height: number;
+  length: number | null;
+  width: number | null;
+  height: number | null;
 };
 
 export type ProductWorkflowStage =
@@ -164,7 +164,7 @@ export type Product = {
   imageFileId?: string;
   asin: string;
   developer: string;
-  purchasePrice: number;
+  purchasePrice: number | null;
   status: ProductStatus;
   source?: "dashboard";
   supplierName: string;
@@ -179,10 +179,10 @@ export type Product = {
   images: string[];
   imageAssets?: ProductImageAsset[];
   competitorAsins: string[];
-  productWeightG: number;
-  packageWeightG: number;
-  productSizeCm: ProductSizeCm;
-  packageSizeCm: ProductSizeCm;
+  productWeightG: number | null;
+  packageWeightG: number | null;
+  productSizeCm: ProductSizeCm | null;
+  packageSizeCm: ProductSizeCm | null;
   selectionOwner?: string;
   opsAssignee?: string;
   opsAssignees?: string[];

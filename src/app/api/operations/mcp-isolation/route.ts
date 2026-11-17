@@ -4,7 +4,8 @@ import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { prisma } from "@/lib/db/prisma";
 import { amazonMcpToolCatalog, listMcpCredentials, listMcpScopeOptions } from "@/lib/amazon-sync/mcp";
 import { mcpIsolationMatrix, McpIsolationError, mcpProviderPolicies } from "@/lib/mcp/isolation";
-import { listSellfoxMcpCredentials, manageSellfoxMcpCredential, probeSellfoxReadOnly, sellfoxMcpCatalog } from "@/lib/sellfox/mcp";
+import { inspectDatabaseRoles, probeDatabaseRole } from "@/lib/mcp/database-audit.mjs";
+import { listSellfoxMcpCredentials, manageSellfoxMcpCredential, sellfoxMcpCatalog } from "@/lib/sellfox/mcp";
 import { sellfoxDatasetKeys, sellfoxDatasets, sellfoxMcpToolNames } from "@/lib/sellfox/mcp-tool-registry";
 
 export const runtime = "nodejs";
@@ -20,44 +21,6 @@ const activeCredentials = (rows: Array<{ status: string; expiresAt: Date }>) =>
 
 const lastUsedAt = (rows: Array<{ lastUsedAt: Date | null }>) =>
   rows.reduce<Date | null>((latest, row) => (row.lastUsedAt && (!latest || row.lastUsedAt > latest) ? row.lastUsedAt : latest), null);
-
-/**
- * 数据库角色层的真实越权检查。只读 information_schema / has_table_privilege，
- * 不执行任何 DDL。环境变量是否配置只代表「连接已配」，不等于「角色层已隔离」。
- */
-type DbRoleAudit = {
-  available: boolean;
-  roles: Array<{ role: string; amazonTables: number; sellfoxTables: number }>;
-  violations: string[];
-  note: string;
-};
-async function inspectDatabaseRoles(): Promise<DbRoleAudit> {
-  try {
-    const rows = await prisma.$queryRaw<Array<{ role: string; amazon: number; sellfox: number }>>`
-      SELECT r.rolname::text AS role,
-             count(*) FILTER (WHERE t.table_name LIKE 'Amazon%'
-               AND has_table_privilege(r.rolname, quote_ident(t.table_name), 'SELECT'))::int AS amazon,
-             count(*) FILTER (WHERE t.table_name LIKE 'Sellfox%'
-               AND has_table_privilege(r.rolname, quote_ident(t.table_name), 'SELECT'))::int AS sellfox
-      FROM pg_roles r
-      CROSS JOIN information_schema.tables t
-      WHERE r.rolname IN ('sellfox_mcp_ro', 'amazon_mcp_ro')
-        AND t.table_schema = current_schema() AND t.table_type = 'BASE TABLE'
-        AND (t.table_name LIKE 'Amazon%' OR t.table_name LIKE 'Sellfox%')
-      GROUP BY r.rolname`;
-    const roles = rows.map(row => ({ role: row.role, amazonTables: Number(row.amazon), sellfoxTables: Number(row.sellfox) }));
-    const sellfox = roles.find(row => row.role === "sellfox_mcp_ro");
-    const amazon = roles.find(row => row.role === "amazon_mcp_ro");
-    const violations: string[] = [];
-    if (sellfox && sellfox.amazonTables > 0) violations.push(`sellfox_mcp_ro 仍可读 ${sellfox.amazonTables} 张 Amazon* 表`);
-    if (!amazon) violations.push("缺少 amazon_mcp_ro 独立只读角色");
-    else if (amazon.sellfoxTables > 0) violations.push(`amazon_mcp_ro 仍可读 ${amazon.sellfoxTables} 张 Sellfox* 表`);
-    if (!sellfox) violations.push("缺少 sellfox_mcp_ro 只读角色");
-    return { available: true, roles, violations, note: "依据 information_schema 与 has_table_privilege 实测，不含环境变量推断。" };
-  } catch (error) {
-    return { available: false, roles: [], violations: [], note: `角色权限查询不可用，状态未知，不宣称已隔离：${error instanceof Error ? error.message.slice(0, 120) : "unknown"}` };
-  }
-}
 
 /** Audit rows are user-facing; keep only the fields the settings page renders. */
 function auditLabel(action: string) {
@@ -95,7 +58,6 @@ export async function GET(request: Request) {
 
     const sellfoxReadonly = Boolean(process.env.MCP_PG_READONLY_URL?.trim());
     const amazonReadonly = Boolean(process.env.AMAZON_MCP_PG_READONLY_URL?.trim());
-    const sharedTokenEnabled = Boolean(process.env.MCP_HTTP_TOKEN?.trim()) && process.env.MCP_DISABLE_SHARED_TOKEN !== "true";
     const sellfoxActive = activeCredentials(sellfoxCredentials);
     const amazonActive = activeCredentials(amazonCredentials);
     const sellfoxRole = dbRoleAudit.roles.find(row => row.role === "sellfox_mcp_ro");
@@ -108,18 +70,14 @@ export async function GET(request: Request) {
       { key: "cross", label: "跨服务请求", state: "ok", detail: "在查询数据库前拒绝，并写入 isolation.denied 审计" },
       { key: "catalog", label: "工具与数据集封闭清单", state: "ok", detail: `Amazon 仅 amazon.*，赛狐仅 sellfox.* 与 ${sellfoxDatasetKeys.length} 个数据集` },
       { key: "fence", label: "店铺 / 站点围栏", state: "ok", detail: "凭证范围之外的店铺、账号、站点一律 403 STORE_NOT_ALLOWED" },
-      { key: "sellfox-ro", label: "赛狐只读连接", state: sellfoxReadonly ? "ok" : "warn", detail: sellfoxReadonly
-          ? `MCP_PG_READONLY_URL 已配置（sellfox_mcp_ro）；${dbRoleAudit.available ? `实测该角色可读 Amazon* 表 ${sellfoxRole?.amazonTables ?? 0} 张（应为 0）` : "角色权限实测不可用，跨池归属未核实"}`
-          : "未配置 MCP_PG_READONLY_URL，赛狐工具调用会直接失败（不会回退到可写连接）" },
-      { key: "amazon-ro", label: "Amazon 只读连接", state: amazonReadonly ? "ok" : "warn", detail: amazonReadonly
-          ? `AMAZON_MCP_PG_READONLY_URL 已配置，原始行读取走独立连接 + 只读事务；${dbRoleAudit.available ? (amazonRole ? `实测 amazon_mcp_ro 可读 Sellfox* 表 ${amazonRole.sellfoxTables} 张（应为 0）` : "库中尚无 amazon_mcp_ro 角色") : "角色权限实测不可用"}`
-          : "未配置 AMAZON_MCP_PG_READONLY_URL，读路径走主连接 + 只读事务；应用层只读仍强制生效" },
+      { key: "sellfox-ro", label: "赛狐只读连接", state: sellfoxRole && !sellfoxRole.unavailable && !sellfoxRole.violations.length ? "ok" : "warn",
+        detail: !sellfoxRole || sellfoxRole.unavailable ? "sellfox_mcp_ro 审计不可用，隔离状态未知" : sellfoxRole.violations.length ? sellfoxRole.violations.join("；") : "sellfox_mcp_ro 独立登录及完整有效权限审计通过" },
+      { key: "amazon-ro", label: "Amazon 只读连接", state: amazonRole && !amazonRole.unavailable && !amazonRole.violations.length ? "ok" : "warn",
+        detail: !amazonRole || amazonRole.unavailable ? "amazon_mcp_ro 审计不可用，隔离状态未知" : amazonRole.violations.length ? amazonRole.violations.join("；") : "amazon_mcp_ro 独立登录及完整有效权限审计通过" },
       { key: "db-cross-pool", label: "数据库角色层双池隔离", state: dbIsolated ? "ok" : "warn", detail: dbIsolated
-          ? "实测 0 越权：sellfox_mcp_ro 对 Amazon* 无 SELECT，amazon_mcp_ro 对 Sellfox* 无 SELECT；可用 node scripts/mcp-isolation/audit-roles.mjs 复核"
-          : dbRoleAudit.available
-            ? `实测未收口：${dbRoleAudit.violations.join("；")}。应用层 Amazon*/Sellfox* 前缀封闭清单仍生效，不是数据泄露；执行 scripts/mcp-isolation/grant-roles.sql（DBA 用强密码创建角色）并配 AMAZON_MCP_PG_READONLY_URL 后复跑 audit-roles.mjs`
-            : `状态未知，不能按环境变量推断为已隔离：${dbRoleAudit.note}` },
-      { key: "shared-token", label: "兼容共享令牌", state: sharedTokenEnabled ? "warn" : "ok", detail: sharedTokenEnabled ? "MCP_HTTP_TOKEN 仍启用，可在赛狐端点只读访问单组织全部店铺" : "已关闭共享令牌，只接受个人凭证" },
+          ? "两实际只读登录有效权限审计通过：仅本提供方表 SELECT，无跨池、写入、转授权或角色切换路径；与 audit-roles.mjs 使用同一规则"
+          : `隔离未通过或状态未知：${dbRoleAudit.violations.join("；")}。由 DBA 按 docs/mcp-isolation-amazon-sellfox.md 逐项处理后复核；仓库整改不代表数据库授权已实施` },
+      { key: "credential-source", label: "凭证单一来源", state: "ok", detail: "仅接受数据库中明确授权的个人凭证；不接受环境共享令牌" },
       { key: "credentials", label: "可用凭证", state: sellfoxActive.length + amazonActive.length ? "ok" : "warn", detail: `Amazon ${amazonActive.length} 个 · 赛狐 ${sellfoxActive.length} 个可用（已排除过期与停用）` },
     ] as const;
 
@@ -162,7 +120,6 @@ export async function GET(request: Request) {
         datasets: sellfoxDatasetKeys.map(key => ({ key, label: sellfoxDatasets[key].label, description: sellfoxDatasets[key].description, table: sellfoxDatasets[key].table })),
         catalogSize: sellfoxMcpToolNames.length,
         readonlyRoleConfigured: sellfoxReadonly,
-        sharedTokenEnabled,
         activeCount: sellfoxActive.length,
         lastUsedAt: lastUsedAt(sellfoxCredentials),
       },
@@ -175,21 +132,14 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     if (Number(request.headers.get("content-length")) > 16_000) return json({ error: "请求过大。" }, 413);
-    const body = await request.json() as Record<string, unknown>;
+    const body = await request.clone().json() as Record<string, unknown>;
     const action = typeof body.action === "string" ? body.action : "";
     const permission = await requireApiPermission("sellfox", action === "probe" ? "view" : action === "create" || action === "rotate" ? "create" : "edit", request);
     if (!permission.ok) return permission.response;
-    const scope = { organizationId: permission.user.organizationId, workspaceId: workspaceScopeFromRequest(request).workspaceId };
+    const scope = { organizationId: permission.user.organizationId, workspaceId: workspaceScopeFromRequest(request, body).workspaceId };
     if (action === "probe") {
       const provider = body.provider === "amazon" ? "amazon" : "sellfox";
-      if (provider === "sellfox") return json({ provider, ...(await probeSellfoxReadOnly()) });
-      const startedAt = Date.now();
-      try {
-        await prisma.$queryRaw`SELECT 1 AS ok`;
-        return json({ provider, ok: true, latencyMs: Date.now() - startedAt, detail: `主连接可用（${Date.now() - startedAt} ms）；Amazon 读路径使用主连接，应用层只读` });
-      } catch {
-        return json({ provider, ok: false, latencyMs: Date.now() - startedAt, detail: "数据库连接不可用。" });
-      }
+      return json(await probeDatabaseRole(provider));
     }
     return json(await manageSellfoxMcpCredential(scope, permission.user.id, body));
   } catch (error) {

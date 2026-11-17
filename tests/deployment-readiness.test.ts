@@ -10,7 +10,10 @@ import { migrationReadiness, migrationCatalog, validConnection, authReadiness } 
 
 const read = (file: string) => readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
 const registry = JSON.parse(read("src/lib/runtime/worker-registry.json")) as Array<{ id: string; entry: string; service: string }>;
-const childProcessEnv = () => Object.fromEntries(["PATH", "Path", "SystemRoot", "SYSTEMROOT", "COMSPEC", "PATHEXT", "TEMP", "TMP"].flatMap(key => process.env[key] === undefined ? [] : [[key, process.env[key]!]]));
+const childProcessEnv = (): NodeJS.ProcessEnv => ({
+  ...Object.fromEntries(["PATH", "Path", "SystemRoot", "SYSTEMROOT", "COMSPEC", "PATHEXT", "TEMP", "TMP"].flatMap(key => process.env[key] === undefined ? [] : [[key, process.env[key]!]])),
+  NODE_ENV: "test",
+});
 
 test("当前五项注册 Worker 均有真实入口、manager 命令和正式 systemd 合同", () => {
   assert.deepEqual(registry.map(worker => worker.id), ["import", "image-upscale", "amazon-sync", "sellfox-sync", "forecast"]);
@@ -28,9 +31,9 @@ test("当前五项注册 Worker 均有真实入口、manager 命令和正式 sys
 });
 
 test("release-check 接受完整合成包，拒绝缺失注册 unit 和真实配置文件", () => {
-  mkdirSync(fileURLToPath(new URL("../tmp/", import.meta.url)), { recursive: true });
   const root = mkdtempSync(fileURLToPath(new URL("../tmp/upgrade-release-contract-", import.meta.url)));
   const put = (file: string, content = "fixture") => { mkdirSync(path.dirname(path.join(root, "package", file)), { recursive: true }); writeFileSync(path.join(root, "package", file), content); };
+  let executionError: unknown;
   try {
     for (const dir of [".next-build/standalone/.next-build/static", ".next-build/standalone/public", "prisma/migrations"]) mkdirSync(path.join(root, "package", dir), { recursive: true });
     for (const file of [".next-build/standalone/server.js", ".next-build/standalone/.next-build/BUILD_ID", ".next-build/standalone/.next-build/server/app.js", ".next-build/standalone/.next-build/static/app.js", "prisma/migrations/fixture/migration.sql", "RELEASE-METADATA.json", "deployment-plan.json", "deploy/README.md", "deploy/production.env.example", "deploy/systemd/amazon-web.service"]) put(file);
@@ -41,9 +44,9 @@ test("release-check 接受完整合成包，拒绝缺失注册 unit 和真实配
     put("src/lib/uploads.ts");
     const check = () => {
       const artifact = "fixture.tar.gz";
-      execFileSync("tar", ["-czf", artifact, "-C", "package", "."], { cwd: root, env: { ...childProcessEnv(), NODE_ENV: "test" }, timeout: 15_000 });
+      execFileSync("tar", ["-czf", artifact, "-C", "package", "."], { cwd: root, env: childProcessEnv(), timeout: 15_000 });
       writeFileSync(path.join(root, "release-manifest.json"), JSON.stringify({ commit: "fixture", build: "passed", lint: "passed", tests: "passed", artifactSha256: createHash("sha256").update(readFileSync(path.join(root, artifact))).digest("hex") }));
-      execFileSync("bash", [fileURLToPath(new URL("../scripts/release-check.sh", import.meta.url)), artifact], { cwd: root, env: { ...childProcessEnv(), NODE_ENV: "test", SOURCE_COMMIT: "fixture" }, stdio: "pipe", timeout: 30_000 });
+      execFileSync("bash", [fileURLToPath(new URL("../scripts/release-check.sh", import.meta.url)), artifact], { cwd: root, env: { ...childProcessEnv(), NODE_ENV: "test", SOURCE_COMMIT: "fixture" }, stdio: "pipe", timeout: process.platform === "win32" ? 120_000 : 30_000 });
     };
     assert.doesNotThrow(check);
     put("RELEASE-METADATA.json", JSON.stringify({ ...metadata, commit: "other" }));
@@ -74,11 +77,23 @@ test("release-check 接受完整合成包，拒绝缺失注册 unit 和真实配
     mkdirSync(path.join(root, "package/src/nested/uploads"), { recursive: true });
     put("src/nested/uploads/data.txt");
     assert.throws(check, /Artifact contains forbidden path: uploads\//);
-  } finally { rmSync(root, { recursive: true, force: true }); }
+  } catch (error) {
+    executionError = error;
+    // Preserve the original child-process failure even if Windows still holds
+    // an archive handle and the cleanup below throws as well.
+    console.error("[release-check fixture] validation failed", error);
+    throw error;
+  } finally {
+    try { rmSync(root, { recursive: true, force: true }); }
+    catch (cleanupError) {
+      console.error("[release-check fixture] cleanup failed", cleanupError);
+      if (executionError !== undefined) throw new AggregateError([executionError, cleanupError], "发布校验与临时目录清理均失败", { cause: executionError });
+      throw cleanupError;
+    }
+  }
 });
 
 test("部署入口在任何网络操作前拒绝失败、漂移或不完整的发布证据", () => {
-  mkdirSync(fileURLToPath(new URL("../tmp/", import.meta.url)), { recursive: true });
   const root = mkdtempSync(fileURLToPath(new URL("../tmp/deploy-evidence-", import.meta.url)));
   const commit = "a".repeat(40);
   const artifact = path.join(root, "fixture.tar.gz");
@@ -142,7 +157,8 @@ test("生产同机 loopback 合法，缺失、错误协议与占位符不合法"
 test("迁移校验拒绝缺失、漂移、失败、重复应用、未知记录和无步骤", () => {
   const catalog = [{ name: "one", checksum: "abc" }, { name: "two", checksum: "def" }];
   const history = catalog.map(row => ({ migration_name: row.name, checksum: row.checksum, finished_at: new Date(), rolled_back_at: null, applied_steps_count: 1 }));
-  assert.equal(migrationReadiness(catalog, history).ok, true);
+  const completeHistoryReadiness = migrationReadiness(catalog, history);
+  assert.equal(completeHistoryReadiness.ok, true, completeHistoryReadiness.detail);
   for (const rows of [history.slice(1), [...history, history[0]], [...history, { ...history[0], migration_name: "unknown" }], history.map(row => ({ ...row, checksum: "drift" })), history.map(row => ({ ...row, finished_at: null })), history.map(row => ({ ...row, rolled_back_at: new Date() })), history.map(row => ({ ...row, applied_steps_count: 0 }))]) assert.equal(migrationReadiness(catalog, rows).ok, false);
   assert.equal(migrationReadiness(catalog, [{ ...history[0], finished_at: null, rolled_back_at: new Date(), checksum: "failed-attempt-sql" }, ...history]).ok, true);
   assert.equal(migrationReadiness(catalog, [{ ...history[0], finished_at: null, rolled_back_at: new Date(), checksum: "failed-attempt-sql" }, history[1]]).ok, false);

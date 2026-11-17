@@ -1,4 +1,4 @@
-import { addProductListSummaries, getProductListSummarySourceContribution, subtractProductListSummaries } from "@/lib/products/product-list-summary";
+import { addProductListSummaries, createProductListSummaryContribution, subtractProductListSummaries } from "@/lib/products/product-list-summary";
 import { prisma } from "@/lib/db/prisma";
 import type { Product, ProductListSummary } from "@/lib/products/types";
 import type { ProductListSource } from "@/lib/products/list-query";
@@ -200,8 +200,8 @@ export function updateCachedProductListSummariesForProductChange(input: {
     }
 
     const next = addProductListSummaries(
-      subtractProductListSummaries(cached, getProductListSummarySourceContribution(input.before ?? null, source, now)),
-      getProductListSummarySourceContribution(input.after ?? null, source, now),
+      subtractProductListSummaries(cached, createProductListSummaryContribution(input.before ?? null, now)),
+      createProductListSummaryContribution(input.after ?? null, now),
     );
     setCachedProductListSummary(cacheKey, next);
   }

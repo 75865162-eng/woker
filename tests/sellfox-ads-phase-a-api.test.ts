@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
+import { encryptSellfoxCredentials } from "@/lib/sellfox/credential-crypto";
 import { createLocalSession } from "@/lib/auth/session";
 import { GET as browse } from "@/app/api/sellfox/[domain]/route";
 import { GET as exportRows } from "@/app/api/sellfox/[domain]/export/route";
@@ -10,16 +11,18 @@ import { POST as sync } from "@/app/api/sellfox/sync/route";
 
 test("new CPC domains browse/export/detail with authenticated workspace scope and expose opt-in daily schedules", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
-  const env = { AUTH_DRIVER: process.env.AUTH_DRIVER, DATABASE_URL: process.env.DATABASE_URL, QUEUE_DRIVER: process.env.QUEUE_DRIVER, SELLFOX_CLIENT_ID: process.env.SELLFOX_CLIENT_ID, SELLFOX_CLIENT_SECRET: process.env.SELLFOX_CLIENT_SECRET };
-  delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local"; process.env.QUEUE_DRIVER = "redis";
-  process.env.SELLFOX_CLIENT_ID = "fixture"; process.env.SELLFOX_CLIENT_SECRET = "fixture";
+  const env = { AUTH_DRIVER: process.env.AUTH_DRIVER, DATABASE_URL: process.env.DATABASE_URL, QUEUE_DRIVER: process.env.QUEUE_DRIVER, SELLFOX_CLIENT_ID: process.env.SELLFOX_CLIENT_ID, SELLFOX_CLIENT_SECRET: process.env.SELLFOX_CLIENT_SECRET, SELLFOX_CREDENTIAL_ENCRYPTION_KEY: process.env.SELLFOX_CREDENTIAL_ENCRYPTION_KEY, AUTH_SECRET: process.env.AUTH_SECRET };
+  process.env.DATABASE_URL = "postgresql://fixture:fixture@127.0.0.1:1/fixture"; process.env.AUTH_DRIVER = "local"; process.env.QUEUE_DRIVER = "redis";
+  process.env.SELLFOX_CLIENT_ID = "fixture"; process.env.SELLFOX_CLIENT_SECRET = "fixture"; process.env.SELLFOX_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64"); process.env.AUTH_SECRET = "sellfox-ads-fixture-auth-secret-key-at-least-32-characters";
   const sqlCalls: Prisma.Sql[] = []; let expectedDomain = ""; let overflow = false;
   const row = { id: "row", campaignId: "campaign", adGroupId: "group", placement: "topOfSearch", targetingId: "target", searchTerm: "customer query", currency: null, cost: 2, adSales: 10 };
   const payloadModel = { findFirst: async ({ where }: { where: Record<string, unknown> }) => {
     assert.deepEqual(where, { id: "row", organizationId: "org", workspaceId: "ws" }); return { payload: { token: "private", 投放: "keyword" } };
   } };
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceMembership: { findUnique: async () => ({ userId: "actor" }) }, workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    organizationRosterRole: { findMany: async () => [{ id: "owner", name: "Owner", description: "fixture", sortOrder: 0, updatedAt: new Date(0), permissions: { sellfox: ["view", "create", "edit", "export"], settings: ["edit"] } }], count: async () => 1, createMany: async () => ({ count: 0 }) },
+    sellfoxIntegrationCredential: { findUnique: async () => ({ credentialsCiphertext: encryptSellfoxCredentials({ clientId: "scoped-client", clientSecret: "scoped-secret" }, { organizationId: "org", workspaceId: "ws" }), revision: 1, updatedAt: new Date() }) },
     sellfoxStore: { findMany: async () => [], findFirst: async () => null },
     sellfoxAdsCampaignDaily: payloadModel, sellfoxAdsAdGroupDaily: payloadModel, sellfoxAdsPlacementDaily: payloadModel, sellfoxAdsTargetingDaily: payloadModel, sellfoxAdsSearchTermDaily: payloadModel,
     sellfoxSyncSchedule: { findMany: async () => [] }, workerHeartbeat: { findFirst: async () => null },
@@ -32,6 +35,7 @@ test("new CPC domains browse/export/detail with authenticated workspace scope an
     },
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({
       $executeRaw: async () => undefined,
+      sellfoxIntegrationCredential: { findUnique: async () => ({ credentialsCiphertext: encryptSellfoxCredentials({ clientId: "scoped-client", clientSecret: "scoped-secret" }, { organizationId: "org", workspaceId: "ws" }), revision: 1, updatedAt: new Date() }) },
       sellfoxSyncRun: { findFirst: async ({ where }: { where: Record<string, unknown> }) => { assert.equal(where.resource, expectedDomain); return { id: "existing" }; } },
       sellfoxSyncSchedule: { findUnique: async () => null, upsert: async ({ create }: { create: Record<string, unknown> }) => {
         assert.equal(create.organizationId, "org"); assert.equal(create.workspaceId, "ws"); assert.equal(create.resource, expectedDomain); assert.equal(create.enabled, true);

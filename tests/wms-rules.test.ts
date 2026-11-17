@@ -16,6 +16,15 @@ test("WMS browser acceptance source propagates workflow failures before reportin
   assert.doesNotMatch(source.slice(workflow, procurement), /catch\s*\(/, "WMS workflow failures must not be swallowed");
 });
 
+test("WMS 完整工作流在全量迁移后使用独立 seed 入口", () => {
+  const runner = readFileSync(new URL("../scripts/test-wms-core-offline.mjs", import.meta.url), "utf8");
+  const migration = runner.indexOf('await db.query(readFileSync(`prisma/migrations/${folder}/migration.sql`, "utf8"))');
+  const entry = runner.indexOf('workflow ? "tests/integration/wms-first-loop.integration.ts" : "tests/integration/wms-core.integration.ts"');
+  assert.ok(migration >= 0 && entry > migration, "通用工作流必须在完整迁移之后执行");
+  assert.match(runner, /const workflow = process\.argv\.includes\("--workflow"\)/);
+  assert.match(runner, /if \(workflow && process\.argv\.includes\("--browser"\)\) throw Error/);
+});
+
 test("WMS approval controls require live permission, distinct members and unexpired approval", () => {
   const scope = { organizationId: "fixture", workspaceId: "default", actorUserId: "operator" };
   const now = new Date("2026-11-11T12:00:00.001Z");

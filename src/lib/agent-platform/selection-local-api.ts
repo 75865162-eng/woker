@@ -16,31 +16,38 @@ async function body(request: Request): Promise<Record<string, unknown>> {
   // As in selection-evidence, prevent auth's JSON clone from buffering arbitrary input.
   if (request.headers.get("content-type")?.split(";")[0] !== "application/octet-stream") throw new LocalSelectionError("请使用选品表单提交。", 415);
   if (!request.body || Number(request.headers.get("content-length")) > 2 * 1024 * 1024) throw new LocalSelectionError("表单缺失或超过 2 MB。", 413);
-  const reader = request.body.getReader(); const chunks: Uint8Array[] = []; let size = 0;
+  const reader = request.body.getReader(); const chunks: Uint8Array[] = []; let size = 0, complete = false;
   try {
     while (true) {
-      const next = await reader.read(); if (next.done) break;
+      const next = await reader.read(); if (next.done) { complete = true; break; }
       size += next.value.byteLength;
-      if (size > 2 * 1024 * 1024) throw new LocalSelectionError("表单超过 2 MB。", 413);
+      if (size > 2 * 1024 * 1024) {
+        void reader.cancel().catch(() => undefined);
+        throw new LocalSelectionError("表单超过 2 MB。", 413);
+      }
       chunks.push(next.value);
     }
-  } finally { await reader.cancel(); }
+  } finally {
+    if (!complete) void reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
   const value: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new LocalSelectionError("表单格式无效。");
   return value as Record<string, unknown>;
 }
 export async function selectionLocalApi(request: Request, operation: "slugs" | "local" | "reviews" | "suppliers") {
   try {
+    const permission = await requireApiPermission("agents", request.method === "GET" ? "view" : "create", request);
+    if (!permission.ok) return json({ error: permission.response.status === 401 ? "请先登录。" : "没有当前工作区的 Agent 权限。" }, permission.response.status);
     if (request.method === "POST") {
       const origin = request.headers.get("origin");
       if (origin && origin !== new URL(request.url).origin) throw new LocalSelectionError("请从本站提交表单。", 403);
       if (request.headers.get("content-type")?.split(";")[0] !== "application/octet-stream") throw new LocalSelectionError("请使用选品表单提交。", 415);
     }
-    const permission = await requireApiPermission("agents", request.method === "GET" ? "view" : "create", request);
-    if (!permission.ok) return json({ error: permission.response.status === 401 ? "请先登录。" : "没有当前工作区的 Agent 权限。" }, permission.response.status);
     const { user } = permission;
-    const { workspaceId } = workspaceScopeFromRequest(request);
-    if (!(await assertWorkspaceAccess(user.organizationId, workspaceId))) throw new LocalSelectionError("没有当前工作区的访问权限。", 403);
+    const input = request.method === "POST" ? await body(request.clone()) : {};
+    const { workspaceId } = workspaceScopeFromRequest(request, input);
+    if (!(await assertWorkspaceAccess(user.organizationId, workspaceId, user.id))) throw new LocalSelectionError("没有当前工作区的访问权限。", 403);
     let organizationId = process.env.SELECTION_ORGANIZATION_ID;
     if (!organizationId) {
       const organizations = await prisma.organization.findMany({ select: { id: true }, take: 2 });
@@ -59,7 +66,6 @@ export async function selectionLocalApi(request: Request, operation: "slugs" | "
       }
       return json({ slugs, environment });
     }
-    const input = request.method === "POST" ? await body(request) : {};
     const slug = request.method === "GET" ? new URL(request.url).searchParams.get("slug") : input.slug;
     if (typeof slug !== "string") throw new LocalSelectionError("请选择 Slug。");
     return await withSelectionLock(slug, async dir => {

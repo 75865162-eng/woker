@@ -30,7 +30,7 @@ export async function GET(request: Request) {
 }
 export async function POST(request: Request) {
   try {
-    const body = await boundedJsonObject(request, 64_000);
+    const body = await boundedJsonObject(request.clone(), 64_000);
     if (body.executionMode !== undefined && !["codex", "server"].includes(String(body.executionMode))) throw new Error("INVALID_RESEARCH_REQUEST");
     const input = parseResearchInput(body);
     const { mode, asin, requirement, marketplace, erpCredentialId, aiConfigSource, budgetMode } = input;

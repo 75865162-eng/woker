@@ -2,15 +2,16 @@
  * Sellfox MCP server runtime: credential lifecycle, authentication, scoped reads.
  *
  * Isolation rules enforced here:
- *  - only `sfmcp_` credentials (or the explicitly shared compatibility token)
- *    authenticate; Amazon `amcp_` credentials are rejected before lookup;
+ *  - only persisted `sfmcp_` credentials authenticate;
+ *    Amazon `amcp_` credentials are rejected before lookup;
  *  - the organization / workspace / store fence comes from the credential row,
  *    never from the request body;
  *  - only Sellfox* tables in the registry allow-list are queried, through a
  *    read-only Postgres role;
  *  - every call is audited under `sellfox.mcp.*`, separate from `amazon.mcp.*`.
  */
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
+import { mcpTokenHash as sellfoxMcpTokenHash } from "@/lib/mcp/token";
 import { Prisma } from "@prisma/client";
 import { Pool } from "pg";
 import { prisma } from "@/lib/db/prisma";
@@ -20,7 +21,7 @@ import {
 } from "@/lib/mcp/isolation";
 import {
   normalizeSellfoxToolGrants, sellfoxDataset, sellfoxDatasetKeys, sellfoxDatasets,
-  sellfoxMcpDefinition, sellfoxMcpToolDefinitions, sellfoxMcpToolNames, type SellfoxMcpToolDefinition,
+  sellfoxMcpDefinition, sellfoxMcpToolDefinitions, type SellfoxMcpToolDefinition,
 } from "./mcp-tool-registry";
 
 export const SELLFOX_MCP_TOKEN_PREFIX = "sfmcp_";
@@ -35,8 +36,8 @@ export type SellfoxMcpCredential = {
 };
 
 export type SellfoxMcpIdentity = SellfoxMcpCredential & {
-  kind: "credential" | "shared-env";
-  /** Internal SellfoxStore ids, or `*` for the shared compatibility identity. */
+  kind: "credential";
+  /** Internal SellfoxStore ids; `*` follows the persisted credential grant. */
   storeScope: string[];
 };
 
@@ -45,13 +46,7 @@ const credentialSelect = {
   tools: true, storeIds: true, scopes: true, status: true, revision: true, expiresAt: true, lastUsedAt: true,
 } satisfies Prisma.SellfoxMcpCredentialSelect;
 
-export const sellfoxMcpTokenHash = (value: string) => createHash("sha256").update(value).digest("hex");
-
-function sharedToken() {
-  const token = process.env.MCP_HTTP_TOKEN?.trim() ?? "";
-  if (!token || process.env.MCP_DISABLE_SHARED_TOKEN === "true") return null;
-  return token;
-}
+export { mcpTokenHash as sellfoxMcpTokenHash } from "@/lib/mcp/token";
 
 async function audit(identity: SellfoxMcpIdentity | null, event: string, metadata: Prisma.InputJsonObject) {
   await prisma.auditLog.create({
@@ -72,10 +67,8 @@ export async function auditSellfoxMcpProtocol(identity: SellfoxMcpIdentity, meth
 
 export async function authenticateSellfoxMcp(authorization: string | null, resource = "/api/mcp/sellfox"): Promise<SellfoxMcpIdentity> {
   const token = bearerToken(authorization);
-  const legacy = sharedToken();
-  const isShared = Boolean(legacy && token && token.length === legacy.length && timingSafeEqual(Buffer.from(token), Buffer.from(legacy)));
   const provider = providerOfToken(token);
-  if (!isShared) {
+  {
     try {
       assertEndpointProvider("sellfox", provider);
     } catch (error) {
@@ -88,19 +81,6 @@ export async function authenticateSellfoxMcp(authorization: string | null, resou
       }).catch(() => undefined);
       throw error;
     }
-  }
-  if (isShared) {
-    const organizationId = process.env.MCP_ORG_ID?.trim() ?? "";
-    if (!organizationId) throw new McpIsolationError("MCP_ORG_ID 未配置。", "PROVIDER_MISMATCH", 503, "sellfox");
-    const stores = (process.env.MCP_STORE_IDS ?? "*").split(",").map(value => value.trim()).filter(Boolean);
-    const now = new Date();
-    const identity: SellfoxMcpIdentity = {
-      kind: "shared-env", id: "sellfox-shared-env", organizationId, workspaceId: process.env.MCP_WORKSPACE_ID?.trim() || "default",
-      userId: "sellfox-shared-env", name: "共享兼容令牌", tokenPrefix: (token ?? "").slice(0, 8), tools: [...sellfoxMcpToolNames],
-      storeIds: stores, scopes: [], status: "ACTIVE", revision: 0, expiresAt: new Date(now.getTime() + 3600_000), lastUsedAt: null,
-      storeScope: stores.length ? stores : ["*"],
-    };
-    return identity;
   }
   const row = await prisma.sellfoxMcpCredential.findUnique({ where: { tokenHash: sellfoxMcpTokenHash(token!) }, select: credentialSelect });
   if (!row || row.status !== "ACTIVE" || row.expiresAt <= new Date()) {

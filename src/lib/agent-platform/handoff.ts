@@ -33,7 +33,7 @@ export interface LaunchApprovalReference {
   executionId: string;
   planId: string;
 }
-export type HandoffPayload = Record<string, unknown> & { _handoff?: HandoffMetadata };
+export type HandoffPayload = Record<string, unknown> & { _handoff: HandoffMetadata };
 export interface ChainExecutionRef { stage: ChainStage | "orchestrator"; executionId: string }
 
 export function readHandoffTrace(value: unknown): ChainExecutionRef[] {
@@ -46,14 +46,19 @@ export function readHandoffTrace(value: unknown): ChainExecutionRef[] {
 }
 
 export function handoffProvenance(value: unknown): unknown {
-  if (!isObject(value)) return null;
-  return value._handoff ?? { legacy: true, goal: value.goal ?? value.naturalLanguageGoal ?? "", marketplace: value.marketplace ?? "" };
+  if (!isObject(value) || !isObject(value._handoff)) return null;
+  const meta = value._handoff;
+  try {
+    validateHandoff(value, meta.to as ChainStage, meta as unknown as HandoffIdentity);
+    return meta;
+  } catch { return null; }
 }
 
 export function executionMatchesHandoff(execution: { input?: unknown } | null | undefined, payload: HandoffPayload | null) {
   if (!payload) return true;
   const input = isObject(execution?.input) ? execution.input : {};
-  return JSON.stringify(input.handoff) === JSON.stringify(handoffProvenance(payload));
+  const provenance = handoffProvenance(payload);
+  return provenance !== null && JSON.stringify(input.handoff) === JSON.stringify(provenance);
 }
 
 export function isObject(value: unknown): value is Record<string, unknown> {
@@ -116,14 +121,7 @@ export function parseLaunchApproval(value: unknown): LaunchApprovalReference | n
 export function validateHandoff(value: unknown, to: ChainStage, identity: HandoffIdentity): HandoffPayload {
   if (!isObject(value)) throw new Error("交接内容必须是对象。");
   readHandoffTrace(value);
-  // Old navigation payloads remain readable, but cannot supply launch authority.
-  if (!("_handoff" in value)) {
-    if (to === "ppc") throw new Error("PPC 全链交接需要 v1 契约与服务端 Launch 审批。");
-    if (!["goal", "naturalLanguageGoal", "productReport", "marketOpportunity", "listingDraft"].some((key) => key in value)) {
-      throw new Error("旧版交接缺少业务内容。");
-    }
-    return value;
-  }
+  if (!("_handoff" in value)) throw new Error("NEEDS_DATA：交接缺少明确执行来源，请回到来源重新交接。");
   const meta = value._handoff;
   if (!isObject(meta) || meta.version !== handoffVersion) throw new Error("不支持的交接版本。");
   if (meta.to !== to || !Object.keys(fieldsByKind).includes(String(meta.kind))) throw new Error("交接目标或类型不匹配。");
@@ -132,7 +130,7 @@ export function validateHandoff(value: unknown, to: ChainStage, identity: Handof
   for (const key of ["organizationId", "userId", "workspaceId"] as const) {
     if (!identity[key] || meta[key] !== identity[key]) throw new Error("交接所属用户、组织或工作区已变化，请回到来源重新交接。");
   }
-  if (typeof meta.sourceExecutionId !== "string" || !meta.sourceExecutionId || typeof meta.createdAt !== "string" || !Number.isFinite(Date.parse(meta.createdAt))) throw new Error("交接缺少有效执行来源或时间。");
+  if (typeof meta.sourceExecutionId !== "string" || !meta.sourceExecutionId.trim() || meta.sourceExecutionId.length > 200 || typeof meta.createdAt !== "string" || !Number.isFinite(Date.parse(meta.createdAt))) throw new Error("交接缺少有效执行来源或时间。");
   if (!["user", "orchestrator", "market", "product", "supplier", "listing", "launch", "ppc"].includes(String(meta.from))) throw new Error("交接来源无效。");
   if (typeof value.goal !== "string" || !value.goal.trim() || typeof value.marketplace !== "string" || !value.marketplace.trim()) throw new Error("交接缺少目标或站点。");
   for (const field of ["marketOpportunity", "marketReport", "productReport", "supplierReport", "listingDraft", "productContext"]) {
@@ -157,7 +155,6 @@ export function validateHandoff(value: unknown, to: ChainStage, identity: Handof
 export function createHandoff(payload: Record<string, unknown>, metadata: Omit<HandoffMetadata, "version" | "createdAt">): HandoffPayload {
   const value = {
     ...payload,
-    goal: payload.goal ?? payload.naturalLanguageGoal,
     _handoff: { ...metadata, version: handoffVersion, createdAt: new Date().toISOString() },
   };
   return validateHandoff(value, metadata.to, metadata);

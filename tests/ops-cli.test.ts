@@ -30,7 +30,7 @@ const readOnlyDb = new Proxy({}, { get: (_, table: string) => new Proxy({}, { ge
   if (table === "amazonDataAccessGrant") return [{ sellerAccountId: "seller" }];
   if (table === "organizationMember") return { role: "owner", user: { status: "active" } };
   if (table === "workspaceScope") return { id: "ws" };
-  if (table === "organizationRosterRole") return [{ id: "owner", permissions: {} }];
+  if (table === "organizationRosterRole") return [{ id: "owner", permissions: { operations: ["view"], workspace: ["view"], agents: ["view"] } }];
   if (table === "amazonSyncDataSource") {
     const where = args.where as { AND?: Array<{ OR?: Array<{ resource: string }> }> };
     const resources = where.AND?.[0]?.OR?.map(row => row.resource);
@@ -92,7 +92,8 @@ test("CLI daily metrics keep missing facts null", async () => {
 test("CLI authorization requires active membership, workspace and current module grants without role seeding", async () => {
   let active = true; let workspace = true; let grants = ["operations", "workspace", "agents"];
   const db = {
-    organizationMember: { findFirst: async () => active ? { role: "staff" } : null },
+    organizationMember: { findFirst: async () => active ? { role: "staff" } : null, findUnique: async () => active ? { role: "staff", user: { status: "active" } } : null },
+    workspaceMembership: { findUnique: async () => ({ userId: "actor" }) },
     workspaceScope: { findUnique: async () => workspace ? { id: "ws" } : null },
     organizationRosterRole: { findMany: async () => [{ id: "staff", permissions: Object.fromEntries(grants.map((key) => [key, ["view"]])) }] },
   } as unknown as Prisma.TransactionClient;
@@ -107,7 +108,7 @@ test("PPC suggestions reuse real analytics and warn on stale inventory/unknown a
   const now = new Date("2026-10-25T00:00:00Z");
   const result = await suggestPpc(readOnlyDb, identity, {
     id: "dataset", createdAt: new Date("2026-10-01"), marketplace: "US", campaignGroups: [],
-    performanceRows: [{ id: "row", campaignGroupId: "group", campaignName: "Campaign", adGroupName: "Ad Group", keyword: "keyword", target: "keyword", matchType: "exact", currentBid: 1, spend: 15, sales: 0, clicks: 25, impressions: 100, orders: 0, batchId: "batch" }] as never,
+    performanceRows: [{ id: "row", campaignGroupId: "group", campaignName: "Campaign", adGroupName: "Ad Group", keyword: "keyword", target: "keyword", matchType: "exact", currentBid: 1, spend: 15, sales: 0, clicks: 25, impressions: 100, orders: 0, topOfSearchShare: 12, advertisedProductOrders: 0, otherProductOrders: 0, viewableImpressions: 80, batchId: "batch" }] as never,
   }, now);
   assert.equal(result.mode, "draft_only");
   assert.equal(result.externalWriteAttempted, false);
@@ -117,6 +118,10 @@ test("PPC suggestions reuse real analytics and warn on stale inventory/unknown a
   assert.ok(result.freshnessWarnings.some((warning) => warning.includes("库存 STALE")));
   assert.ok(Array.isArray(result.adjustmentDrafts));
   assert.ok(result.freshnessWarnings.some((warning) => warning.includes("UNKNOWN")));
+  await assert.rejects(() => suggestPpc(readOnlyDb, identity, {
+    id: "incomplete-dataset", createdAt: now, marketplace: "US", campaignGroups: [],
+    performanceRows: [{ id: "row", campaignGroupId: "group", campaignName: "Campaign", adGroupName: "Ad Group", keyword: "keyword", target: "keyword", matchType: "exact", currentBid: 1, spend: 15, sales: 0, clicks: 25, impressions: 100, orders: 0, batchId: "batch" }] as never,
+  }, now), /PPC 本地分析失败/);
 });
 
 test("PPC local reader never fills missing metrics/bids with invented defaults", async () => {

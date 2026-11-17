@@ -73,16 +73,16 @@ export async function getOperationsReadiness(input: {
   return { scope: input.scope, generatedAt: new Date().toISOString(), connection: toConnection(null, { configured: false, missingEnvironmentVariables: [], region: "按授权路由" }), runs: [], inventory, domains: emptyDomainFreshnessSummaries(inventory) };
 }
 
-function emptyInventorySummary(): OperationsInventorySnapshotSummary {
+export function emptyInventorySummary(): OperationsInventorySnapshotSummary {
   return {
     status: "NOT_SYNCED",
     syncRunId: null,
     capturedAt: null,
     snapshotCount: 0,
-    fulfillableQuantity: 0,
-    inboundQuantity: 0,
-    reservedQuantity: 0,
-    unfulfillableQuantity: 0,
+    fulfillableQuantity: null,
+    inboundQuantity: null,
+    reservedQuantity: null,
+    unfulfillableQuantity: null,
   };
 }
 
@@ -105,70 +105,6 @@ export function emptyDomainFreshnessSummaries(inventory: OperationsInventorySnap
   }])) as Record<AmazonReadDomain, DomainFreshnessSummary>;
 }
 
-export function buildDomainFreshnessSummaries(input: {
-  inventory: OperationsInventorySnapshotSummary;
-  latestByDomain: Map<AmazonReadDomain, DomainRunState>;
-}): Record<AmazonReadDomain, DomainFreshnessSummary> {
-  const summaries = emptyDomainFreshnessSummaries(input.inventory);
-  summaries.inventory = {
-    ...summaries.inventory,
-    source: "Amazon SP-API FBA Inventory Summaries",
-    lastAttemptAt: input.latestByDomain.get("inventory")?.latestAttempt?.startedAt.toISOString() ?? null,
-    lastAttemptStatus: input.latestByDomain.get("inventory")?.latestAttempt ? syncRunStatus(input.latestByDomain.get("inventory")!.latestAttempt!.status) : null,
-    lastAttemptError: input.latestByDomain.get("inventory")?.latestAttempt?.error ?? null,
-  };
-
-  for (const resource of amazonReadDomains) {
-    if (resource === "ads" || resource === "inventory") continue;
-    const state = input.latestByDomain.get(resource);
-    const latest = state?.latestAttempt;
-    const success = state?.latestSuccess;
-    if (resource === "catalog" && success?.finishedAt) {
-      const failed = latest && (latest.status === "FAILED" || latest.status === "BLOCKED") && latest.startedAt >= success.finishedAt;
-      const stale = Date.now() - success.finishedAt.getTime() > 48 * 60 * 60_000;
-      summaries.catalog = { ...summaries.catalog, status: failed ? latest!.status as "FAILED" | "BLOCKED" : stale ? "STALE" : "FRESH", source: "Amazon Listings Items API", syncRunId: success.id, lastSuccessAt: success.finishedAt.toISOString(), lastAttemptAt: latest?.startedAt.toISOString() ?? null, lastAttemptStatus: latest ? syncRunStatus(latest.status) : null, lastAttemptError: latest?.error ?? null, reason: failed ? latest?.error ?? "刊登同步失败" : stale ? "刊登快照已超过 48 小时。" : null, recommendedAction: failed || stale ? "检查店铺绑定/API 授权和 worker 后同步在线产品。" : null };
-      continue;
-    }
-    const attemptStatus = latest ? syncRunStatus(latest.status) : null;
-    const newerFailure = latest && (latest.status === "FAILED" || latest.status === "BLOCKED");
-    const status = newerFailure ? latest.status as "FAILED" | "BLOCKED" : "NOT_SYNCED";
-    summaries[resource] = {
-      resource,
-      status,
-      source: null,
-      syncRunId: latest?.id ?? null,
-      lastSuccessAt: null,
-      lastAttemptAt: latest?.startedAt.toISOString() ?? null,
-      lastAttemptStatus: attemptStatus,
-      lastAttemptError: latest?.error ?? null,
-      reason: newerFailure ? latest?.error ?? "最近一次同步失败。" : resource === "catalog" ? "刊登执行器已就绪，等待店铺身份/授权绑定与首次同步。" : "该数据域尚未接入 Amazon 同步执行器。",
-      recommendedAction: newerFailure ? "查看同步历史中的失败原因，再由系统管理员处理。" : resource === "catalog" ? "配置已授权的 Seller ID、店铺和站点后启用刊登计划。" : "无需重试；该数据域尚未开放同步。",
-    };
-  }
-
-  if (input.inventory.status === "STALE") {
-    summaries.inventory.reason = "库存快照已超过配置的新鲜度阈值。";
-    summaries.inventory.recommendedAction = "检查 Amazon 连接与 Worker 后重新请求库存同步。";
-  } else if (input.inventory.status === "NOT_SYNCED") {
-    summaries.inventory.reason = "当前工作区尚无成功的库存快照。";
-    summaries.inventory.recommendedAction = "检查 Amazon 连接与 Worker 后请求库存同步。";
-  } else {
-    summaries.inventory.reason = null;
-    summaries.inventory.recommendedAction = null;
-  }
-
-  return summaries;
-}
-
-type DomainRunState = {
-  latestAttempt: { id: string; status: string; error: string | null; startedAt: Date; finishedAt: Date | null } | null;
-  latestSuccess: { id: string; status: string; error: string | null; startedAt: Date; finishedAt: Date | null } | null;
-};
-
-function syncRunStatus(value: string): OperationsSyncRun["status"] {
-  return value === "QUEUED" || value === "RUNNING" || value === "SUCCEEDED" || value === "FAILED" ? value : "BLOCKED";
-}
-
 export function inventorySnapshotStatus(capturedAt: Date | null, now = new Date(), freshnessMinutes = configuredInventoryFreshnessMinutes()): OperationsInventorySnapshotSummary["status"] {
   if (!capturedAt) return "NOT_SYNCED";
   return now.getTime() - capturedAt.getTime() <= freshnessMinutes * 60_000 ? "FRESH" : "STALE";
@@ -178,9 +114,6 @@ function configuredInventoryFreshnessMinutes() {
   const value = Number(process.env.AMAZON_INVENTORY_FRESHNESS_MINUTES ?? 360);
   return Number.isFinite(value) ? Math.min(Math.max(Math.floor(value), 15), 24 * 60) : 360;
 }
-
-export async function requestAmazonSync(...args: unknown[]): Promise<never> { void args; throw new Error("旧同步入口已退役，请创建执行审批。"); }
-export async function validateAmazonConnection(...args: unknown[]): Promise<never> { void args; throw new Error("旧验证入口已退役，请创建执行审批。"); }
 
 export function extractMarketplaceParticipations(value: unknown): AmazonMarketplaceParticipation[] {
   if (!isRecord(value) || !Array.isArray(value.payload)) return [];

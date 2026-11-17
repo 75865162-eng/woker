@@ -139,7 +139,8 @@ function stringValue(value: unknown) {
   return value === null || value === undefined ? "" : String(value);
 }
 
-function numberValue(value: unknown, fallback = 0) {
+function numberValue(value: unknown, fallback: number | null = null): number | null {
+  if (value == null || (typeof value === "string" && !value.trim())) return fallback;
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
@@ -192,14 +193,14 @@ function buildPricingRows(product: ExportProduct) {
 
   return [{
     name: product.chineseName || product.englishName || product.sku,
-    lengthCm: product.packageSizeCm?.length ?? 0,
-    widthCm: product.packageSizeCm?.width ?? 0,
-    heightCm: product.packageSizeCm?.height ?? 0,
-    actualWeightKg: numberValue(product.packageWeightG) / 1000,
-    suggestedPrice: 0,
+    lengthCm: product.packageSizeCm?.length ?? null,
+    widthCm: product.packageSizeCm?.width ?? null,
+    heightCm: product.packageSizeCm?.height ?? null,
+    actualWeightKg: product.packageWeightG == null ? null : product.packageWeightG / 1000,
+    suggestedPrice: null,
     purchaseCost: product.purchasePrice,
     oceanFreightUnitPrice: 12,
-    fbaFee: 0,
+    fbaFee: null,
     exchangeRate: 6.8,
   }];
 }
@@ -292,7 +293,7 @@ function writePricingSection(worksheet: ExcelJS.Worksheet, product: ExportProduc
       null,
       null,
       numberValue(source.suggestedPrice),
-      numberValue(source.purchaseCost, product.purchasePrice),
+      numberValue(source.purchaseCost),
       numberValue(source.fbaFee),
       null,
       null,
@@ -305,18 +306,18 @@ function writePricingSection(worksheet: ExcelJS.Worksheet, product: ExportProduc
       null,
     ];
     worksheet.getRow(rowNumber).values = values;
-    worksheet.getCell(rowNumber, 6).value = { formula: `IF($A${rowNumber}="","",B${rowNumber}*C${rowNumber}*D${rowNumber}/6000)` };
-    worksheet.getCell(rowNumber, 7).value = { formula: `IF($A${rowNumber}="","",(B${rowNumber}/2.54*C${rowNumber}/2.54*D${rowNumber}/2.54)/139)` };
-    worksheet.getCell(rowNumber, 8).value = { formula: `IF($A${rowNumber}="","",E${rowNumber}*2.2)` };
-    worksheet.getCell(rowNumber, 9).value = { formula: `IF($A${rowNumber}="","",MAX(G${rowNumber},H${rowNumber}))` };
-    worksheet.getCell(rowNumber, 13).value = { formula: `IF($A${rowNumber}="","",L${rowNumber}*0.035)` };
-    worksheet.getCell(rowNumber, 14).value = { formula: `IF($A${rowNumber}="","",MAX(E${rowNumber},F${rowNumber})*12)` };
-    worksheet.getCell(rowNumber, 15).value = { formula: `IF($A${rowNumber}="","",J${rowNumber}*0.15)` };
-    worksheet.getCell(rowNumber, 16).value = { formula: `IF($A${rowNumber}="","",(B${rowNumber}/2.54)*(C${rowNumber}/2.54)*(D${rowNumber}/2.54)*0.000578*0.87)` };
-    worksheet.getCell(rowNumber, 18).value = { formula: `IF($A${rowNumber}="","",(K${rowNumber}+N${rowNumber})/Q${rowNumber}+M${rowNumber}+O${rowNumber}+L${rowNumber}+P${rowNumber})` };
-    worksheet.getCell(rowNumber, 19).value = { formula: `IF($A${rowNumber}="","",J${rowNumber}-R${rowNumber})` };
-    worksheet.getCell(rowNumber, 20).value = { formula: `IF($A${rowNumber}="","",IFERROR(S${rowNumber}/J${rowNumber},0))` };
-    worksheet.getCell(rowNumber, 21).value = { formula: `IF($A${rowNumber}="","",IF(I${rowNumber}>3,(I${rowNumber}-3)*16/4*0.08+6.97,0))` };
+    worksheet.getCell(rowNumber, 6).value = { formula: `IF(OR($A${rowNumber}="",COUNT($B${rowNumber}:$E${rowNumber},$J${rowNumber}:$L${rowNumber},$Q${rowNumber})<8,$Q${rowNumber}=0),"",B${rowNumber}*C${rowNumber}*D${rowNumber}/6000)` };
+    worksheet.getCell(rowNumber, 7).value = { formula: `IF(OR($A${rowNumber}="",COUNT($B${rowNumber}:$E${rowNumber},$J${rowNumber}:$L${rowNumber},$Q${rowNumber})<8,$Q${rowNumber}=0),"",(B${rowNumber}/2.54*C${rowNumber}/2.54*D${rowNumber}/2.54)/139)` };
+    worksheet.getCell(rowNumber, 8).value = { formula: `IF(OR($A${rowNumber}="",COUNT($B${rowNumber}:$E${rowNumber},$J${rowNumber}:$L${rowNumber},$Q${rowNumber})<8,$Q${rowNumber}=0),"",E${rowNumber}*2.2)` };
+    worksheet.getCell(rowNumber, 9).value = { formula: `IF(OR($A${rowNumber}="",COUNT($B${rowNumber}:$E${rowNumber},$J${rowNumber}:$L${rowNumber},$Q${rowNumber})<8,$Q${rowNumber}=0),"",MAX(G${rowNumber},H${rowNumber}))` };
+    worksheet.getCell(rowNumber, 13).value = { formula: `IF(OR($A${rowNumber}="",COUNT($B${rowNumber}:$E${rowNumber},$J${rowNumber}:$L${rowNumber},$Q${rowNumber})<8,$Q${rowNumber}=0),"",L${rowNumber}*0.035)` };
+    worksheet.getCell(rowNumber, 14).value = { formula: `IF(OR($A${rowNumber}="",COUNT($B${rowNumber}:$E${rowNumber},$J${rowNumber}:$L${rowNumber},$Q${rowNumber})<8,$Q${rowNumber}=0),"",MAX(E${rowNumber},F${rowNumber})*12)` };
+    worksheet.getCell(rowNumber, 15).value = { formula: `IF(OR($A${rowNumber}="",COUNT($B${rowNumber}:$E${rowNumber},$J${rowNumber}:$L${rowNumber},$Q${rowNumber})<8,$Q${rowNumber}=0),"",J${rowNumber}*0.15)` };
+    worksheet.getCell(rowNumber, 16).value = { formula: `IF(OR($A${rowNumber}="",COUNT($B${rowNumber}:$E${rowNumber},$J${rowNumber}:$L${rowNumber},$Q${rowNumber})<8,$Q${rowNumber}=0),"",(B${rowNumber}/2.54)*(C${rowNumber}/2.54)*(D${rowNumber}/2.54)*0.000578*0.87)` };
+    worksheet.getCell(rowNumber, 18).value = { formula: `IF(OR($A${rowNumber}="",COUNT($B${rowNumber}:$E${rowNumber},$J${rowNumber}:$L${rowNumber},$Q${rowNumber})<8,$Q${rowNumber}=0),"",(K${rowNumber}+N${rowNumber})/Q${rowNumber}+M${rowNumber}+O${rowNumber}+L${rowNumber}+P${rowNumber})` };
+    worksheet.getCell(rowNumber, 19).value = { formula: `IF(OR($A${rowNumber}="",COUNT($B${rowNumber}:$E${rowNumber},$J${rowNumber}:$L${rowNumber},$Q${rowNumber})<8,$Q${rowNumber}=0),"",J${rowNumber}-R${rowNumber})` };
+    worksheet.getCell(rowNumber, 20).value = { formula: `IF(OR($A${rowNumber}="",COUNT($B${rowNumber}:$E${rowNumber},$J${rowNumber}:$L${rowNumber},$Q${rowNumber})<8,$Q${rowNumber}=0),"",IFERROR(S${rowNumber}/J${rowNumber},0))` };
+    worksheet.getCell(rowNumber, 21).value = { formula: `IF(OR($A${rowNumber}="",COUNT($B${rowNumber}:$E${rowNumber},$J${rowNumber}:$L${rowNumber},$Q${rowNumber})<8,$Q${rowNumber}=0),"",IF(I${rowNumber}>3,(I${rowNumber}-3)*16/4*0.08+6.97,0))` };
   });
 
   styleRange(worksheet, startRow + 1, 1, startRow + rows.length, 21, { rowHeight: 30 });

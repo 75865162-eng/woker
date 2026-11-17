@@ -55,14 +55,12 @@ const organization = await prisma.organization.upsert({
   },
 });
 
-const user = await prisma.user.upsert({
-  where: { email: adminEmail },
-  update: {
-    name: "Super Admin",
-    passwordHash: hashPassword(adminPassword),
-    status: "active",
-  },
-  create: {
+// Only write a password hash when the account is first created. Re-running the
+// seed (e.g. a scheduled job) must never reset a rotated password back to the
+// value in BOOTSTRAP_ADMIN_PASSWORD.
+const existingUser = await prisma.user.findUnique({ where: { email: adminEmail } });
+const user = existingUser ?? await prisma.user.create({
+  data: {
     email: adminEmail,
     name: "Super Admin",
     passwordHash: hashPassword(adminPassword),
@@ -77,9 +75,7 @@ await prisma.organizationMember.upsert({
       userId: user.id,
     },
   },
-  update: {
-    role: "owner",
-  },
+  update: {},
   create: {
     organizationId: organization.id,
     userId: user.id,
@@ -95,16 +91,7 @@ await prisma.teamRosterMember.upsert({
       id: user.id,
     },
   },
-  update: {
-    name: user.name,
-    email: user.email,
-    department: "System",
-    title: "Owner",
-    roleId: "owner",
-    status: "active",
-    lastActiveAt: "Bootstrap admin",
-    sortOrder: 0,
-  },
+  update: {},
   create: {
     organizationId: organization.id,
     id: user.id,

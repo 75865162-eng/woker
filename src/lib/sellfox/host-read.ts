@@ -88,6 +88,7 @@ const adsReaders: Record<string, { delegate: () => AdsDelegate; fields: string[]
 };
 
 function ratio(numerator: unknown, denominator: unknown) {
+  if (numerator == null || denominator == null) return null;
   const left = typeof numerator === "number" ? numerator : Number(numerator);
   const right = typeof denominator === "number" ? denominator : Number(denominator);
   if (!Number.isFinite(left) || !Number.isFinite(right) || right === 0) return null;
@@ -166,7 +167,11 @@ async function readAds(readerKey: string, scope: Scope, query: HostQuery): Promi
     delegate.findMany({ where, select, orderBy, skip: (query.page - 1) * query.pageSize, take: query.pageSize }),
     delegate.count({ where }),
     delegate.groupBy({ by: ["storeId"], where }),
-    delegate.groupBy({ by: ["currency"], where, _sum: { impressions: true, clicks: true, cost: true, adOrders: true, adSales: true } }),
+    delegate.groupBy({
+      by: ["currency"], where,
+      _sum: { impressions: true, clicks: true, cost: true, adOrders: true, adSales: true },
+      _count: { _all: true, impressions: true, clicks: true, cost: true, adOrders: true, adSales: true },
+    }),
   ]);
 
   const flat = rows.map((row) => {
@@ -178,23 +183,29 @@ async function readAds(readerKey: string, scope: Scope, query: HostQuery): Promi
       storeMarketplace: store.marketplace ?? "",
     } as HostRow;
   });
-  const byCurrency = sums
-    .map((row) => {
-      const sum = (row._sum ?? {}) as Record<string, number | null>;
-      return {
-        currency: typeof row.currency === "string" ? row.currency : "",
-        values: { cost: sum.cost ?? null, adSales: sum.adSales ?? null } as Record<string, number | null>,
-      };
-    })
+  const observedSums = sums.map((row) => {
+    const sum = (row._sum ?? {}) as Record<string, number | null>;
+    const count = (row._count ?? {}) as Record<string, number>;
+    const values: Record<string, number | null> = {};
+    for (const field of ["impressions", "clicks", "cost", "adOrders", "adSales"]) {
+      values[field] = count._all > 0 && count[field] === count._all ? sum[field] ?? null : null;
+    }
+    return { currency: typeof row.currency === "string" ? row.currency : "", values };
+  });
+  const byCurrency = observedSums
+    .map(({ currency, values }) => ({
+      currency,
+      values: { cost: values.cost, adSales: values.adSales },
+    }))
     .sort((left, right) => left.currency.localeCompare(right.currency));
 
   return {
     rows: decorate(flat),
     total,
     totals: {
-      impressions: sums.reduce((total, row) => total + Number(((row._sum ?? {}) as Record<string, number | null>).impressions ?? 0), 0),
-      clicks: sums.reduce((total, row) => total + Number(((row._sum ?? {}) as Record<string, number | null>).clicks ?? 0), 0),
-      adOrders: sums.reduce((total, row) => total + Number(((row._sum ?? {}) as Record<string, number | null>).adOrders ?? 0), 0),
+      impressions: observedSums.reduce<number | null>((total, row) => total == null || row.values.impressions == null ? null : total + row.values.impressions, observedSums.length ? 0 : null),
+      clicks: observedSums.reduce<number | null>((total, row) => total == null || row.values.clicks == null ? null : total + row.values.clicks, observedSums.length ? 0 : null),
+      adOrders: observedSums.reduce<number | null>((total, row) => total == null || row.values.adOrders == null ? null : total + row.values.adOrders, observedSums.length ? 0 : null),
       byCurrency,
     },
     coverage: { stores: byStore.length, rows: total },

@@ -10,7 +10,9 @@ import { adsEntityTypes, mcpDatasets, datasetForTable, resolveMcpDataset, normal
 import { readSyncCoverage } from "./coverage";
 import { createToolGateway, GatewayInvocationError } from "@/lib/agent-platform/tool-gateway";
 import { fixedAmazonMcpDataset, amazonMcpTools, amazonMcpSyncResources, bindAmazonMcpHandlers, hasReimbursementAnalysisReadPath, isCallableAmazonMcpTool, mcpDiscoveryDescriptor, type AmazonMcpToolName } from "./mcp-tool-registry";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
+import { mcpTokenHash } from "@/lib/mcp/token";
+export { mcpTokenHash } from "@/lib/mcp/token";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { amazonDataAccess, assertAmazonAction, assertAmazonScopeAdmin, assertAmazonFinanceAccess, explicitAmazonDataAccess, parseAccessScopes, sellerAccessWhere, withAmazonMcpBoundary, type AmazonAccessScope, type AmazonDataAction } from "./data-access";
@@ -35,7 +37,6 @@ import { listAmazonLocalRawTables, readAmazonLocalRawRows } from "./local-raw-re
 export { amazonMcpTools, amazonMcpToolCatalog } from "./mcp-tool-registry";
 const canonicalMcpTool = (tool: string) => registeredAmazonMcpTools.find(item => item.name === tool)?.canonicalName ?? tool;
 const adsStatusTools = new Set(["ads_get_sync_status", "ads_get_data_health", "ads_get_connection_status", "ads_get_settings"]);
-export const mcpTokenHash = (value: string) => createHash("sha256").update(value).digest("hex");
 const credentialSelect = { id: true, name: true, userId: true, tokenPrefix: true, tools: true, scopes: true, status: true, revision: true, expiresAt: true, createdAt: true, lastUsedAt: true } satisfies Prisma.AmazonMcpCredentialSelect;
 
 /** Cross-provider attempts are recorded even when no Amazon identity matched. */

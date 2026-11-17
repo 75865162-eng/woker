@@ -5,7 +5,7 @@
  * 存在的理由：processor.ts 在写入 AmazonSettlementRow 时**刻意剥离了
  * quantityOriginal**（见 `const { quantityOriginal: _quantity, fields, ... } = row`），
  * 但把原始 TSV 列保留在 fields JSON 里；分摊算法的 SALES 兜底基数需要数量，
- * 因此这里按 domain-reports.ts L369 的同款优先级从 fields 恢复，避免两套口径。
+ * 因此这里从 fields 恢复数量，取值顺序与 domain-reports.ts 结算行保持一致。
  */
 import type { NormalizedDomainReportRow } from "./domain-reports";
 
@@ -29,7 +29,7 @@ export type StoredSettlementRow = {
   fields: unknown;
 };
 
-/** 与 domain-reports.ts L369 对 settlements 的取值顺序保持一致。 */
+/** 取值顺序与 domain-reports.ts 结算行保持一致。 */
 const QUANTITY_KEYS = [
   "quantity-shipped",
   "quantity",

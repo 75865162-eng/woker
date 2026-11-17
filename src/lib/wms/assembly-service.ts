@@ -88,7 +88,13 @@ async function componentCosts(tx: Tx, scope: WmsScope, productRecordIds: string[
   if (missing.length) {
     // 没有历史计价分录时退回商品档案采购价，避免成本为 0 让财务误判
     const products = await tx.productRecord.findMany({ where: { ...scoped(scope), id: { in: missing } }, select: { id: true, purchasePrice: true } });
-    for (const product of products) costs.set(product.id, Number(product.purchasePrice ?? 0).toFixed(6));
+    for (const product of products) {
+      if (product.purchasePrice === null || !Number.isFinite(Number(product.purchasePrice)) || Number(product.purchasePrice) < 0) continue;
+      costs.set(product.id, new Prisma.Decimal(product.purchasePrice).toFixed(6));
+    }
+  }
+  if (productRecordIds.some(id => !costs.has(id))) {
+    throw new WmsError('NEEDS_DATA：组件缺少历史成本和有效采购价，请补齐后创建组装单。', 422);
   }
   return costs;
 }
@@ -141,7 +147,7 @@ export async function createAssemblyOrder(scope: WmsScope, raw: unknown) {
     });
     await tx.wmsAssemblyOrderLine.createMany({
       data: allocated.map(line => {
-        const unitCost = costs.get(line.componentProductRecordId) ?? '0.000000';
+        const unitCost = costs.get(line.componentProductRecordId)!;
         return {
           ...identity, id: crypto.randomUUID(), orderId: id, componentProductRecordId: line.componentProductRecordId,
           balanceId: line.balanceId, lotId: line.lotId, locationId: line.locationId, warehouseId: line.warehouseId,

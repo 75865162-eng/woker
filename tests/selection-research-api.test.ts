@@ -35,7 +35,7 @@ test("real Next handlers enforce session/scope, reject unconfigured live, serial
   let savedBytes = Buffer.from("isolated report");
   localStorageDriver.getBuffer = async () => { fileReads++; return Buffer.from(savedBytes); };
   globals.prisma = {
-    workspaceScope: { findUnique: async ({ where }: { where: { organizationId_id: { id: string } } }) => where.organizationId_id.id === "fixture-workspace" ? { id: "fixture-workspace" } : null },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async ({ where }: { where: { organizationId_id: { id: string } } }) => where.organizationId_id.id === "fixture-workspace" ? { id: "fixture-workspace" } : null },
     agentExecution: {
       findFirst: async ({ where }: { where: { id: string; organizationId: string; workspaceId: string; requestedByUserId: string } }) => where.id === run.id && where.organizationId === run.scope.organizationId && where.workspaceId === run.scope.workspaceId && where.requestedByUserId === run.scope.ownerId ? structuredClone(row) : null,
       updateMany: async ({ where, data }: { where: { AND: { context: { equals: string } }[] }; data: { output: Run; context: typeof row.context } }) => {

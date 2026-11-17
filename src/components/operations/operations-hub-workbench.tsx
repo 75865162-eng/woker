@@ -112,7 +112,7 @@ function money(value: number | null, currency: string) {
 
 export type OperationsBusinessTab = "inventory" | "catalog" | "replenishment" | "ads";
 
-export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true }: { embeddedTab?: OperationsBusinessTab; onSync?: (resource: AmazonReadDomain) => void; canSync?: boolean } = {}) {
+export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true, sellerAccountId, marketplaceId }: { embeddedTab?: OperationsBusinessTab; onSync?: (resource: AmazonReadDomain) => void; canSync?: boolean; sellerAccountId?: string; marketplaceId?: string } = {}) {
   const [activeTab, setTab] = useState("overview");
   const tab = embeddedTab ?? activeTab;
   const needsReadiness = !embeddedTab || embeddedTab === "inventory";
@@ -153,8 +153,12 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true }: 
   const loadReadiness = useCallback(async () => {
     const sequence = ++requests.current.readiness;
     const scopeKey = workspaceHeaders().get("x-workspace-id");
+    setReadiness(null);
     try {
-      const response = await fetch("/api/operations/freshness", { cache: "no-store", headers: workspaceHeaders() });
+      const params = new URLSearchParams();
+      if (sellerAccountId) params.set("sellerAccountId", sellerAccountId);
+      if (marketplaceId) params.set("marketplaceId", marketplaceId);
+      const response = await fetch(`/api/operations/freshness?${params}`, { cache: "no-store", headers: workspaceHeaders() });
       const payload = (await response.json()) as OperationsReadiness & { error?: string };
       if (sequence !== requests.current.readiness || scopeKey !== workspaceHeaders().get("x-workspace-id")) return;
       if (!response.ok) throw new Error(payload.error || "经营中台状态读取失败。");
@@ -162,7 +166,7 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true }: 
     } catch (error) {
       if (sequence === requests.current.readiness && scopeKey === workspaceHeaders().get("x-workspace-id")) throw error;
     }
-  }, []);
+  }, [marketplaceId, sellerAccountId]);
 
   const loadInventory = useCallback(async () => {
     const sequence = ++requests.current.inventory;
@@ -171,6 +175,8 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true }: 
     try {
       const params = new URLSearchParams({ page: String(inventoryPage), pageSize: "20" });
       if (inventorySku) params.set("sku", inventorySku);
+      if (sellerAccountId) params.set("sellerAccountId", sellerAccountId);
+      if (marketplaceId) params.set("marketplaceId", marketplaceId);
       const response = await fetch(`/api/operations/inventory/snapshots?${params}`, { cache: "no-store", headers: workspaceHeaders() });
       const payload = (await response.json()) as InventoryResponse & { error?: string };
       if (!response.ok) throw new Error(payload.error || "库存快照读取失败。");
@@ -183,7 +189,7 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true }: 
     } finally {
       if (sequence === requests.current.inventory && scopeKey === workspaceHeaders().get("x-workspace-id")) setInventoryLoading(false);
     }
-  }, [inventoryPage, inventorySku]);
+  }, [inventoryPage, inventorySku, marketplaceId, sellerAccountId]);
 
   const loadMetrics = useCallback(async () => {
     const sequence = ++requests.current.metrics;
@@ -275,7 +281,7 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true }: 
     }
   }
 
-  const inventoryQuantity = (value?: number) => readiness && readiness.inventory.status !== "NOT_SYNCED" && value !== undefined ? value.toLocaleString("zh-CN") : "未同步";
+  const inventoryQuantity = (value?: number | null) => readiness && readiness.inventory.status !== "NOT_SYNCED" && value !== undefined && value !== null ? value.toLocaleString("zh-CN") : "未同步";
 
   const connectionTone: { tone: BadgeTone; label: string } = readiness
     ? readiness.connection.status === "CONFIGURED" ? { tone: "green", label: "连接已验证" }
@@ -354,7 +360,7 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true }: 
         ) : null}
 
         <div className="mt-3"><SellfoxLinks workspaceId={readiness?.scope.workspaceId ?? workspaceHeaders().get("x-workspace-id") ?? "default"} /></div>
-        <p title="赛狐有、API/本地无" className="mt-3 text-sm">最新可售库存：{readiness?.inventory.status && readiness.inventory.status !== "NOT_SYNCED" ? readiness.inventory.fulfillableQuantity.toLocaleString("zh-CN") : "未同步"} · 今日广告花费：未接通日投影 · 今日订单/销量：未同步 · 赛狐有、API/本地无</p>
+        <p title="赛狐有、API/本地无" className="mt-3 text-sm">最新可售库存：{inventoryQuantity(readiness?.inventory.fulfillableQuantity)} · 今日广告花费：未接通日投影 · 今日订单/销量：未同步 · 赛狐有、API/本地无</p>
         <div className="mt-4 grid gap-px border border-border bg-border sm:grid-cols-2 xl:grid-cols-3">
           {amazonReadDomains.map((domain) => {
             const summary = readiness?.domains?.[domain];

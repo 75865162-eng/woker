@@ -145,6 +145,11 @@ export function evaluateAdsInventoryConstraint(input: {
   const reasons: string[] = [];
   const missingInputs: string[] = [];
   const currentAcosPct = resolveCurrentAcos(input.ads);
+  const currentDailySpend = typeof input.ads.spend === "number" && Number.isFinite(input.ads.spend) && input.ads.spend >= 0
+    && Number.isFinite(input.ads.windowDays) && input.ads.windowDays > 0
+    ? round2(input.ads.spend / input.ads.windowDays)
+    : null;
+  if (currentDailySpend === null) missingInputs.push("广告日均花费（有效花费和统计天数）");
   const leadParts = [input.lead.productionDays, input.lead.domesticDays, input.lead.oceanDays];
   if (leadParts.some((value) => value === null)) missingInputs.push("生产/国内运输/海运周期");
   const leadDays = leadParts.some((value) => value === null)
@@ -170,7 +175,7 @@ export function evaluateAdsInventoryConstraint(input: {
     stockoutDateP50: null,
     currentAcosPct,
     targetAcosPct: input.economics.grossMarginPct === null ? null : round4(input.economics.grossMarginPct - input.economics.targetNetMarginPct),
-    currentDailySpend: input.ads.windowDays > 0 && input.ads.spend !== null ? round2(input.ads.spend / input.ads.windowDays) : null,
+    currentDailySpend,
     maxAdditionalDailySpend: null,
     clearance: null,
     allowedActions: [],
@@ -241,9 +246,9 @@ export function evaluateAdsInventoryConstraint(input: {
     const lossTolerance = unitGrossProfit === null ? null : round2(excessUnits * unitGrossProfit);
     if (lossTolerance !== null && lossTolerance > 0) {
       const dailyFromBudget = lossTolerance / policy.clearanceWindowDays;
-      const currentDailySpend = result.currentDailySpend ?? 0;
+      if (currentDailySpend === null) return result;
       const dailyCapFromPct = currentDailySpend * (policy.maxDailySpendIncreasePct / 100);
-      const maxAdditionalDailySpend = round2(Math.min(dailyFromBudget, dailyCapFromPct > 0 ? dailyCapFromPct : dailyFromBudget));
+      const maxAdditionalDailySpend = round2(Math.min(dailyFromBudget, dailyCapFromPct));
       result.decision = "ALLOW_CLEARANCE";
       result.maxAdditionalDailySpend = maxAdditionalDailySpend;
       result.clearance = { units: excessUnits, lossTolerance, currency: input.economics.currency };
@@ -278,8 +283,8 @@ export function evaluateAdsInventoryConstraint(input: {
     return result;
   }
 
+  if (currentDailySpend === null) return result;
   result.decision = "HOLD";
-  const currentDailySpend = result.currentDailySpend ?? 0;
   result.maxAdditionalDailySpend = round2(currentDailySpend * (policy.maxDailySpendIncreasePct / 100));
   result.allowedActions = [`维持并小幅优化（单次加投不超过 ${result.maxAdditionalDailySpend}）`];
   result.forbiddenActions = [];

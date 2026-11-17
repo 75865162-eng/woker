@@ -20,6 +20,10 @@ type RegistrationTransaction = Pick<
 >;
 
 export async function POST(request: Request) {
+  if (process.env.NODE_ENV === "production" || process.env.ERP_RUNTIME_MODE === "production") {
+    return NextResponse.json({ error: "生产环境不开放公开注册，请联系管理员创建账号。" }, { status: 403 });
+  }
+
   try {
     const body = (await request.json()) as {
       email?: string;
@@ -69,12 +73,7 @@ export async function POST(request: Request) {
           slug: organizationSlug,
         },
       });
-      const existingMemberCount = await tx.organizationMember.count({
-        where: {
-          organizationId: organization.id,
-        },
-      });
-      const membershipRole = existingMemberCount === 0 ? "owner" : "viewer";
+      const membershipRole = "viewer";
       const user = await tx.user.create({
         data: {
           email,

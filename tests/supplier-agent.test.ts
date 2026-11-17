@@ -60,6 +60,17 @@ test("supplier agent runtime turns a product plan into a sourcing report", async
       targetLeadTime: "18-24 days",
       questions: ["What is the MOQ per SKU?"],
     },
+    sourceMarketReport: {
+      selectionSource: {
+        schemaVersion: 1,
+        fileId: "fixture-selection",
+        sha256: "a".repeat(64),
+        slug: "portable-drawer-organizer",
+        importedAt: "2026-09-02T00:00:00.000Z",
+        stale: false,
+        suppliers: [],
+      },
+    },
     evidence: [],
     recommendation: "Review sourcing plan",
     generatedAt: "2026-09-02T00:00:00.000Z",
@@ -120,4 +131,13 @@ test("supplier agent runtime turns a product plan into a sourcing report", async
   assert.ok(result.memoryItems.length >= 1);
   assert.ok(result.traces.some((trace) => trace.type === "recommendation"));
   assert.ok(result.execution.output && typeof result.execution.output === "object");
+  const output = result.execution.output as { report: { sourcingStatus: string; supplierRecommendations: unknown[]; quotationAnalysis: unknown[] } };
+  assert.equal(output.report.sourcingStatus, "NEEDS_DATA");
+  assert.deepEqual(output.report.supplierRecommendations, []);
+  assert.deepEqual(output.report.quotationAnalysis, []);
+});
+
+test("缺失供应线索来源时在调用任何工具前拒绝，不生成模拟报告", async () => {
+  const executor = createSupplierAgentExecutionExecutor({ request: { naturalLanguageGoal: "核实供应来源", marketplace: "US" } });
+  await assert.rejects(() => executor({} as Parameters<typeof executor>[0]), /NEEDS_DATA.*selectionSource/);
 });

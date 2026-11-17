@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createHandoff, handoffSchemas, validateHandoff, type ChainStage, type HandoffKind } from "@/lib/agent-platform/handoff";
+import { createHandoff, handoffSchemas, validateHandoff, handoffProvenance, executionMatchesHandoff, type ChainStage, type HandoffKind } from "@/lib/agent-platform/handoff";
 import { resolveLaunchOutput, verifyLaunchApproval, type LaunchApprovalRecord } from "@/lib/agent-platform/launch-gate";
 import { createAgentRuntime } from "@/lib/agent-platform/runtime";
 import { createMarketAgentExecutionExecutor, marketAgentDefinition, marketToolDefinitions } from "@/lib/agent-platform/market";
@@ -29,9 +29,20 @@ test("all six v1 contracts round trip while versions, destinations, scope and ma
     assert.throws(() => validateHandoff({ ...payload, _handoff: { ...payload._handoff, version: 99 } }, to, identity), /版本/);
     assert.throws(() => validateHandoff({ ...payload, supplierReport: [] }, to, identity), /格式/);
   }
-  assert.equal(validateHandoff({ goal: "legacy", marketplace: "US" }, "product", identity).goal, "legacy");
-  assert.throws(() => validateHandoff({ goal: "legacy", launchApproved: true }, "ppc", identity), /审批/);
+  for (const stage of ["market", "product", "supplier", "listing", "launch", "ppc"] as ChainStage[]) {
+    assert.throws(() => validateHandoff({ goal: "legacy", marketplace: "US", launchApproved: true }, stage, identity), /NEEDS_DATA/);
+  }
   assert.throws(() => createHandoff({ goal: "test", marketplace: "US" }, { ...identity, kind: "PRD", from: "market", to: "supplier", sourceExecutionId: "execution" }), /顺序/);
+});
+
+test("旧载荷及只有版本号的伪装元数据不能成为执行来源", () => {
+  for (const payload of [{ goal: "old", marketplace: "US" }, { goal: "old", marketplace: "US", _handoff: { version: 1 } }]) {
+    assert.equal(handoffProvenance(payload), null);
+    // 故意越过静态合同，验证旧载荷与畸形元数据在运行时仍被拒绝。
+    assert.equal(Reflect.apply(executionMatchesHandoff, undefined, [{ input: { handoff: payload._handoff ?? null } }, payload]), false);
+  }
+  const payload = createHandoff({ goal: "研究", marketplace: "US", marketOpportunity: { name: "方向" } }, { ...identity, kind: "Opportunity", from: "market", to: "product", sourceExecutionId: "source" });
+  assert.equal(executionMatchesHandoff({ input: { handoff: payload._handoff } }, payload), true);
 });
 
 test("Launch authority is bound to persisted action, execution, organization, workspace and plan", () => {

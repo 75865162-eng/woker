@@ -80,18 +80,7 @@ export function createPermissions(moduleIds: string[], actions: PermissionAction
 }
 
 export function getEffectiveRolePermissionMap(overrides?: RolePermissionMap | null): RolePermissionMap {
-  if (!overrides) return defaultRolePermissionMap;
-
-  const merged = { ...defaultRolePermissionMap };
-
-  for (const [roleId, rolePermissions] of Object.entries(overrides)) {
-    merged[roleId] = {
-      ...(defaultRolePermissionMap[roleId] ?? {}),
-      ...rolePermissions,
-    };
-  }
-
-  return merged;
+  return overrides ?? defaultRolePermissionMap;
 }
 
 export function getModuleIdForPath(pathname: string): string | null {
@@ -103,8 +92,23 @@ export function getModuleIdForPath(pathname: string): string | null {
   return match?.moduleId ?? null;
 }
 
+/**
+ * Explicit allowlist of module ids that need no role grant. Deliberately empty:
+ * an unmapped/null module id must never grant access on its own (fail-closed).
+ * Add an id only after auditing that the route is genuinely public.
+ */
+const publicModuleIds = new Set<string>();
+
+/**
+ * Paths with no module requirement that every authenticated role may reach.
+ * Only these are allowed through when module resolution returns null; any
+ * other unmapped path falls back to the role's first accessible module.
+ */
+const publicPathsWithoutModule = new Set<string>(["/"]);
+
 export function roleCanAccessModule(role: string | undefined, moduleId: string | null, permissions?: RolePermissionMap | null) {
-  if (!moduleId) return true;
+  if (!moduleId) return false;
+  if (publicModuleIds.has(moduleId)) return true;
 
   const rolePermissions = getEffectiveRolePermissionMap(permissions)[role ?? ""] ?? {};
 
@@ -117,7 +121,8 @@ export function roleCanPerformAction(
   action: PermissionAction,
   permissions?: RolePermissionMap | null,
 ) {
-  if (!moduleId) return true;
+  if (!moduleId) return false;
+  if (publicModuleIds.has(moduleId)) return true;
 
   const rolePermissions = getEffectiveRolePermissionMap(permissions)[role ?? ""] ?? {};
 
@@ -131,14 +136,20 @@ export function roleHasAnyPage(role: string | undefined, permissions?: RolePermi
 }
 
 export function getFirstAccessiblePath(role: string | undefined, permissions?: RolePermissionMap | null) {
-  return defaultAccessiblePaths.find((item) => roleCanAccessModule(role, item.moduleId, permissions))?.href ?? "/";
+  const first = defaultAccessiblePaths.find((item) =>
+    (item.moduleId === null && publicPathsWithoutModule.has(item.href))
+    || roleCanAccessModule(role, item.moduleId, permissions),
+  );
+
+  return first?.href ?? "/";
 }
 
 export function getAccessiblePathOrFallback(pathname: string | null | undefined, role: string | undefined, permissions?: RolePermissionMap | null) {
   if (pathname && pathname.startsWith("/") && !pathname.startsWith("//")) {
     const moduleId = pathname === "/" ? null : getModuleIdForPath(pathname);
+    const isPublicPath = moduleId === null && publicPathsWithoutModule.has(pathname);
 
-    if (roleCanAccessModule(role, moduleId, permissions)) {
+    if (isPublicPath || (moduleId !== null && roleCanAccessModule(role, moduleId, permissions))) {
       return pathname;
     }
   }

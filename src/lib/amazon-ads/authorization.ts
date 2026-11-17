@@ -2,6 +2,7 @@ import { assertAmazonCloudExecution } from "@/lib/amazon/execution-role";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { assertWorkspaceAccess } from "@/lib/workspace/access";
 import { roleCanPerformAction, defaultRolePermissionMap } from "@/lib/accounts/permissions";
 import { normalizeRolePermissions } from "@/lib/accounts/role-permissions-utils";
 import { encryptAmazonAdsRefreshToken } from "./credentials";
@@ -27,7 +28,7 @@ function oauthSettings(environment: Record<string, string | undefined> = process
 
 export async function assertAdsSettingsManager(scope: AdsAuthScope, actor: string, db: typeof prisma | Prisma.TransactionClient = prisma) {
   const member = await db.organizationMember.findUnique({ where: { organizationId_userId: { organizationId: scope.organizationId, userId: actor } }, include: { user: { select: { status: true } } } });
-  if (!member || member.user.status !== "active" || !await db.workspaceScope.findUnique({ where: { organizationId_id: { organizationId: scope.organizationId, id: scope.workspaceId } }, select: { id: true } })) throw new Error("Amazon Ads 数据范围不可访问。");
+  if (!member || member.user.status !== "active" || !await assertWorkspaceAccess(scope.organizationId, scope.workspaceId, actor, db)) throw new Error("Amazon Ads 数据范围不可访问。");
   const permissions = { ...defaultRolePermissionMap };
   for (const role of await db.organizationRosterRole.findMany({ where: { organizationId: scope.organizationId }, select: { id: true, permissions: true } })) permissions[role.id] = { ...(permissions[role.id] ?? {}), ...normalizeRolePermissions(role.permissions) };
   if (!roleCanPerformAction(member.role, "settings", "edit", permissions)) throw new Error("当前账号没有管理 Amazon Ads 授权的权限。");

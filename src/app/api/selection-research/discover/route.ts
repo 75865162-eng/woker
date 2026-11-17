@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 /** Explicit metadata-only discovery: no research record, model request or tools/call. */
 export async function POST(request: Request) {
   try {
-    const body = await boundedJsonObject(request, 64_000);
+    const body = await boundedJsonObject(request.clone(), 64_000);
     const access = await researchAccess(request, "view", { ...body, mode: "fixture" });
     if (!access.ok) return access.response;
     const runtimeTools = await runtimeToolsForUser({ id: access.scope.ownerId, organizationId: access.scope.organizationId }, request, body);

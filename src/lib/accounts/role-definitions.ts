@@ -68,7 +68,7 @@ export const roleDefinitions: RoleDefinition[] = [
   {
     id: "finance",
     name: "财务",
-    description: "查看业务数据并导出财务所需资料；物流页当前进页即开放全部操作，请谨慎分配",
+    description: "查看业务数据并导出财务所需资料；对已授权模块（含物流）仅有查看与导出权限，不含创建、编辑或审批",
     permissions: {},
     availableByDefault: true,
   },
@@ -173,7 +173,7 @@ export function buildRoleDefinitions(permissionActions: PermissionAction[], modu
       case "warehouse":
         return { ...role, permissions: createPermissions(["logistics"], ["view", "create", "edit", "export"]) };
       case "finance":
-        // Logistics currently exposes its full UI after page access; keep the view/export limitation explicit in this role description.
+        // 描述已与权限对齐：仅 view/export，不暗示进页即获得全部操作；权限本身未改动。
         return { ...role, permissions: createPermissions(["products", "sellfox", "workspace", "agents", "logistics", "history"], ["view", "export"]) };
       case "warehouse_supervisor":
         return { ...role, permissions: createPermissions(["logistics"], ["view", "create", "edit", "approve", "export"]) };

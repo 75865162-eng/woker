@@ -2,6 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { setImmediate } from "node:timers/promises";
 import type { PrismaClient } from "@prisma/client";
+import { randomBytes } from "node:crypto";
+import { Client } from "pg";
+import { encryptSellfoxCredentials } from "@/lib/sellfox/credential-crypto";
 import { runSellfoxConnectionTest } from "@/lib/sellfox/connection-test";
 import { closeSellfoxClient } from "@/lib/sellfox/client";
 import { POST } from "@/app/api/integrations/sellfox/credentials/test/route";
@@ -15,18 +18,26 @@ test("connection test rejects unauthenticated and cross-origin requests", async 
 test("connection test uses fresh tokens only, enforces live scope/revision/cooldown and sanitizes results", async t => {
   const globals = globalThis as unknown as { prisma?: PrismaClient };
   const previous = globals.prisma, previousFetch = globalThis.fetch;
-  const env = { DATABASE_URL: process.env.DATABASE_URL, SELLFOX_CLIENT_ID: process.env.SELLFOX_CLIENT_ID, SELLFOX_CLIENT_SECRET: process.env.SELLFOX_CLIENT_SECRET };
-  delete process.env.DATABASE_URL;
+  const env = { DATABASE_URL: process.env.DATABASE_URL, SELLFOX_CLIENT_ID: process.env.SELLFOX_CLIENT_ID, SELLFOX_CLIENT_SECRET: process.env.SELLFOX_CLIENT_SECRET, SELLFOX_CREDENTIAL_ENCRYPTION_KEY: process.env.SELLFOX_CREDENTIAL_ENCRYPTION_KEY };
+  process.env.DATABASE_URL = "postgresql://fixture:fixture@127.0.0.1:1/fixture";
+  process.env.SELLFOX_CREDENTIAL_ENCRYPTION_KEY = randomBytes(32).toString("base64");
+  t.mock.method(Client.prototype, "connect", async () => undefined);
+  t.mock.method(Client.prototype, "query", async () => ({ rows: [{ ok: true }] }));
+  t.mock.method(Client.prototype, "end", async () => undefined);
   process.env.SELLFOX_CLIENT_ID = "fixture-test-id"; process.env.SELLFOX_CLIENT_SECRET = "fixture-test-secret";
   const scope = { organizationId: "org", workspaceId: "workspace" };
+  let record = { credentialsCiphertext: encryptSellfoxCredentials({ clientId: "fixture-test-id", clientSecret: "fixture-test-secret" }, scope), revision: 0, updatedAt: new Date(0) };
   let role = "owner", active = true, workspace = true, failAudit = false, changedDuringRequest = false;
+  let ownerPermissions: Record<string, string[]> = { sellfox: ["view", "create"], settings: ["edit"] };
   let calls = 0, tokenCode = 0, ttl = 86_400_000;
   const audits: { action: string; metadata: unknown; entityId: string; createdAt: Date }[] = [];
   const db = {
     organizationMember: { findUnique: async () => ({ role, user: { status: active ? "active" : "disabled" } }) },
     workspaceScope: { findUnique: async () => workspace ? { id: "workspace" } : null },
-    organizationRosterRole: { findMany: async () => [] },
+    workspaceMembership: { findUnique: async () => ({ userId: "actor" }) },
+    organizationRosterRole: { findMany: async () => [{ id: "owner", permissions: ownerPermissions }, { id: "viewer", permissions: { sellfox: ["view"] } }] },
     organizationRolePermission: { findUnique: async () => null },
+    sellfoxIntegrationCredential: { findUnique: async () => record },
     $executeRaw: async () => 1,
     auditLog: {
       findFirst: async () => audits.find(a => a.action === "sellfox.credentials.test.started" && Date.now() - a.createdAt.getTime() < 60_000) ?? null,
@@ -43,7 +54,7 @@ test("connection test uses fresh tokens only, enforces live scope/revision/coold
     const url = new URL(String(input));
     assert.equal(url.origin, "https://openapi.sellfox.com");
     assert.equal(url.pathname, "/api/oauth/v2/token.json");
-    if (changedDuringRequest) process.env.SELLFOX_CLIENT_SECRET = "fixture-changed";
+    if (changedDuringRequest) record = { ...record, revision: record.revision + 1 };
     return Response.json({ code: tokenCode, msg: "private-upstream-fixture-test-secret", data: { access_token: "private-fixture-token", expires_in: ttl } });
   };
   t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_800_000_000_000 });
@@ -58,6 +69,11 @@ test("connection test uses fresh tokens only, enforces live scope/revision/coold
     role = "owner"; active = false; await assert.rejects(() => runSellfoxConnectionTest(scope, "actor", 0), /无权/);
     active = true; workspace = false; await assert.rejects(() => runSellfoxConnectionTest(scope, "actor", 0), /无权/);
     workspace = true;
+    for (const permissions of [{}, { sellfox: ["view", "create"] }, { sellfox: ["view"], settings: ["edit"] }] as Record<string, string[]>[]) {
+      ownerPermissions = permissions;
+      await assert.rejects(() => runSellfoxConnectionTest(scope, "actor", 0), /无权|管理员/);
+    }
+    ownerPermissions = { sellfox: ["view", "create"], settings: ["edit"] };
     await assert.rejects(() => runSellfoxConnectionTest(scope, "actor", 1), /版本/);
     failAudit = true; await assert.rejects(() => runSellfoxConnectionTest(scope, "actor", 0)); failAudit = false;
     assert.equal(calls, 0);

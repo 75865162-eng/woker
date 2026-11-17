@@ -10,11 +10,11 @@ type Row = Record<string, unknown>;
 // Transactional in-memory integration double: service uses the same delegates as Prisma.
 // Deliberately does not replace real PostgreSQL lock/constraint acceptance.
 function database() {
-  let tables: Record<string, Row[]> = { workspaceScope: [{ organizationId: "org", id: "ws" }, { organizationId: "org", id: "other" }], agentDefinition: [{ id: "ppc", organizationId: "org", enabled: true }] };
+  let tables: Record<string, Row[]> = { organizationMember: ['actor', 'approver', 'someone'].map(userId => ({ organizationId: 'org', userId, role: 'owner', user: { status: 'active' } })), workspaceScope: [{ organizationId: "org", id: "ws" }, { organizationId: "org", id: "other" }], agentDefinition: [{ id: "ppc", organizationId: "org", enabled: true }] };
   let serial = Promise.resolve(); let rejectAuditCreate = false;
   function matches(row: Row, where: Row = {}): boolean {
     return Object.entries(where).every(([key, value]) => {
-      if (key === "organizationId_id" || key === "organizationId_workspaceId_idempotencyKey") return matches(row, value as Row);
+      if (key === "organizationId_id" || key === "organizationId_userId" || key === "organizationId_workspaceId_idempotencyKey") return matches(row, value as Row);
       if (key === "execution") return matches(tables.agentExecution?.find((execution) => execution.id === row.executionId) ?? {}, value as Row);
       return row[key] === value;
     });

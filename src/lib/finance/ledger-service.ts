@@ -54,7 +54,7 @@ export async function queryFinanceLedger(scope: WmsScope, params: URLSearchParam
     tx.financeBook.findMany({ where: scoped(scope), orderBy: [{ code: 'asc' }, { id: 'asc' }] }),
     tx.financePeriod.findMany({ where: { ...scoped(scope), ...(bookId ? { bookId } : {}) }, orderBy: [{ start: 'desc' }, { id: 'desc' }], take: 120 }),
     tx.financeSubject.findMany({ where: { ...scoped(scope), ...(bookId ? { bookId } : {}) }, orderBy: [{ code: 'asc' }, { id: 'asc' }], take: 1000 }),
-    tx.financeVoucher.findMany({ where: { ...scoped(scope), ...(bookId ? { bookId } : {}) }, include: { lines: { orderBy: { lineNumber: 'asc' } }, period: { select: { start: true, end: true, status: true } } }, orderBy: [{ date: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }], take: 100 }),
+    tx.financeVoucher.findMany({ where: { ...scoped(scope), ...(bookId ? { bookId } : {}), ...(params.get('periodId') ? { periodId: params.get('periodId')! } : {}) }, include: { lines: { orderBy: { lineNumber: 'asc' } }, period: { select: { start: true, end: true, status: true } } }, orderBy: [{ date: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }], take: 100 }),
   ]);
   const trial = params.get('periodId') && bookId ? await readTrialInTransaction(tx,scope,bookId,params.get('periodId')!) : null;
   return { books, periods, subjects, vouchers: vouchers.map(row => ({ ...row, lines: row.lines.map(line => ({ ...line, debit: line.debit.toFixed(6), credit: line.credit.toFixed(6) })) })), trial, limits: { periods: 120, subjects: 1000, vouchers: 100 } };

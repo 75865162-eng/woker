@@ -7,7 +7,8 @@ import { prisma } from "@/lib/db/prisma";
 import { PRODUCT_ATTACHMENT_MAX_BYTES } from "@/lib/products/file-assets";
 import type { ProductPatentAttachment } from "@/lib/products/types";
 import { getStorageDriver, getStorageType } from "@/lib/storage";
-import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
+import { WorkspaceScopeError, workspaceScopeFromRequest } from "@/lib/workspace/scope";
+import { assertUploadWorkspaceAccess } from "@/lib/workspace/access";
 
 export const runtime = "nodejs";
 
@@ -26,14 +27,16 @@ export async function POST(request: Request) {
   try {
     const permission = await requireApiPermission("products", "edit", request);
     if (!permission.ok) return permission.response;
-    const formData = await request.formData();
+    const formData = await request.formData().catch(() => {
+      throw new WorkspaceScopeError("Invalid upload form.", 400);
+    });
     const file = formData.get("file");
-    if (!(file instanceof File)) return NextResponse.json({ error: "缺少专利附件。" }, { status: 400 });
-    if (file.size > PRODUCT_ATTACHMENT_MAX_BYTES) return NextResponse.json({ error: "专利附件不能超过 10MB。" }, { status: 400 });
-
     const scope = workspaceScopeFromRequest(request, {
       workspaceId: formData.get("workspaceId"), accountId: formData.get("accountId"), marketplace: formData.get("marketplace"),
     });
+    await assertUploadWorkspaceAccess(permission.user.organizationId, formData, scope.workspaceId, permission.user.id, request);
+    if (!(file instanceof File)) return NextResponse.json({ error: "缺少专利附件。" }, { status: 400 });
+    if (file.size > PRODUCT_ATTACHMENT_MAX_BYTES) return NextResponse.json({ error: "专利附件不能超过 10MB。" }, { status: 400 });
     const buffer = Buffer.from(await file.arrayBuffer());
     const storage = getStorageDriver();
     const original = await storage.putBuffer({ key: storageKey(file.name, "original"), buffer, contentType: file.type || undefined });
@@ -68,6 +71,6 @@ export async function POST(request: Request) {
     };
     return NextResponse.json({ asset });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "专利附件上传失败。" }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "专利附件上传失败。" }, { status: error instanceof WorkspaceScopeError ? error.status : 500 });
   }
 }

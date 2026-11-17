@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { requireApiPermission } from "@/lib/auth/api-permissions";
+import { getAuthorizationContext } from "@/lib/auth/authorization-context";
+import { requireWorkspaceOwner } from "@/lib/workspace/memberships";
+import { WorkspaceScopeError } from "@/lib/workspace/scope";
 import { getCurrentUserFromRequest } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { ensureOrganization } from "@/lib/organizations/organization-server";
@@ -18,11 +20,12 @@ export async function GET(request: Request) {
     const scopes = await prisma.workspaceScope.findMany({
       where: {
         organizationId: user.organizationId,
+        ...(user.role === "owner" ? {} : { memberships: { some: { userId: user.id } } }),
       },
       orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }],
     });
 
-    if (!scopes.some((scope) => scope.id === "default")) {
+    if (user.role === "owner" && !scopes.some((scope) => scope.id === "default")) {
       await ensureOrganization(user.organizationId, user.organizationName);
 
       const defaultScope = await prisma.workspaceScope.create({
@@ -40,25 +43,23 @@ export async function GET(request: Request) {
     return NextResponse.json({ workspaces: scopes });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load workspaces.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: error instanceof WorkspaceScopeError ? error.status : 500 });
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const permission = await requireApiPermission("settings", "edit", request);
-
-    if (!permission.ok) {
-      return permission.response;
-    }
-    const { user } = permission;
+    const authorization = await getAuthorizationContext(request);
+    if (!authorization) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    const { user } = authorization;
+    await requireWorkspaceOwner(user.organizationId, user.id);
 
     const body = (await request.json()) as { workspaceId?: unknown; name?: unknown; accountId?: unknown; marketplace?: unknown };
     const scope = normalizeWorkspaceScope({
       workspaceId: body.workspaceId,
       accountId: body.accountId,
       marketplace: body.marketplace,
-    });
+    }, { requireWorkspaceId: true });
     const name = typeof body.name === "string" && body.name.trim() ? body.name.trim() : scope.workspaceId;
 
     if (!isWorkspaceScopeComplete(scope)) {
@@ -90,6 +91,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ workspace });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to save workspace.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: error instanceof WorkspaceScopeError ? error.status : 500 });
   }
 }

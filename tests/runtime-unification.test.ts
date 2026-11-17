@@ -15,7 +15,7 @@ import { watchParent } from "../scripts/runtime/parent-lifecycle.mjs";
 import { createHeartbeatWriter } from "../src/lib/runtime/heartbeat-writer";
 import { connectionIdentity, publicHeartbeatMetadata } from "../src/lib/runtime/connection-identity";
 import { restoreNextEnvironment } from "../scripts/runtime/generated-types-cleanup.mjs";
-import { fixtureEnvironment } from "../scripts/runtime/fixture-safety.mjs";
+import { assertFixtureContainer, fixtureEnvironment } from "../scripts/runtime/fixture-safety.mjs";
 import { createLocalSession } from "../src/lib/auth/session";
 
 test("scheduler-only registration does not require an invented queue connection", async () => {
@@ -58,6 +58,19 @@ test("runtime fixture secrets satisfy the real session signing boundary without 
 });
 
 const fixtureConfig = "DATABASE_URL=postgresql://fixture:password@127.0.0.1:5440/fixture\nREDIS_URL=redis://127.0.0.1:6381/4\nQUEUE_DRIVER=redis\nAUTH_SECRET=literal$dollar\n";
+test("fixture container identity rejects changed ID, tag, and public binding", () => {
+  const valid = {
+    Id: "fixture-id", Name: "/erp-runtime-pg-ab12cd34",
+    Config: { Labels: { "codex.task": "erp-runtime-fixture", "erp.fixture.run": "ab12cd34" } },
+    HostConfig: { PortBindings: { "5432/tcp": [{ HostIp: "127.0.0.1", HostPort: "55432" }] }, NetworkMode: "default", Privileged: false },
+    Mounts: [],
+  };
+  assert.doesNotThrow(() => assertFixtureContainer(valid, { id: "fixture-id", name: "erp-runtime-pg-ab12cd34", tag: "ab12cd34", port: 55432, servicePort: 5432 }));
+  assert.throws(() => assertFixtureContainer({ ...valid, Id: "other-id" }, { id: "fixture-id", name: "erp-runtime-pg-ab12cd34", tag: "ab12cd34", port: 55432, servicePort: 5432 }), /容器 ID/);
+  assert.throws(() => assertFixtureContainer({ ...valid, Config: { Labels: { ...valid.Config.Labels, "erp.fixture.run": "deadbeef" } } }, { id: "fixture-id", name: "erp-runtime-pg-ab12cd34", tag: "ab12cd34", port: 55432, servicePort: 5432 }), /本次创建/);
+  assert.throws(() => assertFixtureContainer({ ...valid, HostConfig: { ...valid.HostConfig, PortBindings: { "5432/tcp": [{ HostIp: "0.0.0.0", HostPort: "55432" }] } } }, { id: "fixture-id", name: "erp-runtime-pg-ab12cd34", tag: "ab12cd34", port: 55432, servicePort: 5432 }), /127.0.0.1/);
+});
+
 test("connection identity compares Redis target/index without disclosing credentials", () => {
   const env = { DATABASE_URL: "postgresql://user:secret@localhost:5432/fixture", REDIS_URL: "redis://localhost:6379/0", AUTH_SECRET: "fixture-secret", QUEUE_DRIVER: "redis" };
   const identity = connectionIdentity(env)!;

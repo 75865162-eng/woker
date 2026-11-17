@@ -354,7 +354,7 @@ export async function invoiceReconciliation(scope: WmsScope, orderId: string) {
       GROUP BY il."productRecordId"`),
   ]);
   const receivedMap = new Map(received.map(row => [row.productRecordId, Number(row.qty ?? 0)]));
-  const invoicedMap = new Map(invoiced.map(row => [row.productRecordId, { qty: Number(row.qty ?? 0), amount: row.amount ?? '0' }]));
+  const invoicedMap = new Map(invoiced.map(row => [row.productRecordId, { qty: Number(row.qty ?? 0), amount: row.amount ?? null }]));
   return {
     order: { id: order.id, number: order.number, status: order.status, currency: order.currency, supplier: order.supplier },
     lines: order.lines.map(line => {
@@ -370,7 +370,7 @@ export async function invoiceReconciliation(scope: WmsScope, orderId: string) {
         remainingQty: Math.max(0, receivedQty - (invoicedRow?.qty ?? 0)),
         unitPrice: line.unitPrice.toString(),
         orderedAmount: (Number(line.unitPrice) * line.expectedQty).toFixed(2),
-        invoicedAmount: invoicedRow?.amount ?? '0',
+        invoicedAmount: invoicedRow?.amount ?? null,
       };
     }),
   };

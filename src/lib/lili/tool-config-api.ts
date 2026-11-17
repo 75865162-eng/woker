@@ -1,4 +1,4 @@
-import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
+import { WorkspaceScopeError, workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { ToolConfigInputError, publicXiyouSettings, xiyouEndpoint, type XiyouSettings } from "./tool-config";
 import type { ToolConfigStore } from "./tool-config-server";
 
@@ -62,6 +62,7 @@ export async function handleToolConfiguration(
     await (dependencies?.probe ?? probeXiyouConnection)(settings);
     return json({ ok: true, message: "西柚 MCP 初始化已响应；未执行业务工具或工作流。" });
   } catch (error) {
+    if (error instanceof WorkspaceScopeError) return json({ message: error.message }, error.status);
     if (error instanceof ToolConfigInputError) return json({ message: error.message }, 400);
     return json({ message: key === "tool-config/test" ? "西柚连接测试失败，请检查 Token、网络及服务状态。" : "西柚配置读取或保存失败，请检查数据库及服务端加密密钥后重试。" }, 503);
   }

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { assertWorkspaceAccess } from "@/lib/workspace/access";
 import { createApprovalRequest } from "./approval";
 import { buildAmazonAdsExecutionPlan, amazonAdsToolDefinitions, createAmazonAdsApiAdapter, type AmazonAdsExecutionPlan } from "./amazon-ads";
 import { ppcAgentDefinition } from "./ppc";
@@ -14,7 +15,7 @@ export type AmazonActionScope = { organizationId: string; workspaceId: string; a
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 const record = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 export async function assertActionWorkspace(db: Prisma.TransactionClient, scope: AmazonActionScope) {
-  const workspace = await db.workspaceScope.findUnique({ where: { organizationId_id: { organizationId: scope.organizationId, id: scope.workspaceId } } });
+  const workspace = await assertWorkspaceAccess(scope.organizationId, scope.workspaceId, scope.actorUserId, db);
   assertAction(workspace, "WORKSPACE_NOT_FOUND", "工作区不属于当前组织。", 404);
 }
 async function auditLock(db: Prisma.TransactionClient, scope: AmazonActionScope, key: string) {

@@ -1,5 +1,6 @@
 import { OrganizationRole } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { randomBytes } from "node:crypto";
 import { hashPassword } from "@/lib/auth/password";
 import { type CurrentUser } from "@/lib/auth/session";
 import { upsertMemberWithCallAccount } from "@/lib/accounts/member-call-account";
@@ -35,7 +36,7 @@ export async function ensureCurrentUserRecord(user: CurrentUser) {
       id: user.id,
       email: user.email,
       name: user.name,
-      passwordHash: hashPassword("__local_session_placeholder__"),
+      passwordHash: hashPassword(randomBytes(32).toString("base64url")),
       status: "active",
     },
   });

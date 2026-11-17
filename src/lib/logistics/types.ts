@@ -6,6 +6,8 @@ export type UploadedFileState = {
 
 export type LogisticsStatusTone = "green" | "amber" | "red" | "gray" | "blue";
 
+export type ExcelImageExtension = "png" | "jpeg" | "gif";
+
 export type LogisticsLogLevel = "info" | "success" | "warning" | "error";
 
 export type LogisticsLogEntry = {

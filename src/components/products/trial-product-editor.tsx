@@ -15,7 +15,7 @@ import {
   type TrialSupplierRow,
 } from "./product-workbench-model";
 import { ExternalLinkButton, AmazonSearchLinkButton, DecimalInput, LabeledInput, ReadonlyMetric, SmallInput, SmallTextarea } from "./product-workbench-fields";
-import { calculateTrialPricing } from "./product-workbench-utils";
+import { calculateTrialPricing, parseOptionalProductNumber } from "./product-workbench-utils";
 import { getSupplierTextareaSize } from "./product-workbook-detail-sections";
 import { createTrialProductDraft, trialImprovementLabels } from "./product-workbench-data";
 
@@ -51,12 +51,12 @@ export function TrialProductEditor({
 }) {
   const [draft, setDraft] = useState<TrialProductDraft>(() => createTrialProductDraft());
 
-  function updatePricingRow(index: number, field: keyof TrialPriceRow, value: string | number) {
+  function updatePricingRow(index: number, field: keyof TrialPriceRow, value: string | number | null) {
     setDraft((current) => ({
       ...current,
       pricingRows: current.pricingRows.map((row, rowIndex) =>
         rowIndex === index
-          ? { ...row, [field]: field === "name" ? String(value) : typeof value === "number" ? value : Number(value) || 0 }
+          ? { ...row, [field]: field === "name" ? String(value) : parseOptionalProductNumber(value) }
           : row,
       ),
     }));
@@ -80,7 +80,7 @@ export function TrialProductEditor({
     }));
   }
 
-  function updateSupplier(index: number, field: keyof TrialSupplierRow, value: string | number) {
+  function updateSupplier(index: number, field: keyof TrialSupplierRow, value: string | number | null) {
     setDraft((current) => ({
       ...current,
       suppliers: current.suppliers.map((row, rowIndex) =>
@@ -89,9 +89,7 @@ export function TrialProductEditor({
               ...row,
               [field]:
                 field === "cost100" || field === "cost300"
-                  ? typeof value === "number"
-                    ? value
-                    : Number(value) || 0
+                  ? parseOptionalProductNumber(value)
                   : value,
             }
           : row,
@@ -106,14 +104,14 @@ export function TrialProductEditor({
     }));
   }
 
-  function updateKeyword(index: number, field: keyof TrialKeywordRow, value: string | number) {
+  function updateKeyword(index: number, field: keyof TrialKeywordRow, value: string | number | null) {
     setDraft((current) => ({
       ...current,
       keywords: current.keywords.map((row, rowIndex) =>
         rowIndex === index
           ? {
               ...row,
-              [field]: field === "keyword" ? String(value) : typeof value === "number" ? value : Number(value) || 0,
+              [field]: field === "keyword" ? String(value) : parseOptionalProductNumber(value),
             }
           : row,
       ),
@@ -197,7 +195,7 @@ export function TrialProductEditor({
                         <td className="px-2 py-2"><DecimalInput compact value={row.exchangeRate} onChange={(value) => updatePricingRow(index, "exchangeRate", value)} /></td>
                         <ReadonlyMetric value={calc.breakEvenPrice} />
                         <ReadonlyMetric value={calc.profit} />
-                        <ReadonlyMetric value={`${(calc.profitRate * 100).toFixed(1)}%`} />
+                        <ReadonlyMetric value={calc.profitRate === null ? null : `${(calc.profitRate * 100).toFixed(1)}%`} />
                         <ReadonlyMetric value={calc.volumeWeightLb} />
                         <ReadonlyMetric value={calc.actualWeightLb} />
                         <td className="w-10 min-w-10 px-1 py-2 text-center">

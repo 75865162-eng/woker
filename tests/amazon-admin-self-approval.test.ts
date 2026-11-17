@@ -28,6 +28,7 @@ function mockDatabase() {
   const state = { role: "owner", active: true, canApprove: true, workspace: true, member: true, row: undefined as AmazonDataCenterChangeRequest | undefined, envelope: null as { ciphertext: string } | null, saved: 0, savedSellerId: undefined as string | undefined, envelopeReads: 0, audits: [] as Array<{ action: string; metadata: Record<string, unknown> }> };
   const db = {
     $executeRaw: async () => 0,
+    workspaceMembership: { findUnique: async () => ({ userId: "admin" }) },
     workspaceScope: { findUnique: async () => state.workspace ? { id: scope.workspaceId } : null },
     organizationMember: { findUnique: async () => state.member ? { role: state.role, user: { status: state.active ? "active" : "disabled" } } : null },
     organizationRosterRole: { findMany: async () => [{ id: state.role, permissions: { operations: state.canApprove ? ["view", "create", "edit", "approve"] : ["view", "create", "edit"] } }] },
@@ -97,9 +98,9 @@ test("self confirmation resolves live membership, role, approval permission and 
   state.canApprove = false;
   await assert.rejects(() => decideChange(scope, "admin", id, "APPROVED", ""), /操作权限不足/);
   state.canApprove = true; state.active = false;
-  await assert.rejects(() => decideChange(scope, "admin", id, "APPROVED", ""), /操作权限不足/);
+  await assert.rejects(() => decideChange(scope, "admin", id, "APPROVED", ""), /工作区不可访问/);
   state.active = true; state.member = false;
-  await assert.rejects(() => decideChange(scope, "admin", id, "APPROVED", ""), /操作权限不足/);
+  await assert.rejects(() => decideChange(scope, "admin", id, "APPROVED", ""), /工作区不可访问/);
   state.member = true; state.workspace = false;
   await assert.rejects(() => decideChange(scope, "admin", id, "APPROVED", ""), /工作区不可访问/);
   state.workspace = true; state.role = "operations";

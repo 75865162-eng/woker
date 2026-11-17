@@ -52,11 +52,26 @@ test("product export creates one formatted worksheet per SKU", async () => {
   assert.deepEqual(workbook.worksheets.map((worksheet) => worksheet.name), ["SKU_ONE_测试", "SKU-TWO"]);
   assert.equal(workbook.worksheets[0].getCell("A1").value, "品名");
   assert.deepEqual(workbook.worksheets[0].getCell("F2").value, {
-    formula: 'IF($A2="","",B2*C2*D2/6000)',
+    formula: 'IF(OR($A2="",COUNT($B2:$E2,$J2:$L2,$Q2)<8,$Q2=0),"",B2*C2*D2/6000)',
   });
   assert.equal(workbook.worksheets[0].getCell("A11").value, "多套装组合");
   assert.equal(workbook.worksheets[0].getCell("A28").value, "产品改进点");
   assert.equal(workbook.worksheets[0].getCell("A33").value, "关键词");
+});
+
+test("商品导出保留缺失数值空白与真实零", async () => {
+  const buffer = await buildProductExportWorkbook([
+    createProduct({ sku: "MISSING", purchasePrice: null, packageWeightG: null, packageSizeCm: null }),
+    createProduct({ sku: "ZERO", purchasePrice: 0, packageWeightG: 0, packageSizeCm: { length: 0, width: 0, height: 0 } }),
+  ]);
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer);
+  for (const address of ["B2", "C2", "D2", "E2", "K2"]) {
+    assert.equal(workbook.worksheets[0].getCell(address).value, null, address);
+    assert.equal(workbook.worksheets[1].getCell(address).value, 0, address);
+  }
+  assert.equal(workbook.worksheets[0].getCell("J2").value, null);
+  assert.equal(workbook.worksheets[0].getCell("L2").value, null);
 });
 
 test("product export uses xlsx names and storage keys", () => {

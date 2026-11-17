@@ -7,11 +7,11 @@ import { Button } from "@/components/ui/button";
 import { useDraftState } from "@/lib/workspace/use-draft-state";
 import { Badge, Field, Kpis, Notice, Section, SelectField, Table, extPost, money, statusLabel, today, useExt } from "./kit";
 
-type PlanRow = { id: string; name: string; marketplace: string; periodStart: string; periodEnd: string; status: string; lineCount: number; targetQty: number; targetRevenue: number; forecastQty: number; revision: number };
+type PlanRow = { id: string; name: string; marketplace: string; periodStart: string; periodEnd: string; status: string; lineCount: number; targetQty: number; targetRevenue: number; forecastQty: number | null; forecastState: "READY" | "NEEDS_DATA"; revision: number };
 type PlanDetail = {
   plan: { id: string; name: string; marketplace: string; currency: string; periodType: string; periodStart: string; periodEnd: string; status: string; revision: number; forecastWindowDays: number; seasonalityBp: number; notes: string };
-  lines: Array<{ id: string; sellerSku: string; asin: string; targetQty: number; targetRevenue: string; unitCost: string; historyDailyAvg: string; forecastQty: number; actualQty: number; actualRevenue: number; completionBp: number; gap: number }>;
-  totals: { targetQty: number; actualQty: number; forecastQty: number };
+  lines: Array<{ id: string; sellerSku: string; asin: string; targetQty: number; targetRevenue: string; unitCost: string; historyDailyAvg: string | null; forecastQty: number | null; actualQty: number | null; actualRevenue: number | null; completionBp: number | null; gap: number | null; actualState: "READY" | "NEEDS_DATA"; forecastState: "READY" | "NEEDS_DATA" }>;
+  totals: { targetQty: number; actualQty: number | null; forecastQty: number | null; actualState: "READY" | "NEEDS_DATA"; forecastState: "READY" | "NEEDS_DATA" };
 };
 type LineDraft = { sellerSku: string; asin: string; targetQty: string; targetRevenue: string; unitCost: string };
 
@@ -58,7 +58,9 @@ export function SalesPlansWorkbench() {
     if (busyRef.current || !["idle", "ready"].includes(loadRef.current.state)) return;
     const payloadLines = lines.filter(line => line.sellerSku.trim()).map(line => ({
       sellerSku: line.sellerSku.trim(), asin: line.asin.trim(),
-      targetQty: Number(line.targetQty || 0), targetRevenue: Number(line.targetRevenue || 0), unitCost: Number(line.unitCost || 0),
+      targetQty: line.targetQty.trim() ? Number(line.targetQty) : null,
+      targetRevenue: line.targetRevenue.trim() ? Number(line.targetRevenue) : null,
+      unitCost: line.unitCost.trim() ? Number(line.unitCost) : null,
     }));
     if (!payloadLines.length) { setError("至少填写一行 SKU 目标。"); return; }
     void run("save-sales-plan", {
@@ -128,7 +130,7 @@ export function SalesPlansWorkbench() {
       { label: "计划数", value: String(plans.data?.items.length ?? 0) },
       { label: "在行 SKU", value: String((plans.data?.items ?? []).reduce((sum, row) => sum + row.lineCount, 0)) },
       { label: "目标销量合计", value: String((plans.data?.items ?? []).reduce((sum, row) => sum + row.targetQty, 0)) },
-      { label: "预测销量合计", value: String((plans.data?.items ?? []).reduce((sum, row) => sum + row.forecastQty, 0)) },
+      { label: "预测销量合计", value: !plans.data?.items.length || plans.data.items.some(row => row.forecastQty === null) ? "待补数据" : String(plans.data.items.reduce((sum, row) => sum + row.forecastQty!, 0)) },
     ]} />} main={<div className="space-y-6">
 
     <Section title={editing ? "编辑销售计划" : "新建销售计划"} description="预测取历史日均销量 × 计划天数 × 季节系数；实际销量取订单事实，两者都不允许手填覆盖。">
@@ -176,7 +178,7 @@ export function SalesPlansWorkbench() {
           { key: "marketplace", label: "站点" },
           { key: "lineCount", label: "SKU 数", align: "right" },
           { key: "targetQty", label: "目标销量", align: "right" },
-          { key: "forecastQty", label: "预测销量", align: "right" },
+          { key: "forecastQty", label: "预测销量", align: "right", render: row => row.forecastQty === null ? "待补数据" : row.forecastQty },
           { key: "targetRevenue", label: "目标销售额", align: "right", render: row => money(row.targetRevenue) },
           { key: "status", label: "状态", render: row => <Badge text={statusLabel(row.status)} tone={row.status === "ACTIVE" ? "good" : row.status === "CLOSED" ? "muted" : "info"} /> },
           { key: "ops", label: "操作", render: row => <div className="flex flex-wrap gap-1">
@@ -191,9 +193,9 @@ export function SalesPlansWorkbench() {
       {detail.data ? <>
         <Kpis items={[
           { label: "目标销量", value: String(detail.data.totals.targetQty) },
-          { label: "实际销量", value: String(detail.data.totals.actualQty) },
-          { label: "预测销量", value: String(detail.data.totals.forecastQty) },
-          { label: "完成率", value: detail.data.totals.targetQty > 0 ? `${((detail.data.totals.actualQty / detail.data.totals.targetQty) * 100).toFixed(1)}%` : "—" },
+          { label: "实际销量", value: detail.data.totals.actualQty === null ? "待补数据" : String(detail.data.totals.actualQty) },
+          { label: "预测销量", value: detail.data.totals.forecastQty === null ? "待补数据" : String(detail.data.totals.forecastQty) },
+          { label: "完成率", value: detail.data.totals.actualQty === null ? "待补数据" : detail.data.totals.targetQty > 0 ? `${((detail.data.totals.actualQty / detail.data.totals.targetQty) * 100).toFixed(1)}%` : "—" },
         ]} />
         <Table
           rows={detail.data.lines}
@@ -202,10 +204,11 @@ export function SalesPlansWorkbench() {
             { key: "sellerSku", label: "SKU", render: row => <span className="font-mono">{row.sellerSku}</span> },
             { key: "asin", label: "ASIN" },
             { key: "targetQty", label: "目标", align: "right" },
-            { key: "forecastQty", label: "预测", align: "right" },
-            { key: "actualQty", label: "实际", align: "right" },
-            { key: "gap", label: "偏差", align: "right", render: row => <span className={row.gap < 0 ? "text-danger-ink" : "text-success-ink"}>{row.gap}</span> },
-            { key: "completionBp", label: "完成率", align: "right", render: row => `${(row.completionBp / 100).toFixed(1)}%` },
+            { key: "forecastQty", label: "预测", align: "right", render: row => row.forecastQty === null ? "待补数据" : row.forecastQty },
+            { key: "actualQty", label: "实际", align: "right", render: row => row.actualQty === null ? "待补数据" : row.actualQty },
+            { key: "gap", label: "偏差", align: "right", render: row => row.gap === null ? "待补数据" : <span className={row.gap < 0 ? "text-danger-ink" : "text-success-ink"}>{row.gap}</span> },
+            { key: "completionBp", label: "完成率", align: "right", render: row => row.completionBp === null ? "—" : `${(row.completionBp / 100).toFixed(1)}%` },
+            { key: "actualState", label: "数据状态", render: row => row.actualState === "NEEDS_DATA" || row.forecastState === "NEEDS_DATA" ? <Badge text="待补数据" tone="muted" /> : <Badge text="观测完整" tone="good" /> },
           ]}
         />
       </> : <p className="text-xs text-muted">正在读取计划明细…</p>}

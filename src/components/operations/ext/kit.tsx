@@ -155,11 +155,11 @@ export function Table<T extends { id?: string }>(props: { columns: Array<Column<
   </div>;
 }
 
-export function Kpis({ items }: { items: Array<{ label: string; value: string; hint?: string; tone?: "warn" | "good" }> }) {
+export function Kpis({ items }: { items: Array<{ label: string; value: string; hint?: string; tone?: "warn" | "good" | "muted" }> }) {
   return <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
     {items.map(item => <article key={item.label} className="rounded border border-border bg-surface px-3 py-2">
       <p className="text-label text-muted">{item.label}</p>
-      <p className={`mt-0.5 text-lg font-semibold tabular-nums ${item.tone === "warn" ? "text-danger-ink" : item.tone === "good" ? "text-success-ink" : ""}`}>{item.value}</p>
+      <p className={`mt-0.5 text-lg font-semibold tabular-nums ${item.tone === "warn" ? "text-danger-ink" : item.tone === "good" ? "text-success-ink" : item.tone === "muted" ? "text-muted" : ""}`}>{item.value}</p>
       {item.hint && <p className="text-label text-muted">{item.hint}</p>}
     </article>)}
   </div>;

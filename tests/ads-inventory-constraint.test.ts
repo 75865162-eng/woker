@@ -11,7 +11,8 @@ function evaluate(overrides: {
   p90Daily?: number | null;
   agingDays?: number | null;
   snapshotAgeHours?: number | null;
-  spend?: number;
+  spend?: number | null;
+  windowDays?: number;
   sales?: number;
   acosPct?: number | null;
   grossMarginPct?: number | null;
@@ -22,11 +23,11 @@ function evaluate(overrides: {
     sku: "SKU-1",
     asOf: "2026-11-14",
     ads: {
-      spend: overrides.spend ?? 200,
+      spend: overrides.spend === undefined ? 200 : overrides.spend,
       sales: overrides.sales ?? 1400,
       orders: 20,
       acosPct: overrides.acosPct === undefined ? null : overrides.acosPct,
-      windowDays: 7,
+      windowDays: overrides.windowDays ?? 7,
     },
     inventory: {
       available: overrides.available ?? 400,
@@ -125,6 +126,29 @@ test("advisor brief carries facts and evidence but no execution amounts the mode
   assert.equal("maxAdditionalDailySpend" in brief, false, "预算属于执行层，模型不得生成");
   assert.equal("suggestedQuantity" in brief, false);
   assert.ok(brief.forbiddenActions.length > 0);
+});
+
+test("缺失或无效日均花费不生成常规或清仓加投推荐", () => {
+  for (const agingDays of [30, 120]) {
+    for (const invalid of [{ spend: null }, { windowDays: 0 }, { windowDays: Number.NaN }, { spend: Number.NaN }, { spend: -1 }]) {
+      const result = evaluate({ available: 1000, agingDays, acosPct: 15, ...invalid });
+      assert.equal(result.decision, "NEEDS_DATA");
+      assert.equal(result.currentDailySpend, null);
+      assert.equal(result.maxAdditionalDailySpend, null);
+      assert.equal(result.clearance, null);
+      assert.deepEqual(result.allowedActions, []);
+      assert.ok(result.missingInputs.some((value) => value.includes("日均花费")));
+    }
+  }
+});
+
+test("真实零花费保留零且不绕过清仓百分比上限", () => {
+  for (const agingDays of [30, 120]) {
+    const result = evaluate({ available: 1000, agingDays, spend: 0, acosPct: 15 });
+    assert.equal(result.currentDailySpend, 0);
+    assert.equal(result.maxAdditionalDailySpend, 0);
+    assert.notEqual(result.decision, "NEEDS_DATA");
+  }
 });
 
 test("default policy values are explicit and reviewable", () => {

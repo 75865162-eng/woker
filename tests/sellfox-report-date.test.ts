@@ -95,7 +95,7 @@ test("sales browse/export and both performance browse layouts share scoped effec
     aggregate: async ({ where }: { where: unknown }) => { filters.push(where); return { _sum: {} }; },
   };
   globals.prisma = {
-    workspaceScope: { findUnique: async () => ({ id: scope.workspaceId }) },
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) }, workspaceScope: { findUnique: async () => ({ id: scope.workspaceId }) },
     sellfoxStore: { findMany: async () => [], findFirst: async () => null },
     sellfoxSalesDailySnapshot: table, sellfoxProductDailySnapshot: table,
     $queryRaw: async (sql: Prisma.Sql) => { sqlCalls.push(sql); return [{ rows: [], total: 0, totals: [{ currency: "USD", promotionDiscount: 0, giftWrapFee: 0 }] }]; },

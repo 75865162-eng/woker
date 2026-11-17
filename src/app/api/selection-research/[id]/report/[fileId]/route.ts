@@ -14,7 +14,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   try {
     const { id, fileId } = await context.params;
     const scope = workspaceScopeFromRequest(request);
-    if (!await assertWorkspaceAccess(permission.user.organizationId, scope.workspaceId)) return NextResponse.json({ error: "Forbidden workspace." }, { status: 403 });
+    if (!await assertWorkspaceAccess(permission.user.organizationId, scope.workspaceId, permission.user.id, undefined, request)) return NextResponse.json({ error: "Forbidden workspace." }, { status: 403 });
     const { run } = await prismaResearchRepository().read(id, { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId, ownerId: permission.user.id });
     if (run.status !== "COMPLETED" || run.report?.fileId !== fileId) return NextResponse.json({ error: "RESEARCH_REPORT_NOT_FOUND" }, { status: 404 });
     const file = await prisma.fileObject.findFirst({ where: {

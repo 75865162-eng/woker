@@ -10,7 +10,7 @@ type ToolEntry = { name: string; description: string; operationMode: string; ver
 type Payload = {
   matrix: MatrixRow[];
   endpoints: { amazon: { path: string; tokenPrefix: string; credentialCount: number; isolation: string }; sellfox: { path: string; tokenPrefix: string; credentialCount: number; legacyPath: string; isolation: string } };
-  sellfox: { credentials: SellfoxCredential[]; stores: Store[]; tools: ToolEntry[]; datasets: string[]; catalogSize: number; readonlyRoleConfigured: boolean; sharedTokenEnabled: boolean };
+  sellfox: { credentials: SellfoxCredential[]; stores: Store[]; tools: ToolEntry[]; datasets: string[]; catalogSize: number; readonlyRoleConfigured: boolean };
 };
 const input = "rounded border border-border bg-background px-2 py-1.5 text-sm";
 
@@ -88,9 +88,8 @@ export function McpIsolationPanel() {
         <p>Amazon：{data.endpoints.amazon.isolation} · 当前用户凭证 {data.endpoints.amazon.credentialCount} 个</p>
         <p>赛狐：{data.endpoints.sellfox.isolation} · 当前用户凭证 {data.endpoints.sellfox.credentialCount} 个（兼容旧路径 {data.endpoints.sellfox.legacyPath}）</p>
       </div>
-      {(!data.sellfox.readonlyRoleConfigured || data.sellfox.sharedTokenEnabled) && <ul className="my-2 space-y-1 text-xs text-warning-ink">
+      {!data.sellfox.readonlyRoleConfigured && <ul className="my-2 space-y-1 text-xs text-warning-ink">
         {!data.sellfox.readonlyRoleConfigured && <li>赛狐 MCP 未配置独立只读连接（MCP_PG_READONLY_URL）。当前无法执行查询，也不会回退到可写连接。</li>}
-        {data.sellfox.sharedTokenEnabled && <li>检测到兼容共享令牌 MCP_HTTP_TOKEN 仍启用。它只能在赛狐端点的单一组织内只读；建议迁移到个人凭证后设置 MCP_DISABLE_SHARED_TOKEN=true。</li>}
       </ul>}
       <h3 className="mt-4 text-sm font-semibold">赛狐 MCP 凭证</h3>
       <p className="mt-1 text-xs text-muted">凭证店铺范围决定可读数据；留空表示该组织/工作区全部店铺。工具名统一带 sellfox. 前缀，与 Amazon 工具无交集。</p>

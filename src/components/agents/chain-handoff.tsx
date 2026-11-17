@@ -91,6 +91,6 @@ export function ChainHandoffNotice({ payload, error }: { payload: HandoffPayload
   const meta = payload._handoff;
   const agent = meta?.from === "orchestrator" || meta?.from === "launch" ? "orchestrator" : meta?.from;
   return <div className="rounded border border-border p-2 text-sm" role="status">
-    已加载交接，运行前请复核。{meta ? <a className="ml-2 text-brand underline" href={`/agents/${agent}?executionId=${encodeURIComponent(meta.sourceExecutionId)}`}>查看来源执行</a> : "旧版交接无执行来源。"}
+    已加载交接，运行前请复核。<a className="ml-2 text-brand underline" href={`/agents/${agent}?executionId=${encodeURIComponent(meta.sourceExecutionId)}`}>查看来源执行</a>
   </div>;
 }

@@ -90,7 +90,7 @@ export function SellfoxCredentialsPanel() {
         <p className="text-xs text-muted">测试已保存的凭据；修改输入框后请先保存。点击后仅请求赛狐 Token，不读取业务数据或启动同步，每分钟限一次。</p>
         {testResult && <p role={testResult.passed ? "status" : "alert"} className={testResult.passed ? "text-sm text-success-ink" : "text-sm text-danger-ink"}>{testResult.message}</p>}
       </div>
-      <p className="text-xs text-muted">来源：{status.source === "database" ? "工作区加密配置" : status.source === "environment" ? "现有服务端环境变量" : "尚未配置"} · 版本 {status.revision}{status.updatedAt ? ` · 更新时间 ${new Date(status.updatedAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}` : ""}</p>
+      <p className="text-xs text-muted">来源：{status.source === "database" ? "工作区加密配置" : "尚未配置"} · 版本 {status.revision}{status.updatedAt ? ` · 更新时间 ${new Date(status.updatedAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}` : ""}</p>
       {status.configurationError && <p role="alert" className="text-xs text-danger-ink">{status.configurationError}</p>}
       {!status.storageReady && <p role="alert" className="text-xs text-warning-ink">凭据表尚未就绪，请管理员按审批流程应用当前版本迁移。页面不会自动执行迁移。</p>}
       {!status.encryptionReady && <p className="text-xs text-warning-ink">服务端需配置 SELLFOX_CREDENTIAL_ENCRYPTION_KEY（32 字节 Base64）；不要替换已有主密钥。主密钥不在此表单输入。</p>}

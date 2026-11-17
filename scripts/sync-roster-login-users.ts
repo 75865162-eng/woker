@@ -30,7 +30,6 @@ async function main() {
         username: true,
         name: true,
         email: true,
-        password: true,
         phone: true,
         status: true,
         roleId: true,
@@ -42,7 +41,6 @@ async function main() {
       accounts.map((account) => ({
         ...account,
         username: account.username ?? undefined,
-        password: account.password ?? undefined,
         phone: account.phone ?? undefined,
         roleId: normalizeAccountRoleId(account.roleId),
         organizationId,

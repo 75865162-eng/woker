@@ -11,7 +11,7 @@ export const mulMoney = (value: number, factor: number) => fromMicro(micro(value
 export const roundMoney = (value: number) => fromMicro(micro(value));
 
 export function requireMoney(value: unknown, label: string, options: { min?: number; max?: number } = {}) {
-  const raw = typeof value === 'string' ? Number(value.trim()) : value;
+  const raw = typeof value === 'string' && value.trim() ? Number(value.trim()) : value;
   if (typeof raw !== 'number' || !Number.isFinite(raw)) throw new WmsInputError(`${label}必须是数字。`);
   const min = options.min ?? 0;
   const max = options.max ?? 1_000_000_000;
@@ -20,7 +20,7 @@ export function requireMoney(value: unknown, label: string, options: { min?: num
 }
 
 export function requireInt(value: unknown, label: string, options: { min?: number; max?: number } = {}) {
-  const raw = typeof value === 'string' ? Number(value.trim()) : value;
+  const raw = typeof value === 'string' && value.trim() ? Number(value.trim()) : value;
   const min = options.min ?? 0;
   const max = options.max ?? 2_147_483_647;
   if (typeof raw !== 'number' || !Number.isSafeInteger(raw) || raw < min || raw > max) {

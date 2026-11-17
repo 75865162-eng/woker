@@ -26,6 +26,7 @@ export type TeamAccountRecord = {
   username?: string;
   name: string;
   email: string;
+  // 仅用于显式设置或重置密码；服务端读取和导出不得返回。
   password?: string;
   department: string;
   title: string;
@@ -65,37 +66,35 @@ export const accountRoleToWorkflowRole: Partial<Record<string, ProductWorkflowRo
   designer: "designer",
 };
 
-const legacyRoleMap: Record<string, AccountRoleId> = {
-  selection: "procurement",
-  admin: "database_admin",
-  operations_manager: "operations_supervisor",
-  ppc_manager: "operations",
-  ppc_specialist: "operations",
-  listing_operator: "operations",
-  listing_specialist: "operations",
-  logistics_operator: "warehouse",
-  logistics_specialist: "warehouse",
+const roleAliases: Record<string, OrganizationRoleId> = {
+  "超级管理员": "owner",
+  "数据库管理员": "database_admin",
+  "运营主管": "operations_supervisor",
+  "运营助理": "operations_assistant",
+  "运营": "operations",
+  "选品": "developer",
+  "美工": "designer",
+  "仓管": "warehouse",
+  "仓管员": "warehouse",
+  "仓库主管": "warehouse_supervisor",
+  "财务": "finance",
+  "采购": "procurement",
+  "查看者": "viewer",
+  "乐器查看账号": "viewer",
 };
 
 export function normalizeAccountRoleId(roleId: string | null | undefined): AccountRoleId {
   const normalized = String(roleId ?? "").trim();
-
-  if (!normalized) return "viewer";
-
-  const legacyRole = legacyRoleMap[normalized];
-  if (legacyRole) return legacyRole;
-
-  if (normalized.includes("财务")) return "finance";
-  if (normalized.includes("仓库主管")) return "warehouse_supervisor";
-  if (normalized.includes("仓管")) return "warehouse";
-  if (normalized.includes("选品")) return "developer";
-  if (normalized.includes("采购")) return "procurement";
-  if (normalized.includes("美工")) return "designer";
-  if (normalized.includes("运营主管") || normalized.includes("主管")) return "operations_supervisor";
-  if (normalized.includes("运营")) return "operations";
-  if (normalized.includes("查看")) return "viewer";
-
-  return normalized;
+  if (organizationRoleIds.includes(normalized as OrganizationRoleId)) return normalized;
+  if (roleAliases[normalized]) return roleAliases[normalized];
+  const candidates = normalized.split(/[，,、/|]+/).map((item) => item.trim()).filter(Boolean);
+  const matches = candidates.map((candidate) => roleAliases[candidate] ?? (organizationRoleIds.includes(candidate as OrganizationRoleId) ? candidate as OrganizationRoleId : undefined)).filter((role): role is OrganizationRoleId => Boolean(role));
+  if (!matches.length) return normalized;
+  if (matches.includes("operations_supervisor")) return "operations_supervisor";
+  if (matches.includes("operations")) return "operations";
+  if (matches.includes("warehouse_supervisor")) return "warehouse_supervisor";
+  if (matches.includes("warehouse")) return "warehouse";
+  return matches[0];
 }
 
 export function toOrganizationRoleId(roleId: string | null | undefined): OrganizationRoleId {

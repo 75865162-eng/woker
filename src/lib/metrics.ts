@@ -1,6 +1,17 @@
 import type { MetricSnapshot, PerformanceRow } from "@/lib/types";
 
-export function enrichMetric(row: PerformanceRow, metric: string): number {
+function requireObservedMetrics(row: PerformanceRow) {
+  for (const key of ["sales", "spend", "orders", "impressions", "clicks"] as const) {
+    if (typeof row[key] !== "number" || !Number.isFinite(row[key]) || row[key] < 0) {
+      throw new Error(`NEEDS_DATA: ${key}`);
+    }
+  }
+}
+
+export function enrichMetric(row: PerformanceRow, metric: "roas" | "ctr" | "cpc" | "cvr" | "cpa" | "acots" | "asots"): number;
+export function enrichMetric(row: PerformanceRow, metric: string): number | null;
+export function enrichMetric(row: PerformanceRow, metric: string): number | null {
+  requireObservedMetrics(row);
   const spend = row.spend;
   const sales = row.sales;
   const clicks = row.clicks;
@@ -9,7 +20,7 @@ export function enrichMetric(row: PerformanceRow, metric: string): number {
 
   switch (metric) {
     case "acos":
-      return sales > 0 ? (spend / sales) * 100 : spend > 0 ? 999 : 0;
+      return sales > 0 ? (spend / sales) * 100 : null;
     case "roas":
       return spend > 0 ? sales / spend : 0;
     case "ctr":
@@ -25,7 +36,7 @@ export function enrichMetric(row: PerformanceRow, metric: string): number {
     case "asots":
       return sales > 0 ? (sales / (sales * 1.32)) * 100 : 0;
     default:
-      return Number(row[metric as keyof PerformanceRow] ?? 0);
+      return typeof row[metric as keyof PerformanceRow] === "number" ? row[metric as keyof PerformanceRow] as number : null;
   }
 }
 
@@ -39,6 +50,7 @@ export function aggregateMetrics(
   );
   const totals = scopedRows.reduce(
     (acc, row) => {
+      requireObservedMetrics(row);
       acc.sales += row.sales;
       acc.spend += row.spend;
       acc.orders += row.orders;
@@ -57,7 +69,7 @@ export function aggregateMetrics(
     orders: totals.orders,
     impressions: totals.impressions,
     clicks: totals.clicks,
-    acos: totals.sales > 0 ? (totals.spend / totals.sales) * 100 : 0,
+    acos: totals.sales > 0 ? (totals.spend / totals.sales) * 100 : null,
     roas: totals.spend > 0 ? totals.sales / totals.spend : 0,
     ctr: totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0,
     cpc: totals.clicks > 0 ? totals.spend / totals.clicks : 0,
@@ -72,6 +84,7 @@ export function aggregateMetricsForCampaignGroups(
   const scopedRows = rows.filter((row) => campaignGroupIds.includes(row.campaignGroupId));
   const totals = scopedRows.reduce(
     (acc, row) => {
+      requireObservedMetrics(row);
       acc.sales += row.sales;
       acc.spend += row.spend;
       acc.orders += row.orders;
@@ -90,7 +103,7 @@ export function aggregateMetricsForCampaignGroups(
     orders: totals.orders,
     impressions: totals.impressions,
     clicks: totals.clicks,
-    acos: totals.sales > 0 ? (totals.spend / totals.sales) * 100 : 0,
+    acos: totals.sales > 0 ? (totals.spend / totals.sales) * 100 : null,
     roas: totals.spend > 0 ? totals.sales / totals.spend : 0,
     ctr: totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0,
     cpc: totals.clicks > 0 ? totals.spend / totals.clicks : 0,
@@ -113,6 +126,6 @@ export function formatCurrency(value: number): string {
   }).format(value);
 }
 
-export function formatPercent(value: number): string {
-  return `${formatNumber(value, 1)}%`;
+export function formatPercent(value: number | null): string {
+  return value === null ? "—" : `${formatNumber(value, 1)}%`;
 }

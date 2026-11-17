@@ -9,6 +9,7 @@ import {
 import { getProductWorkflowStage, normalizeAssigneeList } from "@/lib/products/workflow";
 import { projectProductCenter } from "@/lib/products/product-center-projection";
 import { getProductListImage } from "@/lib/products/image-assets";
+import { requireProductPurchasePrice } from "@/lib/products/product-record-index";
 
 export const productProjectionVersion = 1;
 export const productProjectionNames = ["summary", "text", "list_summary", "product_center"] as const;
@@ -48,7 +49,7 @@ export function buildProductSummaryProjection(input: {
     primaryImageUrl: getProductListImage(product),
     status: product.status,
     supplierName: product.supplierName,
-    purchasePrice: product.purchasePrice,
+    purchasePrice: requireProductPurchasePrice(product),
     selectionOwner: product.selectionOwner || product.developer || "",
     opsAssignee: product.opsAssignee || normalizeAssigneeList(undefined, product.opsAssignees).join("、"),
     designerAssignee: product.designerAssignee || normalizeAssigneeList(undefined, product.designerAssignees).join("、"),

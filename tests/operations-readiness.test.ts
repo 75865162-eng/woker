@@ -1,8 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildBlockedAmazonSyncRun, buildDomainFreshnessSummaries, emptyDomainFreshnessSummaries, extractMarketplaceParticipations, inventorySnapshotStatus, normalizeSyncIdempotencyKey } from "@/lib/operations/readiness";
+import { buildBlockedAmazonSyncRun, emptyDomainFreshnessSummaries, extractMarketplaceParticipations, inventorySnapshotStatus, normalizeSyncIdempotencyKey } from "@/lib/operations/readiness";
 import { isAmazonSyncResource } from "@/lib/operations/types";
 import { getAmazonSpApiConfigurationStatus } from "@/lib/amazon/sp-api-config";
+
+test("未同步库存和聚合缺字段保留未知，真实零与完整入库总数保留", async () => {
+  const { emptyInventorySummary } = await import('@/lib/operations/readiness');
+  const { compatibilityInventoryQuantities } = await import('@/lib/amazon-sync/compatibility');
+  const unknown = { fulfillableQuantity: null, inboundQuantity: null, reservedQuantity: null, unfulfillableQuantity: null };
+  const { fulfillableQuantity, inboundQuantity, reservedQuantity, unfulfillableQuantity } = emptyInventorySummary();
+  assert.deepEqual({ fulfillableQuantity, inboundQuantity, reservedQuantity, unfulfillableQuantity }, unknown);
+  assert.deepEqual(compatibilityInventoryQuantities(null), unknown);
+  assert.deepEqual(compatibilityInventoryQuantities({ fulfillableQuantity: null, inboundWorkingQuantity: null, inboundShippedQuantity: null, inboundReceivingQuantity: null, reservedQuantity: null, unfulfillableQuantity: null }), unknown);
+  const zero = { fulfillableQuantity: 0, inboundWorkingQuantity: 0, inboundShippedQuantity: 0, inboundReceivingQuantity: 0, reservedQuantity: 0, unfulfillableQuantity: 0 };
+  assert.deepEqual(compatibilityInventoryQuantities(zero), { fulfillableQuantity: 0, inboundQuantity: 0, reservedQuantity: 0, unfulfillableQuantity: 0 });
+  assert.equal(compatibilityInventoryQuantities({ ...zero, inboundWorkingQuantity: 3, inboundShippedQuantity: 2 }).inboundQuantity, 5);
+  for (const field of ['inboundWorkingQuantity', 'inboundShippedQuantity', 'inboundReceivingQuantity']) {
+    assert.equal(compatibilityInventoryQuantities({ ...zero, [field]: null }).inboundQuantity, null);
+  }
+});
 
 test("rejects unsupported Amazon sync resources", () => {
   assert.equal(isAmazonSyncResource("ads"), true);
@@ -78,33 +94,26 @@ test("operations readiness exposes six domains and keeps unimplemented domains u
   assert.match(summaries.orders.reason ?? "", /尚未接入/);
 });
 
-test("domain freshness keeps PPC unconnected and reports failed unsupported attempts", () => {
-  const inventory = {
-    status: "FRESH" as const,
-    syncRunId: "inventory-run",
-    capturedAt: "2026-10-22T07:00:00.000Z",
-    snapshotCount: 1,
-    fulfillableQuantity: 4,
-    inboundQuantity: 2,
-    reservedQuantity: 1,
-    unfulfillableQuantity: 0,
-  };
-  const latestByDomain = new Map([
-    ["finance" as const, {
-      latestAttempt: { id: "finance-run", status: "FAILED", error: "未实现执行器", startedAt: new Date("2026-10-21T08:00:00.000Z"), finishedAt: new Date("2026-10-21T08:01:00.000Z") },
-      latestSuccess: null,
-    }],
-  ]);
-  const summaries = buildDomainFreshnessSummaries({
-    inventory,
-    latestByDomain,
-  });
+test("兼容就绪投影只聚合中心状态且部分成功不冒充最新", async () => {
+  const { aggregateCenterHealth } = await import("@/lib/amazon-sync/compatibility");
+  assert.equal(aggregateCenterHealth([]), "NOT_SYNCED");
+  assert.equal(aggregateCenterHealth(["FRESH", "FRESH"]), "FRESH");
+  assert.equal(aggregateCenterHealth(["FRESH", "PARTIAL_SUCCESS"]), "FAILED");
+  assert.equal(aggregateCenterHealth(["STALE", "SYNCING"]), "SYNCING");
+  assert.equal(aggregateCenterHealth(["SYNCING", "BLOCKED"]), "BLOCKED");
+  assert.equal(aggregateCenterHealth(["FRESH", "unknown"]), "NOT_SYNCED");
+});
 
-  assert.equal(summaries.ads.status, "NOT_SYNCED");
-  assert.match(summaries.ads.reason ?? "", /PPC/);
-  assert.equal(summaries.finance.status, "FAILED");
-  assert.equal(summaries.finance.lastAttemptStatus, "FAILED");
-  assert.equal(summaries.inventory.status, "FRESH");
+test("同步中心健康状态是就绪页的唯一来源", async () => {
+  const { sourceHealth } = await import("@/lib/amazon-sync/read");
+  const source = { enabled: true, lastSuccessAt: new Date(), freshnessMinutes: 60, activeRunId: "published", authorization: { status: "CONFIGURED" }, seller: { status: "active" } };
+  assert.equal(sourceHealth(source), "FRESH");
+  assert.equal(sourceHealth({ ...source, lastSuccessAt: new Date(0) }), "STALE");
+  assert.equal(sourceHealth({ ...source, activeRunId: null }), "NOT_SYNCED");
+  for (const status of ["RUNNING", "QUEUED", "WAITING", "RETRY_WAIT"]) assert.equal(sourceHealth(source, status), "SYNCING");
+  for (const status of ["FAILED", "BLOCKED", "PARTIAL_SUCCESS"]) assert.equal(sourceHealth(source, status), status);
+  assert.equal(sourceHealth({ ...source, enabled: false }, "RUNNING"), "DISABLED");
+  assert.equal(sourceHealth({ ...source, authorization: { status: "ERROR" } }, "RUNNING"), "BLOCKED");
 });
 
 

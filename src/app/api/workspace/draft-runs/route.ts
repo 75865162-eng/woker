@@ -1,23 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
+import { draftRunSaveErrorResponse, saveDraftRun } from "./save-draft-run";
 
 export const runtime = "nodejs";
-
-function isJsonArray(value: unknown): value is unknown[] {
-  return Array.isArray(value);
-}
-
-function jsonArray(value: unknown): Prisma.InputJsonValue {
-  return isJsonArray(value) ? (value as Prisma.InputJsonValue) : [];
-}
-
-function jsonObject(value: unknown): Prisma.InputJsonValue {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Prisma.InputJsonValue) : {};
-}
 
 function optionalDate(value: unknown) {
   if (typeof value !== "string" || !value.trim()) {
@@ -96,47 +84,14 @@ export async function POST(request: Request) {
     const id = typeof body.id === "string" && body.id.trim() ? body.id.trim() : `draft-run-${randomUUID()}`;
     const createdAt = optionalDate(body.ranAt);
 
-    const draftRun = await prisma.draftRun.upsert({
-      where: { id },
-      create: {
-        id,
-        organizationId: user.organizationId,
-        userId: user.id,
-        workspaceId: scope.workspaceId,
-        accountId: scope.accountId,
-        marketplace: scope.marketplace,
-        scopeType: body.scopeType ?? "workspace",
-        campaignGroupIds: jsonArray(body.campaignGroupIds),
-        campaignGroupNames: jsonArray(body.campaignGroupNames),
-        rulesSnapshot: jsonObject(body.rulesSnapshot),
-        overallAdDataRows: jsonArray(body.overallAdDataRows),
-        overallAdDataMatchSummary: jsonObject(body.overallAdDataMatchSummary),
-        drafts: jsonArray(body.drafts),
-        selectedDraftIds: jsonArray(body.selectedDraftIds),
-        summary: jsonObject(body.summary),
-        createdAt,
-        exportedAt: body.exportFileName ? new Date(body.exportedAt ?? Date.now()) : null,
-        exportFileName: body.exportFileName ?? null,
-        updatedAt: new Date(),
-      },
-      update: {
-        campaignGroupIds: jsonArray(body.campaignGroupIds),
-        campaignGroupNames: jsonArray(body.campaignGroupNames),
-        rulesSnapshot: jsonObject(body.rulesSnapshot),
-        overallAdDataRows: jsonArray(body.overallAdDataRows),
-        overallAdDataMatchSummary: jsonObject(body.overallAdDataMatchSummary),
-        drafts: jsonArray(body.drafts),
-        selectedDraftIds: jsonArray(body.selectedDraftIds),
-        summary: jsonObject(body.summary),
-        exportedAt: body.exportFileName ? new Date(body.exportedAt ?? Date.now()) : null,
-        exportFileName: body.exportFileName ?? null,
-        updatedAt: new Date(),
-      },
-    });
+    // 主键冲突只允许失败，不能回退到按裸 ID 更新其他作用域的记录。
+    const draftRun = await saveDraftRun({ db: prisma, id, user, scope, body: body as Record<string, unknown>, createdAt });
 
     return NextResponse.json({ draftRun });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to save draft run.";
+    const conflictResponse = draftRunSaveErrorResponse(error);
+    if (conflictResponse) return conflictResponse;
+    const message = error instanceof Error ? error.message : "Failed to save draft runs.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

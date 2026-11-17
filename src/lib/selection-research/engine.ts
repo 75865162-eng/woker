@@ -69,16 +69,6 @@ export class ResearchEngine {
   private feeReviewRequired(run: Run) {
     return researchFeeReviewRequired(run);
   }
-  private releaseFeeGate(run: Run) {
-    // Historical billing gates never require receipts or fee approval to resume.
-    if (run.gate?.kind === "MCP_CALL" && run.pendingAction && !this.feeReviewRequired(run)) run.pendingActionApproved = true;
-    else if (run.gate?.kind !== "BILLING") return false;
-    for (const call of run.calls) if (["UNKNOWN", "IN_FLIGHT"].includes(call.status)) {
-      call.status = "FAILED"; call.errorCode = "OUTCOME_UNVERIFIED_NOT_REPLAYED";
-    }
-    delete run.gate; run.status = "RESUMABLE";
-    return true;
-  }
   constructor(private readonly store: Store, private readonly principal: Scope, private readonly transport: Transport,
     private readonly agent: Agent, private readonly options: { mode: "fixture" | "live"; paidCallConsent?: { id: string; approvedAt: string; approvedByUserId: string; allowUncapped?: boolean }; marketQuota?: MarketCallQuota; authorizeLive?: (run: Run) => Promise<boolean>; verifyTariffEvidence?: (claim: Claim, run: Run) => boolean; timeoutMs?: number }) {}
   private owned(run: Run) {
@@ -142,7 +132,6 @@ export class ResearchEngine {
         run.status = "RESUMABLE";
         await save();
       }
-      if (!run.pausedAt && run.status === "WAITING_FOR_USER" && this.releaseFeeGate(run)) await save();
       if (run.pausedAt || terminal.has(run.status) || run.status === "WAITING_FOR_USER") return structuredClone(run);
       if (run.status === "FAILED") throw new Error("EXPLICIT_RECOVERY_REQUIRED");
       // A previous process may have died after dispatch. Never replay its call.
@@ -406,7 +395,7 @@ export class ResearchEngine {
       if (expectedRevision !== undefined && (!Number.isSafeInteger(expectedRevision) || expectedRevision !== run.revision)) throw new Error("STALE_RESEARCH_DECISION");
       if (decision.confirmation && (decision.confirmation.channel !== "chat" || typeof decision.confirmation.text !== "string" || !decision.confirmation.text.trim() || decision.confirmation.text.length > 2000)) throw new Error("INVALID_RESEARCH_DECISION");
       if (decision.authorizationId !== undefined) throw new Error("INVALID_RESEARCH_AUTHORIZATION");
-      if (Object.keys(decision).some((key) => !["gateId", "kind", "candidateId", "limits", "toolMaxCalls", "callId", "units", "receipt", "confirmation"].includes(key))) throw new Error("INVALID_RESEARCH_DECISION");
+      if (Object.keys(decision).some((key) => !["gateId", "kind", "candidateId", "limits", "toolMaxCalls", "callId", "confirmation"].includes(key))) throw new Error("INVALID_RESEARCH_DECISION");
       if (run.status !== "WAITING_FOR_USER" || !run.gate || run.gate.id !== decision.gateId) throw new Error("STALE_OR_MISSING_GATE");
       const gate = run.gate;
       const savedDecision = structuredClone(decision);
@@ -434,11 +423,6 @@ export class ResearchEngine {
           if (!integer(limit) || !run.policies[tool] || limit <= run.policies[tool].maxCalls) throw new Error("CALL_LIMIT_MUST_INCREASE");
           run.policies[tool].maxCalls = limit;
         }
-      } else if (gate.kind === "BILLING" && decision.kind === "RECONCILE") {
-        const call = run.calls.find((entry) => entry.id === decision.callId);
-        if (!call || call.billing === "CONFIRMED" || !integer(decision.units) || !decision.receipt?.trim() || !call.paid && (decision.units !== 0 || !["UNKNOWN", "IN_FLIGHT"].includes(call.status))) throw new Error("INVALID_BILLING_RECONCILIATION");
-        call.knownUnits = decision.units; call.billing = call.paid ? "CONFIRMED" : "FREE";
-        if (call.status === "UNKNOWN" || call.status === "IN_FLIGHT") { call.status = "FAILED"; call.errorCode = "OUTCOME_UNVERIFIED_NOT_REPLAYED"; }
       } else throw new Error("DECISION_DOES_NOT_MATCH_GATE");
       run.decisions.push({ actorId: this.principal.ownerId, at: stamp(), decision: savedDecision });
       delete run.gate;
@@ -508,7 +492,6 @@ export class ResearchEngine {
       this.owned(run);
       if (terminal.has(run.status)) throw new Error("TERMINAL_RUN");
       if (run.pausedAt) { delete run.pausedAt; delete run.planningPause; await save(); }
-      if (this.releaseFeeGate(run)) await save();
       // Explicit user/Skill gates remain. Resume never dispatches a request.
       return structuredClone(run);
     });

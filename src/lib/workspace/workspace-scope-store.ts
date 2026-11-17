@@ -1,17 +1,10 @@
 "use client";
 
 /**
- * 工作区作用域的唯一读取入口。
- *
- * 以前存在两套键：选择器写 `amazon_bulk_ad_workspace_scope`，而 `extHeaders`、
- * 草稿与若干个工作台读 `tiaotiao.workspace.scope`。后者从来没人写，于是这些地方
- * 恒等于 `default`——草稿因此被塞进 `default` 命名空间，切换工作区会把 A 的
- * 录入带进 B。这里统一成一个来源，服务端仍然叠加组织与权限边界。
+ * 工作区作用域的唯一读取入口，唯一存储键为 `amazon_bulk_ad_workspace_scope`。
+ * 服务端仍然叠加组织与权限边界。
  */
 export const workspaceScopeStorageKey = "amazon_bulk_ad_workspace_scope";
-
-/** 历史键：只在主键缺失时回退，避免升级后旧草稿凭空消失。 */
-const legacyWorkspaceScopeStorageKey = "tiaotiao.workspace.scope";
 
 export type SelectedWorkspaceScope = {
   workspaceId: string;
@@ -38,8 +31,7 @@ function readScope(storageKey: string): SelectedWorkspaceScope | null {
 }
 
 export function readWorkspaceScope(): SelectedWorkspaceScope {
-  return readScope(workspaceScopeStorageKey) ?? readScope(legacyWorkspaceScopeStorageKey)
-    ?? { workspaceId: "default", accountId: "", marketplace: "" };
+  return readScope(workspaceScopeStorageKey) ?? { workspaceId: "default", accountId: "", marketplace: "" };
 }
 
 export function readWorkspaceScopeId() {

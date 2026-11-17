@@ -13,6 +13,7 @@ function fixture() {
   const state = { role: "viewer", active: true, assigned: ["seller-a"], authorization: "CONFIGURED", workspace: true, credential: true };
   const db = {
     organizationMember: { findUnique: async () => ({ role: state.role, user: { status: state.active ? "active" : "disabled" } }) },
+    workspaceMembership: { findUnique: async () => ({ userId: "user-a" }) },
     workspaceScope: { findUnique: async () => state.workspace ? { id: scope.workspaceId } : null },
     amazonDataAccessGrant: { findMany: async ({ where }: { where: Record<string, unknown> }) => {
       assert.equal(where.userId, "user-a"); assert.equal(where.organizationId, scope.organizationId);

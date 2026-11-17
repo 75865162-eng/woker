@@ -1,5 +1,6 @@
 import { credentialAllowsTool } from "@/lib/lili/account-tool-access";
 import { prisma } from "@/lib/db/prisma";
+import { assertWorkspaceAccess } from "@/lib/workspace/access";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Prisma } from "@prisma/client";
 import { SyncInputError, type SyncScope } from "./policy";
@@ -24,7 +25,7 @@ export function parseAccessScopes(value: unknown): AmazonAccessScope[] {
 export async function explicitAmazonDataAccess(scope: SyncScope, actor: string, db: Prisma.TransactionClient, action: AmazonDataAction = "view", mcp = false): Promise<AmazonDataAccess> {
   scope = { organizationId: scope.organizationId, workspaceId: scope.workspaceId };
   const member = await db.organizationMember.findUnique({ where: { organizationId_userId: { organizationId: scope.organizationId, userId: actor } }, include: { user: { select: { status: true } } } });
-  if (!member || member.user.status !== "active" || !await db.workspaceScope.findUnique({ where: { organizationId_id: { organizationId: scope.organizationId, id: scope.workspaceId } }, select: { id: true } })) throw new SyncInputError("Amazon 数据范围不可访问。", 403);
+  if (!member || member.user.status !== "active" || !await assertWorkspaceAccess(scope.organizationId, scope.workspaceId, actor, db)) throw new SyncInputError("Amazon 数据范围不可访问。", 403);
   // An enabled user/account assignment grants every Amazon business read.
   // Legacy module, tool, action and marketplace settings apply only to mutations.
   if (action === "view" || action === "export") {
@@ -74,7 +75,7 @@ export async function amazonDataAccess(scope: SyncScope, actor: string | undefin
     return { allSellers: false, sellerIds: [...new Set(scopes.map(s => s.sellerAccountId))], scopes };
   }
   const member = await db.organizationMember.findUnique({ where: { organizationId_userId: { organizationId: scope.organizationId, userId: actor } }, include: { user: { select: { status: true } } } });
-  if (!member || member.user.status !== "active" || !await db.workspaceScope.findUnique({ where: { organizationId_id: { organizationId: scope.organizationId, id: scope.workspaceId } }, select: { id: true } })) throw new SyncInputError("Amazon 数据范围不可访问。", 403);
+  if (!member || member.user.status !== "active" || !await assertWorkspaceAccess(scope.organizationId, scope.workspaceId, actor, db)) throw new SyncInputError("Amazon 数据范围不可访问。", 403);
   if (action !== "view" && action !== "export" && isAmazonScopeAdmin(member.role)) return { allSellers: true, sellerIds: [] };
   return explicitAmazonDataAccess(scope, actor, db, action);
 }
@@ -91,7 +92,7 @@ export async function assertAmazonScopeAdmin(scope: SyncScope, actor: string, db
   if (boundary.getStore()) throw new SyncInputError("数据接口不能管理账号授权。", 403);
   const member = await db.organizationMember.findUnique({ where: { organizationId_userId: { organizationId: scope.organizationId, userId: actor } }, include: { user: { select: { status: true } } } });
   if (!member || member.user.status !== "active" || !isAmazonScopeAdmin(member.role)
-    || !await db.workspaceScope.findUnique({ where: { organizationId_id: { organizationId: scope.organizationId, id: scope.workspaceId } }, select: { id: true } })) {
+    || !await assertWorkspaceAccess(scope.organizationId, scope.workspaceId, actor, db)) {
     throw new SyncInputError("授权及范围管理仅限组织管理员。", 403);
   }
 }

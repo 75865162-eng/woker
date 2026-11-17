@@ -38,6 +38,7 @@ test('隔离服务集成：收货及付款桥接→部分核销→幂等重试�
   let permitted = true, receiptStatus = 'RECEIVED', reversed = false, corrupted = false;
   const tx = {
     $queryRaw: async () => [{ role: 'role', permissions: { operations: permitted ? ['view', 'create', 'approve'] : [], wms: ['view'] }, status: 'active' }],
+    organizationMember: { findUnique: async () => ({ role: 'owner', user: { status: 'active' } }) },
     workspaceScope: { findUnique: async () => ({ id: 'ws' }) },
     financeBook: { findFirst: async () => ({ id: 'book' }) },
     financeVoucher: { findFirst: async ({ where }: { where: { id: string; bookId?: string; organizationId: string; workspaceId: string } }) => where.organizationId === 'org' && where.workspaceId === 'ws' && (!where.bookId || where.bookId === 'book') ? (where.id === 'rv' ? receiptVoucher : voucher) : null, count: async () => reversed ? 1 : 0, findMany: async () => [voucher, receiptVoucher].map(row => ({ ...row, reversals: reversed ? [{ id: 'reversal' }] : [] })) },

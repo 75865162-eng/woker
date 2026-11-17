@@ -9,10 +9,13 @@ test("request-scoped authentication deduplicates reads without caching across re
   const previous = { database: process.env.DATABASE_URL, driver: process.env.AUTH_DRIVER, secret: process.env.AUTH_SECRET };
   const globalDb = globalThis as typeof globalThis & { prisma?: unknown };
   const previousDb = globalDb.prisma;
-  Object.assign(process.env, { DATABASE_URL: "postgresql://fixture.invalid/unused", AUTH_DRIVER: "database", AUTH_SECRET: "auth-performance-fixture" });
+  Object.assign(process.env, { DATABASE_URL: "postgresql://fixture.invalid/unused", AUTH_DRIVER: "database", AUTH_SECRET: "auth-performance-fixture-secret-at-least-32-characters" });
   let sessionReads = 0, roleReads = 0, enabled = true, allowed = true;
   const queryArguments: unknown[] = [];
   globalDb.prisma = {
+    workspaceMembership: { findUnique: async () => ({ userId: "fixture-member" }) },
+    workspaceScope: { findUnique: async () => ({ id: "default" }) },
+    organizationMember: { findUnique: async () => ({ role: "viewer", user: { status: "active" } }) },
     userSession: { findFirst: async (args: { where: { userId: string } }) => {
       sessionReads++; queryArguments.push(args);
       const id = args.where.userId;
@@ -24,7 +27,7 @@ test("request-scoped authentication deduplicates reads without caching across re
     } },
   };
   const request = (user: string) => {
-    const payload = Buffer.from(JSON.stringify({ driver: "database", sessionId: "fixture", userId: user, token: "fixture", expiresAt: new Date(Date.now() + 60000).toISOString() })).toString("base64url");
+    const payload = Buffer.from(JSON.stringify({ driver: "database", sessionId: "fixture", userId: user, organizationId: `${user}-org`, token: "fixture", expiresAt: new Date(Date.now() + 60000).toISOString() })).toString("base64url");
     const signature = createHmac("sha256", process.env.AUTH_SECRET!).update(payload).digest("base64url");
     return new Request("http://fixture.invalid/api/example", { headers: { cookie: `amazon_bulk_ad_session=${payload}.${signature}` } });
   };

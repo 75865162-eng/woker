@@ -58,7 +58,21 @@ export function formatSkuSequence(sequence: number) {
   return `${indexToLetters(prefixIndex)}${String(suffix).padStart(3, "0")}`;
 }
 
+export function parseOptionalProductNumber(value: string | number | null | undefined): number | null {
+  if (value == null || (typeof value === "string" && !value.trim())) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function hasCompletePricing(row: TrialPriceRow): row is { [K in keyof TrialPriceRow]: NonNullable<TrialPriceRow[K]> } {
+  return [row.lengthCm, row.widthCm, row.heightCm, row.actualWeightKg, row.suggestedPrice, row.purchaseCost, row.oceanFreightUnitPrice, row.fbaFee, row.exchangeRate]
+    .every((value) => typeof value === "number" && Number.isFinite(value)) && row.exchangeRate !== 0;
+}
+
 export function calculateExcelPricing(row: TrialPriceRow) {
+  if (!hasCompletePricing(row)) {
+    return { volumeWeightKg: null, lengthIn: null, widthIn: null, heightIn: null, actualWeightLb: null, volumeWeightLbFromCm: null, volumeWeightLb: null, fbaBillableWeightLb: null, oceanFreight: null, commission: null, fuelFee: null, monthlyStorageFee: null, breakEvenPrice: null, profit: null, profitRate: null };
+  }
   const volumeWeightKg = (row.lengthCm * row.widthCm * row.heightCm) / 6000;
   const lengthIn = row.lengthCm / 2.54;
   const widthIn = row.widthCm / 2.54;
@@ -97,6 +111,9 @@ export function calculateExcelPricing(row: TrialPriceRow) {
 }
 
 export function calculateTrialPricing(row: TrialPriceRow) {
+  if (!hasCompletePricing(row)) {
+    return { volumeWeightKg: null, fuelFee: null, oceanFreight: null, commission: null, monthlyStorageFee: null, breakEvenPrice: null, profit: null, profitRate: null, volumeWeightLb: null, actualWeightLb: null, lightFreight: null, heavyFreight: null, oversizeFreight: null };
+  }
   const volumeWeightKg = (row.lengthCm * row.widthCm * row.heightCm) / 6000;
   const billableWeight = Math.max(row.actualWeightKg, volumeWeightKg);
   const fuelFee = row.fbaFee * 0.035;

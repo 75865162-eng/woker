@@ -9,7 +9,7 @@ export async function canExecuteSellfoxSync(scope: { organizationId: string; wor
   const [member, permissions, workspaceExists] = await Promise.all([
     dependencies.member(scope.organizationId, scope.userId),
     dependencies.permissions(scope.organizationId),
-    dependencies.workspace(scope.organizationId, scope.workspaceId),
+    dependencies.workspace(scope.organizationId, scope.workspaceId, scope.userId),
   ]);
   return Boolean(member?.user.status === "active" && workspaceExists && roleCanPerformAction(member.role, "sellfox", "create", permissions));
 }

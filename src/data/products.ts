@@ -50,7 +50,7 @@ type ProductSeed = {
   hsCode: string;
   purchasePrice: number;
   productWeightG: number;
-  productSizeCm: Product["productSizeCm"];
+  productSizeCm: { length: number; width: number; height: number };
 };
 
 const productSeeds: ProductSeed[] = [
