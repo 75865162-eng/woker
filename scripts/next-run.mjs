@@ -2,7 +2,8 @@ import { runtimeVersion } from "./runtime/version.mjs";
 import { spawn } from "node:child_process";
 import { applyRuntimeEnvironment } from "./runtime/environment.mjs";
 import { existsSync } from "node:fs";
-import { readdir, rm, mkdtemp, writeFile, mkdir } from "node:fs/promises";
+import { readdir, rm, writeFile, mkdir } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { acquireNextOutputLock } from "./runtime/next-output-lock.mjs";
 
@@ -25,13 +26,16 @@ if (!existsSync(command)) {
 const releaseOutputLock = acquireNextOutputLock(path.resolve(distDir));
 process.on("exit", releaseOutputLock);
 const runtimeEnv = applyRuntimeEnvironment({ build: args[0] === "build" });
-// Next validates only this invocation's generated routes, never old dist outputs.
-// Turbopack requires its tsconfig path to remain inside the project root.
+// Turbopack resolves `paths` aliases relative to the tsconfig file's own
+// directory. A generated tsconfig inside a nested .next-types-*/ directory makes
+// "@/..." resolve to <root>/.next-types-*/src/... in the edge (middleware) build,
+// so keep the temporary tsconfig at the project root (random suffix keeps
+// parallel invocations isolated) and set baseUrl to "." to match the real layout.
 await mkdir(path.join(process.cwd(), "tmp"), { recursive: true });
-const typeDirectory = await mkdtemp(path.join(process.cwd(), ".next-types-"));
-const typeConfig = path.join(typeDirectory, "tsconfig.json");
-const ambient = path.join(typeDirectory, "next.d.ts");
-await writeFile(ambient, `/// <reference path=${JSON.stringify(path.relative(typeDirectory, path.resolve(distDir, "types/routes.d.ts")))} />
+const typeSuffix = randomBytes(6).toString("hex");
+const typeConfig = path.join(process.cwd(), `.next-types-${typeSuffix}.json`);
+const ambient = path.join(process.cwd(), `.next-types-ambient-${typeSuffix}.d.ts`);
+await writeFile(ambient, `/// <reference path=${JSON.stringify(path.relative(process.cwd(), path.resolve(distDir, "types/routes.d.ts")))} />
 /// <reference types="next" />
 /// <reference types="next/image-types/global" />
 `);
@@ -49,7 +53,7 @@ await writeFile(typeConfig, JSON.stringify({
     resolveJsonModule: true,
     isolatedModules: true,
     jsx: "preserve",
-    baseUrl: process.cwd(),
+    baseUrl: ".",
     paths: { "@/*": ["./src/*"] },
     incremental: false,
     plugins: [{ name: "next" }],
@@ -63,7 +67,7 @@ const child = spawn(process.execPath, [command, ...args], {
     ...runtimeEnv,
     ERP_RUNTIME_VERSION: runtimeVersion(),
     NEXT_DIST_DIR: distDir,
-    ERP_NEXT_TYPESCRIPT_CONFIG: path.relative(process.cwd(), typeConfig),
+    ERP_NEXT_TYPESCRIPT_CONFIG: path.basename(typeConfig),
   },
   shell: false,
   stdio: "inherit",
@@ -114,11 +118,18 @@ async function cleanupStandaloneOutput() {
   );
 }
 
+async function cleanupTypeFiles() {
+  await Promise.all([
+    rm(typeConfig, { force: true }),
+    rm(ambient, { force: true }),
+  ]);
+}
+
 for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => child.kill(signal));
-child.on("error", async () => { await rm(typeDirectory, { recursive: true, force: true }); console.error("Unable to start Next"); process.exitCode = 1; });
+child.on("error", async () => { await cleanupTypeFiles(); console.error("Unable to start Next"); process.exitCode = 1; });
 
 child.on("exit", async (code, signal) => {
-  await rm(typeDirectory, { recursive: true, force: true });
+  await cleanupTypeFiles();
   if (signal) {
     process.exit(128 + (signal === "SIGINT" ? 2 : 15));
     return;
