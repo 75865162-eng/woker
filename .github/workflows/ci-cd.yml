@@ -42,6 +42,62 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Performance regression gate (from upstream 17f3c63). Runs on PR / manual
+  # dispatch only; push-to-main is unaffected. Measure base revision vs candidate
+  # with a disposable PostgreSQL + Redis fixture, enforce a 20% regression budget.
+  performance-regression:
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && (!inputs.initial_deployment || !inputs.deploy_production))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.2'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ hashFiles('package-lock.json') }}
+
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Prepare disposable database image
+        run: |
+          docker pull postgres:16-alpine
+          docker pull redis:7
+
+      - name: Measure base revision
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.base_sha }}
+        run: |
+          set -euo pipefail
+          baseline_dir="$RUNNER_TEMP/erp-performance-base"
+          mkdir -p "$baseline_dir"
+          git archive "$BASE_SHA" | tar -x -C "$baseline_dir"
+          node scripts/performance/erp-navigation.mjs \
+            --mode=production \
+            --output="$RUNNER_TEMP/erp-performance-baseline.json" \
+            --source-dir="$baseline_dir"
+
+      - name: Enforce performance budget
+        run: |
+          node scripts/performance/erp-navigation.mjs \
+            --mode=production \
+            --output="$RUNNER_TEMP/erp-performance-candidate.json" \
+            --baseline="$RUNNER_TEMP/erp-performance-baseline.json"
+
   build:
     runs-on: ubuntu-24.04
     outputs:
