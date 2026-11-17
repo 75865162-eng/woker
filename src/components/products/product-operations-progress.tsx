@@ -4,6 +4,7 @@ import { useState, type Dispatch, type SetStateAction } from "react";
 import { Check, CheckSquare, FileSpreadsheet, History, ImagePlus, Square, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/overlays";
 import { uploadProductAttachmentAsset } from "@/lib/products/image-assets";
 import {
   calculateForecastMonthlyRevenue,
@@ -132,7 +133,7 @@ export function ProductOperationsProgress({
   }
 
   return (
-    <div className="fixed inset-0 z-40 bg-foreground/40 p-3 backdrop-blur-sm">
+    <Dialog open bare size="full" zIndex="modal" busy={uploadingIndex !== null} onClose={onClose}>
       <div className="mx-auto flex h-full w-full max-w-[1500px] flex-col overflow-hidden rounded-lg bg-surface shadow-xl">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div>
@@ -295,7 +296,7 @@ export function ProductOperationsProgress({
           </section>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }
 

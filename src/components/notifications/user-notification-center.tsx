@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bell, CheckCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/overlays";
 import { cn } from "@/lib/utils";
 import { useAppShellUser } from "@/components/app-shell/app-shell-context";
 import { roleCanAccessModule } from "@/lib/accounts/permissions";
@@ -265,15 +266,8 @@ export function UserNotificationCenter() {
         ) : null}
       </div>
       {popup ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/35 px-4 backdrop-blur-sm"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              closePopup();
-            }
-          }}
-        >
-          <div ref={popupPanelRef} className="w-full max-w-xl rounded-lg border border-border bg-surface shadow-2xl">
+        <Dialog open bare zIndex="modal" onClose={closePopup}>
+          <div ref={popupPanelRef} className="mx-auto w-full max-w-xl rounded-lg border border-border bg-surface shadow-2xl">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <div>
                 <p className="text-sm font-bold text-foreground">业务流转提醒</p>
@@ -306,7 +300,7 @@ export function UserNotificationCenter() {
               </div>
             </div>
           </div>
-        </div>
+        </Dialog>
       ) : null}
     </>
   );

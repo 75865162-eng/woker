@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Copy, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog } from "@/components/ui/overlays";
 import {
   scalarImprovementFields,
   supplierFields,
@@ -132,7 +133,7 @@ export function TrialProductEditor({
   }
 
   return (
-    <div className="fixed inset-0 z-30 bg-foreground/35 p-4 backdrop-blur-sm">
+    <Dialog open bare size="full" zIndex="modal" onClose={onClose}>
       <div className="mx-auto flex h-full max-w-7xl flex-col overflow-hidden rounded-lg bg-surface shadow-xl">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
@@ -279,6 +280,6 @@ export function TrialProductEditor({
           </Card>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

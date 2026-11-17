@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Download, Highlighter, Loader2, Minus, Plus, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog } from "@/components/ui/overlays";
 import { AmazonLinkButton, GalleryCell, ImagePreviewModal } from "@/components/listing-ai/gallery-primitives";
 import { MiniUploader } from "@/components/listing-ai/image-upload-primitives";
 import { ListingAiAplusPanel } from "@/components/listing-ai/listing-ai-aplus-panel";
@@ -881,13 +882,9 @@ export function ImagesSection({
         />
       ) : null}
       {clearGalleryConfirmOpen ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-6 backdrop-blur-sm"
-          role="presentation"
-          onClick={() => setClearGalleryConfirmOpen(false)}
-        >
+        <Dialog open bare zIndex="modal" onClose={() => setClearGalleryConfirmOpen(false)}>
           <div
-            className="w-full max-w-md rounded-lg bg-surface p-6 shadow-2xl"
+            className="mx-auto w-full max-w-md rounded-lg bg-surface p-6 shadow-2xl"
             role="dialog"
             aria-modal="true"
             aria-labelledby="clear-gallery-title"
@@ -913,7 +910,7 @@ export function ImagesSection({
               </Button>
             </div>
           </div>
-        </div>
+        </Dialog>
       ) : null}
     </div>
   );

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/overlays";
 import type { ImagePreview } from "@/lib/listing-ai/workspace-draft";
 
 export function MiniUploader({
@@ -92,14 +93,9 @@ export function ImagePreviewGrid({
         ))}
       </div>
       {previewImage ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-          onClick={() => setPreviewImage(null)}
-          role="dialog"
-          aria-modal="true"
-        >
+        <Dialog open bare zIndex="viewer" onClose={() => setPreviewImage(null)}>
           <div
-            className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-md border border-border bg-surface shadow-2xl"
+            className="mx-auto flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-md border border-border bg-surface shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
@@ -121,7 +117,7 @@ export function ImagePreviewGrid({
           />
             </div>
           </div>
-        </div>
+        </Dialog>
       ) : null}
     </>
   );

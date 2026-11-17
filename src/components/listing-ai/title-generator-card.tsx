@@ -3,6 +3,7 @@ import { Loader2, Save, Search, Settings2, Wand2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog } from "@/components/ui/overlays";
 import {
   fieldClass,
   labelClass,
@@ -407,8 +408,8 @@ function PromptEditorDialog({
   onSave: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-      <div className="w-full max-w-3xl rounded-lg border border-border bg-surface shadow-xl">
+    <Dialog open bare zIndex="modal" onClose={onClose}>
+      <div className="mx-auto w-full max-w-3xl rounded-lg border border-border bg-surface shadow-xl">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
             <h2 className="text-lg font-black text-foreground">提示词修改</h2>
@@ -441,6 +442,6 @@ function PromptEditorDialog({
           </Button>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

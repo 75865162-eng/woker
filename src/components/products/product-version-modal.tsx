@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/overlays";
 import type { Product } from "@/lib/products/types";
 import { ProductEditDialog } from "./product-edit-dialog";
 
@@ -103,8 +104,8 @@ export function ProductVersionModal({
   }, [loadVersions]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-6 backdrop-blur-sm">
-      <div className="flex max-h-[82vh] w-full max-w-3xl flex-col rounded-lg bg-surface shadow-2xl">
+    <Dialog open bare zIndex="modal" onClose={onClose}>
+      <div className="mx-auto flex max-h-[82vh] w-full max-w-3xl flex-col rounded-lg bg-surface shadow-2xl">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
             <h3 className="text-lg font-bold text-foreground">版本历史：{product.sku}</h3>
@@ -142,6 +143,6 @@ export function ProductVersionModal({
           <Button variant="secondary" disabled={Boolean(busyId)} onClick={() => setConfirmation(null)}>取消</Button>
         </div>
       </ProductEditDialog> : null}
-    </div>
+    </Dialog>
   );
 }

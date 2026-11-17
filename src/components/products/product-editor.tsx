@@ -4,6 +4,7 @@ import { ProductEditorForm } from "./product-editor-form";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FileUp, LoaderCircle, Save, Video, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/overlays";
 import { useAppShellUser } from "@/components/app-shell/app-shell-context";
 import type { Product, ProductDraft } from "@/lib/products/types";
 import { buildWorkflowEvent, createWorkflowDueAt, getProductWorkflowStage, formatAssigneeList, normalizeAssigneeList } from "@/lib/products/workflow";
@@ -248,7 +249,7 @@ export function ProductEditor({
 
 
   return (
-    <div className="fixed inset-0 z-30 bg-foreground/35 p-4 backdrop-blur-sm">
+    <Dialog open bare size="full" zIndex="modal" onClose={() => void requestClose()}>
       <div className="mx-auto flex h-full w-full max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg bg-surface shadow-xl">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
@@ -389,6 +390,6 @@ export function ProductEditor({
           onLoad={() => setPreviewLoading(false)}
         />
       ) : null}
-    </div>
+    </Dialog>
   );
 }

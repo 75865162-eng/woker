@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from
 import { ExternalLink, Minus, Plus, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog } from "@/components/ui/overlays";
 import { appendCurrentWorkspaceScope } from "@/lib/products/image-assets";
 import { useProductImageUrls } from "@/lib/products/signed-image-urls";
 import {
@@ -180,7 +181,7 @@ export function ProductVideoPlanModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-foreground/35 p-4 backdrop-blur-sm">
+    <Dialog open bare size="full" zIndex="modal" busy={Boolean(uploadingField)} onClose={onClose}>
       <div className="mx-auto flex h-full w-full max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg bg-surface shadow-xl">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div>
@@ -427,8 +428,8 @@ export function ProductVideoPlanModal({
         </div>
       </div>
       {previewAsset ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/70 p-6" onClick={() => setPreviewAsset(null)}>
-          <div className="max-h-full max-w-5xl overflow-hidden rounded-lg bg-surface p-3 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <Dialog open bare zIndex="viewer" onClose={() => setPreviewAsset(null)}>
+          <div className="mx-auto max-h-full max-w-5xl overflow-hidden rounded-lg bg-surface p-3 shadow-2xl">
             <div className="mt-2 flex items-center justify-center" onClick={() => setPreviewAsset(null)}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={previewImageUrls[previewAsset.id] || previewAsset.url} alt={previewAsset.name} className="max-h-[82vh] max-w-full object-contain" onClick={(event) => event.stopPropagation()} />
@@ -441,9 +442,9 @@ export function ProductVideoPlanModal({
               </Button>
             </div>
           </div>
-        </div>
+        </Dialog>
       ) : null}
-    </div>
+    </Dialog>
   );
 }
 

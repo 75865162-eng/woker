@@ -176,6 +176,19 @@ export function Dropdown({
 
 /* ---------------------------------------------------------------- Dialog */
 
+export type OverlayZIndex = "modal" | "drawer" | "viewer";
+
+const overlayZIndexClass: Record<OverlayZIndex, string> = {
+  modal: "z-[var(--z-modal)]",
+  drawer: "z-[var(--z-drawer)]",
+  viewer: "z-[var(--z-viewer)]",
+};
+
+/**
+ * 统一模态底座。原生 <dialog> 自带焦点陷阱、焦点归还与背景 inert（滚动锁定）；
+ * 遮罩点击关闭在这里统一实现：只有 event.target === dialog 自身（即点在 backdrop
+ * 或 dialog 空白区）才关闭，面板内部点击不会命中 dialog 元素。
+ */
 export function Dialog({
   open,
   title,
@@ -185,15 +198,27 @@ export function Dialog({
   children,
   size = "md",
   busy = false,
+  busyMessage,
+  zIndex = "modal",
+  bare = false,
+  hideClose = false,
+  closeOnBackdrop = true,
 }: {
   open: boolean;
-  title: ReactNode;
+  title?: ReactNode;
   description?: ReactNode;
   onClose: () => void;
   footer?: ReactNode;
   children: ReactNode;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl" | "full";
   busy?: boolean;
+  busyMessage?: ReactNode;
+  zIndex?: OverlayZIndex;
+  /** 无标题栏变体：不渲染 header，供图片查看器/加载层使用 */
+  bare?: boolean;
+  /** 隐藏右上角 X（仍保留 ESC / 遮罩关闭） */
+  hideClose?: boolean;
+  closeOnBackdrop?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement | null>(null);
   const titleId = useId();
@@ -214,36 +239,57 @@ export function Dialog({
   return (
     <dialog
       ref={ref}
-      aria-labelledby={titleId}
+      aria-labelledby={bare ? undefined : titleId}
+      aria-label={bare ? "对话框" : undefined}
+      aria-modal="true"
       onCancel={(event) => {
         event.preventDefault();
         if (!busy) {
           onClose();
         }
       }}
+      onClick={(event) => {
+        if (closeOnBackdrop && !busy && event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
       className={cn(
-        "m-auto max-h-[88dvh] w-[calc(100%-2rem)] overflow-auto rounded-xl border border-border bg-surface p-0 text-foreground shadow-pop backdrop:bg-black/35",
-        size === "sm" && "max-w-md",
-        size === "md" && "max-w-2xl",
-        size === "lg" && "max-w-5xl",
+        overlayZIndexClass[zIndex],
+        bare
+          ? "m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-none overflow-auto border-0 bg-transparent p-0 text-foreground shadow-none backdrop:bg-black/35"
+          : "m-auto max-h-[88dvh] w-[calc(100%-2rem)] overflow-auto rounded-xl border border-border bg-surface p-0 text-foreground shadow-pop backdrop:bg-black/35",
+        !bare && size === "sm" && "max-w-md",
+        !bare && size === "md" && "max-w-2xl",
+        !bare && size === "lg" && "max-w-5xl",
+        !bare && size === "xl" && "max-w-7xl",
+        size === "full" && "h-dvh max-h-dvh w-screen max-w-none rounded-none",
       )}
     >
-      <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-border bg-surface px-5 py-3">
-        <div className="min-w-0">
-          <h2 id={titleId} className="text-title text-foreground">
-            {title}
-          </h2>
-          {description ? <p className="mt-0.5 text-meta text-muted">{description}</p> : null}
-        </div>
-        <Button type="button" size="icon" variant="ghost" disabled={busy} aria-label="关闭" onClick={onClose}>
-          <X aria-hidden className="h-4 w-4" />
-        </Button>
-      </header>
-      <div className="px-5 py-4">{open ? children : null}</div>
+      {bare ? null : (
+        <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-border bg-surface px-5 py-3">
+          <div className="min-w-0">
+            <h2 id={titleId} className="text-title text-foreground">
+              {title}
+            </h2>
+            {description ? <p className="mt-0.5 text-meta text-muted">{description}</p> : null}
+          </div>
+          {hideClose ? null : (
+            <Button type="button" size="icon" variant="ghost" disabled={busy} aria-label="关闭" onClick={onClose}>
+              <X aria-hidden className="h-4 w-4" />
+            </Button>
+          )}
+        </header>
+      )}
+      <div className={cn("px-5 py-4", bare && "p-0")}>{open ? children : null}</div>
       {footer ? (
         <footer className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-border bg-surface px-5 py-3">
           {footer}
         </footer>
+      ) : null}
+      {busy && busyMessage ? (
+        <div role="status" className="px-5 pb-4 text-center text-meta text-muted" aria-live="polite">
+          {busyMessage}
+        </div>
       ) : null}
     </dialog>
   );
@@ -260,15 +306,22 @@ export function Drawer({
   footer,
   width = "md",
   busy = false,
+  zIndex = "drawer",
+  closeOnBackdrop = true,
+  bare = false,
 }: {
   open: boolean;
-  title: ReactNode;
+  title?: ReactNode;
   description?: ReactNode;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
   width?: "sm" | "md" | "lg";
   busy?: boolean;
+  zIndex?: OverlayZIndex;
+  closeOnBackdrop?: boolean;
+  /** 无标题栏变体：内部自行渲染 header/footer，底座只提供 modal 行为 */
+  bare?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement | null>(null);
   const titleId = useId();
@@ -289,37 +342,101 @@ export function Drawer({
   return (
     <dialog
       ref={ref}
-      aria-labelledby={titleId}
+      aria-labelledby={bare ? undefined : titleId}
+      aria-label={bare ? "抽屉" : undefined}
+      aria-modal="true"
       onCancel={(event) => {
         event.preventDefault();
         if (!busy) {
           onClose();
         }
       }}
+      onClick={(event) => {
+        if (closeOnBackdrop && !busy && event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
       className={cn(
-        "fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-dvh w-full overflow-hidden border-l border-border bg-surface p-0 text-foreground shadow-pop backdrop:bg-black/30",
-        width === "sm" && "max-w-md",
-        width === "md" && "max-w-xl",
-        width === "lg" && "max-w-3xl",
+        overlayZIndexClass[zIndex],
+        bare
+          ? "fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-dvh w-full max-w-none overflow-hidden border-0 bg-transparent p-0 text-foreground shadow-none backdrop:bg-black/30"
+          : "fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-dvh w-full overflow-hidden border-l border-border bg-surface p-0 text-foreground shadow-pop backdrop:bg-black/30",
+        !bare && width === "sm" && "max-w-md",
+        !bare && width === "md" && "max-w-xl",
+        !bare && width === "lg" && "max-w-3xl",
       )}
     >
-      <div className="flex h-full flex-col">
-        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-5 py-3">
-          <div className="min-w-0">
-            <h2 id={titleId} className="text-title text-foreground">
-              {title}
-            </h2>
-            {description ? <p className="mt-0.5 text-meta text-muted">{description}</p> : null}
-          </div>
-          <Button type="button" size="icon" variant="ghost" disabled={busy} aria-label="关闭抽屉" onClick={onClose}>
-            <X aria-hidden className="h-4 w-4" />
-          </Button>
-        </header>
-        <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-5 py-4">{open ? children : null}</div>
-        {footer ? (
-          <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-5 py-3">{footer}</footer>
-        ) : null}
+      {bare ? (open ? children : null) : (
+        <div className="flex h-full flex-col">
+          <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-5 py-3">
+            <div className="min-w-0">
+              <h2 id={titleId} className="text-title text-foreground">
+                {title}
+              </h2>
+              {description ? <p className="mt-0.5 text-meta text-muted">{description}</p> : null}
+            </div>
+            <Button type="button" size="icon" variant="ghost" disabled={busy} aria-label="关闭抽屉" onClick={onClose}>
+              <X aria-hidden className="h-4 w-4" />
+            </Button>
+          </header>
+          <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-5 py-4">{open ? children : null}</div>
+          {footer ? (
+            <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-5 py-3">{footer}</footer>
+          ) : null}
+        </div>
+      )}
+    </dialog>
+  );
+}
+
+/* ------------------------------------------------------- LoadingOverlay */
+
+/**
+ * 全屏进度/加载遮罩：原生 modal（自带焦点陷阱与背景 inert），
+ * 不可被 ESC 或遮罩点击关闭，用于操作进行中的阻塞态。
+ */
+export function LoadingOverlay({
+  open,
+  label = "操作进行中，请稍候",
+  zIndex = "viewer",
+  children,
+}: {
+  open: boolean;
+  label?: ReactNode;
+  zIndex?: OverlayZIndex;
+  children?: ReactNode;
+}) {
+  const ref = useRef<HTMLDialogElement | null>(null);
+  const labelId = useId();
+
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog) {
+      return;
+    }
+    if (open && !dialog.open) {
+      dialog.showModal();
+    }
+    if (!open && dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
+
+  return (
+    <dialog
+      ref={ref}
+      aria-labelledby={labelId}
+      aria-busy="true"
+      onCancel={(event) => event.preventDefault()}
+      className={cn(
+        overlayZIndexClass[zIndex],
+        "fixed inset-0 m-0 flex h-dvh max-h-dvh w-screen max-w-none flex-col items-center justify-center gap-4 rounded-none border-0 bg-surface/80 p-6 text-foreground backdrop:bg-black/35",
+      )}
+    >
+      <div id={labelId} role="status" aria-live="polite" className="text-title text-foreground">
+        {label}
       </div>
+      {children}
     </dialog>
   );
 }

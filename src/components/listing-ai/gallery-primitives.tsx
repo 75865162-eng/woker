@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  Download,
   ExternalLink,
   GripVertical,
   Loader2,
@@ -15,6 +16,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/overlays";
 import { MiniUploader } from "@/components/listing-ai/image-upload-primitives";
 import {
   labelClass,
@@ -251,8 +253,8 @@ export function ImagePreviewModal({
   function adjustZoom(delta: number) {
     setZoom((current) => {
       const nextZoom = Math.min(
-        3,
-        Math.max(0.5, Number((current + delta).toFixed(2))),
+        4,
+        Math.max(0.25, Number((current + delta).toFixed(2))),
       );
 
       if (nextZoom <= 1) {
@@ -313,15 +315,9 @@ export function ImagePreviewModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-    >
+    <Dialog open bare zIndex="viewer" onClose={onClose}>
       <div
-        className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-md border border-border bg-surface shadow-2xl"
-        onClick={(event) => event.stopPropagation()}
+        className="mx-auto flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-md border border-border bg-surface shadow-2xl"
       >
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
           <p className="truncate text-sm font-bold text-foreground">
@@ -332,7 +328,7 @@ export function ImagePreviewModal({
               variant="ghost"
               size="icon"
               onClick={() => adjustZoom(-0.25)}
-              disabled={zoom <= 0.5}
+              disabled={zoom <= 0.25}
               title="Zoom out"
               aria-label="Zoom out"
             >
@@ -345,7 +341,7 @@ export function ImagePreviewModal({
               variant="ghost"
               size="icon"
               onClick={() => adjustZoom(0.25)}
-              disabled={zoom >= 3}
+              disabled={zoom >= 4}
               title="Zoom in"
               aria-label="Zoom in"
             >
@@ -361,6 +357,17 @@ export function ImagePreviewModal({
             >
               <RotateCcw className="h-4 w-4" />
             </Button>
+            <a
+              href={image.url}
+              download={image.name}
+              target="_blank"
+              rel="noreferrer"
+              title="下载当前图片"
+              aria-label="下载当前图片"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-foreground"
+            >
+              <Download className="h-4 w-4" />
+            </a>
             <Button variant="ghost" size="icon" onClick={onClose} title="Close" aria-label="Close">
               <X className="h-4 w-4" />
             </Button>
@@ -397,7 +404,7 @@ export function ImagePreviewModal({
           />
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }
 
