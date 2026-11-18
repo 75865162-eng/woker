@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { SellfoxCredentialError } from "@/lib/sellfox/credential-crypto";
 import { getSellfoxCredentialStatus, saveSellfoxCredentials, sellfoxCredentialAccess } from "@/lib/sellfox/credential-store";
+import { activateSellfoxSyncAfterSave } from "@/lib/sellfox/sync-activation";
 
 export const runtime = "nodejs";
 const headers = { "Cache-Control": "no-store" };
@@ -51,6 +52,14 @@ export async function PUT(request: Request) {
     } catch { throw new SellfoxCredentialError("凭据 JSON 格式无效。"); }
     if (Object.keys(body).some(key => !["clientId", "clientSecret", "revision"].includes(key))) throw new SellfoxCredentialError("提交内容包含不支持的字段。");
     const result = await saveSellfoxCredentials(scope, actor, { clientId: body.clientId, clientSecret: body.clientSecret }, body.revision as number);
-    return NextResponse.json({ ...result, configured: true, source: "database" }, { headers });
+    // 保存已提交后才尝试自动激活；激活失败不回滚凭据，连通性结果随响应返回供前端明确展示。
+    let activation: { activated: boolean; connected: boolean; storesStarted: boolean; message: string } | null = null;
+    let activationError: string | null = null;
+    try {
+      activation = await activateSellfoxSyncAfterSave(scope, actor, result.revision);
+    } catch (activationFailure) {
+      activationError = activationFailure instanceof Error ? activationFailure.message : "凭据已保存，但自动校验与启动未完成，请稍后手动测试连接。";
+    }
+    return NextResponse.json({ ...result, configured: true, source: "database", activation, activationError }, { headers });
   } catch (error) { return failure(error); }
 }

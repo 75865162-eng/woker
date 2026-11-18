@@ -60,6 +60,11 @@ export function SellfoxCredentialsPanel() {
       if (controller.signal.aborted || generation !== epoch.current) throw new Error("scope changed");
       if (!response.ok) { setError(result.error || "赛狐配置保存失败。"); throw new Error("save failed"); }
       setStatus({ ...status, configured: true, source: "database", revision: result.revision, updatedAt: new Date().toISOString() });
+      if (result.activationError) {
+        setTestResult({ passed: false, message: String(result.activationError) });
+      } else if (result.activation) {
+        setTestResult({ passed: result.activation.connected === true, message: String(result.activation.message ?? "") });
+      }
     } finally { if (!controller.signal.aborted && generation === epoch.current) setSaving(false); }
   }
   async function testConnection() {

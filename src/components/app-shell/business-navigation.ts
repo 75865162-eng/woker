@@ -87,6 +87,7 @@ export const navigationGroups = [
   { label: "AI 与工具", items: [
     { href: "/agents", label: "Amazon AI Agent", icon: Bot, moduleId: "agents" },
     { href: "/lili", label: "粒粒 Lili 技能中心", icon: Sparkles, moduleId: "agents" },
+    { href: "/skills", label: "Skill 智能工作台", icon: Sparkles, moduleId: "agents" },
     { href: "/saihu-search-merge", label: "赛狐搜词合并", icon: SearchCheck, moduleId: "searchMerge" },
   ] },
   { label: "系统设置", items: [

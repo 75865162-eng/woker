@@ -17,8 +17,9 @@ import { sellfoxStoreFailure, SellfoxStoreSyncError } from "@/lib/sellfox/sync-e
 import { generateAdsProposals } from "@/lib/sellfox/ads-proposal";
 import { SellfoxRequestError, closeSellfoxClient } from "@/lib/sellfox/client";
 import { normalizeSellfoxDates, sellfoxSyncDisabledReason, SellfoxSyncInputError, SellfoxSyncUnavailableError, type SellfoxSyncResource } from "@/lib/sellfox/sync-contract";
-import { planSellfoxEndpointAuto, handleSellfoxAdaptiveSplits } from "@/lib/sellfox/sync-orchestrator";
+import { planSellfoxEndpointAuto, handleSellfoxAdaptiveSplits, wakeWaitingDependents } from "@/lib/sellfox/sync-orchestrator";
 import { getSellfoxWindowConfig } from "@/lib/sellfox/window-config";
+import { sellfoxStoresReady } from "@/lib/sellfox/sync-dependency";
 
 const workerName = process.env.SELLFOX_SYNC_WORKER_NAME?.trim() || `${sellfoxSyncQueueName}-${process.pid}`;
 const workerId = process.env.SELLFOX_SYNC_WORKER_ID?.trim() || `${workerName}-${process.pid}`;
@@ -41,10 +42,23 @@ async function recoverAndSchedule() {
   recovering = true;
   try {
     await recoverExpiredSellfoxRuns();
+    // 兜底唤醒：stores 已成功落库但唤醒钩子因 Worker 重启未执行时，按 scope 补唤醒一次。
+    const waitingScopes = await prisma.sellfoxSyncRun.findMany({
+      where: { status: "waiting_dependency" },
+      select: { organizationId: true, workspaceId: true },
+      distinct: ["organizationId", "workspaceId"],
+    });
+    for (const waitingScope of waitingScopes) {
+      const scope = { organizationId: waitingScope.organizationId, workspaceId: waitingScope.workspaceId };
+      try {
+        if (await sellfoxStoresReady(scope)) await wakeWaitingDependents(scope);
+      } catch (error) { console.error("[sellfox-sync-worker] wake waiting failed", tickFailure(error)); }
+    }
     const pending = await prisma.sellfoxSyncRun.findMany({ where: { status: "queued" }, orderBy: { startedAt: "asc" }, take: 50 });
     for (const run of pending) await recoverSellfoxQueueRun(run.id);
     if (process.env.QUEUE_DRIVER !== "redis") return;
     const credentialStatuses = new Map<string, Promise<boolean>>();
+    const storeReadiness = new Map<string, Promise<boolean>>();
     const schedules = await prisma.sellfoxSyncSchedule.findMany({ where: { enabled: true }, orderBy: { lastEnqueuedAt: "asc" }, take: 100 });
     for (const candidate of schedules) {
       const disabledReason = sellfoxSyncDisabledReason(candidate.resource);
@@ -58,6 +72,12 @@ async function recoverAndSchedule() {
       const scopeKey = JSON.stringify([candidate.organizationId, candidate.workspaceId]);
       if (!credentialStatuses.has(scopeKey)) credentialStatuses.set(scopeKey, getSellfoxCredentialStatus({ organizationId: candidate.organizationId, workspaceId: candidate.workspaceId }).then(status => status.configured));
       if (!(await credentialStatuses.get(scopeKey))) continue;
+      // 零店铺保护：除 stores 自身外，前置数据未就绪时不反复创建下游失败/等待任务。
+      // stores 成功落库后由 wakeWaitingDependents 依依赖顺序补排。
+      if (candidate.resource !== "stores") {
+        if (!storeReadiness.has(scopeKey)) storeReadiness.set(scopeKey, sellfoxStoresReady({ organizationId: candidate.organizationId, workspaceId: candidate.workspaceId }));
+        if (!(await storeReadiness.get(scopeKey))) continue;
+      }
       await prisma.$transaction(async (tx) => {
         const lockKey = sellfoxSyncScopeLock(candidate.organizationId, candidate.workspaceId, candidate.resource);
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
