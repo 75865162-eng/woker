@@ -282,6 +282,7 @@ export function OperationsHubWorkbench() {
     <div className="space-y-5">
       <nav aria-label="经营中台分区" className="flex flex-wrap gap-2 border-b border-border pb-3">
         {[["overview", "概览"], ["sync", "同步与计划"], ["inventory", "库存"], ["ads", "广告联看"], ["orders", "订单"], ["catalog", "在线产品"], ["replenishment", "补货计划"], ["runs", "同步历史"]].map(([key, label]) => <a key={key} href={`?tab=${key}`} aria-current={tab === key ? "page" : undefined} className={`rounded px-3 py-2 text-sm ${tab === key ? "bg-brand text-white" : "text-muted"}`} onClick={(event) => { event.preventDefault(); window.history.pushState(null, "", `?tab=${key}`); setTab(key); }}>{label}</a>)}
+        <a href="/operations/calculators" className="rounded px-3 py-2 text-sm text-brand">FBA费用测算</a>
         <Button size="sm" variant="secondary" onClick={() => void refreshAll()} disabled={requesting}>刷新数据</Button>
       </nav>
       {tab === "sync" && <SyncSchedulesPanel key={scopeRevision} headers={workspaceHeaders} onSync={(resource) => void requestSync(resource ?? "inventory")} onChanged={() => void refreshAll()} />}

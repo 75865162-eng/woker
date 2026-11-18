@@ -1,3 +1,4 @@
+import { quoteReferenceFba } from "@/lib/ext/fba-reference";
 import type { Product } from "@/lib/products/types";
 import { overdueThresholdDays, type TrialPriceRow } from "./product-workbench-model";
 
@@ -58,7 +59,17 @@ export function formatSkuSequence(sequence: number) {
   return `${indexToLetters(prefixIndex)}${String(suffix).padStart(3, "0")}`;
 }
 
+export function calculateAutomaticFbaFee(row: TrialPriceRow): number | null {
+  const { lengthCm, widthCm, heightCm, actualWeightKg, suggestedPrice } = row;
+  if (![lengthCm, widthCm, heightCm, actualWeightKg, suggestedPrice].every((v) => Number.isFinite(v) && v > 0)) return null;
+  const quote = quoteReferenceFba({ lengthIn: lengthCm / 2.54, widthIn: widthCm / 2.54, heightIn: heightCm / 2.54, weightLb: actualWeightKg * 2.2046226218, price: suggestedPrice, category: "家居及厨房用品", date: "2026-11-18" }, "peak");
+  const shipping = quote.fees.find((fee) => fee.id === "shipping")?.amount;
+  return shipping == null ? null : Number(shipping);
+}
+
 export function calculateExcelPricing(row: TrialPriceRow) {
+  const automaticFbaFee = calculateAutomaticFbaFee(row);
+  const fbaFee = row.fbaFee || automaticFbaFee || 0;
   const volumeWeightKg = (row.lengthCm * row.widthCm * row.heightCm) / 6000;
   const lengthIn = row.lengthCm / 2.54;
   const widthIn = row.widthCm / 2.54;
@@ -69,15 +80,16 @@ export function calculateExcelPricing(row: TrialPriceRow) {
   const fbaBillableWeightLb = Math.max(actualWeightLb, volumeWeightLb);
   const oceanFreight = (Math.max(actualWeightLb, volumeWeightLbFromCm) / 2.2) * (row.oceanFreightUnitPrice || 0);
   const commission = row.suggestedPrice * 0.15;
-  const fuelFee = row.fbaFee * 0.035;
+  const fuelFee = fbaFee * 0.035;
   const monthlyStorageFee = lengthIn * widthIn * heightIn * 0.000578 * 0.87;
   const breakEvenPrice = row.exchangeRate
-    ? (row.purchaseCost + oceanFreight) / row.exchangeRate + commission + row.fbaFee + fuelFee + monthlyStorageFee
+    ? (row.purchaseCost + oceanFreight) / row.exchangeRate + commission + fbaFee + fuelFee + monthlyStorageFee
     : 0;
   const profit = row.suggestedPrice - breakEvenPrice;
   const profitRate = row.suggestedPrice ? profit / row.suggestedPrice : 0;
 
   return {
+    automaticFbaFee,
     volumeWeightKg,
     lengthIn,
     widthIn,

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import Link from "next/link";
 import { Copy, FileText, ImagePlus, Minus, Plus, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useProductAttachmentActivity } from "./product-attachment-activity";
@@ -68,12 +69,23 @@ function PricingNameInput({ value, onChange }: { value: string; onChange: (value
       ref={inputRef}
       rows={1}
       style={{ height: 32 }}
-      className="max-h-[60px] w-full resize-none overflow-y-auto rounded-md border border-border bg-white px-2 py-1 text-xs leading-5 text-foreground outline-none focus:border-brand"
+      className="max-h-[60px] w-[220px] resize-none overflow-y-auto rounded-md border border-border bg-white px-2 py-1 text-xs leading-5 text-foreground outline-none focus:border-brand"
       value={value}
       onChange={(event) => onChange(event.target.value)}
       onInput={(event) => resize(event.currentTarget)}
     />
   );
+}
+
+function LivePriceInput({ value, onChange, placeholder }: { value: number; onChange: (value: number) => void; placeholder?: string }) {
+  const [text, setText] = useState(value ? String(value) : "");
+  const focused = useRef(false);
+  useEffect(() => { if (!focused.current) setText(value ? String(value) : ""); }, [value]);
+  return <input type="text" inputMode="decimal" placeholder={placeholder} value={text}
+    className="h-8 w-[60px] min-w-[60px] rounded-md border border-border bg-white px-2 text-xs text-foreground outline-none focus:border-brand"
+    onFocus={() => { focused.current = true; }}
+    onChange={(event) => { const next = event.target.value; setText(next); const n = next.trim() ? Number(next) : 0; if (Number.isFinite(n)) onChange(n); }}
+    onBlur={() => { focused.current = false; const n = text.trim() ? Number(text) : 0; if (!Number.isFinite(n)) setText(value ? String(value) : ""); }} />;
 }
 
 export function ProductWorkbookDetailSections({
@@ -116,6 +128,9 @@ export function ProductWorkbookDetailSections({
   onRemarkImagesChange: (images: string[], imageAssets?: ProductImageAsset[]) => void;
 }) {
   const [showOptionalPricingMetrics, setShowOptionalPricingMetrics] = useState(false);
+  const [lengthUnit, setLengthUnit] = useState<"cm" | "in">("cm");
+  const [weightUnit, setWeightUnit] = useState<"kg" | "lb">("kg");
+  const displayValue = (value: number, factor: number) => Number((value / factor).toFixed(4));
   const optionalPricingMetricLabels = new Set([
     "3.5%燃油$",
     "佣金(USD)",
@@ -126,22 +141,22 @@ export function ProductWorkbookDetailSections({
   ]);
   const pricingHeaders = [
     "品名",
-    "长cm",
-    "宽cm",
-    "高cm",
-    "实际重Kg",
-    "材积重Kg",
-    "建议售价(USD)",
-    "采购成本（RMB）",
-    "FBA配送费$",
+    "长\ncm",
+    "宽\ncm",
+    "高\ncm",
+    "实际重\nKg",
+    "材积重\nKg",
+    "建议售价\n(USD)",
+    "采购成本\n（RMB）",
+    "FBA配送费\n(USD)",
     "3.5%燃油$",
-    "海运单价（RMB）",
-    "海运头程（RMB）",
+    "海运单价\n（RMB）",
+    "海运头程\n（RMB）",
     "佣金(USD)",
     "月仓储费(USD)",
     "汇率",
     "保本价(USD)",
-    "海运毛利润(USD)",
+    "海运毛利润\n(USD)",
     "海运毛利润率",
     "体积重量/磅",
     "重量/磅",
@@ -153,6 +168,7 @@ export function ProductWorkbookDetailSections({
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle>区域 1：利润试算</CardTitle>
           <div className="flex gap-2">
+            <Link href="/operations/calculators" className="inline-flex items-center rounded-md border border-border bg-white px-3 text-xs font-semibold">FBA费用测算</Link>
             <Button variant="secondary" size="icon" title="增加试算行" onClick={onPricingAdd}>
               <Plus className="h-4 w-4" />
             </Button>
@@ -170,9 +186,9 @@ export function ProductWorkbookDetailSections({
                   .map((label) => (
                   <th
                     key={label}
-                    className={`px-2 py-2 font-bold ${label === "品名" ? "w-[140px] min-w-[140px]" : ""} ${label === "3.5%燃油$" ? "w-[60px] min-w-[60px]" : ""} ${["建议售价(USD)", "采购成本（RMB）", "海运毛利润率"].includes(label) ? "text-danger" : ""}`}
+                    className={`px-2 py-2 font-bold ${label === "品名" ? "w-[236px] min-w-[236px]" : ""} ${label === "3.5%燃油$" ? "w-[60px] min-w-[60px]" : ""} ${["建议售价\n(USD)", "采购成本\n（RMB）", "海运毛利润率"].includes(label) ? "text-danger" : ""}`}
                   >
-                    {label}
+                    {["长\ncm", "宽\ncm", "高\ncm", "实际重\nKg", "材积重\nKg"].includes(label) ? <><span className="block">{label.split("\n")[0]}</span><span className="inline-flex rounded border border-border bg-white p-0.5">{(label.endsWith("cm") ? ["cm", "in"] : ["kg", "lb"]).map((unit) => <button type="button" key={unit} aria-label={`${label.split("\n")[0]} ${unit}`} aria-pressed={label.endsWith("cm") ? lengthUnit === unit : weightUnit === unit} className={`rounded px-1 py-0.5 ${(label.endsWith("cm") ? lengthUnit === unit : weightUnit === unit) ? "bg-surface-muted text-foreground" : "text-muted"}`} onClick={() => label.endsWith("cm") ? setLengthUnit(unit as "cm" | "in") : setWeightUnit(unit as "kg" | "lb")}>{unit}</button>)}</span></> : label.includes("\n") ? label.split("\n").map((part, partIndex) => <span key={partIndex} className="block">{part}</span>) : label}
                   </th>
                 ))}
                 <th className="w-10 min-w-10 px-1 py-2 text-center">
@@ -194,20 +210,18 @@ export function ProductWorkbookDetailSections({
 
                 return (
                   <tr key={index} className="border-t border-border align-top">
-                    <td className="w-[140px] min-w-[140px] px-2 py-2">
+                    <td className="w-[236px] min-w-[236px] px-2 py-2">
                       <PricingNameInput
                         value={row.name}
                         onChange={(value) => onPricingChange(index, "name", value)}
                       />
                     </td>
-                    <td className="px-2 py-2"><DecimalInput compact value={row.lengthCm} onChange={(value) => onPricingChange(index, "lengthCm", value)} /></td>
-                    <td className="px-2 py-2"><DecimalInput compact value={row.widthCm} onChange={(value) => onPricingChange(index, "widthCm", value)} /></td>
-                    <td className="px-2 py-2"><DecimalInput compact value={row.heightCm} onChange={(value) => onPricingChange(index, "heightCm", value)} /></td>
-                    <td className="px-2 py-2"><DecimalInput compact value={row.actualWeightKg} onChange={(value) => onPricingChange(index, "actualWeightKg", String(value))} /></td>
-                    <ReadonlyMetric value={calc.volumeWeightKg} />
-                    <td className="px-2 py-2"><DecimalInput compact value={row.suggestedPrice} onChange={(value) => onPricingChange(index, "suggestedPrice", value)} /></td>
+                    {(["lengthCm", "widthCm", "heightCm"] as const).map((field) => { const factor = lengthUnit === "cm" ? 1 : 2.54; return <td key={field} className="px-2 py-2"><LivePriceInput value={displayValue(row[field], factor)} onChange={(value) => onPricingChange(index, field, value * factor)} /></td>; })}
+                    <td className="px-2 py-2"><LivePriceInput value={displayValue(row.actualWeightKg, weightUnit === "kg" ? 1 : 0.45359237)} onChange={(value) => onPricingChange(index, "actualWeightKg", value * (weightUnit === "kg" ? 1 : 0.45359237))} /></td>
+                    <ReadonlyMetric value={Number((calc.volumeWeightKg / (weightUnit === "kg" ? 1 : 0.45359237)).toPrecision(4)).toString()} />
+                    <td className="px-2 py-2"><LivePriceInput value={row.suggestedPrice} onChange={(value) => onPricingChange(index, "suggestedPrice", value)} /></td>
                     <td className="px-2 py-2"><DecimalInput compact value={row.purchaseCost} onChange={(value) => onPricingChange(index, "purchaseCost", value)} /></td>
-                    <td className="px-2 py-2"><DecimalInput compact value={row.fbaFee} onChange={(value) => onPricingChange(index, "fbaFee", value)} /></td>
+                    <td className="px-2 py-2"><LivePriceInput value={row.fbaFee} placeholder={calc.automaticFbaFee?.toFixed(2)} onChange={(value) => onPricingChange(index, "fbaFee", value)} /></td>
                     {showOptionalPricingMetrics && <td className="w-[60px] min-w-[60px] px-2 py-2 font-semibold text-muted metric-tabular">{calc.fuelFee.toFixed(2)}</td>}
                     <td className="px-2 py-2"><DecimalInput compact value={row.oceanFreightUnitPrice} onChange={(value) => onPricingChange(index, "oceanFreightUnitPrice", value)} /></td>
                     <ReadonlyMetric value={calc.oceanFreight} />
@@ -251,7 +265,7 @@ export function ProductWorkbookDetailSections({
           </div>
         </CardHeader>
         <CardContent className="thin-scrollbar h-fit overflow-x-auto overflow-y-hidden">
-          <table className="w-[1960px] table-fixed text-left text-xs">
+          <table className="w-[1960px] table-fixed border-collapse text-left text-xs [&_th]:border [&_th]:border-border [&_td]:border [&_td]:border-border">
             <colgroup>
               {[146, 60, 76, 110, 110, 110, 110, 110, 110, 76, 40, 120, 120, 120, 120, 120, 136, 166].map((width, index) => (
                 <col key={index} style={{ width }} />
@@ -267,7 +281,7 @@ export function ProductWorkbookDetailSections({
             <tbody>
               {detail.competitors.map((row, index) => (
                 <tr key={index} className="border-t border-border align-top">
-                  <td className="px-2 py-2">
+                  <td className="px-2 py-1">
                     <div className="w-[130px] space-y-2">
                       <ImageUploadSquare
                         image={row.hotVariantImage}
@@ -287,11 +301,11 @@ export function ProductWorkbookDetailSections({
                       </select>
                     </div>
                   </td>
-                  <td className="px-1 py-2">
+                  <td className="px-1 py-1">
                     <div className="space-y-2">
                       <textarea
                         rows={2}
-                        className="block h-[105px] w-full min-w-0 resize-none rounded-md border border-border bg-white px-1 py-2 text-xs leading-4 text-foreground outline-none focus:border-brand"
+                        className="block h-[105px] w-full min-w-0 resize-none rounded-md border border-border bg-white px-1 py-1 text-xs leading-4 text-foreground outline-none focus:border-brand"
                         value={row.asin}
                         onChange={(event) => onCompetitorChange(index, "asin", event.target.value)}
                       />
@@ -299,7 +313,7 @@ export function ProductWorkbookDetailSections({
                     </div>
                   </td>
                   {competitorTextFields.map((field) => (
-                    <td key={field} className="px-1 py-2">
+                    <td key={field} className="px-1 py-1">
                       {negativeCompetitorFields.has(field) ? (
                         <NegativePointEditor
                           value={String(row[field] ?? "")}
@@ -309,18 +323,18 @@ export function ProductWorkbookDetailSections({
                       ) : (
                         <textarea
                           rows={2}
-                          className="block h-[180px] w-full min-w-0 resize-none rounded-md border border-border bg-white px-1 py-2 text-xs leading-4 text-foreground outline-none focus:border-brand"
+                          className="block h-[180px] w-full min-w-0 resize-none rounded-md border border-border bg-white px-1 py-1 text-xs leading-4 text-foreground outline-none focus:border-brand"
                           value={String(row[field] ?? "")}
                           onChange={(event) => onCompetitorChange(index, field, event.target.value)}
                         />
                       )}
                     </td>
                   ))}
-                  <td className="px-2 py-2">
-                    <div className="w-[150px] space-y-2">
+                  <td className="px-2 py-1">
+                    <div className="w-[150px]">
                       <textarea
                         rows={2}
-                        className="block h-[50px] w-full min-w-0 resize-none rounded-md border border-border bg-white px-1 py-2 text-xs leading-4 text-foreground outline-none focus:border-brand"
+                        className="block h-[50px] w-full min-w-0 resize-none rounded-md border border-border bg-white px-1 py-1 text-xs leading-4 text-foreground outline-none focus:border-brand"
                         value={row.note}
                         onChange={(event) => onCompetitorChange(index, "note", event.target.value)}
                       />
@@ -353,7 +367,7 @@ export function ProductWorkbookDetailSections({
           </div>
         </CardHeader>
         <CardContent className="thin-scrollbar overflow-auto">
-          <table className="min-w-[1540px] text-left text-xs">
+          <table className="min-w-[1540px] border-collapse text-left text-xs [&_th]:border [&_th]:border-border [&_td]:border [&_td]:border-border">
             <thead className="bg-surface-muted text-muted">
               <tr>
                 {["供应商产品链接", "厂家名称", "配置", "起订量", "交期", "国内物流费", "相关认证", "专利国家", "产品包装方式", "报价（20套）", "报价（100-500套）", "开票信息", "备注"].map((label) => (
