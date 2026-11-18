@@ -285,3 +285,39 @@
 - **字段级汇总开关**：`SourceTable` 启用 `StandardDataTable` 已有的 `columnToggle`，用户可逐列开关「最近成功 / 覆盖范围 / 当前状态 / 下次同步」等汇总字段；「数据域 / 范围」作为识别列通过 `pinnedColumnKeys` 固定不隐藏。开关只影响展示，不改变取数与统计口径。
 - **行内同步进度**：新增 `SyncInlineProgress`，当来源 `health = SYNCING` 且存在 `latestTask` 时，在「当前状态」列状态徽章下方渲染行内进度条。文案来自服务端已有的真实字段（`stage` 映射 + `pagesCompleted` / `processedCount`），不臆造总页数或百分比；无分母用不确定态流动条表达「进行中」。阶段映射覆盖 `REPORT_CREATING`→报表生成中、`REPORT_PARSING`→下载解析中、`DOWNLOAD`→下载中、`FETCHING`→拉取中等真实 stage。
 - **验证**：E2E `sync-center` 全 60 用例通过（新增断言覆盖列开关显隐 / 固定列 / 进度条真实计数），`check:fast` EXIT=0（2367 测试 0 失败、lint 0 error、ui:guard 零回退）。未使用 Mock 冒充业务数据，fixture 仅为浏览器组件测试的隔离输入。
+
+---
+
+## 十六、Amazon SP-API / Ads API 独立同步中心页面（2026-11-18，用户"一并做了"）
+
+承接第十五章结尾提出的"更大独立页面规划"，按《Amazon SP-API & Ads API 独立同步中心 UI 设计文档》把独立页面/日志抽屉/手动同步弹窗全部落地。**强隔离**：SP-API 与 Ads API 本就是系统内两套独立数据模型（`AmazonSync*` vs `AmazonAds*`）与独立接口，本轮沿用该边界，不合并、不共用矩阵、不做 UNION；赛狐仍在 `/sellfox/sync` 与系统设置集成页，互不混放。所有数据取自服务端真实字段，缺失用「—」/`NEEDS_DATA` 表达，不补造零值、百分比或总页数。
+
+### 16.1 新增页面与路由
+- `/operations?view=amazon-sync`：独立 Amazon 同步矩阵页。在 `operations/page.tsx` 服务端按 `view` 分流，直接渲染独立组件，**不侵入**原 109KB 同步工作台内部逻辑（`?tab=ads` 可直达 Ads Tab）。
+- `/settings/amazon-connections`：Amazon 连接管理页。仅管理 SP-API / Ads API 连接，赛狐连接保持原位。
+- 侧栏导航：数据中心组加入「Amazon 同步矩阵」，系统设置组加入「Amazon 连接管理」。
+
+### 16.2 双 Tab 矩阵（`amazon-sync-matrix.tsx`）
+- **SP-API Tab**：数据取 `sync-center?section=overview` + `?section=coverage`。矩阵列对齐文档：数据域 / 落库表 / 总行数 / 覆盖主体（已覆盖 Marketplace ÷ 全部）/ 覆盖区间（时序游标水位，快照显示「—」）/ 最新业务日期 / 最近同步时间 / 状态 / 操作。落库表用 `sp-api-datasets` 已登记的真实物理表名映射，未登记域显示 `NEEDS_DATA`，不臆造表名。
+- **Ads API Tab**：数据取独立 `ads/sync`（`plans`/`freshness`/`taskHistory`）与 `ads/profiles`。覆盖主体为已覆盖 Profile ÷ 全部 Profile；通过 `freshness.lastTaskId → taskHistory → plan` 的真实关联链取处理行数、状态与计划（**不**用内部 Profile ID 与 Amazon 公共 Profile ID 做错误等价关联）。落库表为 `AmazonAdsEntityRecord` / `AmazonAdsReportFact`。
+- 顶部：连接下拉选择器（切换即过滤）、批量重试失败项、4 项汇总卡（总注册 / 权限就绪 / 同步成功 / 同步失败，均按当前视图真实统计）。
+- 字段级列开关复用 `StandardDataTable.columnToggle` + `pinnedColumnKeys={["domain"]}`；`health=Syncing/RUNNING` 行内渲染真实进度条（`stage` + `pagesCompleted`/`processedCount`，无分母用不确定态）。
+- 状态徽章严格取自服务端 `health`/`status`，按文档枚举映射样式（等待授权 / 权限不足 / 待接入 / 空闲 / 同步中 / 成功 / 失败 / 已暂停）。
+
+### 16.3 同步日志抽屉 + 手动同步弹窗
+- **日志抽屉**：复用统一 `Drawer`（ESC / 遮罩关闭、busy 锁定）。SP 取 `section=task` 的结构化日志（RequestId / HTTP 状态 / 限流头 / 错误分类，不展示原始报错正文）；Ads 取 `ads/sync?taskId` 的 `attemptRuns`。
+- **手动同步弹窗**：SP 时序资源提供「增量更新 / 自定义区间回填」，前端按文档上限拦截（订单/财务 730 天、搜索词类 65 天、其余 95 天），快照类不提供历史日期，提交走现有审批流（`action:run`）；Ads 走 `ads/sync` 的 `run`。同步中按钮变「取消」，取消走 `control-task`/`cancel` 并在检查点生效。危险操作均二次确认 Dialog。手动同步明确标注为补救入口，不替代授权后自动回填/增量。
+
+### 16.4 连接卡片页（`amazon-connections.tsx`）
+- SP 卡片取 `sync-center?section=connections` 的 `authorizations` + `sources`，摘要显示已发现 Marketplace 数、权限就绪/失败资源；操作含编辑凭据（跳店铺与授权）、验证参与站点、停用连接（均走现有审批流）。
+- Ads 卡片取 `ads/profiles`（按 authorization 分组），摘要显示 Profile 数、同步计划/失败计划、自动同步配置状态；操作含前往授权（OAuth start，环境未配置时禁用）、删除连接（走 `profiles` 的 `disconnect`，**仅停调度与同步状态、保留已落库业务数据**）。删除/停用均二次确认。
+
+### 16.5 本轮修改文件
+- 新增：`src/components/operations/amazon-sync-matrix.tsx`、`src/components/settings/amazon-connections.tsx`、`src/app/(erp)/settings/amazon-connections/page.tsx`。
+- 修改：`src/app/(erp)/operations/page.tsx`（`view=amazon-sync` 服务端分流）、`src/components/app-shell/business-navigation.ts`（2 个导航入口）、`package.json`（`test:amazon-sync-matrix:browser` 脚本）。
+- 测试新增：`tests/browser/amazon-sync-matrix-harness.tsx`、`tests/browser/amazon-sync-matrix.config.ts`、`tests/browser/amazon-sync-matrix.spec.ts`（4 用例：双 Tab 隔离 + 列开关 + 汇总 + 真实进度 / 手动同步回填上限拦截 + 取消 / 日志抽屉真实 RequestId / 连接卡片二次确认）。
+
+### 16.6 验证
+- E2E `amazon-sync-matrix` 4/4 通过。
+- `check:fast` EXIT=0：2367 测试 0 失败、lint 0 error、typecheck 通过、ui:guard 零回退（新增组件用 `font-semibold` 而非 `font-bold`，未引入 UI 范式回退）。
+- 未用 Mock 冒充业务数据；浏览器 fixture 仅为组件测试的隔离输入与断言载体。真实端到端回填/授权仍需生产 Amazon 凭据（同第十四、十五章的外部环境依赖说明）。

@@ -75,6 +75,7 @@
     "test:amazon-finance:offline": "node scripts/test-amazon-sync-integration.mjs --finance",
     "test:amazon-orders:offline": "node scripts/test-amazon-sync-integration.mjs --orders",
     "test:amazon-sync:browser": "playwright test --config tests/browser/sync-center.config.ts",
+    "test:amazon-sync-matrix:browser": "playwright test --config tests/browser/amazon-sync-matrix.config.ts",
     "worker:import": "node scripts/runtime/worker-manager.mjs import",
     "test:runtime:integration": "node scripts/test-runtime-integration.mjs",
     "mcp:roles": "node scripts/mcp-isolation/apply-roles.mjs",

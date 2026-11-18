@@ -82,6 +82,7 @@ export const navigationGroups = [
     { href: "/sellfox", label: "Sellfox 数据", icon: Store, moduleId: "sellfox" },
     { href: "/sellfox/sync", label: "Sellfox 同步", icon: RefreshCw, moduleId: "sellfox" },
     { href: "/operations", label: "同步中心", icon: Activity, moduleId: "operations" },
+    { href: "/operations?view=amazon-sync", label: "Amazon 同步矩阵", icon: Activity, moduleId: "operations" },
   ] },
   { label: "AI 与工具", items: [
     { href: "/agents", label: "Amazon AI Agent", icon: Bot, moduleId: "agents" },
@@ -90,6 +91,7 @@ export const navigationGroups = [
   ] },
   { label: "系统设置", items: [
     { href: "/operations?view=connections", label: "Amazon 账号与站点", icon: Store, moduleId: "operations" },
+    { href: "/settings/amazon-connections", label: "Amazon 连接管理", icon: Store, moduleId: "settings" },
     { href: "/amazon-ads/accounts", label: "Ads 账号授权", icon: Activity, moduleId: "workspace" },
     { href: "/operations/data-dictionary", label: "数据字典", icon: BookMarked, moduleId: "operations" },
     ...accountMenuItems,
