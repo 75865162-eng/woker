@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "mode": "production",
+  "bundler": "webpack",
+  "fixtureOnly": true,
+  "capturedAt": "2026-11-18T14:11:48.396Z",
+  "node": "v24.18.0",
+  "routes": [
+    "/listing-ai",
+    "/logistics",
+    "/workspace"
+  ],
+  "loginColdMs": 188.1688749999994,
+  "loginMs": {
+    "samples": [
+      30.65,
+      28.61,
+      27.35,
+      28.03,
+      27.37,
+      26.82,
+      26.55
+    ],
+    "median": 27.370749999998225,
+    "p95": 30.65033300000141
+  },
+  "coldPages": [
+    {
+      "path": "/listing-ai",
+      "totalMs": 126.04970799999865
+    },
+    {
+      "path": "/logistics",
+      "totalMs": 855.2256249999991
+    },
+    {
+      "path": "/workspace",
+      "totalMs": 852.0770420000008
+    }
+  ],
+  "warmNavigationMs": {
+    "samples": [
+      824.29,
+      808.75,
+      810.92,
+      801.19,
+      47.49,
+      827.46,
+      799.02,
+      819.86,
+      812.94
+    ],
+    "median": 810.9177089999976,
+    "p95": 827.4622919999965
+  },
+  "rsc": [
+    {
+      "ms": 18.5,
+      "ttfb": 7.299999952316284
+    },
+    {
+      "ms": 18.5,
+      "ttfb": 9.299999952316284
+    },
+    {
+      "ms": 18.5,
+      "ttfb": 11.300000190734863
+    },
+    {
+      "ms": 13.600000143051147,
+      "ttfb": 3.700000047683716
+    },
+    {
+      "ms": 15.900000095367432,
+      "ttfb": 4.599999904632568
+    },
+    {
+      "ms": 16.200000047683716,
+      "ttfb": 4
+    },
+    {
+      "ms": 12.400000095367432,
+      "ttfb": 3.1999998092651367
+    },
+    {
+      "ms": 18,
+      "ttfb": 5.200000047683716
+    },
+    {
+      "ms": 12,
+      "ttfb": 3.4000000953674316
+    },
+    {
+      "ms": 17.5,
+      "ttfb": 5.5
+    },
+    {
+      "ms": 21.09999990463257,
+      "ttfb": 7.6000001430511475
+    },
+    {
+      "ms": 20.700000047683716,
+      "ttfb": 7.299999952316284
+    }
+  ],
+  "shellPersisted": true,
+  "publicRequests": [],
+  "checks": [
+    "role revocation",
+    "cross-organization identity",
+    "disabled user"
+  ],
+  "limitations": [
+    "Disposable database and synthetic accounts; not production acceptance",
+    "External font loading excluded; CSS scan bounded to src in both measurements",
+    "Cold page navigation includes networkidle settle time",
+    "Selected real routes, not a full ERP benchmark"
+  ]
+}

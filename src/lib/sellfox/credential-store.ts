@@ -37,6 +37,23 @@ export async function getSellfoxCredentialStatus(scope: SellfoxCredentialScope, 
   return { ...base, source: "none", configured: false };
 }
 
+export async function disableSellfoxAuthorization(scope: SellfoxCredentialScope, actorUserId: string, revision: number) {
+  if (!Number.isSafeInteger(revision) || revision < 1) throw new SellfoxCredentialError("凭据版本无效，请重新读取配置。", 409);
+  return prisma.$transaction(async tx => {
+    if (!(await sellfoxCredentialAccess(scope, actorUserId, tx)).canEdit) throw new SellfoxCredentialError("仅有配置权限的组织管理员可停止赛狐授权。", 403);
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${JSON.stringify(["sellfox-credentials", scope.organizationId, scope.workspaceId])}, 0))`;
+    const { record } = await storedCredential(scope, tx);
+    if (!record || record.revision !== revision) throw new SellfoxCredentialError("凭据版本已变化，请重新读取配置。", 409);
+    const nextRevision = revision + 1;
+    await tx.sellfoxIntegrationCredential.delete({ where: { organizationId_workspaceId: scope } });
+    await tx.sellfoxSyncSchedule.updateMany({ where: { ...scope, enabled: true }, data: { enabled: false } });
+    await tx.sellfoxSyncRun.updateMany({ where: { ...scope, status: { in: ["running", "queued", "waiting", "retry_wait"] } }, data: { status: "cancelled", error: "赛狐授权已停止。", finishedAt: new Date(), executionToken: null, leaseExpiresAt: null } });
+    await tx.sellfoxSyncShard.updateMany({ where: { ...scope, status: { in: ["running", "queued", "waiting", "retry_wait"] } }, data: { status: "cancelled", finishedAt: new Date() } });
+    await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actorUserId, action: "sellfox.credentials.disabled", entityType: "sellfox_integration_credential", entityId: JSON.stringify([scope.organizationId, scope.workspaceId]), metadata: { workspaceId: scope.workspaceId, previousRevision: revision, revision: nextRevision } } });
+    return { revision: nextRevision };
+  });
+}
+
 export async function sellfoxCredentialAccess(scope: SellfoxCredentialScope, actorUserId: string, db: Db = prisma) {
   const [member, workspace, permissions] = await Promise.all([
     db.organizationMember.findUnique({ where: { organizationId_userId: { organizationId: scope.organizationId, userId: actorUserId } }, select: { role: true, user: { select: { status: true } } } }),

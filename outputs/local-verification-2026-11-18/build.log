@@ -1,0 +1,328 @@
+   ▲ Next.js 15.5.25
+   - Experiments (use with caution):
+     · staleTimes
+
+   Creating an optimized production build ...
+   Using tsconfig file: .next-types-0b54ab132715.json
+   Using tsconfig file: .next-types-0b54ab132715.json
+   Using tsconfig file: .next-types-0b54ab132715.json
+ ✓ Compiled successfully in 21.2s
+   Linting and checking validity of types ...
+
+   We detected TypeScript in your project and reconfigured your tsconfig.json file for you.
+   The following suggested values were added to your tsconfig.json. These values can be changed to fit your project's needs:
+
+   	- include was updated to add '.next-local-verification/types/**/*.ts'
+
+
+./src/components/accounts/account-workbench.tsx
+60:6  Warning: React Hook useEffect has a missing dependency: 'workbenchTabs'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/sellfox/replica/replica-workbench.tsx
+136:18  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/lib/accounts/roster-auth-sync.ts
+88:11  Warning: 'isBootstrapAccount' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+
+./src/lib/integration-catalog.ts
+54:13  Warning: 'resourceId' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules
+   Collecting page data ...
+   Generating static pages (0/224) ...
+   Generating static pages (56/224) 
+   Generating static pages (112/224) 
+   Generating static pages (168/224) 
+ ✓ Generating static pages (224/224)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                             Size  First Load JS
+┌ ƒ /                                                2.22 kB         147 kB
+├ ○ /_not-found                                         1 kB         104 kB
+├ ƒ /.well-known/[...parts]                            611 B         104 kB
+├ ƒ /accounts                                        27.3 kB         182 kB
+├ ƒ /agents                                          5.03 kB         149 kB
+├ ƒ /agents/[agentId]                                6.38 kB         151 kB
+├ ƒ /agents/listing                                  5.31 kB         156 kB
+├ ƒ /agents/market                                   9.44 kB         165 kB
+├ ƒ /agents/market/selection                         4.81 kB         155 kB
+├ ƒ /agents/orchestrator                             5.49 kB         156 kB
+├ ƒ /agents/ppc                                      9.95 kB         182 kB
+├ ƒ /agents/product                                  7.16 kB         162 kB
+├ ƒ /agents/selection-research                         18 kB         162 kB
+├ ƒ /agents/supplier                                 5.87 kB         161 kB
+├ ƒ /amazon-ads/[[...view]]                            611 B         104 kB
+├ ƒ /api/accounts/role-permissions                     611 B         104 kB
+├ ƒ /api/accounts/roles                                611 B         104 kB
+├ ƒ /api/accounts/team-members                         611 B         104 kB
+├ ƒ /api/agents                                        611 B         104 kB
+├ ƒ /api/agents/[agentId]                              611 B         104 kB
+├ ƒ /api/agents/[agentId]/executions                   611 B         104 kB
+├ ƒ /api/agents/approvals/[approvalId]                 611 B         104 kB
+├ ƒ /api/agents/evaluations                            611 B         104 kB
+├ ƒ /api/agents/listing                                611 B         104 kB
+├ ƒ /api/agents/listing/executions                     611 B         104 kB
+├ ƒ /api/agents/listing/projects                       611 B         104 kB
+├ ƒ /api/agents/market/executions                      611 B         104 kB
+├ ƒ /api/agents/market/projects                        611 B         104 kB
+├ ƒ /api/agents/market/selection-evidence              611 B         104 kB
+├ ƒ /api/agents/market/selection-local                 611 B         104 kB
+├ ƒ /api/agents/market/selection-reviews               611 B         104 kB
+├ ƒ /api/agents/market/selection-slugs                 611 B         104 kB
+├ ƒ /api/agents/market/selection-suppliers             611 B         104 kB
+├ ƒ /api/agents/orchestrator                           611 B         104 kB
+├ ƒ /api/agents/orchestrator/executions                611 B         104 kB
+├ ƒ /api/agents/ppc/actions                            611 B         104 kB
+├ ƒ /api/agents/ppc/audits                             611 B         104 kB
+├ ƒ /api/agents/ppc/audits/[auditId]                   611 B         104 kB
+├ ƒ /api/agents/ppc/audits/[auditId]/apply             611 B         104 kB
+├ ƒ /api/agents/ppc/executions                         611 B         104 kB
+├ ƒ /api/agents/product/executions                     611 B         104 kB
+├ ƒ /api/agents/product/projects                       611 B         104 kB
+├ ƒ /api/agents/supplier/projects                      611 B         104 kB
+├ ƒ /api/agents/tools                                  611 B         104 kB
+├ ƒ /api/ai-settings                                   611 B         104 kB
+├ ƒ /api/ai-settings/test-chat                         611 B         104 kB
+├ ƒ /api/assets/[...key]                               611 B         104 kB
+├ ƒ /api/assets/upload                                 611 B         104 kB
+├ ƒ /api/audit/versions                                611 B         104 kB
+├ ƒ /api/auth/login                                    611 B         104 kB
+├ ƒ /api/auth/logout                                   611 B         104 kB
+├ ƒ /api/auth/me                                       611 B         104 kB
+├ ƒ /api/auth/register                                 611 B         104 kB
+├ ƒ /api/files                                         611 B         104 kB
+├ ƒ /api/files/[id]/download                           611 B         104 kB
+├ ƒ /api/files/upload                                  611 B         104 kB
+├ ƒ /api/health                                        611 B         104 kB
+├ ƒ /api/image-upscale                                 611 B         104 kB
+├ ƒ /api/image-upscale/batches/[batchId]/zip           611 B         104 kB
+├ ƒ /api/image-upscale/jobs/[id]                       611 B         104 kB
+├ ƒ /api/image-upscale/jobs/[id]/download              611 B         104 kB
+├ ƒ /api/integrations/amazon/ads/changes               611 B         104 kB
+├ ƒ /api/integrations/amazon/ads/data                  611 B         104 kB
+├ ƒ /api/integrations/amazon/ads/oauth/callback        611 B         104 kB
+├ ƒ /api/integrations/amazon/ads/oauth/start           611 B         104 kB
+├ ƒ /api/integrations/amazon/ads/profiles              611 B         104 kB
+├ ƒ /api/integrations/amazon/ads/reports               611 B         104 kB
+├ ƒ /api/integrations/amazon/ads/sync                  611 B         104 kB
+├ ƒ /api/integrations/amazon/sp-api/bindings           611 B         104 kB
+├ ƒ /api/integrations/amazon/sp-api/credentials        611 B         104 kB
+├ ƒ /api/integrations/amazon/sp-api/oauth/callback     611 B         104 kB
+├ ƒ /api/integrations/amazon/sp-api/oauth/start        611 B         104 kB
+├ ƒ /api/integrations/catalog                          611 B         104 kB
+├ ƒ /api/integrations/sellersprite                     611 B         104 kB
+├ ƒ /api/integrations/sellfox/credentials              611 B         104 kB
+├ ƒ /api/integrations/sellfox/credentials/test         611 B         104 kB
+├ ƒ /api/internal/amazon/execution                     611 B         104 kB
+├ ƒ /api/jobs                                          611 B         104 kB
+├ ƒ /api/jobs/[id]                                     611 B         104 kB
+├ ƒ /api/jobs/[id]/retry                               611 B         104 kB
+├ ƒ /api/lili/[...path]                                611 B         104 kB
+├ ƒ /api/lili/call-quota                               611 B         104 kB
+├ ƒ /api/lili/devices                                  611 B         104 kB
+├ ƒ /api/lili/oauth/[action]                           611 B         104 kB
+├ ƒ /api/lili/pair                                     611 B         104 kB
+├ ƒ /api/listing-ai/chat                               611 B         104 kB
+├ ƒ /api/listing-ai/chat-history                       611 B         104 kB
+├ ƒ /api/listing-ai/gallery-saves                      611 B         104 kB
+├ ƒ /api/listing-ai/generate-description               611 B         104 kB
+├ ƒ /api/listing-ai/generate-images                    611 B         104 kB
+├ ƒ /api/listing-ai/generate-title                     611 B         104 kB
+├ ƒ /api/listing-ai/optimize                           611 B         104 kB
+├ ƒ /api/listing-ai/studio                             611 B         104 kB
+├ ƒ /api/listing-ai/studio/export                      611 B         104 kB
+├ ƒ /api/listing-ai/studio/rewrite                     611 B         104 kB
+├ ƒ /api/listing-ai/workspace                          611 B         104 kB
+├ ƒ /api/mcp/amazon                                    611 B         104 kB
+├ ƒ /api/mcp/sellfox                                   611 B         104 kB
+├ ƒ /api/notifications/user                            611 B         104 kB
+├ ƒ /api/notifications/wecom                           611 B         104 kB
+├ ƒ /api/notifications/wecom/settings                  611 B         104 kB
+├ ƒ /api/operations/amazon-mcp                         611 B         104 kB
+├ ƒ /api/operations/amazon-stores                      611 B         104 kB
+├ ƒ /api/operations/assembly                           611 B         104 kB
+├ ƒ /api/operations/connection/validate                611 B         104 kB
+├ ƒ /api/operations/data-quality                       611 B         104 kB
+├ ƒ /api/operations/ext                                611 B         104 kB
+├ ƒ /api/operations/fba-customs-profiles               611 B         104 kB
+├ ƒ /api/operations/fba-customs-templates              611 B         104 kB
+├ ƒ /api/operations/fba-local-labels                   611 B         104 kB
+├ ƒ /api/operations/fba-local-plans                    611 B         104 kB
+├ ƒ /api/operations/fba-remote-actions                 611 B         104 kB
+├ ƒ /api/operations/fba-workflow-options               611 B         104 kB
+├ ƒ /api/operations/finance-attachments                611 B         104 kB
+├ ƒ /api/operations/finance-attachments/[id]           611 B         104 kB
+├ ƒ /api/operations/finance-auxiliary                  611 B         104 kB
+├ ƒ /api/operations/finance-bank                       611 B         104 kB
+├ ƒ /api/operations/finance-catalog                    611 B         104 kB
+├ ƒ /api/operations/finance-close-reviews              611 B         104 kB
+├ ƒ /api/operations/finance-expenses                   611 B         104 kB
+├ ƒ /api/operations/finance-external-sources           611 B         104 kB
+├ ƒ /api/operations/finance-fx-revaluations            611 B         104 kB
+├ ƒ /api/operations/finance-ledger                     611 B         104 kB
+├ ƒ /api/operations/finance-ledger/sources             611 B         104 kB
+├ ƒ /api/operations/finance-open-items                 611 B         104 kB
+├ ƒ /api/operations/finance-reports                    611 B         104 kB
+├ ƒ /api/operations/finance-structure                  611 B         104 kB
+├ ƒ /api/operations/finance-voucher-import             611 B         104 kB
+├ ƒ /api/operations/finance-voucher-import/workbook    611 B         104 kB
+├ ƒ /api/operations/finance-voucher-templates          611 B         104 kB
+├ ƒ /api/operations/freshness                          611 B         104 kB
+├ ƒ /api/operations/inventory/snapshots                611 B         104 kB
+├ ƒ /api/operations/mcp-isolation                      611 B         104 kB
+├ ƒ /api/operations/metrics/daily                      611 B         104 kB
+├ ƒ /api/operations/ops-extensions                     611 B         104 kB
+├ ƒ /api/operations/procurement                        611 B         104 kB
+├ ƒ /api/operations/procurement/approvals              611 B         104 kB
+├ ƒ /api/operations/procurement/invoices               611 B         104 kB
+├ ƒ /api/operations/procurement/plans                  611 B         104 kB
+├ ƒ /api/operations/products                           611 B         104 kB
+├ ƒ /api/operations/products/images/[fileId]           611 B         104 kB
+├ ƒ /api/operations/readiness                          611 B         104 kB
+├ ƒ /api/operations/replenishment                      611 B         104 kB
+├ ƒ /api/operations/schedules                          611 B         104 kB
+├ ƒ /api/operations/settlement-allocations             611 B         104 kB
+├ ƒ /api/operations/sync-center                        611 B         104 kB
+├ ƒ /api/operations/sync-center/approvals              611 B         104 kB
+├ ƒ /api/operations/sync-center/exports                611 B         104 kB
+├ ƒ /api/operations/sync-center/replica                611 B         104 kB
+├ ƒ /api/operations/sync-runs                          611 B         104 kB
+├ ƒ /api/operations/wms-aging-schedules                611 B         104 kB
+├ ƒ /api/operations/wms-aging-snapshots                611 B         104 kB
+├ ƒ /api/operations/wms-cost-adjustments               611 B         104 kB
+├ ƒ /api/operations/wms-inventory-risk                 611 B         104 kB
+├ ƒ /api/operations/wms-overseas-charges               611 B         104 kB
+├ ƒ /api/operations/wms-stocktake-print                611 B         104 kB
+├ ƒ /api/operations/wms/[kind]                         611 B         104 kB
+├ ƒ /api/operations/wms/approvals                      611 B         104 kB
+├ ƒ /api/operations/wms/commands                       611 B         104 kB
+├ ƒ /api/points/adjust                                 611 B         104 kB
+├ ƒ /api/points/ledger                                 611 B         104 kB
+├ ƒ /api/points/override                               611 B         104 kB
+├ ƒ /api/points/overview                               611 B         104 kB
+├ ƒ /api/points/policy                                 611 B         104 kB
+├ ƒ /api/points/price                                  611 B         104 kB
+├ ƒ /api/points/requests                               611 B         104 kB
+├ ƒ /api/points/requests/[id]                          611 B         104 kB
+├ ƒ /api/points/spend                                  611 B         104 kB
+├ ƒ /api/points/summary                                611 B         104 kB
+├ ƒ /api/products                                      611 B         104 kB
+├ ƒ /api/products/[sku]                                611 B         104 kB
+├ ƒ /api/products/[sku]/detail                         611 B         104 kB
+├ ƒ /api/products/[sku]/meeting-notes                  611 B         104 kB
+├ ƒ /api/products/[sku]/video-plan                     611 B         104 kB
+├ ƒ /api/products/catalogs                             611 B         104 kB
+├ ƒ /api/products/conclusion-files/[id]/download       611 B         104 kB
+├ ƒ /api/products/conclusion-files/upload              611 B         104 kB
+├ ƒ /api/products/export                               611 B         104 kB
+├ ƒ /api/products/export/[id]                          611 B         104 kB
+├ ƒ /api/products/export/[id]/download                 611 B         104 kB
+├ ƒ /api/products/file-assets/[id]/download            611 B         104 kB
+├ ƒ /api/products/file-assets/upload                   611 B         104 kB
+├ ƒ /api/products/image-assets/upload                  611 B         104 kB
+├ ƒ /api/products/image-urls                           611 B         104 kB
+├ ƒ /api/products/patent-files/upload                  611 B         104 kB
+├ ƒ /api/products/video-assets/upload                  611 B         104 kB
+├ ƒ /api/saihu-search-merge/history                    611 B         104 kB
+├ ƒ /api/selection-research                            611 B         104 kB
+├ ƒ /api/selection-research/[id]                       611 B         104 kB
+├ ƒ /api/selection-research/[id]/report                611 B         104 kB
+├ ƒ /api/selection-research/[id]/report/[fileId]       611 B         104 kB
+├ ƒ /api/selection-research/discover                   611 B         104 kB
+├ ƒ /api/sellfox/[domain]                              611 B         104 kB
+├ ƒ /api/sellfox/[domain]/[id]                         611 B         104 kB
+├ ƒ /api/sellfox/[domain]/export                       611 B         104 kB
+├ ƒ /api/sellfox/ads-proposals                         611 B         104 kB
+├ ƒ /api/sellfox/dataset                               611 B         104 kB
+├ ƒ /api/sellfox/endpoint-records                      611 B         104 kB
+├ ƒ /api/sellfox/endpoints                             611 B         104 kB
+├ ƒ /api/sellfox/full-sync                             611 B         104 kB
+├ ƒ /api/sellfox/hub                                   611 B         104 kB
+├ ƒ /api/sellfox/orders                                611 B         104 kB
+├ ƒ /api/sellfox/overview                              611 B         104 kB
+├ ƒ /api/sellfox/performance                           611 B         104 kB
+├ ƒ /api/sellfox/performance/export                    611 B         104 kB
+├ ƒ /api/sellfox/restock                               611 B         104 kB
+├ ƒ /api/sellfox/sales                                 611 B         104 kB
+├ ƒ /api/sellfox/schedules                             611 B         104 kB
+├ ƒ /api/sellfox/shipments                             611 B         104 kB
+├ ƒ /api/sellfox/store-grants                          611 B         104 kB
+├ ƒ /api/sellfox/sync                                  611 B         104 kB
+├ ƒ /api/skills                                        611 B         104 kB
+├ ƒ /api/skills/[slug]                                 611 B         104 kB
+├ ƒ /api/skills/[slug]/export/[downloadId]             611 B         104 kB
+├ ƒ /api/skills/[slug]/run                             611 B         104 kB
+├ ƒ /api/system/worker-health                          611 B         104 kB
+├ ƒ /api/user-preferences/[key]                        611 B         104 kB
+├ ƒ /api/workspace/draft-runs                          611 B         104 kB
+├ ƒ /api/workspace/snapshot                            611 B         104 kB
+├ ƒ /api/workspace/workbook-files/[id]/download        611 B         104 kB
+├ ƒ /api/workspace/workbook-files/upload               611 B         104 kB
+├ ƒ /api/workspaces                                    611 B         104 kB
+├ ƒ /api/workspaces/members                            611 B         104 kB
+├ ƒ /dashboard                                         985 B         145 kB
+├ ƒ /design                                          14.3 kB         166 kB
+├ ƒ /forbidden                                         195 B         145 kB
+├ ƒ /help                                              138 B         178 kB
+├ ƒ /help/[slug]                                       139 B         178 kB
+├ ƒ /history                                           986 B         145 kB
+├ ƒ /image-upscale                                     611 B         104 kB
+├ ƒ /lili/[[...path]]                                14.3 kB         159 kB
+├ ƒ /lili/api/[...path]                                611 B         104 kB
+├ ƒ /listing-ai                                        985 B         145 kB
+├ ƒ /listing-ai/studio                                 985 B         145 kB
+├ ○ /login                                           2.22 kB         119 kB
+├ ƒ /logistics                                         985 B         145 kB
+├ ƒ /logistics/warehouse                             38.7 kB         193 kB
+├ ƒ /operations                                       144 kB         301 kB
+├ ƒ /operations/assembly                             6.68 kB         156 kB
+├ ƒ /operations/calculators                            25 kB         174 kB
+├ ƒ /operations/data-dictionary                      3.28 kB         152 kB
+├ ƒ /operations/expenses                             5.08 kB         149 kB
+├ ƒ /operations/finance-ledger                       19.6 kB         167 kB
+├ ƒ /operations/multi-channel                        3.08 kB         152 kB
+├ ƒ /operations/ops-extensions                       6.09 kB         155 kB
+├ ƒ /operations/procurement-collab                   3.73 kB         152 kB
+├ ƒ /operations/purchase-invoices                    6.86 kB         156 kB
+├ ƒ /operations/purchase-plans                       6.97 kB         156 kB
+├ ƒ /operations/repricing                            3.79 kB         153 kB
+├ ƒ /operations/reviews                              3.74 kB         152 kB
+├ ƒ /operations/sales-plans                          4.65 kB         153 kB
+├ ƒ /operations/settlement-allocations                6.6 kB         156 kB
+├ ƒ /operations/tax                                  2.82 kB         152 kB
+├ ƒ /saihu-search-merge                                 1 kB         145 kB
+├ ƒ /sellfox                                         35.7 kB         211 kB
+├ ƒ /sellfox/ads                                       141 B         160 kB
+├ ƒ /sellfox/endpoint-data                           2.19 kB         157 kB
+├ ƒ /sellfox/finance                                   141 B         160 kB
+├ ƒ /sellfox/inventory                                 141 B         160 kB
+├ ƒ /sellfox/listings                                  320 B         163 kB
+├ ƒ /sellfox/orders                                    313 B         163 kB
+├ ƒ /sellfox/performance                               318 B         163 kB
+├ ƒ /sellfox/products                                  141 B         160 kB
+├ ƒ /sellfox/profit                                    142 B         160 kB
+├ ƒ /sellfox/purchase                                  141 B         160 kB
+├ ƒ /sellfox/restock                                   317 B         163 kB
+├ ƒ /sellfox/sales                                     316 B         163 kB
+├ ƒ /sellfox/shipments                                 319 B         163 kB
+├ ƒ /sellfox/stock-ops                                 141 B         160 kB
+├ ƒ /sellfox/sync                                    8.88 kB         168 kB
+├ ƒ /settings                                          15 kB         195 kB
+├ ƒ /settings/amazon-connections                     4.25 kB         149 kB
+├ ƒ /skills                                          2.28 kB         147 kB
+├ ƒ /skills/[slug]                                   6.12 kB         150 kB
+├ ƒ /tasks                                             986 B         145 kB
+├ ƒ /versions                                          986 B         145 kB
+└ ƒ /workspace                                       3.03 kB         147 kB
++ First Load JS shared by all                         103 kB
+  ├ chunks/1255-bed7ccc0501c6121.js                  46.1 kB
+  ├ chunks/4bd1b696-100b9d70ed4e49c1.js              54.2 kB
+  └ other shared chunks (total)                      2.75 kB
+
+
+ƒ Middleware                                         35.8 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

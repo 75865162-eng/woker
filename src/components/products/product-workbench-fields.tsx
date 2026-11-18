@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, ExternalLink } from "lucide-react";
 import { buildAmazonLink, buildAmazonSearchLink, parseOptionalProductNumber } from "./product-workbench-utils";
 
@@ -116,22 +116,30 @@ export function DecimalInput({
   value,
   onChange,
   compact = false,
+  placeholder,
+  immediate = false,
 }: {
   value: number | null | undefined;
   onChange: (value: number | null) => void;
   compact?: boolean;
+  placeholder?: string;
+  immediate?: boolean;
 }) {
   const [text, setText] = useState(String(value ?? ""));
+  const focused = useRef(false);
 
   useEffect(() => {
-    setText(String(value ?? ""));
+    if (!focused.current) setText(String(value ?? ""));
   }, [value]);
 
   function commit(nextText: string) {
     const normalized = nextText.trim();
     const parsed = parseOptionalProductNumber(normalized);
-    if (!normalized || parsed !== null) onChange(parsed);
-    else setText(String(value ?? ""));
+    if (!normalized || parsed !== null) {
+      onChange(parsed);
+      // A derived fallback may keep the controlled value unchanged on clear.
+      if (!normalized) setText(String(value ?? ""));
+    } else setText(String(value ?? ""));
   }
 
   return (
@@ -139,9 +147,18 @@ export function DecimalInput({
       className={`h-8 rounded-md border border-border bg-surface px-2 text-xs text-foreground outline-none focus:border-brand ${compact ? "w-[60px] min-w-[60px]" : "w-full min-w-[88px]"}`}
       type="text"
       inputMode="decimal"
+      placeholder={placeholder}
       value={text}
-      onChange={(event) => setText(event.target.value)}
-      onBlur={() => commit(text)}
+      onFocus={() => { focused.current = true; }}
+      onChange={(event) => {
+        const next = event.target.value;
+        setText(next);
+        if (immediate) {
+          const parsed = parseOptionalProductNumber(next);
+          if (!next.trim() || parsed !== null) onChange(parsed);
+        }
+      }}
+      onBlur={() => { focused.current = false; commit(text); }}
       onKeyDown={(event) => {
         if (event.key === "Enter") {
           event.currentTarget.blur();

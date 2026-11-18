@@ -3,7 +3,6 @@
 import {
   createContext,
   memo,
-  startTransition,
   useCallback,
   useContext,
   useEffect,
@@ -41,6 +40,8 @@ export type AppShellConfiguration = Omit<
 > & { authorizationRevision?: string };
 
 const ConfigurationContext = createContext<Dispatch<SetStateAction<AppShellConfiguration>> | null>(null);
+type RegisterPage = (href: string, element: ReactNode, configuration: AppShellConfiguration, context: SegmentContext) => void;
+const PageRegistrationContext = createContext<RegisterPage | null>(null);
 const STORAGE_KEY = "woker:workspace-tabs:v3";
 const PREFETCH_DELAY_MS = 60;
 /** 页面稳定多久之后开始预热同组路由：太早会和首屏自己的请求抢带宽。 */
@@ -98,8 +99,7 @@ export function WorkspaceShell({ children, configuration }: {
     return [{ id: currentHref, href: currentHref, src: currentHref, label, locked }];
   });
   // 当前分段的路由上下文：视图登记时一并快照，隐藏视图靠它固定住自己的页面。
-  const segmentContext = useContext(LayoutRouterContext);
-  const [views, setViews] = useState<CachedView[]>(() => [{ href: currentHref, element: children, context: segmentContext, seq: 1 }]);
+  const [views, setViews] = useState<CachedView[]>([]);
   const [restored, setRestored] = useState(false);
   // 乐观切换：保活视图已经在了，点标签就没必要等 Next 把 RSC 拉回来再提交。
   // 先把它亮出来，路由在后台跟上；地址栏晚几十毫秒，页面本身是立刻可见的。
@@ -182,24 +182,14 @@ export function WorkspaceShell({ children, configuration }: {
     });
   }, [currentHref, restored, touch, appendTab]);
 
-  // 视图登记：只有「没见过的地址」在渲染期登记，保证新页面第一帧就渲染出来。
-  // 已有视图的 RSC 更新（路由缓存过期后的重新校验、router.refresh）放到 effect 里用
-  // transition 采用：先让用户看到保活的内容，新数据到了再无缝换上，不会卡在等 RSC 上。
-  const activeView = views.find((view) => view.href === currentHref);
-  const needsRegister = !activeView;
-  const syncedViews = needsRegister ? upsertView(views, currentHref, children, segmentContext) : views;
-  if (needsRegister) setViews(syncedViews);
-
   const viewsRef = useRef(views);
   viewsRef.current = views;
-
-  useEffect(() => {
-    const current = viewsRef.current.find((view) => view.href === currentHref);
-    if (!current || current.element === children) return;
-    startTransition(() => {
-      setViews((prev) => upsertView(prev, currentHref, children, segmentContext));
-    });
-  }, [children, currentHref, segmentContext]);
+  // Cache page content, never Next's live LayoutRouter element. A hidden router
+  // can issue stale server patches and prevent the next navigation committing.
+  const registerPage = useCallback<RegisterPage>((href, element, pageConfiguration, context) => {
+    setViews(prev => upsertView(prev, href, <AppShellPage configuration={pageConfiguration}>{element}</AppShellPage>, context));
+  }, []);
+  const syncedViews = views;
 
   // 只渲染仍在标签栏里的视图；被关掉或被标签上限挤掉的视图顺带释放。
   const renderedViews = syncedViews.filter(
@@ -372,6 +362,9 @@ export function WorkspaceShell({ children, configuration }: {
 
   return (
     <ConfigurationContext.Provider value={setDisplay}>
+      <PageRegistrationContext.Provider value={registerPage}>
+        <div hidden>{children}</div>
+      </PageRegistrationContext.Provider>
       <AppShellClient
         {...display}
         title={display.title ?? activeTab?.label ?? configuration.title}
@@ -402,7 +395,7 @@ export function WorkspaceShell({ children, configuration }: {
             href={view.href}
             visible={view.href === shownHref}
             element={view.element}
-            context={view.href === currentHref ? segmentContext : view.context}
+            context={view.context}
           />
         ))}
       </AppShellClient>
@@ -491,10 +484,18 @@ export function AppShellPage({ children, configuration }: {
   configuration: AppShellConfiguration;
 }) {
   const setConfiguration = useContext(ConfigurationContext);
+  const registerPage = useContext(PageRegistrationContext);
+  const pathname = usePathname() || "/";
+  const search = useSearchParams()?.toString() ?? "";
+  const href = normalizeHref(`${pathname}${search ? `?${search}` : ""}`);
+  const segmentContext = useContext(LayoutRouterContext);
+  useLayoutEffect(() => {
+    registerPage?.(href, children, configuration, segmentContext);
+  }, [registerPage, href, children, configuration, segmentContext]);
   const active = useTabActive();
   useLayoutEffect(() => {
     if (active) setConfiguration?.(configuration);
   }, [active, configuration, setConfiguration]);
   if (!setConfiguration) throw new Error("Business pages must use the persistent ERP layout.");
-  return children;
+  return registerPage ? null : children;
 }
