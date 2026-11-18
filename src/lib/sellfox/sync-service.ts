@@ -16,6 +16,8 @@ import { withSellfoxCredentialScope } from "./credential-context";
 import { buildRunShards, recordSellfoxShards, refreshSellfoxCoverage } from "@/lib/sellfox/sync-shards";
 import { syncSellfoxGenericEndpoint, type SellfoxEndpointConfig } from "@/lib/sellfox/generic-endpoint-sync";
 import { buildSellfoxReconciliation } from "@/lib/sellfox/reconciliation";
+import { markRunWaitingDependency, sellfoxStoresReady } from "@/lib/sellfox/sync-dependency";
+import { wakeWaitingDependents } from "@/lib/sellfox/sync-orchestrator";
 
 function endpointConfig(row: {
   code: string; label: string; path: string; dateMode: string; scopeMode: string;
@@ -218,7 +220,12 @@ export async function processSellfoxSyncRun(runId: string) {
       const stores = await prisma.sellfoxStore.findMany({ where: {
         organizationId: run.organizationId, workspaceId: run.workspaceId, ...(requested.length ? { externalId: { in: requested } } : {}),
       }, select: { externalId: true }, orderBy: { externalId: "asc" } });
-      if (!stores.length) throw new SellfoxSyncInputError("当前工作区没有可同步店铺，请先同步店铺。");
+      if (!stores.length) {
+        // 依赖未就绪（stores 尚未成功落库）：等待而非失败。正常释放租约，
+        // 由 stores 成功后的唤醒钩子重新入队，不消耗重试次数、不写失败记录。
+        await markRunWaitingDependency(lease, runId, "等待店铺主数据（stores）同步完成。");
+        return;
+      }
       if (requested.length && stores.length !== new Set(requested).size) throw new SellfoxSyncInputError("所选店铺不属于当前工作区。");
       summary = { ...summary, shopExternalIds: stores.map((store) => store.externalId), storesFrozen: true };
     }
@@ -311,6 +318,15 @@ export async function processSellfoxSyncRun(runId: string) {
       }
     } catch (bookkeepingError) {
       console.error(JSON.stringify({ scope: "sellfox.sync-shards", resource: input.resource, runId, message: bookkeepingError instanceof Error ? bookkeepingError.message : "unknown" }));
+    }
+    // stores 首次成功落库后，唤醒本工作区因缺店铺而等待的下游任务，并按原窗口重排历史失败任务。
+    // 整段是成功后的附带编排：任何异常都只记录，不得把已完成的 stores 同步改判为失败。
+    if (input.resource === "stores") {
+      try {
+        if (await sellfoxStoresReady({ organizationId: input.organizationId, workspaceId: input.workspaceId })) {
+          await wakeWaitingDependents({ organizationId: input.organizationId, workspaceId: input.workspaceId });
+        }
+      } catch (wakeError) { console.error(JSON.stringify({ scope: "sellfox.sync.wake", runId, message: wakeError instanceof Error ? wakeError.message : "unknown" })); }
     }
     });
   } catch (error) {

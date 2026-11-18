@@ -6,6 +6,7 @@ import { enqueueSellfoxSyncRun } from "@/lib/queue";
 import { getSellfoxCredentialStatus } from "./credential-store";
 import { canExecuteSellfoxSync } from "./sync-authorization";
 import { sellfoxDateAt, sellfoxEndpointResource } from "./sync-contract";
+import { WAITING_DEPENDENCY, asJsonObject } from "./sync-dependency";
 import {
   builtinSyncRules, sellfoxDateChunks, sellfoxSpanDays, splitSellfoxDateChunk,
   isSellfoxChunkTooWide, addSellfoxDays, endpointSyncRule, isSellfoxEndpointResource,
@@ -76,10 +77,10 @@ function bag(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-/** 幂等：同资源同窗口已有排队/运行/完成的任务就不再重复建。 */
+/** 幂等：同资源同窗口已有等待/排队/运行/完成的任务就不再重复建。 */
 async function alreadyPlanned(scope: { organizationId: string; workspaceId: string }, item: FullSyncPlanItem, client: Pick<Prisma.TransactionClient, "sellfoxSyncRun"> = prisma) {
   const runs = await client.sellfoxSyncRun.findMany({
-    where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, resource: item.resource, status: { in: ["queued", "running", "done"] } },
+    where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, resource: item.resource, status: { in: ["queued", "running", "done", WAITING_DEPENDENCY] } },
     select: { summary: true }, orderBy: { startedAt: "desc" },
   });
   return runs.some((run) => {
@@ -148,6 +149,88 @@ export async function planSellfoxFullSync(scope: SyncScope, options: {
     if (runId) created.push(runId); else skipped += 1;
   }
   return { from, to, total: items.length, created: created.length, skipped, runIds: created };
+}
+
+/**
+ * 凭据保存成功后的冷启动编排：只幂等创建 stores 初始化任务并入队。
+ * 其余下游数据域不在此时下发，必须由 stores 成功后的 wakeWaitingDependents 依依赖顺序触发。
+ */
+export async function bootstrapSellfoxStores(scope: SyncScope) {
+  if (!(await getSellfoxCredentialStatus({ organizationId: scope.organizationId, workspaceId: scope.workspaceId })).configured) {
+    throw new Error("服务端赛狐凭据未配置，无法启动同步。");
+  }
+  const runId = await createAndEnqueue(scope, { resource: "stores", label: "店铺列表", trigger: "credential_bootstrap" });
+  return { started: Boolean(runId), runId };
+}
+
+/**
+ * stores 首次成功落库后的依赖唤醒。
+ *
+ * 1) waiting_dependency 的 run：置回 queued 并重新入队（stores 未就绪时它不消耗重试、不写失败）。
+ * 2) 历史「没有可同步店铺」failed run：按其冻结的日期窗口重建等价任务，保留原失败记录不动。
+ * 两条路径都复用 alreadyPlanned / createAndEnqueue 的幂等与 pg_advisory_xact_lock。
+ */
+export async function wakeWaitingDependents(scope: SyncScope) {
+  const key = (run: { resource: string; summary: Prisma.JsonValue | null }) => {
+    const s = asJsonObject(run.summary);
+    return JSON.stringify([run.resource, s.startDate ?? null, s.endDate ?? null, s.reportDate ?? null, s.endpointCode ?? null]);
+  };
+  const [waiting, staleFailed] = await Promise.all([
+    prisma.sellfoxSyncRun.findMany({
+      where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, status: WAITING_DEPENDENCY },
+      orderBy: { startedAt: "asc" },
+    }),
+    prisma.sellfoxSyncRun.findMany({
+      where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, status: "failed", error: { contains: "没有可同步店铺" } },
+      orderBy: { startedAt: "asc" },
+    }),
+  ]);
+  let woke = 0; let replayed = 0;
+
+  // 先唤醒等待任务：重置执行计数后入队，让它走正常执行门禁（此时店铺已就绪）。
+  const alreadyActive = new Set<string>();
+  const active = await prisma.sellfoxSyncRun.findMany({
+    where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, status: { in: ["queued", "running", "done"] } },
+    select: { resource: true, summary: true },
+  });
+  for (const run of active) alreadyActive.add(key(run));
+
+  for (const run of waiting) {
+    const k = key(run);
+    if (alreadyActive.has(k)) {
+      // 已有等价的活动/完成任务，等待任务直接取消，避免重复拉取。
+      await prisma.sellfoxSyncRun.update({ where: { id: run.id }, data: { status: "cancelled", finishedAt: new Date() } });
+      continue;
+    }
+    const claimed = await prisma.sellfoxSyncRun.updateMany({
+      where: { id: run.id, status: WAITING_DEPENDENCY },
+      data: { status: "queued", error: null, finishedAt: null, executionAttempts: 0, executionToken: null, leaseExpiresAt: null },
+    });
+    if (claimed.count !== 1) continue;
+    alreadyActive.add(k);
+    try { await enqueueSellfoxSyncRun(run.id); woke += 1; }
+    catch { /* queued run 由 worker 恢复循环兜底入队 */ }
+  }
+
+  // 历史失败任务：复用其冻结窗口重建等价 run（保留失败记录作为审计）。
+  for (const failed of staleFailed) {
+    const s = asJsonObject(failed.summary);
+    if (s.dependencyReplay === true) continue;
+    const resource = failed.resource;
+    if (!builtinSyncRules.some((rule) => rule.id === resource) && !isSellfoxEndpointResource(resource)) continue;
+    const item: FullSyncPlanItem = {
+      resource,
+      label: typeof s.label === "string" ? s.label : resource,
+      trigger: "dependency_replay",
+      ...(typeof s.startDate === "string" ? { startDate: s.startDate } : {}),
+      ...(typeof s.endDate === "string" ? { endDate: s.endDate } : {}),
+      ...(typeof s.reportDate === "string" ? { reportDate: s.reportDate } : {}),
+      ...(typeof s.endpointCode === "string" ? { endpointCode: s.endpointCode } : {}),
+    };
+    const runId = await createAndEnqueue({ ...scope, userId: failed.userId || scope.userId }, item, { dependencyReplay: true, replayOf: failed.id });
+    if (runId) replayed += 1;
+  }
+  return { woke, replayed };
 }
 
 /** 端点自动计划：历史窗口按游标逐块推进，回填完成后每天滚动重跑最近 7 天。 */

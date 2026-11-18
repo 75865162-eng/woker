@@ -44,7 +44,7 @@ export function SellfoxCredentialsForm({
     try {
       await onSave({ clientId, clientSecret });
       form.reset();
-      setMessage("赛狐凭据已保存。保存不会测试连接或自动启动同步。");
+      setMessage("赛狐凭据已保存，正在自动校验连通性并启动同步。校验结果见下方。");
     } catch {
       // Never render transport errors, which could contain submitted secrets.
       setFailed(true);
@@ -67,7 +67,7 @@ export function SellfoxCredentialsForm({
         <input className="h-9 w-full rounded border border-border bg-surface px-3 text-sm font-normal" name={name} type="password" autoComplete="new-password" spellCheck={false} required={!configured} maxLength={16384} disabled={disabled} placeholder={configured ? "不回显已有值，留空保留" : `请输入 ${label}`} />
       </label>)}
     </div>
-    <p className="text-xs text-muted">凭据只提交到服务端加密保存，不写入浏览器恢复缓存，不回显已有值。保存不会请求赛狐或开启同步计划。</p>
+    <p className="text-xs text-muted">凭据只提交到服务端加密保存，不写入浏览器恢复缓存，不回显已有值。保存后将自动请求赛狐校验连通性，成功后自动同步店铺并按依赖顺序拉取全部已接入数据域。</p>
     {!canEdit && <p className="text-xs text-warning-ink">仅当前组织有配置权限的管理员可以保存凭据。</p>}
     {!encryptionReady && <p role="alert" className="text-xs text-warning-ink">服务端加密存储尚未就绪，请管理员先完成加密主密钥配置。</p>}
     {message && <p role={failed ? "alert" : "status"} className={failed ? "text-sm text-danger-ink" : "text-sm text-success-ink"}>{message}</p>}
