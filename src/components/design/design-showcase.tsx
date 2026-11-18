@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Section, SectionBody } from "@/components/ui/section";
-import { useDensityStore } from "@/lib/stores/density-store";
 
 import { LegacyTablesShowcase } from "./design-showcase-legacytables";
 import { TemplatesShowcase } from "./design-showcase-templates";
@@ -12,13 +11,10 @@ import { OverlaysShowcase } from "./design-showcase-overlays";
 import { FeedbackShowcase } from "./design-showcase-feedback";
 import { FormsShowcase } from "./design-showcase-forms";
 import { ButtonsShowcase } from "./design-showcase-buttons";
-import { DensityShowcase } from "./design-showcase-density";
 import { SpacingShowcase } from "./design-showcase-spacing";
 import { ColorsShowcase } from "./design-showcase-colors";
 import { TypographyShowcase } from "./design-showcase-typography";
 export function DesignShowcase() {
-  const density = useDensityStore((state) => state.density);
-  const setDensity = useDensityStore((state) => state.setDensity);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [tab, setTab] = useState<"overview" | "detail" | "history">("overview");
@@ -49,9 +45,6 @@ export function DesignShowcase() {
 
       {/* --------------------------------------------- 3 间距/圆角/阴影 */}
       <SpacingShowcase />
-
-      {/* ------------------------------------------------------- 4 密度 */}
-      <DensityShowcase density={density} setDensity={setDensity} />
 
       {/* ------------------------------------------------------- 5 按钮 */}
       <ButtonsShowcase />
