@@ -16,6 +16,7 @@ const scope = { organizationId: 'fixture-org', workspaceId: 'fixture-workspace',
 
 test('扩展域复用现有价格测算，不建立平行费率口径', () => {
   const quote = quoteOnly('fee', { price: 20, shipping: 0, weightOz: 8, lengthIn: 1, widthIn: 1, heightIn: 1 });
+  assert.ok('revenue' in quote);
   assert.equal(quote.revenue, 20);
   assert.ok(quote.totalFee > 0);
 });

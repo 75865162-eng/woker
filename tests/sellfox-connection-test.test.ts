@@ -35,7 +35,7 @@ test("connection test uses fresh tokens only, enforces live scope/revision/coold
     organizationMember: { findUnique: async () => ({ role, user: { status: active ? "active" : "disabled" } }) },
     workspaceScope: { findUnique: async () => workspace ? { id: "workspace" } : null },
     workspaceMembership: { findUnique: async () => ({ userId: "actor" }) },
-    organizationRosterRole: { findMany: async () => [{ id: "owner", permissions: ownerPermissions }, { id: "viewer", permissions: { sellfox: ["view"] } }] },
+    organizationRosterRole: { findMany: async () => [{ id: "owner", permissions: {} }, { id: "database_admin", permissions: ownerPermissions }, { id: "viewer", permissions: { sellfox: ["view"] } }] },
     organizationRolePermission: { findUnique: async () => null },
     sellfoxIntegrationCredential: { findUnique: async () => record },
     $executeRaw: async () => 1,
@@ -69,10 +69,12 @@ test("connection test uses fresh tokens only, enforces live scope/revision/coold
     role = "owner"; active = false; await assert.rejects(() => runSellfoxConnectionTest(scope, "actor", 0), /无权/);
     active = true; workspace = false; await assert.rejects(() => runSellfoxConnectionTest(scope, "actor", 0), /无权/);
     workspace = true;
+    role = "database_admin";
     for (const permissions of [{}, { sellfox: ["view", "create"] }, { sellfox: ["view"], settings: ["edit"] }] as Record<string, string[]>[]) {
       ownerPermissions = permissions;
       await assert.rejects(() => runSellfoxConnectionTest(scope, "actor", 0), /无权|管理员/);
     }
+    role = "owner";
     ownerPermissions = { sellfox: ["view", "create"], settings: ["edit"] };
     await assert.rejects(() => runSellfoxConnectionTest(scope, "actor", 1), /版本/);
     failAudit = true; await assert.rejects(() => runSellfoxConnectionTest(scope, "actor", 0)); failAudit = false;

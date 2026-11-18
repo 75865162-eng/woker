@@ -20,7 +20,7 @@ export const permissionActions: Array<{ id: PermissionAction; label: string }> =
 export const permissionModules = [
   { id: "products", name: "产品管理 /dashboard", paths: ["/dashboard"] },
   { id: "sellfox", name: "Sellfox /sellfox", paths: ["/sellfox"] },
-  { id: "workspace", name: "PPC 优化 /workspace", paths: ["/workspace"] },
+  { id: "workspace", name: "PPC 优化 /workspace、/amazon-ads", paths: ["/workspace", "/amazon-ads"] },
   { id: "searchMerge", name: "赛狐搜词合并 /saihu-search-merge、/history", paths: ["/saihu-search-merge", "/history"] },
   { id: "listingAi", name: "Listing AI /listing-ai", paths: ["/listing-ai"] },
   { id: "agents", name: "Amazon AI Agent Platform /agents、Lili /lili、Skill /skills", paths: ["/agents", "/lili", "/skills"] },
@@ -105,7 +105,7 @@ const publicModuleIds = new Set<string>();
  * Only these are allowed through when module resolution returns null; any
  * other unmapped path falls back to the role's first accessible module.
  */
-const publicPathsWithoutModule = new Set<string>(["/"]);
+const publicPathsWithoutModule = new Set<string>(["/", "/forbidden", "/help"]);
 
 export function roleCanAccessModule(role: string | undefined, moduleId: string | null, permissions?: RolePermissionMap | null) {
   if (!moduleId) return false;

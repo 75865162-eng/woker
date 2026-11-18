@@ -129,21 +129,11 @@ export function WorkspaceShell({ children, configuration }: {
     usedAtRef.current.set(href, ++seqRef.current);
   }, []);
 
-  // 超过上限时淘汰最久没被使用的标签（当前页和刚打开的除外）。
+  // 超过上限时按标签打开顺序淘汰最早的标签（当前页和刚打开的除外）。
   const appendTab = useCallback((prev: WorkspaceTab[], tab: WorkspaceTab) => {
     const next = [...prev, tab];
     while (next.length > MAX_TABS) {
-      let victim = -1;
-      let victimUsedAt = Number.POSITIVE_INFINITY;
-      for (let index = 0; index < next.length; index += 1) {
-        const candidate = next[index];
-        if (candidate.id === tab.id || candidate.href === currentHrefRef.current) continue;
-        const usedAt = usedAtRef.current.get(candidate.href) ?? 0;
-        if (usedAt < victimUsedAt) {
-          victimUsedAt = usedAt;
-          victim = index;
-        }
-      }
+      const victim = next.findIndex((candidate) => candidate.id !== tab.id && candidate.href !== currentHrefRef.current);
       if (victim < 0) break;
       next.splice(victim, 1);
     }
@@ -159,10 +149,11 @@ export function WorkspaceShell({ children, configuration }: {
         ? stored
             .filter((tab): tab is WorkspaceTab => Boolean(tab && typeof tab.href === "string" && typeof tab.label === "string"))
             .map((tab) => ({ ...tab, id: tab.href, src: tab.href }))
-            .slice(0, MAX_TABS)
+            .slice(-MAX_TABS)
         : [];
       const href = currentHrefRef.current;
       if (!valid.some((tab) => tab.href === href)) {
+        if (valid.length >= MAX_TABS) valid.splice(0, valid.length - MAX_TABS + 1);
         const { label, locked } = labelForHref(href);
         valid.push({ id: href, href, src: href, label, locked });
       }

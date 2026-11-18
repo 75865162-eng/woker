@@ -51,8 +51,10 @@ export function SellfoxHub() {
   const [data, setData] = useState<Hub | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState("");
+  const [syncFeedback, setSyncFeedback] = useState<{ resource: SellfoxSyncResource; message: string; failed: boolean } | null>(null);
   const [batch, setBatch] = useState<{ index: number; total: number; current: string } | null>(null);
   const [from, setFrom] = useState(sellfoxDateAt(new Date(), -6));
   const [to, setTo] = useState(sellfoxDateAt(new Date(), 0));
@@ -66,8 +68,8 @@ export function SellfoxHub() {
       const response = await fetch("/api/sellfox/hub", { headers, cache: "no-store" });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "读取概览失败。");
-      setData(payload as Hub); setError("");
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "读取概览失败。"); }
+      setData(payload as Hub); setLoadError("");
+    } catch (cause) { setLoadError(cause instanceof Error ? cause.message : "读取概览失败。"); }
     finally { setLoading(false); }
   }, [headers]);
 
@@ -91,15 +93,24 @@ export function SellfoxHub() {
   }
 
   async function syncOne(resource: SellfoxSyncResource) {
-    if (!canSync || busy) return;
-    setBusy(resource); setNotice(""); setError("");
-    try { await syncResource(resource); setNotice(`已提交「${resource}」同步，运行状态见下方同步记录。`); await load(); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "同步任务创建失败。"); }
+    if (!canSync || busy || batch) return;
+    setBusy(resource); setNotice(""); setError(""); setSyncFeedback(null);
+    try {
+      const runId = await syncResource(resource);
+      const message = `同步任务已入队，任务号 ${runId}；执行进度见同步记录。`;
+      setNotice(message);
+      setSyncFeedback({ resource, message, failed: false });
+      await load();
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "同步任务创建失败。";
+      setError(message);
+      setSyncFeedback({ resource, message, failed: true });
+    }
     finally { setBusy(""); }
   }
 
   async function syncAll() {
-    if (!canSync || batch) return;
+    if (!canSync || batch || busy) return;
     const targets = (data?.datasets ?? []).map((dataset) => dataset.resource);
     const queue = [...new Set(["stores", ...targets])] as SellfoxSyncResource[];
     setError(""); setNotice("");
@@ -139,14 +150,14 @@ export function SellfoxHub() {
         <button type="button" onClick={() => void load()} className="inline-flex h-7 items-center gap-1 border border-border px-2 hover:border-brand hover:text-brand">
           <RefreshCw className="h-3.5 w-3.5" />刷新
         </button>
-        <button type="button" disabled={!canSync || Boolean(batch)} onClick={() => void syncAll()} className="inline-flex h-7 items-center gap-1 bg-brand px-2.5 text-white disabled:cursor-not-allowed disabled:opacity-50">
+        <button type="button" disabled={!canSync || Boolean(batch) || Boolean(busy)} onClick={() => void syncAll()} className="inline-flex h-7 items-center gap-1 bg-brand px-2.5 text-white disabled:cursor-not-allowed disabled:opacity-50">
           {batch ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PlayCircle className="h-3.5 w-3.5" />}
           {batch ? `全量同步 ${batch.index}/${batch.total} · ${batch.current}` : "全量同步"}
         </button>
       </div>
     </header>
 
-    {error ? <div role="alert" className="border border-danger/20 bg-danger-soft px-3 py-2 text-xs text-danger-ink">{error}</div> : null}
+    {error || loadError ? <div role="alert" className="border border-danger/20 bg-danger-soft px-3 py-2 text-xs text-danger-ink">{error || loadError}</div> : null}
     {notice ? <div role="status" className="border border-success/20 bg-success-soft px-3 py-2 text-xs text-success-ink">{notice}</div> : null}
     {data && !data.configured ? <div className="border border-accent/20 bg-warning-soft px-3 py-2 text-xs text-warning-ink">赛狐凭据不可用，请在集成设置中重新保存 App ID / Secret。</div> : null}
 
@@ -274,8 +285,9 @@ export function SellfoxHub() {
                     </p>
                     <p className="truncate text-label text-muted" title={item.api.join(" · ")}>{item.api.join(" · ")}</p>
                     {item.note ? <p className="text-label text-muted">{item.note}</p> : null}
+                    {syncFeedback && syncFeedback.resource === item.resource ? <p role={syncFeedback.failed ? "alert" : "status"} className={`mt-1 break-all text-label ${syncFeedback.failed ? "text-danger-ink" : "text-success-ink"}`}>{syncFeedback.message}</p> : null}
                   </div>
-                  {item.resource ? <button type="button" disabled={!canSync || Boolean(busy)} onClick={() => void syncOne(item.resource!)} className="shrink-0 text-label text-brand disabled:opacity-40">{busy === item.resource ? "提交中" : "同步"}</button> : null}
+                  {item.resource ? <button type="button" disabled={!canSync || Boolean(busy) || Boolean(batch)} title={!canSync ? "当前角色没有同步权限" : undefined} onClick={() => void syncOne(item.resource!)} className="shrink-0 text-label text-brand disabled:opacity-40">{busy === item.resource ? "提交中" : "同步"}</button> : null}
                   {item.href ? <a href={item.href} className="shrink-0 text-label text-muted hover:text-brand">查看</a> : null}
                 </div>)}
               </div>

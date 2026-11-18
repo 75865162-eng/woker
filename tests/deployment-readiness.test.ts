@@ -6,6 +6,7 @@ import { createHash } from "node:crypto";
 import { parseEnv } from "node:util";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { tmpdir } from "node:os";
 import { migrationReadiness, migrationCatalog, validConnection, authReadiness } from "../scripts/runtime/readiness-contract.mjs";
 
 const read = (file: string) => readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
@@ -31,7 +32,7 @@ test("当前五项注册 Worker 均有真实入口、manager 命令和正式 sys
 });
 
 test("release-check 接受完整合成包，拒绝缺失注册 unit 和真实配置文件", () => {
-  const root = mkdtempSync(fileURLToPath(new URL("../tmp/upgrade-release-contract-", import.meta.url)));
+  const root = mkdtempSync(path.join(tmpdir(), "upgrade-release-contract-"));
   const put = (file: string, content = "fixture") => { mkdirSync(path.dirname(path.join(root, "package", file)), { recursive: true }); writeFileSync(path.join(root, "package", file), content); };
   let executionError: unknown;
   try {
@@ -94,7 +95,7 @@ test("release-check 接受完整合成包，拒绝缺失注册 unit 和真实配
 });
 
 test("部署入口在任何网络操作前拒绝失败、漂移或不完整的发布证据", () => {
-  const root = mkdtempSync(fileURLToPath(new URL("../tmp/deploy-evidence-", import.meta.url)));
+  const root = mkdtempSync(path.join(tmpdir(), "deploy-evidence-"));
   const commit = "a".repeat(40);
   const artifact = path.join(root, "fixture.tar.gz");
   const report = path.join(root, "release-check.json");

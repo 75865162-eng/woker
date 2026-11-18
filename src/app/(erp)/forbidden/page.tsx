@@ -13,7 +13,7 @@ export default function ForbiddenPage() {
           </div>
           <h2 className="mt-5 text-xl font-black text-foreground">访问被拒绝</h2>
           <p className="mt-2 max-w-xl text-sm leading-6 text-muted">
-            当前账号没有勾选这个页面的任何权限。请联系系统管理员在 Accounts 的权限矩阵中开启对应页面。
+            当前页面未获得访问授权，或页面的权限映射异常。请联系系统管理员核对账号角色、组织权限和页面配置。
           </p>
           <Link
             className="mt-5 inline-flex h-10 items-center justify-center rounded-md bg-brand px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-dark"

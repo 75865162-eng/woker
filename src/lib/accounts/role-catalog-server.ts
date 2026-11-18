@@ -4,7 +4,7 @@ import { measureServerOperation } from "@/lib/server/performance";
 import { buildDefaultRoleCatalog, type RoleCatalogItem } from "@/lib/accounts/role-catalog";
 import { prisma } from "@/lib/db/prisma";
 import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
-import { normalizeRolePermissions } from "@/lib/accounts/role-permissions-utils";
+import { normalizeCatalogRolePermissions } from "@/lib/accounts/role-permissions-utils";
 import { invalidateOrganizationRolePermissions } from "@/lib/accounts/role-permission-cache";
 
 export type RoleCatalogSnapshot = {
@@ -35,7 +35,9 @@ function buildRevision(rows: Pick<RoleRow, "id" | "updatedAt">[]) {
 }
 
 function normalizeRoleRow(row: RoleRow): RoleCatalogItem {
-  const permissions = normalizeRolePermissions(row.permissions);
+  // A successfully read owner role always has every registered module/action.
+  // Failure snapshots remain empty so unavailable authorization still fails closed.
+  const permissions = normalizeCatalogRolePermissions(row.id, row.permissions);
 
   return {
     id: row.id,
@@ -128,7 +130,7 @@ export async function readOrganizationRolePermissions(client: Prisma.Transaction
 export async function saveOrganizationRoleCatalog(organizationId: string, roles: RoleCatalogItem[]): Promise<RoleCatalogSnapshot> {
   if (!process.env.DATABASE_URL) {
     return {
-      roles,
+      roles: roles.map(role => ({ ...role, permissions: normalizeCatalogRolePermissions(role.id, role.permissions) })),
       revision: "local",
     };
   }
@@ -140,7 +142,7 @@ export async function saveOrganizationRoleCatalog(organizationId: string, roles:
       id: role.id.trim(),
       name: role.name.trim(),
       description: role.description.trim(),
-      permissions: normalizeRolePermissions(role.permissions),
+      permissions: normalizeCatalogRolePermissions(role.id.trim(), role.permissions),
       sortOrder: Number.isFinite(role.sortOrder) ? role.sortOrder : index,
     }));
 

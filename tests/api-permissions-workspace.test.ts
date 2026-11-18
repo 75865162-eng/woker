@@ -3,6 +3,7 @@ import { createHmac } from "node:crypto";
 import test from "node:test";
 import sharp from "sharp";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
+import { POST as quoteOperations } from "@/app/api/operations/ext/route";
 import { POST as uploadAsset } from "@/app/api/assets/upload/route";
 import { POST as uploadFile } from "@/app/api/files/upload/route";
 import { POST as uploadConclusion } from "@/app/api/products/conclusion-files/upload/route";
@@ -39,7 +40,7 @@ test("API permissions validate every explicit workspace selector without trustin
     workspaceMembership: { findUnique: async ({ where }: { where: { organizationId_workspaceId_userId: { workspaceId: string } } }) => where.organizationId_workspaceId_userId.workspaceId === "allowed-no-membership" ? null : { userId: "user-a" } },
     fileObject: { create: async ({ data }: { data: Record<string, unknown> }) => ({ id: "fixture-file", createdAt: new Date(1), ...data }) },
     userSession: { findFirst: async () => ({ user: { id: "user-a", email: "user@fixture.invalid", name: "User", status: "active", memberships: [{ role: "viewer", organizationId: "org-a", organization: { name: "Fixture" } }] } }) },
-    organizationRosterRole: { findMany: async () => [{ id: "viewer", name: "Viewer", description: "", sortOrder: 0, updatedAt: new Date(1), permissions: { listingAi: ["view", "create"], workspace: ["view", "create", "edit"], products: ["view", "edit"] } }] },
+    organizationRosterRole: { findMany: async () => [{ id: "viewer", name: "Viewer", description: "", sortOrder: 0, updatedAt: new Date(1), permissions: { operations: ["view"], listingAi: ["view", "create"], workspace: ["view", "create", "edit"], products: ["view", "edit"] } }] },
     workspaceScope: { findUnique: async ({ where }: { where: { organizationId_id: { organizationId: string; id: string } } }) => {
       assert.equal(where.organizationId_id.organizationId, "org-a");
       const id = where.organizationId_id.id;
@@ -58,6 +59,21 @@ test("API permissions validate every explicit workspace selector without trustin
   };
 
   try {
+    await t.test("费用测算保留请求体用于授权，并拒绝跨工作区选择器", async () => {
+      const quote = async (workspaceId: string) => quoteOperations(new Request("http://fixture.invalid/api/operations/ext", {
+        method: "POST", headers: { cookie, "content-type": "application/json", "x-workspace-id": "allowed-header" },
+        body: JSON.stringify({ action: "quote", kind: "fee", workspaceId, price: "20", shipping: "0", weightOz: "8", lengthIn: "1", widthIn: "1", heightIn: "1", oversize: false }),
+      }));
+      const response = await quote("allowed-body");
+      assert.ok(response);
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.equal(body.result.revenue, 20);
+      assert.ok(body.result.totalFee > 0);
+      const denied = await quote("denied-body");
+      assert.ok(denied);
+      assert.equal(denied.status, 403);
+    });
     assert.equal(await check("http://fixture.invalid/api/example?workspaceId=allowed-query", undefined, "denied-header"), 403);
     assert.deepEqual(lookups, ["allowed-query", "denied-header"]);
 

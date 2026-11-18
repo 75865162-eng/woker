@@ -1,3 +1,5 @@
+import { quoteReferenceFba, referenceModel } from './fba-reference';
+import { WmsInputError } from '@/lib/wms/rules';
 import {
   priceForMargin,
   quoteFbaFee,
@@ -37,6 +39,10 @@ function profitInputFrom(row: Record<string, unknown>): ProfitInput {
 }
 
 export function quoteOnly(kind: string, body: Record<string, unknown>) {
+  if (kind === 'fee' && body.rateModel === referenceModel) {
+    try { return quoteReferenceFba(body); }
+    catch (error) { throw new WmsInputError(error instanceof Error ? error.message : '测算参数无效。'); }
+  }
   if (kind === 'fee') return quoteFbaFee(feeInputFrom(body));
   const input = profitInputFrom(body);
   const result = quoteProfit(input);

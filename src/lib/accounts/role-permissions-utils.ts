@@ -1,4 +1,4 @@
-import { defaultRolePermissionMap, permissionActions, type PermissionAction, type RolePermissionMap, type RolePermissions } from "@/lib/accounts/permissions";
+import { createFullPermissions, defaultRolePermissionMap, permissionActions, type PermissionAction, type RolePermissionMap, type RolePermissions } from "@/lib/accounts/permissions";
 
 const validActions = new Set<PermissionAction>(permissionActions.map((action) => action.id));
 
@@ -14,7 +14,9 @@ export type RolePermissionRow = { id: string; permissions: unknown };
 export function mergeRolePermissions(roles: Iterable<RolePermissionRow>, base: RolePermissionMap = defaultRolePermissionMap): RolePermissionMap {
   const permissions: RolePermissionMap = { ...base };
   for (const role of roles) {
-    permissions[role.id] = { ...(permissions[role.id] ?? {}), ...normalizeRolePermissions(role.permissions) };
+    permissions[role.id] = role.id === "owner"
+      ? normalizeCatalogRolePermissions(role.id, role.permissions)
+      : { ...(permissions[role.id] ?? {}), ...normalizeCatalogRolePermissions(role.id, role.permissions) };
   }
   return permissions;
 }
@@ -64,4 +66,9 @@ export function cloneRolePermissionMap(value: RolePermissionMap): RolePermission
       Object.fromEntries(Object.entries(modules).map(([moduleId, actions]) => [moduleId, [...actions]])),
     ]),
   );
+}
+
+/** Apply only to successfully loaded/saved catalog rows, never failure snapshots. */
+export function normalizeCatalogRolePermissions(roleId: string, value: unknown): RolePermissions {
+  return roleId === "owner" ? createFullPermissions() : normalizeRolePermissions(value);
 }

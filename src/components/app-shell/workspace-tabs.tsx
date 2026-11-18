@@ -15,8 +15,8 @@ export type WorkspaceTab = {
 };
 
 export const HOME_HREF = "/dashboard";
-/** 标签上限。ERP 实际使用常在 10–20 个标签，标签本身只是元数据，不占页面状态。 */
-export const MAX_TABS = 20;
+/** 标签上限；超过后按打开顺序自动关闭最早的标签。 */
+export const MAX_TABS = 8;
 /** 同时保留「组件状态 + DOM」的页面数上限；超出后按最近使用时间淘汰最久没打开的那个。 */
 export const MAX_VIEWS = 6;
 

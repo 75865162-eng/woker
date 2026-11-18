@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "mode": "dev",
+  "bundler": "turbopack",
+  "fixtureOnly": true,
+  "capturedAt": "2026-11-18T07:58:33.471Z",
+  "node": "v24.18.0",
+  "routes": [
+    "/listing-ai",
+    "/logistics",
+    "/workspace"
+  ],
+  "loginColdMs": 737.2720420000005,
+  "loginMs": {
+    "samples": [
+      290.65,
+      285.3,
+      275.56,
+      278.95,
+      277.29,
+      285.18,
+      288.13
+    ],
+    "median": 285.1843749999989,
+    "p95": 290.6529580000006
+  },
+  "coldPages": [
+    {
+      "path": "/listing-ai",
+      "totalMs": 2615.506625000002
+    },
+    {
+      "path": "/logistics",
+      "totalMs": 1351.9276250000003
+    },
+    {
+      "path": "/workspace",
+      "totalMs": 1319.1769999999997
+    }
+  ],
+  "warmNavigationMs": {
+    "samples": [
+      305.5,
+      224.32,
+      180.62,
+      182.33,
+      211,
+      200.17,
+      163.48,
+      168.32,
+      153.41
+    ],
+    "median": 182.33045800000036,
+    "p95": 305.4971669999977
+  },
+  "rsc": [
+    {
+      "ms": 181.59999990463257,
+      "ttfb": 147
+    },
+    {
+      "ms": 127.09999990463257,
+      "ttfb": 113.89999985694885
+    },
+    {
+      "ms": 135.90000009536743,
+      "ttfb": 117.39999985694885
+    },
+    {
+      "ms": 139.09999990463257,
+      "ttfb": 110.69999980926514
+    },
+    {
+      "ms": 147.29999995231628,
+      "ttfb": 107
+    },
+    {
+      "ms": 129.70000004768372,
+      "ttfb": 109.5
+    },
+    {
+      "ms": 118.59999990463257,
+      "ttfb": 102.89999985694885
+    },
+    {
+      "ms": 124.80000019073486,
+      "ttfb": 109.59999990463257
+    },
+    {
+      "ms": 115.60000014305115,
+      "ttfb": 99.20000004768372
+    }
+  ],
+  "shellPersisted": true,
+  "publicRequests": [],
+  "checks": [
+    "workspace membership revocation",
+    "role revocation",
+    "cross-organization identity",
+    "disabled user"
+  ],
+  "limitations": [
+    "Disposable database and synthetic accounts; not production acceptance",
+    "External font loading excluded; CSS scan bounded to src in both measurements",
+    "Cold page navigation includes networkidle settle time",
+    "Selected real routes, not a full ERP benchmark"
+  ]
+}

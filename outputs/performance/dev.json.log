@@ -1,0 +1,648 @@
+Prisma schema loaded from ../schema.prisma.
+┌─────────────────────────────────────────────────────────┐
+│  Update available 7.10.0 -> 8.0.0-rc.34                 │
+│                                                         │
+│  This is a major update - please follow the guide at    │
+│  https://pris.ly/d/major-version-upgrade                │
+│                                                         │
+│  Run the following to update                            │
+│    npm i --save-dev prisma@latest                       │
+│    npm i @prisma/client@latest                          │
+└─────────────────────────────────────────────────────────┘
+
+✔ Generated Prisma Client (v7.10.0) to ./../../../node_modules/@prisma/client in 22.46s
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+
+Loaded Prisma config from ../prisma.config.ts.
+
+Prisma schema loaded from ../../../prisma/schema.prisma.
+Datasource "db": PostgreSQL database "erp_performance_fixture", schema "public" at "127.0.0.1:50098"
+
+🚀  Your database is now in sync with your Prisma schema. Done in 13.89s
+
+   ▲ Next.js 15.5.25 (Turbopack)
+   - Local:        http://127.0.0.1:50239
+   - Network:      http://127.0.0.1:50239
+
+ ✓ Starting...
+ ✓ Compiled middleware in 311ms
+
+   We detected TypeScript in your project and reconfigured your tsconfig.json file for you.
+   The following suggested values were added to your tsconfig.json. These values can be changed to fit your project's needs:
+
+    - include was updated to add '.next-performance/types/**/*.ts'
+
+ ✓ Ready in 2.9s
+ ○ Compiling /login ...
+ ✓ Compiled /login in 5.6s
+ GET /login 200 in 6507ms
+ ○ Compiling /api/auth/login ...
+ ✓ Compiled /api/auth/login in 1336ms
+{"event":"erp.sql","durationMs":270.8824160000004,"fingerprint":"c6cc810ccb6d"}
+{"event":"erp.sql","durationMs":12.567333999999391,"fingerprint":"80b2069a27ca"}
+{"event":"erp.sql","durationMs":7.188207999999577,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"login.user","durationMs":949.23}
+{"event":"erp.performance","operation":"login.password","durationMs":61.51}
+{"event":"erp.sql","durationMs":18.453999999997905,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":76.72}
+{"event":"erp.sql","durationMs":102.06204199999775,"fingerprint":"2be7224e80f2"}
+{"event":"erp.sql","durationMs":4.98883399999977,"fingerprint":"a777767b83e5"}
+{"event":"erp.sql","durationMs":12.20654099999956,"fingerprint":"1d9e10071f56"}
+ POST /api/auth/login 200 in 3383ms
+{"event":"erp.sql","durationMs":9.632542000003014,"fingerprint":"c6cc810ccb6d"}
+{"event":"erp.sql","durationMs":6.435042000000976,"fingerprint":"80b2069a27ca"}
+{"event":"erp.sql","durationMs":4.2167500000032305,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"login.user","durationMs":23.06}
+{"event":"erp.performance","operation":"login.password","durationMs":90}
+{"event":"erp.sql","durationMs":35.0187909999986,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":48.38}
+{"event":"erp.sql","durationMs":49.231291000000056,"fingerprint":"2be7224e80f2"}
+{"event":"erp.sql","durationMs":5.4979999999995925,"fingerprint":"a777767b83e5"}
+{"event":"erp.sql","durationMs":10.948583000001236,"fingerprint":"1d9e10071f56"}
+ POST /api/auth/login 200 in 534ms
+{"event":"erp.sql","durationMs":2.141708999999537,"fingerprint":"c6cc810ccb6d"}
+{"event":"erp.sql","durationMs":1.4344999999993888,"fingerprint":"80b2069a27ca"}
+{"event":"erp.sql","durationMs":1.3620420000006561,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"login.user","durationMs":6.54}
+{"event":"erp.performance","operation":"login.password","durationMs":56.84}
+{"event":"erp.sql","durationMs":3.6507500000006985,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":5.44}
+{"event":"erp.sql","durationMs":8.064208999996481,"fingerprint":"2be7224e80f2"}
+{"event":"erp.sql","durationMs":1.5463749999980791,"fingerprint":"a777767b83e5"}
+{"event":"erp.sql","durationMs":5.239000000001397,"fingerprint":"1d9e10071f56"}
+ POST /api/auth/login 200 in 370ms
+{"event":"erp.sql","durationMs":2.3034159999988333,"fingerprint":"c6cc810ccb6d"}
+{"event":"erp.sql","durationMs":10.521458999999595,"fingerprint":"80b2069a27ca"}
+{"event":"erp.sql","durationMs":1.7792499999995925,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"login.user","durationMs":16.39}
+{"event":"erp.performance","operation":"login.password","durationMs":94.07}
+{"event":"erp.sql","durationMs":15.214750000002823,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":25.01}
+{"event":"erp.sql","durationMs":18.895917000001646,"fingerprint":"2be7224e80f2"}
+{"event":"erp.sql","durationMs":15.675459000001865,"fingerprint":"a777767b83e5"}
+{"event":"erp.sql","durationMs":22.343333999997412,"fingerprint":"1d9e10071f56"}
+ POST /api/auth/login 200 in 489ms
+{"event":"erp.sql","durationMs":7.728291999999783,"fingerprint":"c6cc810ccb6d"}
+{"event":"erp.sql","durationMs":7.047625000002881,"fingerprint":"80b2069a27ca"}
+{"event":"erp.sql","durationMs":7.105834000001778,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"login.user","durationMs":24.98}
+{"event":"erp.performance","operation":"login.password","durationMs":66.31}
+{"event":"erp.sql","durationMs":2.5300829999978305,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":5.18}
+{"event":"erp.sql","durationMs":9.547958999999537,"fingerprint":"2be7224e80f2"}
+{"event":"erp.sql","durationMs":2.2507499999992433,"fingerprint":"a777767b83e5"}
+{"event":"erp.sql","durationMs":6.822125000002416,"fingerprint":"1d9e10071f56"}
+ POST /api/auth/login 200 in 488ms
+{"event":"erp.sql","durationMs":15.928249999997206,"fingerprint":"c6cc810ccb6d"}
+{"event":"erp.sql","durationMs":4.281332999998995,"fingerprint":"80b2069a27ca"}
+{"event":"erp.sql","durationMs":2.01050000000032,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"login.user","durationMs":33.47}
+{"event":"erp.performance","operation":"login.password","durationMs":100.07}
+{"event":"erp.sql","durationMs":6.805624999997235,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":14.56}
+{"event":"erp.sql","durationMs":23.43108299999949,"fingerprint":"2be7224e80f2"}
+{"event":"erp.sql","durationMs":3.011167000000569,"fingerprint":"a777767b83e5"}
+{"event":"erp.sql","durationMs":5.644749999999476,"fingerprint":"1d9e10071f56"}
+ POST /api/auth/login 200 in 574ms
+{"event":"erp.sql","durationMs":14.360708000000159,"fingerprint":"c6cc810ccb6d"}
+{"event":"erp.sql","durationMs":9.818415999998251,"fingerprint":"80b2069a27ca"}
+{"event":"erp.sql","durationMs":11.855208000000857,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"login.user","durationMs":53.39}
+{"event":"erp.performance","operation":"login.password","durationMs":78.51}
+{"event":"erp.sql","durationMs":19.604834000001574,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":23.83}
+{"event":"erp.sql","durationMs":20.783041999999114,"fingerprint":"2be7224e80f2"}
+{"event":"erp.sql","durationMs":9.848582999999053,"fingerprint":"a777767b83e5"}
+{"event":"erp.sql","durationMs":17.470666000001074,"fingerprint":"1d9e10071f56"}
+ POST /api/auth/login 200 in 668ms
+{"event":"erp.sql","durationMs":5.042333000001236,"fingerprint":"c6cc810ccb6d"}
+{"event":"erp.sql","durationMs":3.886540999999852,"fingerprint":"80b2069a27ca"}
+{"event":"erp.sql","durationMs":1.5142090000008466,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"login.user","durationMs":13.22}
+{"event":"erp.performance","operation":"login.password","durationMs":57.17}
+{"event":"erp.sql","durationMs":4.977167000000918,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":7.32}
+{"event":"erp.sql","durationMs":9.80449999999837,"fingerprint":"2be7224e80f2"}
+{"event":"erp.sql","durationMs":3.6890410000014526,"fingerprint":"a777767b83e5"}
+{"event":"erp.sql","durationMs":5.97754200000054,"fingerprint":"1d9e10071f56"}
+ POST /api/auth/login 200 in 517ms
+ ○ Compiling /listing-ai ...
+ ✓ Compiled /listing-ai in 5.7s
+{"event":"erp.sql","durationMs":78.44570800000292,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":5.060790999999881,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":5.6880830000009155,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":7.561249999998836,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":274.12}
+{"event":"erp.sql","durationMs":10.62354200000118,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":12.77}
+ GET /listing-ai 200 in 7072ms
+ ○ Compiling /favicon.ico ...
+ GET /favicon.ico?favicon.0b3bf435.ico 200 in 2364ms
+ ✓ Compiled /favicon.ico in 3s
+{"event":"erp.sql","durationMs":291.3821250000037,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":976.1843330000047,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":28.78408400000626,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":33.053500000001804,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":1432.26}
+{"event":"erp.sql","durationMs":307.4275409999973,"fingerprint":"0fdada592cb8"}
+{"event":"erp.sql","durationMs":2166.3695829999997,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":2322.421957999999,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":2413.1892090000038,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":898.6723750000019,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":1142.83}
+{"event":"erp.sql","durationMs":2403.7399579999983,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":1425.1695829999953,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":1092.0966249999983,"fingerprint":"6c3fc8a37086"}
+{"event":"erp.sql","durationMs":221.1241250000021,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":65.20954199999687,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":56.41320899999846,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":245.96391700000095,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":272.2587500000009,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":33.01812500000233,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":50.67833399999654,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":50.74958300000435,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":51.95866599999863,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":90.12329200000386,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":39.49683299999742,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":2567.33}
+{"event":"erp.sql","durationMs":124.39291700000467,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":1659.23}
+{"event":"erp.sql","durationMs":156.3054589999956,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":2851.26}
+{"event":"erp.sql","durationMs":162.41070899999613,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":2688.81}
+{"event":"erp.sql","durationMs":371.4458749999976,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":3046.41}
+{"event":"erp.sql","durationMs":295.46766700000444,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":309.71}
+{"event":"erp.sql","durationMs":486.9715830000059,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":493.51}
+{"event":"erp.sql","durationMs":529.2522920000047,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":571.92}
+{"event":"erp.sql","durationMs":914.0873329999959,"fingerprint":"bdc56e749226"}
+ GET /api/notifications/user?limit=50 200 in 5971ms
+{"event":"erp.sql","durationMs":627.4915419999961,"fingerprint":"5d88ae63dab8"}
+{"event":"erp.sql","durationMs":579.3138340000005,"fingerprint":"5d88ae63dab8"}
+{"event":"erp.sql","durationMs":547.5454580000005,"fingerprint":"5d88ae63dab8"}
+{"event":"erp.sql","durationMs":802.1877910000039,"fingerprint":"5e001455e8bc"}
+ GET /api/workspaces 200 in 6401ms
+{"event":"erp.sql","durationMs":795.8767919999955,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":804.58}
+{"event":"erp.sql","durationMs":626.3159579999992,"fingerprint":"1dca2fe0ec4c"}
+{"event":"erp.sql","durationMs":645.8269999999975,"fingerprint":"1dca2fe0ec4c"}
+{"event":"erp.sql","durationMs":124.79266700000153,"fingerprint":"1dca2fe0ec4c"}
+{"event":"erp.sql","durationMs":224.32408299999952,"fingerprint":"4022f0cb0b75"}
+{"event":"erp.sql","durationMs":244.11529200000223,"fingerprint":"5d88ae63dab8"}
+{"event":"erp.sql","durationMs":234.20029200000135,"fingerprint":"4022f0cb0b75"}
+{"event":"erp.sql","durationMs":131.7457080000022,"fingerprint":"4022f0cb0b75"}
+{"event":"erp.sql","durationMs":28.23254199999792,"fingerprint":"fcbcf72164f9"}
+{"event":"erp.sql","durationMs":35.95383299999958,"fingerprint":"fcbcf72164f9"}
+{"event":"erp.sql","durationMs":86.99504200000229,"fingerprint":"fcbcf72164f9"}
+{"event":"erp.sql","durationMs":79.51375000000553,"fingerprint":"85a258e133eb"}
+ GET /api/listing-ai/workspace 200 in 5709ms
+{"event":"erp.sql","durationMs":71.62208399999508,"fingerprint":"2d440ca5d0e4"}
+{"event":"erp.sql","durationMs":92.35700000000361,"fingerprint":"c59de141b246"}
+{"event":"erp.sql","durationMs":14.52441700000054,"fingerprint":"1fc46db271ae"}
+{"event":"erp.sql","durationMs":99.42204199999833,"fingerprint":"1fc46db271ae"}
+{"event":"erp.sql","durationMs":62.534749999998894,"fingerprint":"a3ee621b18b1"}
+{"event":"erp.sql","durationMs":18.27754100000311,"fingerprint":"a3ee621b18b1"}
+{"event":"erp.sql","durationMs":7.312165999996068,"fingerprint":"331c9c7a41bd"}
+{"event":"erp.sql","durationMs":23.368249999999534,"fingerprint":"331c9c7a41bd"}
+{"event":"erp.sql","durationMs":64.8113749999975,"fingerprint":"e0526b103c8e"}
+{"event":"erp.sql","durationMs":71.08341699999437,"fingerprint":"e0526b103c8e"}
+{"event":"erp.sql","durationMs":1313.325334000001,"fingerprint":"1dca2fe0ec4c"}
+{"event":"erp.sql","durationMs":33.49541599999793,"fingerprint":"91b8c28c1a64"}
+{"event":"erp.sql","durationMs":11.309124999999767,"fingerprint":"4022f0cb0b75"}
+{"event":"erp.sql","durationMs":46.61066700000083,"fingerprint":"91b8c28c1a64"}
+{"event":"erp.sql","durationMs":9.320957999996608,"fingerprint":"fcbcf72164f9"}
+{"event":"erp.sql","durationMs":35.8817080000008,"fingerprint":"4c2e4869b3d4"}
+ GET /api/ai-settings 200 in 6838ms
+{"event":"erp.sql","durationMs":35.01829100000032,"fingerprint":"2d440ca5d0e4"}
+{"event":"erp.sql","durationMs":46.87895800000115,"fingerprint":"c0098f7f7f74"}
+ GET /api/notifications/wecom/settings 200 in 7101ms
+{"event":"erp.sql","durationMs":28.24783299999399,"fingerprint":"1fc46db271ae"}
+{"event":"erp.sql","durationMs":19.021042000000307,"fingerprint":"a3ee621b18b1"}
+{"event":"erp.sql","durationMs":68.04912499999773,"fingerprint":"331c9c7a41bd"}
+{"event":"erp.sql","durationMs":6.025291999998444,"fingerprint":"e0526b103c8e"}
+{"event":"erp.sql","durationMs":10.271625000001222,"fingerprint":"91b8c28c1a64"}
+ GET /api/notifications/wecom/settings 500 in 7358ms
+ ○ Compiling /logistics ...
+{"event":"erp.sql","durationMs":16.449582999994163,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":31.332333000005747,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":8.207625000002736,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":6.712165999997524,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":7.5292090000002645,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":4.506500000003143,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":42.17}
+{"event":"erp.sql","durationMs":16.43841600000451,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":8.224709000001894,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":71.4}
+{"event":"erp.sql","durationMs":18.50816599999962,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":20.48}
+{"event":"erp.sql","durationMs":8.100125000004482,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":9}
+{"event":"erp.sql","durationMs":6.661917000004905,"fingerprint":"5d88ae63dab8"}
+{"event":"erp.sql","durationMs":9.579083999997238,"fingerprint":"5d88ae63dab8"}
+{"event":"erp.sql","durationMs":11.668250000002445,"fingerprint":"1dca2fe0ec4c"}
+{"event":"erp.sql","durationMs":14.177208000000974,"fingerprint":"1dca2fe0ec4c"}
+{"event":"erp.sql","durationMs":2.9827920000025188,"fingerprint":"4022f0cb0b75"}
+{"event":"erp.sql","durationMs":5.023000000001048,"fingerprint":"4022f0cb0b75"}
+{"event":"erp.sql","durationMs":6.224291999998968,"fingerprint":"fcbcf72164f9"}
+{"event":"erp.sql","durationMs":10.735124999999243,"fingerprint":"fcbcf72164f9"}
+{"event":"erp.sql","durationMs":8.371707999998762,"fingerprint":"85a258e133eb"}
+ GET /api/listing-ai/workspace 200 in 827ms
+{"event":"erp.sql","durationMs":24.544667000001937,"fingerprint":"c59de141b246"}
+ GET /api/ai-settings 200 in 1025ms
+{"event":"erp.sql","durationMs":33.569916000000376,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":9.57216700000572,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":6.499499999998079,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":15.936041999993904,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":98.47}
+{"event":"erp.sql","durationMs":14.350542000000132,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":23.72}
+{"event":"erp.sql","durationMs":49.39208299999882,"fingerprint":"4b2a23c5cff9"}
+ PUT /api/listing-ai/workspace 403 in 794ms
+ ✓ Compiled /logistics in 8.2s
+{"event":"erp.sql","durationMs":32.20708300000115,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":40.05391700000473,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":95.79662500000268,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":61.03170899999532,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":261.91}
+{"event":"erp.sql","durationMs":112.28520800000115,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":119.89}
+ GET /logistics 200 in 10309ms
+{"event":"erp.sql","durationMs":24.401749999997264,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":1.8566250000003492,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":1.6677500000005239,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":4.630457999999635,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":34.97}
+{"event":"erp.sql","durationMs":14.336084000002302,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":18.59}
+{"event":"erp.sql","durationMs":49.72333300000173,"fingerprint":"0fdada592cb8"}
+{"event":"erp.sql","durationMs":66.87999999999738,"fingerprint":"6c3fc8a37086"}
+{"event":"erp.sql","durationMs":111.28137499999866,"fingerprint":"bdc56e749226"}
+ GET /favicon.ico?favicon.0b3bf435.ico 200 in 382ms
+{"event":"erp.sql","durationMs":7.043582999998762,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":9.418583000006038,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":8.635583000002953,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":3.9140409999963595,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":33.69}
+{"event":"erp.sql","durationMs":6.048665999995137,"fingerprint":"5e001455e8bc"}
+ GET /api/workspaces 200 in 378ms
+{"event":"erp.sql","durationMs":12.931499999998778,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":4.260041999994428,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":6.019749999999476,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":6.181917000001704,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":8.445584000000963,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":2.8725419999973383,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":3.7110830000019632,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":3.3399999999965075,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":2.782875000004424,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":27.95}
+{"event":"erp.sql","durationMs":7.54754099999991,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":23.42}
+{"event":"erp.sql","durationMs":5.717750000003434,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":8.04}
+{"event":"erp.sql","durationMs":12.08720799999719,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":10.362167000006593,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":10.89}
+{"event":"erp.sql","durationMs":8.765999999995984,"fingerprint":"5d88ae63dab8"}
+{"event":"erp.sql","durationMs":6.64249999999447,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":32.65}
+{"event":"erp.sql","durationMs":7.922207999996317,"fingerprint":"5d88ae63dab8"}
+{"event":"erp.sql","durationMs":14.42345899999782,"fingerprint":"0fdada592cb8"}
+{"event":"erp.sql","durationMs":14.179000000003725,"fingerprint":"6c3fc8a37086"}
+{"event":"erp.sql","durationMs":227.2420409999977,"fingerprint":"1dca2fe0ec4c"}
+{"event":"erp.sql","durationMs":220.06104200000118,"fingerprint":"1dca2fe0ec4c"}
+{"event":"erp.sql","durationMs":217.8839999999982,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":219.53}
+{"event":"erp.sql","durationMs":11.94237499999872,"fingerprint":"4022f0cb0b75"}
+{"event":"erp.sql","durationMs":15.154999999998836,"fingerprint":"4022f0cb0b75"}
+{"event":"erp.sql","durationMs":5.5020409999997355,"fingerprint":"fcbcf72164f9"}
+{"event":"erp.sql","durationMs":15.057166999999026,"fingerprint":"fcbcf72164f9"}
+{"event":"erp.sql","durationMs":31.043417000000773,"fingerprint":"bdc56e749226"}
+ GET /api/notifications/user?limit=50 200 in 712ms
+{"event":"erp.sql","durationMs":16.351166000000376,"fingerprint":"2d440ca5d0e4"}
+ GET /api/notifications/wecom/settings 200 in 714ms
+{"event":"erp.sql","durationMs":11.461833999994269,"fingerprint":"2d440ca5d0e4"}
+ GET /api/notifications/wecom/settings 200 in 721ms
+ ○ Compiling /workspace ...
+ ✓ Compiled /workspace in 5.6s
+{"event":"erp.sql","durationMs":205.84674999999697,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":75.75099999999657,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":18.987374999996973,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":22.04308299999684,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":388.36}
+{"event":"erp.sql","durationMs":19.712249999996857,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":29.25}
+ GET /workspace 200 in 9453ms
+ GET /favicon.ico?favicon.0b3bf435.ico 200 in 1588ms
+ ○ Compiling /api/workspace/snapshot ...
+{"event":"erp.sql","durationMs":17.30266699999629,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":4.299917000003916,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":9.865875000003143,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":5.335249999996449,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":46.62}
+{"event":"erp.sql","durationMs":103.45387499999924,"fingerprint":"5e001455e8bc"}
+ GET /api/workspaces 200 in 1543ms
+{"event":"erp.sql","durationMs":12.786082999999053,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":9.89512499999546,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":5.018208000001323,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":4.551124999998137,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":43.23}
+{"event":"erp.sql","durationMs":24.34150000000227,"fingerprint":"0fdada592cb8"}
+{"event":"erp.sql","durationMs":265.78337499999907,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":294.32154199999786,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":187.40970899999957,"fingerprint":"6c3fc8a37086"}
+{"event":"erp.sql","durationMs":188.8359999999957,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":208.9}
+{"event":"erp.sql","durationMs":26.491125000000466,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":34.793541999999434,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":50.768541000004916,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":43.830167000000074,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":27.842915999994148,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":379.37}
+{"event":"erp.sql","durationMs":33.07362500000454,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":409.72}
+{"event":"erp.sql","durationMs":72.47191700000258,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":77.87}
+{"event":"erp.sql","durationMs":186.47691699999996,"fingerprint":"bdc56e749226"}
+ GET /api/notifications/user?limit=50 200 in 924ms
+{"event":"erp.sql","durationMs":16.512750000001688,"fingerprint":"5d88ae63dab8"}
+{"event":"erp.sql","durationMs":119.3661659999998,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":123.32}
+{"event":"erp.sql","durationMs":25.922458999993978,"fingerprint":"1dca2fe0ec4c"}
+{"event":"erp.sql","durationMs":8.993583000003127,"fingerprint":"5d88ae63dab8"}
+{"event":"erp.sql","durationMs":8.797500000000582,"fingerprint":"1dca2fe0ec4c"}
+{"event":"erp.sql","durationMs":6.932082999999693,"fingerprint":"4022f0cb0b75"}
+{"event":"erp.sql","durationMs":5.491416999997455,"fingerprint":"4022f0cb0b75"}
+{"event":"erp.sql","durationMs":4.0935000000026776,"fingerprint":"fcbcf72164f9"}
+{"event":"erp.sql","durationMs":20.286208999998053,"fingerprint":"fcbcf72164f9"}
+{"event":"erp.sql","durationMs":11.226042000002053,"fingerprint":"2d440ca5d0e4"}
+ GET /api/notifications/wecom/settings 200 in 1461ms
+{"event":"erp.sql","durationMs":42.335457999994105,"fingerprint":"2d440ca5d0e4"}
+ GET /api/notifications/wecom/settings 200 in 1487ms
+ ✓ Compiled /api/workspace/snapshot in 1598ms
+{"event":"erp.sql","durationMs":162.72195800000918,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":18.00770800000464,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":35.752542000001995,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":15.126042000003508,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":12.194415999998455,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":10.107417000006535,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":229.39}
+{"event":"erp.sql","durationMs":15.786459000009927,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":8.871291999996174,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":13.59}
+{"event":"erp.sql","durationMs":5.996040999991237,"fingerprint":"5d88ae63dab8"}
+{"event":"erp.sql","durationMs":16.795624999998836,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":90.03}
+{"event":"erp.sql","durationMs":13.770375000007334,"fingerprint":"1dca2fe0ec4c"}
+{"event":"erp.sql","durationMs":21.35733299999265,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":22.56}
+{"event":"erp.sql","durationMs":22.01920899999095,"fingerprint":"4022f0cb0b75"}
+{"event":"erp.sql","durationMs":10.58437500000582,"fingerprint":"fcbcf72164f9"}
+{"event":"erp.sql","durationMs":60.247375000006286,"fingerprint":"1dca2fe0ec4c"}
+{"event":"erp.sql","durationMs":63.74662499999977,"fingerprint":"5d88ae63dab8"}
+{"event":"erp.sql","durationMs":4.29083399999945,"fingerprint":"4022f0cb0b75"}
+{"event":"erp.sql","durationMs":4.7508749999979045,"fingerprint":"fcbcf72164f9"}
+{"event":"erp.sql","durationMs":71.46979200000351,"fingerprint":"05f2f9adbc8b"}
+ GET /api/workspace/snapshot 200 in 2744ms
+{"event":"erp.sql","durationMs":18.597541000010096,"fingerprint":"dde46728e214"}
+ GET /api/workspace/draft-runs?limit=100 200 in 2656ms
+{"event":"erp.sql","durationMs":21.850749999997788,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":8.237750000000233,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":5.540999999997439,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":3.7657080000062706,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":70.69}
+{"event":"erp.sql","durationMs":4.606583999993745,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":10.01}
+ GET /listing-ai 200 in 2422ms
+ GET /favicon.ico?favicon.0b3bf435.ico 200 in 335ms
+{"event":"erp.sql","durationMs":8.668042000004789,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":4.40370900000562,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":13.1909169999999,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":5.9204159999935655,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":49.15}
+{"event":"erp.sql","durationMs":7.2760830000042915,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":10.25}
+ GET /logistics 200 in 953ms
+{"event":"erp.sql","durationMs":143.76787499999045,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":3.6962919999932637,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":30.22958300000755,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":24.71579099999508,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":5.305374999996275,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":2.219666999997571,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":4.35891699999047,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":159.58}
+{"event":"erp.sql","durationMs":9.233165999990888,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":26.637084000001778,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":11.086082999987411,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":9.899082999996608,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":11.51}
+{"event":"erp.sql","durationMs":33.057417000003625,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":83.67}
+{"event":"erp.sql","durationMs":38.636667000013404,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":37.15533299998788,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":23.842459000006784,"fingerprint":"5d88ae63dab8"}
+{"event":"erp.sql","durationMs":1.9687919999996666,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":76.61}
+{"event":"erp.sql","durationMs":4.46341699999175,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":6.28}
+{"event":"erp.sql","durationMs":29.950457999992068,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":30.67}
+{"event":"erp.sql","durationMs":34.25737500000105,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":30.97562499999185,"fingerprint":"5d88ae63dab8"}
+{"event":"erp.sql","durationMs":30.90654199999699,"fingerprint":"1dca2fe0ec4c"}
+{"event":"erp.sql","durationMs":50.12612499999523,"fingerprint":"1dca2fe0ec4c"}
+{"event":"erp.sql","durationMs":5.70070799998939,"fingerprint":"5d88ae63dab8"}
+{"event":"erp.sql","durationMs":12.562707999997656,"fingerprint":"4022f0cb0b75"}
+{"event":"erp.sql","durationMs":15.669542000003275,"fingerprint":"4022f0cb0b75"}
+{"event":"erp.sql","durationMs":17.701499999995576,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":117.33}
+{"event":"erp.sql","durationMs":8.12949999999546,"fingerprint":"fcbcf72164f9"}
+{"event":"erp.sql","durationMs":11.640458000008948,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":12.3}
+{"event":"erp.sql","durationMs":15.770624999990105,"fingerprint":"fcbcf72164f9"}
+{"event":"erp.sql","durationMs":3.360332999989623,"fingerprint":"1dca2fe0ec4c"}
+{"event":"erp.sql","durationMs":5.124167000001762,"fingerprint":"5d88ae63dab8"}
+{"event":"erp.sql","durationMs":3.019625000000815,"fingerprint":"4022f0cb0b75"}
+{"event":"erp.sql","durationMs":9.466582999986713,"fingerprint":"fcbcf72164f9"}
+{"event":"erp.sql","durationMs":39.65099999999802,"fingerprint":"85a258e133eb"}
+ GET /api/listing-ai/workspace 200 in 1301ms
+{"event":"erp.sql","durationMs":35.5447920000006,"fingerprint":"85a258e133eb"}
+ GET /api/listing-ai/workspace 200 in 1301ms
+{"event":"erp.sql","durationMs":64.825582999998,"fingerprint":"c59de141b246"}
+ GET /api/ai-settings 200 in 1334ms
+{"event":"erp.sql","durationMs":209.18054099999426,"fingerprint":"1dca2fe0ec4c"}
+{"event":"erp.sql","durationMs":4.89000000001397,"fingerprint":"4022f0cb0b75"}
+{"event":"erp.sql","durationMs":2.526583999991999,"fingerprint":"fcbcf72164f9"}
+{"event":"erp.sql","durationMs":23.76983299999847,"fingerprint":"c59de141b246"}
+ GET /api/ai-settings 200 in 1458ms
+ GET /favicon.ico?favicon.0b3bf435.ico 200 in 494ms
+{"event":"erp.sql","durationMs":19.910875000001397,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":4.205082999993465,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":4.012667000002693,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":4.5981250000040745,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":43.8}
+{"event":"erp.sql","durationMs":9.561957999991137,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":16}
+ GET /workspace 200 in 929ms
+{"event":"erp.sql","durationMs":7.82012499999837,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":3.3845839999994496,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":3.8374580000090646,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":77.3720420000027,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":106.22}
+{"event":"erp.sql","durationMs":14.488167000003159,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":19.49}
+{"event":"erp.sql","durationMs":74.44795800000429,"fingerprint":"4b2a23c5cff9"}
+ PUT /api/listing-ai/workspace 403 in 1240ms
+ GET /favicon.ico?favicon.0b3bf435.ico 200 in 1058ms
+{"event":"erp.sql","durationMs":20.491582999995444,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":6.869707999998354,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":15.027791000000434,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":5.738916999995126,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":71.84}
+{"event":"erp.sql","durationMs":7.828457999989041,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":12.47}
+ GET /listing-ai 200 in 884ms
+ GET /favicon.ico?favicon.0b3bf435.ico 200 in 702ms
+{"event":"erp.sql","durationMs":7.2108749999897555,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":6.346166000002995,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":5.536959000004572,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":15.360042000000249,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":64.5}
+{"event":"erp.sql","durationMs":12.265084000013303,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":15.51}
+ GET /logistics 200 in 572ms
+ GET /favicon.ico?favicon.0b3bf435.ico 200 in 315ms
+{"event":"erp.sql","durationMs":15.594791999988956,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":3.46524999999383,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":6.835416000001715,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":3.706624999991618,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":48.88}
+{"event":"erp.sql","durationMs":8.869458000001032,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":11.86}
+ GET /workspace 200 in 757ms
+ GET /favicon.ico?favicon.0b3bf435.ico 200 in 623ms
+{"event":"erp.sql","durationMs":12.995666999995592,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":5.140957999989041,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":12.25216599999112,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":13.038709000000381,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":52.86}
+{"event":"erp.sql","durationMs":6.4685000000026776,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":9.44}
+ GET /listing-ai 200 in 551ms
+ GET /favicon.ico?favicon.0b3bf435.ico 200 in 319ms
+{"event":"erp.sql","durationMs":10.079916999995476,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":12.952124999996158,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":11.297458000000915,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":2.4737909999967087,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":46.13}
+{"event":"erp.sql","durationMs":6.037708999996539,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":8.64}
+ GET /logistics 200 in 647ms
+ GET /favicon.ico?favicon.0b3bf435.ico 200 in 285ms
+{"event":"erp.sql","durationMs":7.372208000000683,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":3.965875000008964,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":1.7944580000039423,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":5.811667000001762,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":23.69}
+{"event":"erp.sql","durationMs":1.978584000011324,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":3.21}
+ GET /workspace 200 in 560ms
+{"event":"erp.sql","durationMs":6.8556250000110595,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":2.3805839999986347,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":2.0223750000004657,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":5.049874999996973,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":18.8}
+{"event":"erp.sql","durationMs":24.279332999998587,"fingerprint":"0fdada592cb8"}
+{"event":"erp.sql","durationMs":27.995874999993248,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":34.04}
+{"event":"erp.sql","durationMs":82.66687499999534,"fingerprint":"6c3fc8a37086"}
+{"event":"erp.sql","durationMs":74.04662500000268,"fingerprint":"bdc56e749226"}
+ GET /api/notifications/user?limit=50 200 in 899ms
+ GET /favicon.ico?favicon.0b3bf435.ico 200 in 280ms
+{"event":"erp.sql","durationMs":8.458832999996957,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":6.741416000004392,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":7.548916999992798,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":3.855249999993248,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":33.15}
+{"event":"erp.sql","durationMs":4.568083999998635,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":5.5}
+{"event":"erp.sql","durationMs":8.710625000006985,"fingerprint":"5d88ae63dab8"}
+{"event":"erp.sql","durationMs":24.554000000003725,"fingerprint":"1dca2fe0ec4c"}
+{"event":"erp.sql","durationMs":2.06845799999428,"fingerprint":"4022f0cb0b75"}
+{"event":"erp.sql","durationMs":8.080834000007599,"fingerprint":"fcbcf72164f9"}
+{"event":"erp.sql","durationMs":69.07112500000221,"fingerprint":"4b2a23c5cff9"}
+ GET /api/listing-ai/workspace?workspaceId=default 403 in 601ms
+{"event":"erp.sql","durationMs":5.798416999998153,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":1.0951249999925494,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":5.85587499999383,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":3.729291999989073,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":17.92}
+{"event":"erp.sql","durationMs":6.533625000010943,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":7.16}
+{"event":"erp.sql","durationMs":4.244917000003625,"fingerprint":"5d88ae63dab8"}
+{"event":"erp.sql","durationMs":10.767833999998402,"fingerprint":"1dca2fe0ec4c"}
+{"event":"erp.sql","durationMs":9.305458000002545,"fingerprint":"4022f0cb0b75"}
+{"event":"erp.sql","durationMs":4.942291999992449,"fingerprint":"fcbcf72164f9"}
+{"event":"erp.sql","durationMs":1.9625410000007832,"fingerprint":"85a258e133eb"}
+ GET /api/listing-ai/workspace?workspaceId=default 200 in 353ms
+{"event":"erp.sql","durationMs":2.810833999988972,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":3.9507080000039423,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":2.6037499999947613,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":2.5862920000072336,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":14.98}
+{"event":"erp.sql","durationMs":4.424334000010276,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":7.01}
+{"event":"erp.sql","durationMs":23.39458399999421,"fingerprint":"4b2a23c5cff9"}
+ GET /api/listing-ai/workspace 403 in 422ms
+{"event":"erp.sql","durationMs":20.436791999993147,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":18.74954100001196,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":6.05137499999546,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":17.75274999999965,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":75.36}
+{"event":"erp.sql","durationMs":6.137125000008382,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":10.07}
+ GET /listing-ai?performanceCheck=96dd30a3-daf2-4c19-9d6b-262469721144 200 in 1247ms
+ GET /favicon.ico?favicon.0b3bf435.ico 200 in 522ms
+{"event":"erp.sql","durationMs":11.062625000005937,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":2.54541700000118,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":2.2714169999962905,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":2.29787499998929,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":22.22}
+{"event":"erp.sql","durationMs":6.465083999995841,"fingerprint":"5e001455e8bc"}
+ GET /api/workspaces 200 in 432ms
+ ○ Compiling /forbidden ...
+{"event":"erp.sql","durationMs":34.65620800000033,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":18.802916999993613,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":2.606415999995079,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":10.27141699999629,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":18.546707999994396,"fingerprint":"c4a47c7d43bd"}
+{"event":"erp.sql","durationMs":5.994749999998021,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":15.084875000000466,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":6.350416999994195,"fingerprint":"32eb9c58806c"}
+{"event":"erp.sql","durationMs":7.144916999997804,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":62.56}
+{"event":"erp.sql","durationMs":11.385290999998688,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":48.61}
+{"event":"erp.sql","durationMs":11.436000000001513,"fingerprint":"6e83ba02ce04"}
+{"event":"erp.sql","durationMs":9.600709000005736,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":11.54}
+{"event":"erp.sql","durationMs":9.668832999988808,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":11.13}
+{"event":"erp.sql","durationMs":14.024625000005472,"fingerprint":"0dd94287babd"}
+{"event":"erp.performance","operation":"auth.session","durationMs":53.26}
+{"event":"erp.sql","durationMs":9.977541000000201,"fingerprint":"0fdada592cb8"}
+{"event":"erp.sql","durationMs":26.542249999998603,"fingerprint":"4b2a23c5cff9"}
+ GET /api/notifications/wecom/settings 403 in 581ms
+{"event":"erp.sql","durationMs":31.834917000000132,"fingerprint":"4b2a23c5cff9"}
+ GET /api/notifications/wecom/settings 403 in 584ms
+{"event":"erp.sql","durationMs":301.94112499999756,"fingerprint":"6c3fc8a37086"}
+{"event":"erp.sql","durationMs":319.4842500000086,"fingerprint":"6cd45d6b1c38"}
+{"event":"erp.performance","operation":"auth.roles","durationMs":325.74}
+ GET /api/notifications/user?limit=50 200 in 883ms
+ ✓ Compiled /forbidden in 7.2s
+{"event":"erp.sql","durationMs":163.8017919999984,"fingerprint":"c4a47c7d43bd"}

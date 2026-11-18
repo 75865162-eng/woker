@@ -2,6 +2,9 @@ import { Activity, Banknote, BookMarked, Bot, Boxes, Calculator, ChartNoAxesComb
 
 export const accountMenuItems = [
   { href: "/help", label: "帮助中心", icon: CircleHelp, moduleId: null },
+  { href: "/operations?view=connections", label: "Amazon 账号与站点", icon: Store, moduleId: "operations" },
+  { href: "/amazon-ads/accounts", label: "Ads 账号授权", icon: Activity, moduleId: "workspace" },
+  { href: "/operations/data-dictionary", label: "数据字典", icon: BookMarked, moduleId: "operations" },
   { href: "/tasks", label: "任务中心", icon: ListChecks, moduleId: "tasks" },
   { href: "/versions", label: "版本审计", icon: History, moduleId: "versions" },
   { href: "/accounts", label: "账号权限", icon: UsersRound, moduleId: "accounts" },
@@ -89,12 +92,5 @@ export const navigationGroups = [
     { href: "/lili", label: "粒粒 Lili 技能中心", icon: Sparkles, moduleId: "agents" },
     { href: "/skills", label: "Skill 智能工作台", icon: Sparkles, moduleId: "agents" },
     { href: "/saihu-search-merge", label: "赛狐搜词合并", icon: SearchCheck, moduleId: "searchMerge" },
-  ] },
-  { label: "系统设置", items: [
-    { href: "/operations?view=connections", label: "Amazon 账号与站点", icon: Store, moduleId: "operations" },
-    { href: "/settings/amazon-connections", label: "Amazon 连接管理", icon: Store, moduleId: "settings" },
-    { href: "/amazon-ads/accounts", label: "Ads 账号授权", icon: Activity, moduleId: "workspace" },
-    { href: "/operations/data-dictionary", label: "数据字典", icon: BookMarked, moduleId: "operations" },
-    ...accountMenuItems,
   ] },
 ];

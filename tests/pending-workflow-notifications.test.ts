@@ -72,7 +72,7 @@ test("notification API scopes pending work to the authenticated recipient and ch
       },
       count: async () => 0,
     },
-    organizationRosterRole: { findMany: async () => [{ id: "owner", name: "Owner", description: "", sortOrder: 0,
+    organizationRosterRole: { findMany: async () => [{ id: "operations", name: "Operations", description: "", sortOrder: 0,
       updatedAt: new Date(), permissions: { products: canView ? ["view"] : [] } }] },
     $queryRaw: async (parts: TemplateStringsArray, ...values: unknown[]) => {
       queryCalls++;
@@ -85,7 +85,7 @@ test("notification API scopes pending work to the authenticated recipient and ch
     },
   } as unknown as import("@prisma/client").PrismaClient;
   try {
-    const { sessionCookie } = await createLocalSession({ id: "user", email: "u@test.local", name: "User", role: "owner", organizationId: "org", organizationName: "Org" });
+    const { sessionCookie } = await createLocalSession({ id: "user", email: "u@test.local", name: "User", role: "operations", organizationId: "org", organizationName: "Org" });
     const request = () => new Request("http://localhost/api/notifications/user?limit=1", { headers: { cookie: `${sessionCookie.name}=${sessionCookie.value}` } });
     const response = await GET(request());
     assert.equal(response.status, 200);

@@ -17,7 +17,7 @@ const eslintConfig = [
     // .next-types-*.json / .next-types-ambient-*.d.ts 是 next-run.mjs 生成在项目根的
     // 临时类型配置（dev 进程存活期间存在），需与 .next-types*/** 目录一并排除，
     // 否则 dev 运行时 npm run lint 会把 ambient 的 triple-slash reference 当成错误。
-    ignores: ["integration-evidence/**", ".next/**", ".next-run/**", ".next-dev/**", ".next-dev*/**", ".next-types*/**", ".next-types-*.json", ".next-types-ambient-*.d.ts", ".next-build/**", ".next-build*/**", ".next-verify/**", ".next-verify*/**", ".next-process-*/**", ".next-auth-check/**", ".next-amazon-live/**", "node_modules*/**", "out/**", "build/**", "tmp/**", "outputs/**", "next-env.d.ts", "tmp-node-server.js"],
+    ignores: ["integration-evidence/**", ".next/**", ".next-run/**", ".next-local-merge/**", ".next-dev/**", ".next-dev*/**", ".next-types*/**", ".next-types-*.json", ".next-types-ambient-*.d.ts", ".next-build/**", ".next-build*/**", ".next-verify/**", ".next-verify*/**", ".next-process-*/**", ".next-auth-check/**", ".next-amazon-live/**", "node_modules*/**", "out/**", "build/**", "tmp/**", "outputs/**", "next-env.d.ts", "tmp-node-server.js"],
   },
 ];
 

@@ -100,7 +100,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   let body: Record<string, unknown>;
-  try { body = await request.json() as Record<string, unknown>; }
+  // 授权检查仍需读取原始请求体中的工作区选择器。
+  try { body = await request.clone().json() as Record<string, unknown>; }
   catch { return NextResponse.json({ error: '请求内容不是有效 JSON。' }, { status: 400 }); }
   try {
     const action = requireText(body.action, '操作类型', 60);
