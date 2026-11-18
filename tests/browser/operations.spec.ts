@@ -129,11 +129,12 @@ test("catalog displays persisted main images at 150px and reuses the URL for dup
   const images = page.getByRole("img", { name: "Persisted main image" });
   await expect(images).toHaveCount(2);
   for (const image of await images.all()) {
-    await expect(image).toHaveAttribute("width", "150");
-    await expect(image).toHaveAttribute("height", "150");
+    // 图片已收敛到 ImageThumb：150px 由外层容器 class 控制（含 1px 边框，img 内容区为 148px），
+    // img 以 h-full w-full 撑满；断言容器 150px 与 src 复用，表达“150px 展示”的意图。
     await expect(image).toHaveAttribute("src", "/api/operations/products/images/mock-shared-file?workspaceId=workspace-a");
-    await expect(image).toHaveCSS("width", "150px");
-    await expect(image).toHaveCSS("height", "150px");
+    const thumb = image.locator("..");
+    await expect(thumb).toHaveCSS("width", "150px");
+    await expect(thumb).toHaveCSS("height", "150px");
   }
   await expect(images.first()).toBeVisible();
   expect(calls.every(call => call.method === "GET")).toBe(true);

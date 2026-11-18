@@ -68,7 +68,7 @@ test("Escape and backdrop dismiss without writes; a failed request does not cons
   state.fail = false;
   await page.clock.runFor(15000);
   await expect(page.getByText("业务流转提醒", { exact: true })).toBeVisible();
-  await page.locator(".fixed.inset-0").click({ position: { x: 5, y: 5 } });
+  await page.locator("dialog[open]").click({ position: { x: 5, y: 5 } });
   await expect(page.getByText("业务流转提醒", { exact: true })).toHaveCount(0);
   expect(state.patches).toBe(0);
 });

@@ -17,9 +17,13 @@ async function main() {
     ? await prisma.organization.findUnique({ where: { id: 'cmwdhm9ph0000o4ug8gd68zhd' } })
     : await prisma.organization.findFirst({ where: { id: { startsWith: 'acc-org-' } }, orderBy: { createdAt: 'desc' } });
   assert(org, '需先运行 scripts/acceptance-run.ts 生成验收组织');
-  const operator = inPlace
-    ? await prisma.user.findFirst({ where: { id: { startsWith: 'acc-operator-' } }, orderBy: { createdAt: 'desc' }, select: { id: true } })
-    : { id: `acc-operator-${org.id}` };
+  const operator = await prisma.organizationMember.findFirst({
+    where: { organizationId: org.id, userId: { startsWith: 'acc-operator-' } },
+    orderBy: { createdAt: 'desc' }, select: { userId: true },
+  }).then(row => row ? { id: row.userId } : null)
+    ?? await prisma.organizationMember.findFirst({
+      where: { organizationId: org.id, role: 'owner' }, select: { userId: true },
+    }).then(row => row ? { id: row.userId } : null);
   assert(operator, '需先运行 scripts/acceptance-run.ts 生成双账号');
   const scope: WmsScope = { organizationId: org.id, workspaceId: 'default', actorUserId: operator.id };
   const warehouse = await prisma.wmsWarehouse.findFirst({ where: { organizationId: org.id, workspaceId: 'default' } });

@@ -23,8 +23,13 @@ const today = new Date().toISOString().slice(0, 10);
 const monthEnd = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
 
 async function resolveScope(): Promise<WmsScope> {
+  // 优先用采购验收组织的 owner：权限完整且已有供应商/商品主数据。
   const member = await prisma.organizationMember.findFirst({
-    where: { user: { status: 'active' } },
+    where: { user: { status: 'active' }, role: 'owner', organizationId: { startsWith: 'acc-org-' } },
+    orderBy: { createdAt: 'desc' },
+    select: { organizationId: true, userId: true },
+  }) ?? await prisma.organizationMember.findFirst({
+    where: { user: { status: 'active' }, role: 'owner' },
     orderBy: { createdAt: 'asc' },
     select: { organizationId: true, userId: true },
   });

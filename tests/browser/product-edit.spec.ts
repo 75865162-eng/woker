@@ -5,6 +5,11 @@ import type { TrialProductDraft } from "@/components/products/product-workbench-
 import type { Product } from "@/lib/products/types";
 import type * as DraftRepository from "@/lib/products/product-edit-draft-repository";
 
+// 编辑器外壳统一为原生 <dialog>（bare，无 aria-labelledby）；子模态 ProductEditDialog
+// 由 title 提供 aria-labelledby。测试针对“弹出的确认框/冲突框”时只取子模态，避免
+// 常驻的编辑器外壳被 getByRole('dialog') 一并匹配。
+const childDialog = (page: Page) => page.locator("dialog[aria-labelledby]");
+
 let bundle: string;
 let productionBundle: string;
 test.beforeAll(async () => {
@@ -114,7 +119,7 @@ test("without randomUUID the editor loads and preserves drafts across refresh", 
   await nameInput(page).fill("兼容浏览器草稿");
   await savedLocally(page);
   await page.reload();
-  await expect(page.getByRole("dialog")).toContainText("发现未提交的编辑内容");
+  await expect(childDialog(page)).toContainText("发现未提交的编辑内容");
   await page.getByRole("button", { name: "恢复草稿", exact: true }).click();
   await expect(nameInput(page)).toHaveValue("兼容浏览器草稿");
   expect(state.saves).toBe(0);
@@ -127,7 +132,7 @@ test("autosave, refresh restore, continue editing and explicit discard never com
   await savedLocally(page);
   expect(state.saves).toBe(0);
   await page.reload();
-  await expect(page.getByRole("dialog")).toContainText("发现未提交的编辑内容");
+  await expect(childDialog(page)).toContainText("发现未提交的编辑内容");
   await page.getByRole("button", { name: "恢复草稿", exact: true }).click();
   await expect(nameInput(page)).toHaveValue("我的未提交商品");
   await page.getByRole("button", { name: "取消", exact: true }).click();
@@ -137,7 +142,7 @@ test("autosave, refresh restore, continue editing and explicit discard never com
   await page.getByRole("button", { name: "放弃修改并关闭", exact: true }).click();
   await page.getByRole("button", { name: "打开编辑器" }).click();
   await expect(nameInput(page)).toHaveValue("原商品");
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(childDialog(page)).toHaveCount(0);
   expect(state.saves).toBe(0);
   expect(state.product.revision).toBe(1);
 });
@@ -148,14 +153,14 @@ test("409 retains draft; authoritative reload and explicit restore use latest CA
   await savedLocally(page);
   state.product = { ...state.product, revision: 2, purchasePrice: 21 };
   await page.getByRole("button", { name: "保存", exact: true }).click();
-  await expect(page.getByRole("dialog")).toContainText("该商品已被其他用户修改");
+  await expect(childDialog(page)).toContainText("该商品已被其他用户修改");
   await page.getByRole("button", { name: "加载最新数据", exact: true }).click();
   await page.getByRole("button", { name: "恢复我的修改", exact: true }).click();
   await expect(nameInput(page)).toHaveValue("我的修改");
   expect(state.saves).toBe(1);
   state.product = { ...state.product, revision: 3, purchasePrice: 35 };
   await page.getByRole("button", { name: "保存", exact: true }).click();
-  await expect(page.getByRole("dialog")).toContainText("商品版本冲突");
+  await expect(childDialog(page)).toContainText("商品版本冲突");
   await page.getByRole("button", { name: "加载最新数据", exact: true }).click();
   await page.getByRole("button", { name: "恢复我的修改", exact: true }).click();
   await page.getByRole("button", { name: "保存", exact: true }).click();
@@ -165,7 +170,7 @@ test("409 retains draft; authoritative reload and explicit restore use latest CA
   expect(state.product.purchasePrice).toBe(35);
   await page.getByRole("button", { name: "打开编辑器" }).click();
   await expect(nameInput(page)).toHaveValue("我的修改");
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(childDialog(page)).toHaveCount(0);
 });
 
 test("failed save, temporary leave and identity switching keep local edits isolated", async ({ page }) => {
@@ -178,18 +183,18 @@ test("failed save, temporary leave and identity switching keep local edits isola
   await expect(nameInput(page)).toHaveValue("保留草稿");
   await page.getByRole("button", { name: "暂时离开（保留草稿）", exact: true }).click();
   await page.getByRole("button", { name: "打开编辑器" }).click();
-  await expect(page.getByRole("dialog")).toContainText("发现未提交");
+  await expect(childDialog(page)).toContainText("发现未提交");
   await page.goto("http://127.0.0.1:43219/?user=user-2");
   await expect(nameInput(page)).toHaveValue("原商品");
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(childDialog(page)).toHaveCount(0);
   await page.goto("http://127.0.0.1:43219/?workspace=other");
   await expect(nameInput(page)).toHaveValue("原商品");
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(childDialog(page)).toHaveCount(0);
   await page.goto("http://127.0.0.1:43219/?org=other");
   await expect(nameInput(page)).toHaveValue("原商品");
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(childDialog(page)).toHaveCount(0);
   await page.goto("http://127.0.0.1:43219/");
-  await expect(page.getByRole("dialog")).toContainText("发现未提交");
+  await expect(childDialog(page)).toContainText("发现未提交");
 });
 
 test("uploaded file ids and video edits survive reload without re-upload or automatic formal save", async ({ page }) => {
@@ -228,7 +233,7 @@ test("discard during debounce cannot resurrect a draft, and reverting edits clea
   await page.getByRole("button", { name: "暂时离开（保留草稿）", exact: true }).click();
   await page.getByRole("button", { name: "打开编辑器" }).click();
   await expect(nameInput(page)).toHaveValue("原商品");
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(childDialog(page)).toHaveCount(0);
   expect(state.saves).toBe(0);
 });
 
@@ -252,7 +257,7 @@ test("import seed remains an unsaved new-product draft across reload", async ({ 
   await savedLocally(page);
   expect(state.saves).toBe(0);
   await page.reload();
-  await expect(page.getByRole("dialog")).toContainText("发现未提交");
+  await expect(childDialog(page)).toContainText("发现未提交");
   await page.getByRole("button", { name: "恢复草稿", exact: true }).click();
   await expect(nameInput(page)).toHaveValue("原商品");
   expect(state.product.revision).toBe(1);

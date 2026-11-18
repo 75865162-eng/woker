@@ -243,7 +243,10 @@ export function Dialog({
       aria-label={bare ? "对话框" : undefined}
       aria-modal="true"
       onCancel={(event) => {
+        // 阻止 cancel 冒泡到外层 dialog：嵌套浮层（如详情抽屉内再开确认抽屉）按 Escape 时，
+        // 只关闭栈顶这一层，不能连带关掉外层，否则外层内容（含待操作控件）会一起消失。
         event.preventDefault();
+        event.stopPropagation();
         if (!busy) {
           onClose();
         }
@@ -346,7 +349,9 @@ export function Drawer({
       aria-label={bare ? "抽屉" : undefined}
       aria-modal="true"
       onCancel={(event) => {
+        // 阻止 cancel 冒泡到外层 dialog：嵌套浮层按 Escape 时只关闭栈顶这一层。
         event.preventDefault();
+        event.stopPropagation();
         if (!busy) {
           onClose();
         }

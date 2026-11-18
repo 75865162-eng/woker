@@ -4,7 +4,10 @@ import { expect, test, type Page } from '@playwright/test';
 let bundle = '', styles = '';
 const screenshotDir = 'docs/wimoor-integration/ui/screenshots';
 test.beforeAll(async () => {
-  bundle = (await build({ entryPoints: ['tests/browser/wimoor-ui-harness.tsx'], bundle: true, write: false, platform: 'browser', format: 'iife', jsx: 'automatic', define: { 'process.env.NODE_ENV': '"development"' } })).outputFiles[0].text;
+  // 整体替换 process.env：harness 经 purchase-payment-records 间接引入 next/link → has-base-path，
+  // 后者在模块初始化时读 process.env.__NEXT_ROUTER_BASEPATH。仅替换 NODE_ENV 会残留裸 process 访问而崩溃，
+  // 与 wimoor-continue/sync-center 等同类 spec 保持一致的整体替换写法。
+  bundle = (await build({ entryPoints: ['tests/browser/wimoor-ui-harness.tsx'], bundle: true, write: false, platform: 'browser', format: 'iife', jsx: 'automatic', define: { 'process.env': '{"NODE_ENV":"development"}' } })).outputFiles[0].text;
   const [{ default: postcss }, { default: tailwind }] = await Promise.all([import('postcss'), import('@tailwindcss/postcss')]);
   styles = (await postcss([tailwind() as unknown as import('postcss').AcceptedPlugin]).process(await readFile('src/app/globals.css', 'utf8'), { from: 'src/app/globals.css' })).css;
   await mkdir(screenshotDir, { recursive: true });

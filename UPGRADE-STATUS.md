@@ -234,3 +234,44 @@
 **未闭环（规划文档 B2–B8 属复核/实测项，非本轮代码改动）**：慢查询日志与告警、索引随数据量的 EXPLAIN 复核、Redis8 下队列/锁/心跳专项、PG16 复跑迁移与压测——需在有真实数据量 + Docker/浏览器 + 生产版本环境执行，本机空库无法定论，如实留档
 
 **验证（Node 22.19.0）**：check:fast EXIT=0（**2367 测试 / 0 失败 / 0 cancelled**、lint 0 error、typecheck 通过、ui:guard 零回退；首次 2364 + B1 连接池 3 项）；build 单独跑 EXIT=0（首次与 check:fast 并行因内存竞争被 SIGKILL，非代码问题，重跑通过）；code gate 阻塞 0。P0 安全边界回归 26/26 通过（amazon-account-access/account-roles/amazon-ads-authorization/operations-replenishment/workspace-membership）。
+
+---
+
+## 十四、生产级部署形态 + 全功能 mock 数据验收（2026-11-18）
+
+目标：按生产构建产物与生产运行形态拉起系统，用隔离 mock/fixture 数据把所有功能域跑一遍，确认可用。**未加载任何真实 Amazon 凭据、未写入真实业务数据**；本地 Postgres/Redis Docker 容器仅作隔离数据环境。
+
+### 14.1 部署形态
+- 生产门禁 `code` 通过（10 项/阻塞 0）；`deploy` 门禁 3 项 FAIL 均为本地 mock 环境的**预期值**（`ERP_RUNTIME_MODE=local`、`NODE_ENV` 空、`AMAZON_API_EXECUTION_ROLE` 空），需生产 EnvironmentFile 注入，非代码缺陷，如实留档。
+- 用 `.next-build/standalone` 生产产物 + Next 15.5.25 以 `start:standalone` 拉起；启动时 shell 陈旧 `HOSTNAME=VM-...` 导致 ENOTFOUND，显式 `HOSTNAME=0.0.0.0` 后 Ready in 706ms；`GET /api/health` 返回 `{"status":"ok"}`（HTTP 200），全程无错误日志（仅 SQLite 实验特性无害警告）。
+
+### 14.2 服务端验收（独立组织/合成数据）
+| 项目 | 结果 |
+| --- | --- |
+| 采购全链路（主数据→计划→采购单→收货质检上架→计价→发票三单匹配→付款→总账凭证→应付核销） | 通过 41 项断言，金额 Decimal 精确（1000.000000 / 1130.000000） |
+| 装配冒烟 | 通过 7 项（事务回滚未落库） |
+| 发票入账冒烟 | 通过 3 组（回滚） |
+| 积分账务 | 通过 14/14（存量/预占/释放/跨月结转/上限） |
+| 积分消耗 | 通过 7/7（不足不阻断业务） |
+| 运营扩展（承运商/三方仓/滞销快照） | 通过 8 项 |
+| 扩展域（定价/评价/绩效/调价/销售计划/请款/换货） | 通过 12 项 |
+| Ads 五类报表（种子授权 + 假传输 + 回读，已清理种子） | 通过（campaign/advertised-product/search-term/placement/targeting） |
+
+### 14.3 浏览器 E2E（Playwright harness + mock，27 个 config）
+- 全部 27 个配置通过。代表性：amazon-ads 61、sellfox 44、sync-center 60、wimoor-ui 42、operations 19、product-edit 18、selection-research 14、agent-chain 6、three-core-port 11、wimoor-port 14、wms-risk 1 等。
+- `product-edit` 4 项失败经基线对照确认为 **main2 合并引入的回归**：编辑器外壳由自绘 div 改为原生 `<dialog>`（bare，`aria-label="对话框"`），使 `getByRole('dialog')` 恒匹配到外壳；测试改用 `dialog[aria-labelledby]` 精确定位子模态后 18/18 通过。
+- `notifications` / `operations` 各 1 项失败同为 main2 UI 重构后断言过时（浮层底座改原生 dialog、图片改 ImageThumb 固定尺寸容器）：更新选择器/尺寸断言后分别 2/2、19/19 通过。
+- `wimoor-ui`（42 用例）最初全挂，深入定位为**两个独立问题**，均已修复至 42/42 通过：
+  1. **测试基础设施缺陷**：该 spec 的 esbuild `define` 只替换 `process.env.NODE_ENV`，harness 经 `purchase-payment-records → next/link → has-base-path` 间接引入的模块在初始化时读 `process.env.__NEXT_ROUTER_BASEPATH`，残留裸 `process` 访问导致 bundle 运行时崩溃（整页白屏，0 行 0 按钮）。改为与其他同类 spec 一致的整体替换 `define: {'process.env': '{"NODE_ENV":"development"}'}` 后 41/42 通过。
+  2. **main2 合并引入的真实回归**（基线 5ae9fa2 对照通过、当前失败）：统一浮层底座 `Dialog`/`Drawer` 的 `onCancel` 相比原 `WorkbenchDialog` 丢了 `event.stopPropagation()`，导致嵌套浮层（采购单详情抽屉内再开"到货记录详情"抽屉）按 Escape 时 cancel 穿透到外层、连带关掉外层详情，进度区域随之消失。给两处 `onCancel` 补回 `stopPropagation()` 后 42/42 通过。
+
+### 14.4 本轮修改
+- `scripts/acceptance-run.ts`：独立验收组织为非 owner 复核账号补建 workspaceMembership（匹配正确的 assertWorkspaceAccess 校验）。
+- `scripts/smoke-ops-extensions.ts`、`scripts/smoke-ext-domains.ts`：账号/组织解析改为从真实 owner 成员获取，不再拼接 id 假设。
+- `tests/browser/notifications.spec.ts`、`tests/browser/operations.spec.ts`、`tests/browser/product-edit.spec.ts`：适配 main2 统一浮层底座与 ImageThumb 的 DOM/选择器。
+- `tests/browser/wimoor-ui.spec.ts`：esbuild define 改为整体替换 `process.env`（修复白屏）。
+- `src/components/ui/overlays.tsx`（**业务代码**）：`Dialog` / `Drawer` 的 `onCancel` 补回 `event.stopPropagation()`，修复 main2 合并丢失的嵌套浮层 Escape 隔离（恢复原 WorkbenchDialog 的正确行为）。
+
+### 14.5 最终验证
+- 服务生产形态常驻，`/api/health` 200；最终 `check:fast` EXIT=0（2367 测试 / 0 失败 / 0 cancelled、lint 0 error、typecheck 通过、ui:guard 零回退）；E2E 全部 27 个配置通过，所有修复项重跑确认。
+- 未闭环（如实、均为外部环境依赖，非本轮代码可定论项）：`--gate full`（需真实 Amazon 凭据/授权/远程拓扑）、生产 EnvironmentFile 3 项注入值（`ERP_RUNTIME_MODE`/`NODE_ENV`/`AMAZON_API_EXECUTION_ROLE`）。

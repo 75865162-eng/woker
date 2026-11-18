@@ -93,6 +93,11 @@ async function bootstrap() {
   for (const id of [OPERATOR, APPROVER]) {
     await prisma.user.create({ data: { id, email: `${id}@acceptance.invalid`, name: id, passwordHash: 'not-a-password' } });
     await prisma.organizationMember.create({ data: { organizationId: ORG, userId: id, role: role ?? (id === OPERATOR ? 'owner' : 'operations_supervisor') } });
+    // 非 owner 复核账号通过 assertWorkspaceAccess 需要显式工作区成员关系；
+    // 独立验收组织需补齐，否则收货→财务动作会被正确的工作区校验拦截。
+    if (!IN_PLACE) {
+      await prisma.workspaceMembership.create({ data: { organizationId: ORG, workspaceId: WS, userId: id } });
+    }
   }
   await prisma.supplier.create({ data: { id: SUPPLIER, organizationId: ORG, name: '验收供应商', normalizedName: `${ORG}-${RUN}` } });
   const product = await prisma.productRecord.create({ data: { id: PRODUCT, organizationId: ORG, workspaceId: WS, userId: OPERATOR, sku: `ACC-SKU-${RUN}`, chineseName: '验收商品', payload: {} } });
