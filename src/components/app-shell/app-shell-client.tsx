@@ -14,7 +14,6 @@ import { cn } from "@/lib/utils";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
 import { AppShellUserProvider } from "./app-shell-context";
 import { BusinessNavigationDrawer } from "./business-navigation-drawer";
-import { DensitySwitcher } from "./density-switcher";
 import { WorkspaceScopeSelector } from "./workspace-scope-selector";
 import { setWorkspaceApiCacheScope } from "@/lib/workspace/workspace-api-cache";
 
@@ -234,7 +233,6 @@ export function AppShellClient({
             {subtitle ? <p className="truncate text-meta text-muted">{subtitle}</p> : null}
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <DensitySwitcher />
             <BusinessNavigationDrawer groups={visibleNavigationGroups} isActive={isNavigationActive} />
             {actions}
             <WorkspaceScopeSelector />

@@ -6,8 +6,7 @@
  * 第 1 层：设计令牌
  * ----------------------------------------------------------------------------
  * 全部为语义令牌。业务代码只允许引用本层，不允许写裸色值 / 裸字号 / 裸圆角。
- * 密度相关令牌（行高、内距、控件高、正文字号）会被 html[data-density] 覆盖，
- * 见文件底部「密度模式」区块。
+ * 行高、内距、控件高与文字使用统一的紧凑布局。
  * ========================================================================== */
 
 :root {
@@ -89,7 +88,7 @@
   --shell-topbar: 48px;
   --shell-tabbar: 36px;
 
-  /* ---------- 密度：standard 默认（html[data-density] 覆盖） ---------- */
+  /* ---------- 紧凑布局 ---------- */
   --row-h: 40px;
   --cell-py: 10px;
   --cell-px: 12px;
@@ -98,7 +97,7 @@
 
   /*
    * 带缩略图的行：商品主档首列是 60×60 图片，行高必须容下它。
-   * 这是内容约束而非排版偏好，因此三档密度下都固定 61px，
+   * 这是内容约束而非排版偏好，因此固定 61px，
    * 虚拟滚动的 rowHeight 也按这个值计算。
    */
   --row-h-thumb: 61px;
@@ -401,15 +400,8 @@ main table:not(.ads-main *):not(.ads-synced-shell *):not(.sellfox-ui *):not(.erp
   font-variant-numeric: tabular-nums;
 }
 
-/* ============================================================================
- * 第 4 层：密度模式
- * ----------------------------------------------------------------------------
- * 由 <DensityProvider> 写 html[data-density]，值持久化到 localStorage。
- * 三档真实改变：表格行高、单元格内距、控件高度、正文字号、模块标题字号。
- * 不改变：页面标题、表头字号（保持 12px，再小不可读）。
- * ========================================================================== */
-
-html[data-density="compact"] {
+/* 全局采用紧凑布局；广告模块保留自身控件尺寸。 */
+:root {
   --row-h: 32px;
   --cell-py: 6px;
   --cell-px: 10px;
@@ -424,40 +416,6 @@ html[data-density="compact"] {
   --text-table--line-height: 18px;
   --text-section: 14px;
   --text-section--line-height: 18px;
-}
-
-html[data-density="standard"] {
-  --row-h: 40px;
-  --cell-py: 10px;
-  --cell-px: 12px;
-  --control-h: 36px;
-  --control-h-sm: 28px;
-  --pad-card: 16px;
-  --gap-section: 16px;
-  --gap-field: 12px;
-  --text-body: 13px;
-  --text-body--line-height: 20px;
-  --text-table: 13px;
-  --text-table--line-height: 20px;
-  --text-section: 15px;
-  --text-section--line-height: 20px;
-}
-
-html[data-density="comfortable"] {
-  --row-h: 48px;
-  --cell-py: 14px;
-  --cell-px: 14px;
-  --control-h: 40px;
-  --control-h-sm: 30px;
-  --pad-card: 20px;
-  --gap-section: 20px;
-  --gap-field: 16px;
-  --text-body: 14px;
-  --text-body--line-height: 22px;
-  --text-table: 14px;
-  --text-table--line-height: 22px;
-  --text-section: 15px;
-  --text-section--line-height: 22px;
 }
 
 /* 广告模块自带一套以 --control-h 计算的控件尺寸，固定回 40px 保持原貌 */

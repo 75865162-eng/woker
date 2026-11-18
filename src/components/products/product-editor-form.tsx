@@ -7,7 +7,6 @@ import type { ProductDraft, ProductStatus } from "@/lib/products/types";
 import { newProductStatusOptions, productStatusOptions } from "@/data/products";
 import { getCurrentWorkflowAssignee, formatAssigneePreview } from "@/lib/products/workflow";
 import type { ProductEditorDraft } from "./product-workbench-model";
-import { ProductManagementFields } from "./product-management-fields";
 import { ProductEditorImagePanel } from "./product-editor-image-panel";
 import { ProductWorkflowPanel } from "./product-workflow-panel";
 import { ConclusionExcelField, MultiSelectField, ReadonlyField } from "./product-editor-fields";
@@ -43,7 +42,6 @@ export function ProductEditorForm(p: Props) {
     <section className="space-y-4">
       <Card><CardContent className="grid gap-5 p-5 lg:grid-cols-[280px_minmax(0,1fr)]">
         <fieldset disabled={!ready} className="min-w-0">
-          <fieldset disabled={!ready} className="min-w-0"><ProductManagementFields value={draft.management} onChange={management => setField("management", management)} workspaceId={p.workspaceId} /></fieldset>
           {!ready ? <p className="text-xs text-muted">完整图片附件待详情对齐</p> : null}
           <ProductEditorImagePanel imageAssets={draft.imageAssets} uploadingFiles={images.imageUploads} onPreview={asset => attachments.openImagePreview(asset, asset.thumbUrl)} onUpload={images.handleImageUpload} onCancelUpload={images.cancelImageUpload} onRetryUpload={images.retryImageUpload} onRemove={images.removeImage} />
         </fieldset>

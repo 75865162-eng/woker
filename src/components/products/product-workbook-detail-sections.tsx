@@ -214,7 +214,7 @@ export function ProductWorkbookDetailSections({
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="thin-scrollbar h-fit overflow-x-auto overflow-y-hidden">
+        <CardContent className="erp-table-reset thin-scrollbar h-fit overflow-x-auto overflow-y-hidden">
           <table className="w-[1960px] table-fixed text-left text-xs">
             <colgroup>
               {[146, 60, 76, 110, 110, 110, 110, 110, 110, 76, 40, 120, 120, 120, 120, 120, 136, 166].map((width, index) => (
@@ -357,7 +357,7 @@ export function ProductWorkbookDetailSections({
         <CardHeader>
           <CardTitle>区域 4：产品改进点</CardTitle>
         </CardHeader>
-        <CardContent className="thin-scrollbar overflow-auto">
+        <CardContent className="erp-table-reset thin-scrollbar overflow-auto">
           <ImprovementTable
             detail={detail}
             improvement={detail.improvement}
