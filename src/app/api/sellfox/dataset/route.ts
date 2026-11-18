@@ -23,7 +23,7 @@ export async function GET(request: Request) {
   }
 
   const scope = workspaceScopeFromRequest(request);
-  const fullScope = { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId };
+  const fullScope = { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId, userId: permission.user.id };
   const page = clamp(Number(url.searchParams.get("page")), 1, 10_000, 1);
   const pageSize = clamp(Number(url.searchParams.get("pageSize")), 1, 200, 20);
 

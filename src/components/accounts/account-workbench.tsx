@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAccountWorkbookTransfer } from "./use-account-workbook-transfer";
 import { Archive, Download, Search, Upload, UserCog, UserPlus, UsersRound } from "lucide-react";
 import { AccountMembersTable } from "./account-members-table";
-import { AccountRolePanel } from "./account-role-panel";
 import { ListPageTemplate } from "@/components/templates/page-templates";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,14 +14,27 @@ import { useAccountRoles } from "./use-account-roles";
 import { type RoleCatalogItem } from "@/lib/accounts/role-catalog";
 import { createAccountWorkbookRows } from "@/lib/accounts/account-workbook";
 import { type TeamAccountRecord } from "@/lib/accounts/team-roster";
-import { type AccountStatus, type RoleId, type Account, fieldClass, accountPageSize, getFallbackPassword, canManageAccount, withLoadedAccountState, loadAccountsFromApi, saveAccountsToApi } from "./account-workbench-api";
+import { type AccountStatus, type RoleId, type Account, fieldClass, accountPageSize, getFallbackPassword, canManageAccount, canManageRole, withLoadedAccountState, loadAccountsFromApi, saveAccountsToApi } from "./account-workbench-api";
 import { MetricCard, ArchivedAccountsDialog, RoleDialog, RoleMembersDialog, AccountDialog, EditAccountDialog } from "./account-workbench-dialogs";
+import { AccessCenter } from "./access-center";
+import { AccessConfigPanels } from "./access-config-panels";
+
+type AccountTab = "members" | "access";
+
+function normalizeAccountTab(value: string | null): AccountTab {
+  // 旧 tab=roles 与文档新 tab=access 都归到授权中心。
+  if (value === "access" || value === "roles") return "access";
+  return "members";
+}
+
 export function AccountWorkbench({
   initialAccounts,
   initialRoles: serverRoles,
+  canEditAccess = false,
 }: {
   initialAccounts?: TeamAccountRecord[];
   initialRoles?: RoleCatalogItem[];
+  canEditAccess?: boolean;
 }) {
   const [accounts, setAccounts] = useState<Account[]>(() =>
     (initialAccounts ?? []).map((account) => withLoadedAccountState({
@@ -37,8 +50,12 @@ export function AccountWorkbench({
       sourceCreatedAt: account.sourceCreatedAt ?? "",
     })) as Account[],
   );
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlTab = normalizeAccountTab(searchParams.get("tab"));
+  const urlRole = searchParams.get("role")?.trim() || "";
   const [accountSaveError, setAccountSaveError] = useState("");
-  const [activeTab, setActiveTab] = useState<"members" | "roles">("members");
+  const [activeTab, setActiveTabState] = useState<AccountTab>(urlTab);
   const [pointsByUser, setPointsByUser] = useState<Record<string, PointsRow>>({});
   const [canAdjustPoints, setCanAdjustPoints] = useState(false);
   const [pointsReloadKey, setPointsReloadKey] = useState(0);
@@ -51,7 +68,32 @@ export function AccountWorkbench({
   const [archivedAccountsOpen, setArchivedAccountsOpen] = useState(false);
   const [accountPage, setAccountPage] = useState(1);
   const visibleAccounts = useMemo(() => accounts.filter((account) => account.status !== "archived"), [accounts]);
-  const { roles, visibleRoles, activeRole, setActiveRoleId, activeRoleMembers, availableRoleTemplates, newRoleOpen, setNewRoleOpen, roleMembersOpen, setRoleMembersOpen, roleSavedAt, roleRevision, togglePermission, toggleModulePermissions, updateActiveRole, saveRoles, addRole, deleteRole } = useAccountRoles(serverRoles, visibleAccounts);
+  const { roles, visibleRoles, activeRole, setActiveRoleId, activeRoleMembers, availableRoleTemplates, newRoleOpen, setNewRoleOpen, roleMembersOpen, setRoleMembersOpen, addRole, deleteRole } = useAccountRoles(serverRoles, visibleAccounts);
+
+  // tab 切换同步到 URL，保持可分享/可回退。
+  function setActiveTab(tab: AccountTab) {
+    setActiveTabState(tab);
+    const params = new URLSearchParams(searchParams.toString());
+    if (tab === "members") params.delete("tab");
+    else params.set("tab", "access");
+    if (tab !== "access") params.delete("role");
+    const query = params.toString();
+    router.replace(query ? `/accounts?${query}` : "/accounts", { scroll: false });
+  }
+
+  // URL → state：支持浏览器前进/后退与外部深链。
+  useEffect(() => {
+    setActiveTabState(urlTab);
+  }, [urlTab]);
+
+  // 旧 tab=roles 深链统一规范化为 tab=access（保留 role 选中参数）。
+  useEffect(() => {
+    if (searchParams.get("tab") === "roles") {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("tab", "access");
+      router.replace(`/accounts?${params.toString()}`, { scroll: false });
+    }
+  }, [searchParams, router]);
 
   useEffect(() => {
     let canceled = false;
@@ -217,7 +259,7 @@ export function AccountWorkbench({
     <ListPageTemplate header={<div className="space-y-[var(--gap-section)]">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="inline-flex w-fit items-center gap-1 border-b border-border" role="tablist" aria-label="账号权限视图">
-          {([ ["members", "成员"], ["roles", "角色与权限"] ] as const).map(([tab, label]) => (
+          {([ ["members", "成员"], ["access", "授权中心"] ] as const).map(([tab, label]) => (
             <button key={tab} aria-selected={activeTab === tab} className={`border-b-2 px-4 py-2 text-sm font-semibold ${activeTab === tab ? "border-brand text-brand" : "border-transparent text-muted hover:text-foreground"}`} onClick={() => setActiveTab(tab)} role="tab" type="button">
               {label}
             </button>
@@ -311,14 +353,17 @@ export function AccountWorkbench({
 
       </section>
       </> : <>
-        <AccountRolePanel
-          roles={visibleRoles} accounts={visibleAccounts} activeRole={activeRole}
-          revision={roleRevision} savedAt={roleSavedAt} onSelect={setActiveRoleId}
-          onAdd={() => setNewRoleOpen(true)}
-          onMembers={id => { setActiveRoleId(id); setRoleMembersOpen(true); }}
-          onDelete={deleteRole} onSave={() => void saveRoles()} onUpdate={updateActiveRole}
-          onTogglePermission={togglePermission} onToggleModule={toggleModulePermissions}
+        <AccessCenter
+          initialSubjectId={urlRole || undefined}
+          roleManagement={{
+            roles: visibleRoles.map((role) => ({ id: role.id, name: role.name, description: role.description, memberCount: role.memberCount })),
+            canManage: (id) => canManageRole(id as RoleId),
+            onAdd: () => setNewRoleOpen(true),
+            onMembers: (id) => { setActiveRoleId(id as RoleId); setRoleMembersOpen(true); },
+            onDelete: (id) => deleteRole(id as RoleId),
+          }}
         />
+        <AccessConfigPanels canEdit={canEditAccess} />
       <details className="rounded-md border border-border bg-surface">
         <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-foreground">SKU 流转权限说明</summary>
         <Card className="border-0 shadow-none">

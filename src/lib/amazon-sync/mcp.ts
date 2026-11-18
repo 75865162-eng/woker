@@ -338,7 +338,12 @@ async function invokeRegisteredAmazonMcp(identity: McpIdentity, tool: AmazonMcpT
   let requested: AmazonAccessScope[] = [];
   try {
     if (sessionIdentities.has(identity) && !amazonAccountReadTools.includes(tool)) throw new SyncInputError("会话数据接口只允许读取。", 403);
-    if (!await credentialAllowsTool(identity, tool) || !amazonMcpTools.some(([name]) => name === tool)) throw new SyncInputError("工具不可访问。", 403);
+    if (!await credentialAllowsTool(identity, tool, prisma, {
+      organizationId: identity.organizationId,
+      workspaceId: identity.workspaceId,
+      userId: identity.userId,
+      provider: "amazon",
+    }) || !amazonMcpTools.some(([name]) => name === tool)) throw new SyncInputError("工具不可访问。", 403);
     const args = argumentsObject(raw, canonicalMcpTool(tool));
     if (["promotions_get", "promotions_get_items"].includes(tool) && (typeof args.promotionId !== "string" || !args.promotionId.trim())) throw new SyncInputError("必须指定 promotionId。", 422);
     return await withAmazonMcpBoundary({ ...scope, userId: actor, credentialId: boundaryCredentialId(identity), tool, action }, async () => {

@@ -1,6 +1,7 @@
 import { amazonMcpToolDefinitions, amazonMcpTools } from "@/lib/amazon-sync/mcp-tool-registry";
 import { researchCredentialTools } from "./research-grants";
 import { prisma } from "@/lib/db/prisma";
+import { getMcpToolGrantScope } from "@/lib/accounts/effective-access";
 import type { Prisma } from "@prisma/client";
 
 export const amazonAccountReadTools = amazonMcpToolDefinitions.filter(tool => tool.operationMode === "READ_ONLY").map(tool => tool.name);
@@ -16,6 +17,27 @@ export async function accountToolsForLili(credential: ToolCredential, db: Prisma
   if (new URL(grant.resource).pathname !== "/api/lili/mcp") return withAccountReads(credential.tools);
   return withAccountReads(registered);
 }
-export async function credentialAllowsTool(credential: ToolCredential, tool: string, db: Prisma.TransactionClient = prisma): Promise<boolean> {
-  return (await accountToolsForLili(credential, db)).includes(tool);
+export type McpToolAccessScope = {
+  organizationId: string;
+  workspaceId: string;
+  userId: string;
+  provider: "amazon" | "sellfox";
+  roleId?: string;
+};
+
+export async function credentialAllowsTool(
+  credential: ToolCredential,
+  tool: string,
+  db: Prisma.TransactionClient = prisma,
+  accessScope?: McpToolAccessScope,
+): Promise<boolean> {
+  const allowed = await accountToolsForLili(credential, db);
+  if (!allowed.includes(tool)) return false;
+  // P0 并集：存在明确 MCP_TOOL 授权时，凭据工具集必须与授权集取交集。
+  // 双读期无授权记录时返回 null，回退凭据自身 tools，避免破坏既有 MCP 客户端。
+  if (accessScope) {
+    const granted = await getMcpToolGrantScope({ ...accessScope, db });
+    if (granted && !granted.includes(tool)) return false;
+  }
+  return true;
 }

@@ -3538,6 +3538,34 @@ model AmazonRoleDataAccessGrant {
   @@index([organizationId, workspaceId, roleId, enabled], map: "AmazonRoleGrant_scope_subject_enabled_idx")
 }
 
+/// 账号权限中心：统一的角色/成员 × 功能/数据授权表。
+/// subjectType=ROLE|MEMBER；resourceType=MODULE|AMAZON_SELLER|AMAZON_PROFILE|SELLFOX_STORE|SELLFOX_DOMAIN|MCP_TOOL|APPROVAL|POINTS。
+/// 组织级资源（如 MODULE/APPROVAL/POINTS）用 workspaceId="default" 承载，计算层忽略其工作区过滤。
+/// scopeJson 内的金额（amountMin/amountMax/maxRequestAmount 等）一律以字符串存储，避免精度丢失。
+/// 迁移期不删旧表，旧表与新表双读，计算统一走 effective-access service。
+model ResourceGrant {
+  id             String   @id @default(cuid())
+  organizationId String
+  workspaceId    String   @default("default")
+  subjectType    String
+  subjectId      String
+  resourceType   String
+  resourceId     String
+  scopeJson      Json?
+  actions        String[] @default([])
+  enabled        Boolean  @default(true)
+  source         String   @default("MANUAL")
+  revision       Int      @default(1)
+  createdBy      String?
+  updatedBy      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, workspaceId, subjectType, subjectId, resourceType, resourceId], map: "ResourceGrant_scope_subject_resource_key")
+  @@index([organizationId, workspaceId, subjectType, subjectId, enabled], map: "ResourceGrant_subject_lookup_idx")
+  @@index([organizationId, resourceType, resourceId, enabled], map: "ResourceGrant_resource_lookup_idx")
+}
+
 model LiliOAuthClient {
   id           String   @id
   redirectUris String[]
