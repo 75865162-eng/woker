@@ -6,6 +6,16 @@ import { sellfoxSortKey, sellfoxSqlOrder } from "./browse-sort";
 const projectedColumns = ["dxmPublishState", "fulfillment", "brand", "amazonBrand", "rating", "ratingCount", "productTags", "openDate", "firstSaleDate", "bsrRank", "bsrCategory", "purchaseCost", "fbaFees", "referralFee", "totalFee", "headTripCost", "buyBoxWinner", "reservedQty", "shippingPrice", "profitPrice", "profitRate", "listingQuantity", "unsellable", "warehousing"];
 type Scope = { organizationId: string; workspaceId: string };
 
+/**
+ * P1 3.2: read the flattened profile instead of the two-layer-join view only when the
+ * switch is explicitly on. The profile table's columns mirror the view exactly, so this
+ * is a pure table-name substitution — no filter/select changes, zero口径 risk when off.
+ * Off by default until the reconciliation script confirms 0 diff.
+ */
+export function sellfoxListingSource() {
+  return process.env.SELLFOX_LISTING_PROFILE_READ_ENABLED === "true" ? '"SellfoxListingProfile"' : "sellfox_listing_current";
+}
+
 /** Listing current already joins Store and the last complete Head. Never rejoin its payload. */
 export function listingsReadSql(query: SellfoxBrowseQuery, scope: Scope, exporting = false) {
   const scopeFilters = [Prisma.sql`s."organizationId"=${scope.organizationId} AND s."workspaceId"=${scope.workspaceId}`];
@@ -146,13 +156,14 @@ export function listingsReadSql(query: SellfoxBrowseQuery, scope: Scope, exporti
   // NOT MATERIALIZED lets count/totals prune display columns and lets the page use
   // an ordered index + LIMIT. A shared wide materialized CTE defeats both.
   // Facets intentionally ignore row filters, but keep organization/workspace/shop/site.
+  const listingSource = Prisma.raw(sellfoxListingSource());
   const facets = exporting ? Prisma.empty : Prisma.sql`,facet_source AS MATERIALIZED (
-    SELECT s.brand,s."productTagNames",s."dxmPublishState",s."bsrCategory" FROM sellfox_listing_current s WHERE ${Prisma.join(scopeFilters, " AND ")}
+    SELECT s.brand,s."productTagNames",s."dxmPublishState",s."bsrCategory" FROM ${listingSource} s WHERE ${Prisma.join(scopeFilters, " AND ")}
   )`;
   return Prisma.sql`WITH filtered AS NOT MATERIALIZED (
     SELECT ${columns},s."ratingValue",s.name AS "storeName",s.marketplace AS "storeSite",
       s.title AS "listingTitle",s.price AS "listingPrice",s."parentAsin" AS "listingParentAsin",s."mainImage" AS "listingMainImage"
-    FROM sellfox_listing_current s WHERE ${Prisma.join(filters, " AND ")}
+    FROM ${listingSource} s WHERE ${Prisma.join(filters, " AND ")}
   ), counts AS MATERIALIZED (SELECT currency,count(*)::int AS count FROM filtered GROUP BY currency)${facets}
   SELECT (SELECT COALESCE(sum(count),0)::int FROM counts) AS total,
     (SELECT COALESCE(jsonb_agg(c),'[]'::jsonb) FROM counts c) AS totals,
