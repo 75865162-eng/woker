@@ -3,6 +3,7 @@ aecob.com, www.aecob.com {
 
 	reverse_proxy 127.0.0.1:3000 {
 		header_up Host {host}
+		header_up X-Erp-Client-Ip {http.request.remote.host}
 	}
 }
 
@@ -11,6 +12,7 @@ aoocy.com, www.aoocy.com {
 
 	reverse_proxy 127.0.0.1:3000 {
 		header_up Host {host}
+		header_up X-Erp-Client-Ip {http.request.remote.host}
 	}
 }
 
@@ -19,6 +21,7 @@ http://159.75.203.221, http://159-75-203-221.sslip.io {
 
 	reverse_proxy 127.0.0.1:3000 {
 		header_up Host {host}
+		header_up X-Erp-Client-Ip {http.request.remote.host}
 		header_down Location ^http://localhost:3000(.*)$ http://{host}$1
 	}
 }
@@ -29,6 +32,7 @@ https://159.75.203.221, https://159-75-203-221.sslip.io {
 
 	reverse_proxy 127.0.0.1:3000 {
 		header_up Host {host}
+		header_up X-Erp-Client-Ip {http.request.remote.host}
 		header_down Location ^http://localhost:3000(.*)$ https://{host}$1
 	}
 }
@@ -38,6 +42,7 @@ http://123.207.47.225 {
 
 	reverse_proxy 127.0.0.1:3000 {
 		header_up Host {host}
+		header_up X-Erp-Client-Ip {http.request.remote.host}
 		header_down Location ^http://localhost:3000(.*)$ http://{host}$1
 	}
 }
