@@ -81,3 +81,5 @@ sudo npm run ops:credential-audit -- --env /opt/amazon-ad-bulk-operation/.env
 - 状态含义：`OK` 正常；`DUE` 进入 60 天（Secret 为 150 天）提醒窗口；`EXPIRED` / `OVERDUE` 阻断（退出码 1）；`NOT_TRACKED` 表示未登记签发日期，必须补齐。
 - Access Token 已在客户端按 `tokenRefreshSkewMs` 提前刷新，无需每次请求换取新 token；审计不触发任何 Amazon 网络请求或数据库写入。
 - LWA Client Secret 轮换可用 Application Management API（grantless `POST /applications/2023-11-30/clientSecret`）自动化，轮换后必须同步更新 EnvironmentFile 与签发日期；加密密钥（`*_ENCRYPTION_KEY`）永不轮换，与数据库备份分开保管。
+
+**版本核对结论（2026-11-19，对照官方文档）**：Product Pricing v2022-05-01 仅提供 `getCompetitiveSummary` / `getFeaturedOfferExpectedPriceBatch`，没有卖家自有报价接口，因此 `getOwnPrices` 保留 v0 `/products/pricing/v0/price`，不得误迁；竞品摘要已用 2022-05-01。结算报告已使用新版 `GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2`（旧类型 2026-11-11 移除），无需变更。Orders v2026-01-01 / Finances v2024-06-19 / FBA Inbound v2024-03-20 / Listings 2021-08-01 / Catalog 2022-04-01 均保持现行版本。
