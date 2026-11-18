@@ -191,7 +191,7 @@ test("successful task opens seller-bound snapshot pages and failed authorization
 });
 
 test("overview follows the reviewed desktop layout and remains usable on narrow screens", async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 1355 });
+  await page.setViewportSize({ width: 1280, height: 1800 });
   await setup(page);
   const now = new Date(), recent = new Date(now.getTime() - 25 * 60000).toISOString();
   const next = new Date(now.getTime() + 35 * 60000).toISOString();
@@ -211,6 +211,29 @@ test("overview follows the reviewed desktop layout and remains usable on narrow 
   });
   await page.getByRole("button", { name: "刷新", exact: true }).click();
   await expect(page.getByRole("img", { name: "最近 24 小时成功与失败任务柱形图" })).toBeVisible();
+
+  // 字段级汇总开关：矩阵提供逐列显隐，「数据域 / 范围」为固定识别列。
+  const healthTable = page.getByRole("table", { name: "数据同步健康状态" });
+  await expect(healthTable).toBeVisible();
+  const columnToggle = page.getByRole("button", { name: /^列/ });
+  await expect(columnToggle).toBeVisible();
+  await columnToggle.click();
+  const columnMenu = page.getByRole("menu");
+  await expect(columnMenu.getByRole("checkbox", { name: "下次同步" })).toBeChecked();
+  await expect(healthTable.getByRole("columnheader", { name: "下次同步" })).toBeVisible();
+  const nextSyncCheckbox = columnMenu.getByRole("checkbox", { name: "下次同步" });
+  await nextSyncCheckbox.evaluate((el: HTMLInputElement) => el.click());
+  await expect(healthTable.getByRole("columnheader", { name: "下次同步" })).toHaveCount(0);
+  await expect(healthTable.getByRole("columnheader", { name: "数据域 / 范围" })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  // 行内同步进度：SYNCING 行展示真实处理计数，不臆造总页数/百分比。
+  const progress = healthTable.getByTestId("sync-inline-progress");
+  await expect(progress).toBeVisible();
+  await expect(progress).toHaveAttribute("aria-valuetext", /已处理 2 页 25 条/);
+  await expect(progress).toContainText("拉取中");
+  await expect(progress).toContainText("已处理 2 页 / 25 条");
+
   const metrics = page.getByTestId("sync-center-metrics");
   expect(await metrics.locator(":scope > div").count()).toBe(7);
   const boxes = await metrics.locator(":scope > div").evaluateAll(items => items.map(el => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y }; }));

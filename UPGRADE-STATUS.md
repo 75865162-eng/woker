@@ -275,3 +275,13 @@
 ### 14.5 最终验证
 - 服务生产形态常驻，`/api/health` 200；最终 `check:fast` EXIT=0（2367 测试 / 0 失败 / 0 cancelled、lint 0 error、typecheck 通过、ui:guard 零回退）；E2E 全部 27 个配置通过，所有修复项重跑确认。
 - 未闭环（如实、均为外部环境依赖，非本轮代码可定论项）：`--gate full`（需真实 Amazon 凭据/授权/远程拓扑）、生产 EnvironmentFile 3 项注入值（`ERP_RUNTIME_MODE`/`NODE_ENV`/`AMAZON_API_EXECUTION_ROLE`）。
+
+---
+
+## 十五、同步中心：字段级汇总开关 + 行内同步进度（2026-11-18）
+
+参考《Amazon SP-API + Ads API 独立同步中心 UI 设计文档》，在现有同步中心（`/operations?view=overview`）的「数据同步健康状态」矩阵落地两个能力，不新建路由、不臆造数据、沿用现有组件底座：
+
+- **字段级汇总开关**：`SourceTable` 启用 `StandardDataTable` 已有的 `columnToggle`，用户可逐列开关「最近成功 / 覆盖范围 / 当前状态 / 下次同步」等汇总字段；「数据域 / 范围」作为识别列通过 `pinnedColumnKeys` 固定不隐藏。开关只影响展示，不改变取数与统计口径。
+- **行内同步进度**：新增 `SyncInlineProgress`，当来源 `health = SYNCING` 且存在 `latestTask` 时，在「当前状态」列状态徽章下方渲染行内进度条。文案来自服务端已有的真实字段（`stage` 映射 + `pagesCompleted` / `processedCount`），不臆造总页数或百分比；无分母用不确定态流动条表达「进行中」。阶段映射覆盖 `REPORT_CREATING`→报表生成中、`REPORT_PARSING`→下载解析中、`DOWNLOAD`→下载中、`FETCHING`→拉取中等真实 stage。
+- **验证**：E2E `sync-center` 全 60 用例通过（新增断言覆盖列开关显隐 / 固定列 / 进度条真实计数），`check:fast` EXIT=0（2367 测试 0 失败、lint 0 error、ui:guard 零回退）。未使用 Mock 冒充业务数据，fixture 仅为浏览器组件测试的隔离输入。

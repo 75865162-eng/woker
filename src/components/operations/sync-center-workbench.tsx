@@ -54,6 +54,22 @@ const domainModeName: Record<string, string> = { snapshot: "完整快照", incre
 const authorizationName: Record<string, string> = { verified: "已具备适配器核验", pending: "待官方角色／站点核验", separate: "需独立授权" };
 const healthNames: Record<string, string> = { FRESH: "正常", STALE: "过期", NOT_SYNCED: "待首次同步", SYNCING: "同步中", DISABLED: "已停用", BLOCKED: "已阻断", FAILED: "失败" };
 function StateBadge({ value }: { value: string }) { return <Badge className="rounded px-1.5 py-0 text-label font-medium border-transparent" tone={["SUCCEEDED", "FRESH", "CONFIGURED"].includes(value) ? "green" : ["FAILED", "BLOCKED", "ERROR"].includes(value) ? "red" : ["STALE", "RETRY_WAIT", "PARTIAL_SUCCESS"].includes(value) ? "amber" : ["RUNNING", "SYNCING"].includes(value) ? "blue" : "gray"}>{taskLabels[value] ?? healthNames[value] ?? (value === "CONFIGURED" ? "已验证参与站点" : value === "NOT_CONFIGURED" ? "待验证" : value)}</Badge>; }
+// 行内同步进度：只展示服务端已有的真实计数，不臆造总页数/百分比。
+// 阶段文案映射 REPORT_* / DOWNLOAD 等真实 stage；无分母时用不确定态流动条表达「进行中」。
+const syncStageNames: Record<string, string> = { REPORT_CREATING: "报表生成中", REPORT_CREATE: "报表生成中", REPORT_PARSING: "下载解析中", REPORT_PUBLISH: "报表发布中", DOWNLOAD: "下载中", FETCHING: "拉取中", FETCHING_DETAILS: "详情补集中", PAGE_COMMIT: "分页提交中", PERSISTING: "入库中", VERIFY: "校验中" };
+function SyncInlineProgress({ task }: { task: SyncTaskView }) {
+  const stage = syncStageNames[task.stage] ?? (task.stage ? domainModeName[task.mode] ?? task.stage : domainModeName[task.mode] ?? "同步中");
+  const pages = Number.isFinite(task.pagesCompleted) ? task.pagesCompleted : 0;
+  const rows = Number.isFinite(task.processedCount) ? task.processedCount : 0;
+  return (
+    <div className="mt-1.5" data-testid="sync-inline-progress" role="progressbar" aria-label="同步进度" aria-valuetext={`${stage}，已处理 ${pages} 页 ${rows} 条`}>
+      <div className="h-1 overflow-hidden rounded-full bg-surface">
+        <div className="h-full w-1/3 animate-pulse rounded-full bg-brand" />
+      </div>
+      <span className="mt-0.5 block text-xs text-muted">{stage} · 已处理 {pages} 页 / {rows} 条</span>
+    </div>
+  );
+}
 const inputClass = "min-h-9 w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground";
 function Field({ name, children, inline = false }: { name: string; children: React.ReactNode; inline?: boolean }) { const id = useId(); return <div className={inline ? "flex min-w-0 items-center gap-2 text-xs text-muted" : "grid min-w-0 gap-1 text-xs text-muted"}><label className="shrink-0 whitespace-nowrap" htmlFor={id}>{name}</label>{cloneElement(children as React.ReactElement<{ id?: string }>, { id })}</div>; }
 function Panel({ title, children, action, flush = false }: { title: string; children: React.ReactNode; action?: React.ReactNode; flush?: boolean }) { return <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-surface"><div className="flex min-h-12 items-center justify-between gap-3 border-b border-border px-4 py-3"><h2 className="text-sm font-bold text-foreground">{title}</h2>{action}</div><div className={flush ? "" : "px-4 py-3"}>{children}</div></section>; }
@@ -315,10 +331,12 @@ function SourceTable({ sources, openTask }: { sources: SyncSourceView[]; openTas
     { key: "scope", header: "数据域 / 范围", width: 220, render: s => <>{s.latestTask ? <button type="button" className="text-brand-dark hover:underline" title="查看关联任务" onClick={() => openTask(s.latestTask!.id)}>{domainName(s.resource)}</button> : <span className="text-brand-dark">{domainName(s.resource)}</span>}<span className="mt-0.5 block text-xs text-muted">{s.seller.displayName || s.seller.accountKey} / {s.marketplaceId}</span></> },
     { key: "lastSuccess", header: "最近成功", width: 140, render: s => <span title={stamp(s.lastSuccessAt)}>{shortStamp(s.lastSuccessAt)}</span> },
     { key: "coverage", header: "覆盖范围", width: 250, render: s => <>{s.resource === "returns" ? (s.activeRunId ? "单份报告已发布，请进入退货页查看" : "尚无已发布退货报告") : ["orders", "finance"].includes(s.resource) ? (s.activeRunId ? `最近窗口完成 · 累计 ${s.rowCount.toLocaleString()} 条` : "尚无完整窗口，请查看对应资源进度") : s.activeRunId ? `完整快照 · ${s.rowCount.toLocaleString()} 条` : "尚无已发布快照"}{s.health === "STALE" && <span className="mt-0.5 block text-xs text-muted">已过新鲜度阈值</span>}</> },
-    { key: "health", header: "当前状态", width: 190, render: s => <><StateBadge value={s.health} />{s.resourceCursor && <span className="mt-1 block text-xs text-muted">窗口 {s.resourceCursor.status} · {stamp(s.resourceCursor.watermarkFrom)} — {stamp(s.resourceCursor.watermarkTo)}{s.resourceCursor.hasIncompleteWindow ? " · 未完成，恢复前核对审批与日志" : " · 最近窗口完成"}</span>}</> },
+    { key: "health", header: "当前状态", width: 190, render: s => <><StateBadge value={s.health} />{s.health === "SYNCING" && s.latestTask ? <SyncInlineProgress task={s.latestTask} /> : s.resourceCursor && <span className="mt-1 block text-xs text-muted">窗口 {s.resourceCursor.status} · {stamp(s.resourceCursor.watermarkFrom)} — {stamp(s.resourceCursor.watermarkTo)}{s.resourceCursor.hasIncompleteWindow ? " · 未完成，恢复前核对审批与日志" : " · 最近窗口完成"}</span>}</> },
     { key: "nextSync", header: "下次同步", width: 140, className: "metric-tabular", render: s => <span title={stamp(s.nextScheduledAt)}>{shortStamp(s.nextScheduledAt)}</span> },
   ];
-  return <StandardDataTable ariaLabel="数据同步健康状态" rows={sources} getRowKey={s => s.id} columns={columns} />;
+  // 字段级汇总开关：用户可按列开关「最近成功/覆盖范围/当前状态/下次同步」等汇总字段，
+  // 数据域 / 范围作为识别列固定不参与隐藏。开关只影响展示，不改变取数与统计口径。
+  return <StandardDataTable ariaLabel="数据同步健康状态" rows={sources} getRowKey={s => s.id} columns={columns} columnToggle pinnedColumnKeys={["scope"]} />;
 }
 function shortStamp(value: string | null | undefined) {
   if (!value) return "—";
