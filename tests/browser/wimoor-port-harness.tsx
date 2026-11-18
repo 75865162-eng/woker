@@ -8,6 +8,7 @@ import { DomainReportsWorkbench } from '@/components/operations/domain-reports-w
 import { createRoot } from 'react-dom/client';
 import { AppShellUserProvider } from '@/components/app-shell/app-shell-context';
 import { BusinessNavigationDrawer } from '@/components/app-shell/business-navigation-drawer';
+import { PinnedNavProvider } from '@/components/app-shell/pinned-nav';
 import { navigationGroups } from '@/components/app-shell/business-navigation';
 import { roleCanAccessModule, type RolePermissionMap } from '@/lib/accounts/permissions';
 import { SyncCenterWorkbench } from '@/components/operations/sync-center-workbench';
@@ -22,5 +23,7 @@ function EvidenceHarness() {
   return <><output aria-label="所选来源任务">{task}</output>{params.get('workbench') === 'finance' ? <FinanceWorkbench sellerAccountId="fixture-seller" marketplaceId="SITE" getHeaders={getHeaders} onTask={setTask} /> : params.get('workbench') === 'order-items' ? <OrderItemsWorkbench sellerAccountId="fixture-seller" marketplaceId="SITE" getHeaders={getHeaders} onTask={setTask} /> : params.get('workbench') === 'orders' ? <OrdersWorkbench sellerAccountId="fixture-seller" marketplaceId="SITE" getHeaders={getHeaders} onTask={setTask} /> : params.get('workbench') === 'inventory' ? <OperationsHubWorkbench embeddedTab="inventory" canSync={false} /> : params.has('observations') ? <ObservationsWorkbench resource={params.get('observations')!} sellerAccountId="fixture-seller" marketplaceId="SITE" getHeaders={getHeaders} onTask={setTask} /> : <DomainReportsWorkbench resource={params.get('reports')!} sellerAccountId="fixture-seller" marketplaceId="SITE" getHeaders={getHeaders} onTask={setTask} />}</>;
 }
 createRoot(document.getElementById('root')!).render(<AppShellUserProvider value={{ userId: 'fixture-user', userRole: 'fixture', userInitials: 'UI', rolePermissions }}>
+  <PinnedNavProvider userRole="fixture" rolePermissions={rolePermissions}>
   <div className="p-6"><p className="mb-4 text-xs text-muted">隔离 UI 验证 · fixture 数据 · 无真实业务连接</p><BusinessNavigationDrawer groups={groups} isActive={href => href === '/operations?view=fba-boxing'} />{params.has('observations') || params.has('reports') || params.has('workbench') ? <EvidenceHarness /> : <SyncCenterWorkbench />}</div>
+  </PinnedNavProvider>
 </AppShellUserProvider>);

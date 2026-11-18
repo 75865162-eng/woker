@@ -7,6 +7,8 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { CircleHelp, LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { accountMenuItems, navigationGroups } from "./business-navigation";
+import { PinnedNavProvider } from "./pinned-nav";
+import { NavigationSidebar } from "./navigation-sidebar";
 import { Button } from "@/components/ui/button";
 import { getModuleIdForPath, roleCanAccessModule, type RolePermissionMap } from "@/lib/accounts/permissions";
 import { useShellStore } from "@/lib/stores/shell-store";
@@ -160,6 +162,7 @@ export function AppShellClient({
 
   return (
     <AppShellUserProvider value={{ organizationId, userId, userInitials, userName, userRole, rolePermissions }}>
+      <PinnedNavProvider userRole={userRole} rolePermissions={rolePermissions ?? null}>
       <div className="min-h-screen bg-background">
       {enableShellEnhancements ? <WeComNotificationRunner /> : null}
       <aside
@@ -175,40 +178,7 @@ export function AppShellClient({
             <span className={cn("truncate text-section text-foreground", navCollapsed && "sr-only")}>条条 ERP</span>
           </Link>
         </div>
-        <nav aria-label="业务导航" className={cn("min-h-0 flex-1 overflow-y-auto pb-4 pt-1", navCollapsed ? "px-1.5" : "px-2")}>
-          {visibleNavigationGroups.map((group) => <section key={group.label} className="mb-1">
-            {navCollapsed ? (
-              <div aria-hidden className="mx-1.5 my-2 border-t border-border" />
-            ) : (
-              <h2 className="cursor-default select-none px-2 pb-1 pt-2.5 text-micro uppercase tracking-wide text-muted">{group.label}</h2>
-            )}
-            <div className="space-y-0.5">
-          {group.items.map((item) => {
-            const active = isNavigationActive(item.href);
-            const Icon = item.icon;
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={active ? "page" : undefined}
-                title={navCollapsed ? item.label : undefined}
-                className={cn(
-                  "flex min-h-9 items-center gap-2 rounded-md text-body leading-5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand",
-                  navCollapsed ? "justify-center px-0" : "px-2.5",
-                  active
-                    ? "bg-brand font-semibold text-white hover:bg-brand hover:text-white"
-                    : "text-foreground/80 hover:bg-surface-muted hover:text-foreground",
-                )}
-              >
-                <Icon aria-hidden className="h-4 w-4 shrink-0" />
-                <span className={cn("truncate", navCollapsed && "sr-only")}>{item.label}</span>
-              </Link>
-            );
-          })}
-            </div>
-          </section>)}
-        </nav>
+        <NavigationSidebar groups={visibleNavigationGroups} navCollapsed={navCollapsed} isActive={isNavigationActive} />
         <div className={cn("shrink-0 border-t border-border bg-surface p-2", navCollapsed && "flex justify-center")}>
           <button
             type="button"
@@ -302,6 +272,7 @@ export function AppShellClient({
         </div>
       </main>
       </div>
+      </PinnedNavProvider>
     </AppShellUserProvider>
   );
 }
