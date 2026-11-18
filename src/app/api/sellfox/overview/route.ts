@@ -4,8 +4,27 @@ import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { deriveSellfoxWatermarks } from "@/lib/sellfox/watermark";
+import { prisma as dbPrisma } from "@/lib/db/prisma";
+import { Prisma } from "@prisma/client";
+import { normalizeSellfoxCacheQuery, readThroughSellfox, sellfoxOverviewCacheKey } from "@/lib/sellfox/result-cache";
 
 export const runtime = "nodejs";
+
+/** Composite version of the snapshot tables the overview aggregates. */
+async function overviewVersion(organizationId: string, workspaceId: string): Promise<string> {
+  try {
+    const rows = await dbPrisma.$queryRaw<Array<{ v: Date | string | null }>>(Prisma.sql`
+      SELECT greatest(
+        (SELECT max("syncedAt") FROM "SellfoxSalesDailySnapshot" WHERE "organizationId"=${organizationId} AND "workspaceId"=${workspaceId}),
+        (SELECT max("syncedAt") FROM "SellfoxProductDailySnapshot" WHERE "organizationId"=${organizationId} AND "workspaceId"=${workspaceId}),
+        (SELECT max("capturedAt") FROM "SellfoxListingSnapshot" WHERE "organizationId"=${organizationId} AND "workspaceId"=${workspaceId}),
+        (SELECT max("capturedAt") FROM "SellfoxFbaInventorySnapshot" WHERE "organizationId"=${organizationId} AND "workspaceId"=${workspaceId}),
+        (SELECT max("syncedAt") FROM "SellfoxHourlyMetric" WHERE "organizationId"=${organizationId} AND "workspaceId"=${workspaceId})
+      ) AS v`);
+    const value = rows[0]?.v;
+    return value ? new Date(value).toISOString() : "__empty__";
+  } catch { return "__empty__"; }
+}
 
 export async function GET(request: Request) {
   try {
@@ -14,6 +33,12 @@ export async function GET(request: Request) {
 
     const scope = workspaceScopeFromRequest(request);
     const where = { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId };
+    const scopeKey = normalizeSellfoxCacheQuery({
+      organizationId: where.organizationId, workspaceId: where.workspaceId,
+      accountId: scope.accountId ?? "", marketplace: scope.marketplace ?? "",
+    });
+    const key = sellfoxOverviewCacheKey(where.organizationId, where.workspaceId, scopeKey);
+    const load = async () => {
     // 最早可查日期：供空态提示使用；查不到保留 null（不补零值、不伪造日期）。
     const [earliestSalesRow, earliestPerformanceRow] = await Promise.all([
       prisma.sellfoxSalesDailySnapshot.findFirst({ where, orderBy: { reportDate: "asc" }, select: { reportDate: true } }),
@@ -62,6 +87,13 @@ export async function GET(request: Request) {
         performance: earliestPerformanceRow?.reportDate ?? null,
       },
     });
+    };
+    const result = await readThroughSellfox(
+      key, "overview",
+      () => overviewVersion(where.organizationId, where.workspaceId),
+      load,
+    );
+    return NextResponse.json({ ...result.body, cache: { status: result.cache, cachedAt: result.cachedAt } });
   } catch {
     return NextResponse.json({ error: "读取赛狐概览失败，请稍后重试。" }, { status: 500 });
   }
