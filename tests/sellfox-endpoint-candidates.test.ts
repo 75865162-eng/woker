@@ -45,10 +45,21 @@ test("候选路径全部是已核对的真实 /api/ 只读接口，不含写接�
   }
 });
 
-test("已核对的重点待接入数据集都在候选里", () => {
+test("已核对的重点待接入数据集：未落地的在候选，已落地的在种子", () => {
   const codes = new Set(sellfoxEndpointCandidates().map(candidate => candidate.code));
-  for (const expected of ["profit-report", "ads-manage", "aba", "returns", "settlement", "fba-fee"]) {
+  const seededPaths = new Set(sellfoxKnownEndpoints().map(seed => seed.path));
+  // 仍未落地的域必须留在候选，等待参数契约联调。
+  for (const expected of ["profit-report", "ads-manage", "aba", "settlement"]) {
     assert.ok(codes.has(expected), `${expected} 有真实只读路径却未成为候选`);
+  }
+  // 已用通用采集器落地的域应从候选毕业到种子，杜绝重复注册。
+  const landed = {
+    returns: "/api/order/api/report/fbaReturn/pageList.json",
+    "fba-fee": "/api/finance/fbaStockDetail/pageList.json",
+  };
+  for (const [code, path] of Object.entries(landed)) {
+    assert.ok(!codes.has(code), `${code} 已落地，不应重复留在候选`);
+    assert.ok(seededPaths.has(path), `${code} 已落地但种子缺失 ${path}`);
   }
 });
 
@@ -81,7 +92,8 @@ test("每条候选路径都标注了本地字段文档或已登记种子，杜�
       assert.ok(entry.seeded || entry.doc, `${entry.path} 既无种子也无字段文档，不能作为候选`);
     }
   }
-  assert.ok(documented >= 30, `已核对的本地字段文档不应被意外清空（当前 ${documented}）`);
+  // 部分已联调域毕业到种子后不再出现在候选，候选内文档数随之下降；下限按剩余候选校准。
+  assert.ok(documented >= 25, `已核对的本地字段文档不应被意外清空（当前 ${documented}）`);
   assert.ok(seededCount >= 10, `与已登记种子的重合路径应被显式标注（当前 ${seededCount}）`);
   assert.ok(consoleSource.includes("candidateDocSummary"), "同步控制台必须展示文档/种子落地状态");
 });

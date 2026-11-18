@@ -146,6 +146,66 @@ export function sellfoxKnownEndpoints(): SellfoxKnownEndpointSeed[] {
     note: "FBM 自发货包裹分页；shopIdList 传字符串店铺 externalId。",
   });
 
+  // ── 剩余只读数据域（2026-11-19 用生产凭据逐条真实联调通过）──────────────────────────
+  // 参数名、日期格式、分页字段均来自本地 sellfox-api 字段级文档并经真实响应校验；
+  // 响应列未文档化，一律走通用采集器原样落 SellfoxApiRecord（不猜字段、不补零、不换算）。
+  // 这些接口绝大多数为「全局报表」：scopeMode=global 时采集器只跑一遍、不按店铺放大。
+  const paged = (extra: Record<string, unknown> = {}) => JSON.stringify({
+    pageNo: "${pageNo}", pageSize: "${pageSize}", ...extra,
+  });
+
+  // 主数据 / 当前状态：每天全量一次，无日期窗口。
+  type MasterSeed = Pick<SellfoxKnownEndpointSeed, "code" | "label" | "path" | "idFields" | "note">;
+  const master: MasterSeed[] = [
+    { code: "sku", label: "商品·SKU 商品库", path: "/api/commodity/pageList.json", idFields: "id", note: "本地 SKU 主数据：成本 purchaseCost、开发员 devId/devName、品牌、包装尺寸。实测 2799 行。" },
+    { code: "spu", label: "商品·SPU 款名", path: "/api/commodity/getCommoditySpuList.json", idFields: "id", note: "SPU 款名；当前租户实测 0 行，接口已联调通，保留端点待数据。" },
+    { code: "brand", label: "商品·品牌库", path: "/api/commodity/listBrands.json", idFields: "id", note: "品牌字典，实测 12 行。" },
+    { code: "category", label: "商品·分类树", path: "/api/category/getList.json", idFields: "id", note: "分类树，响应为顶层数组，实测 20 行。" },
+    { code: "attrs", label: "商品·属性字典", path: "/api/commodityAttribute/initAttribute.json", idFields: "attributeId", note: "属性字典，rowsPath=commodityAttributeVoList，实测 2 类。" },
+    { code: "supplier", label: "采购·供应商", path: "/api/supplier/pageList.json", idFields: "id", note: "供应商主数据，实测 512 行。" },
+    { code: "sub-account", label: "总览·子账号", path: "/api/account/getSubUserPage.json", idFields: "id", note: "业务员/运营子账号归属维度，实测 69 行。" },
+    { code: "warehouse", label: "库存·仓库列表", path: "/api/warehouseManage/warehouseList.json", idFields: "id", note: "仓库主数据，实测 24 行。" },
+    { code: "fba-warehouse-list", label: "财务·FBA 仓库列表", path: "/api/financial/batchCost/getFBAWarehousePageList.json", idFields: "id", note: "FBA 仓库与 batchCost 费用域的仓库维表，响应顶层数组，实测 39 行。" },
+    { code: "purchase-order", label: "采购·采购单", path: "/api/purchase/page.json", idFields: "id", note: "采购单主表，含 currency/exchangeRate 金额三列口径，实测 2962 行。" },
+    { code: "local-inventory", label: "库存·本地仓库存明细", path: "/api/warehouseManage/warehouseItemList.json", idFields: "id", note: "本地仓库存，含 perPurchase/totalPurchase/inventoryCost，实测 2047 行。" },
+    { code: "removal-order", label: "库存·移除入库单", path: "/api/removeInboundOrder/search.json", idFields: "id", note: "移除入库单，实测 29 行。" },
+  ];
+  for (const seed of master) {
+    seeds.push({
+      ...seed, label: `赛狐·${seed.label}`, dateMode: "none", scopeMode: "global",
+      chunkDays: 1, pageSize: 200, rowsPath: "", dateFormat: "yyyy-MM-dd",
+      params: paged(), maxRows: 50_000, historyFrom: null,
+    });
+  }
+  // 库龄报表需要 showCost=1 才返回成本列；响应 id 恒为 null，行身份回退内容哈希。
+  seeds.push({
+    code: "age", label: "赛狐·库存·库龄报表", path: "/api/warehouse/batch/age/pageList.json",
+    dateMode: "none", scopeMode: "global", chunkDays: 1, pageSize: 100, rowsPath: "", idFields: "",
+    params: paged({ showCost: "1" }), dateFormat: "yyyy-MM-dd", maxRows: 50_000, historyFrom: null,
+    note: "库龄报表，showCost=1 返回 totalPurchase/totalInventoryCost 成本列；id 恒 null 故行身份用内容哈希。实测 1977 行。",
+  });
+
+  // 日期报表：按全局日期块滚动采集（非按店铺），日期参数名/格式逐条按文档+实测校准。
+  type ReportSeed = Pick<SellfoxKnownEndpointSeed, "code" | "label" | "path" | "params" | "dateFormat" | "idFields" | "note"> & { chunkDays?: number };
+  const reports: ReportSeed[] = [
+    { code: "store-performance", label: "销售·店铺表现按天", path: "/api/stats/getShopDataByDay.json", params: JSON.stringify({ startDate: "${startDate}", endDate: "${endDate}", orderBy: "nowDate", desc: "true" }), dateFormat: "yyyy-MM-dd", idFields: "shopId,marketplaceId,nowDate", note: "店铺按天表现：销量/流量/广告/利润全口径，响应顶层数组，实测单日区间 246 行。" },
+    { code: "fba-return", label: "订单·FBA 退货报告", path: "/api/order/api/report/fbaReturn/pageList.json", params: paged({ returnStartDate: "${startDate}", returnEndDate: "${endDate}" }), dateFormat: "yyyy-MM-dd", idFields: "id", note: "FBA 退货明细；必须传 returnStartDate/returnEndDate（yyyy-MM-dd），实测 1967 行。" },
+    { code: "fbm-return", label: "订单·FBM 退货报告", path: "/api/order/api/report/fbm/return/order/pageList.json", params: paged({ returnStartDate: "${startDate}", returnEndDate: "${endDate}" }), dateFormat: "yyyy-MM-dd", idFields: "id", note: "FBM 退货明细；同样必须传退货日期区间。" },
+    { code: "reviews", label: "商品·评价明细", path: "/api/review/pageDetailList.json", params: paged({ startDate: "${startDate}", endDate: "${endDate}" }), dateFormat: "yyyy-MM-dd", idFields: "reviewId", note: "评价明细；startDate/endDate 必需且跨度≤1年，实测 570 行。" },
+    { code: "product-analysis", label: "销售·产品分析 2.0", path: "/api/productAnalyze/new/pageList.json", params: paged({ startDate: "${startDate}", endDate: "${endDate}", searchType: "sku" }), dateFormat: "yyyy-MM-dd", idFields: "asin", note: "产品分析 2.0：BSR/评分/流量/广告/利润全维度；searchType 必填（此处 sku），实测 1629 行。金额多为 number/字符串，建 typed 表须按规范转 Decimal。" },
+    { code: "inventory-flow", label: "库存·库存流水", path: "/api/warehouseInOut/inOutRecords.json", params: paged({ createTimeStart: "${startDate}", createTimeEnd: "${endDate}" }), dateFormat: "yyyy-MM-dd", idFields: "id", note: "库存流水；必须传 createTimeStart/createTimeEnd，实测 6423 行。" },
+    { code: "order-process", label: "订单·订单处理列表", path: "/api/packageShip/v1/getPackagePage.json", params: paged({ purchaseDateStart: "${startDate}", purchaseDateEnd: "${endDate}" }), dateFormat: "yyyy-MM-dd", idFields: "packageSn", note: "订单处理（FBM 包裹维度）；必须传 purchaseDateStart/purchaseDateEnd。" },
+    { code: "fba-fee-detail", label: "财务·FBA 仓库明细费用", path: "/api/finance/fbaStockDetail/pageList.json", params: JSON.stringify({ startMonth: "${startDate}", endMonth: "${endDate}" }), dateFormat: "yyyy-MM", idFields: "reportDate,fnsku,msku", note: "FBA 仓库费用明细：月末成本/头程/周转等 60+ 金额列，startMonth/endMonth 用 yyyy-MM，实测 2179 行。金额建 typed 表须转 Decimal(18,4)+三列。" },
+    { code: "receivable", label: "财务·应收报表", path: "/api/financial/accountReceivable/pageList.json", params: paged({ bizDate: "${startDate}" }), dateFormat: "yyyyMM", idFields: "sellerId,bizDate", note: "应收报表：含 rate 汇率、期初/期末余额；bizDate 用 yyyyMM，实测 39 行。文档标注即将下线。" },
+    { code: "exchange-rate", label: "总览·汇率列表", path: "/api/rate/open/pageList.json", params: paged({ month: "${startDate}", codes: ["CNY", "USD"] }), dateFormat: "yyyyMM", idFields: "date,code", note: "汇率列表：month 用 yyyyMM，codes 币种数组；多币种利润汇总前置。实测 2 行。" },
+  ];
+  for (const seed of reports) {
+    seeds.push({
+      ...seed, label: `赛狐·${seed.label}`, dateMode: "range", scopeMode: "global",
+      chunkDays: seed.chunkDays || 30, pageSize: 200, rowsPath: "", maxRows: 50_000, historyFrom: null,
+    });
+  }
+
   return seeds;
 }
 

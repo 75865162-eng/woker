@@ -88,6 +88,7 @@ function formatSellfoxEndpointDate(date: string, format: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
   const [year, month, day] = date.split("-");
   if (format === "yyyyMM") return `${year}${month}`;
+  if (format === "yyyy-MM") return `${year}-${month}`;
   if (format === "yyyyMMdd") return `${year}${month}${day}`;
   if (format === "MMdd") return `${month}${day}`;
   return date;
