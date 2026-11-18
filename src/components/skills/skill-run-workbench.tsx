@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Check, CircleDashed, Download, FileSpreadsheet, FileText, LoaderCircle, Play } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
@@ -13,7 +14,7 @@ import type { SkillRunEvent, SkillRunStep, SkillView } from "@/lib/skill-engine/
 
 type Props = { skill: SkillView };
 
-type DownloadInfo = { downloadId: string; fileName: string; exportFormat: "xlsx" | "docx" };
+type DownloadInfo = { downloadId: string; fileName: string; exportFormat: "xlsx" | "docx"; historyId: string | null };
 
 export function SkillRunWorkbench({ skill }: Props) {
   const [values, setValues] = useState<Record<string, string>>(() => {
@@ -90,7 +91,7 @@ export function SkillRunWorkbench({ skill }: Props) {
         else if (event.type === "delta") setReport((current) => current + event.text);
         else if (event.type === "done") {
           setReport(event.report);
-          setDownload({ downloadId: event.downloadId, fileName: event.exportFileName, exportFormat: event.exportFormat });
+          setDownload({ downloadId: event.downloadId, fileName: event.exportFileName, exportFormat: event.exportFormat, historyId: event.historyId });
         } else if (event.type === "error") {
           setError(`${event.code}: ${event.message}`);
         }
@@ -115,6 +116,8 @@ export function SkillRunWorkbench({ skill }: Props) {
 
   const downloadUrl = useMemo(() => {
     if (!download) return "";
+    // 优先持久化历史文档（重启后仍可下载），失败回退到进程内临时下载。
+    if (download.historyId) return `/api/skills/runs/${encodeURIComponent(download.historyId)}/document`;
     return `/api/skills/${encodeURIComponent(skill.slug)}/export/${encodeURIComponent(download.downloadId)}`;
   }, [download, skill.slug]);
 
@@ -189,11 +192,14 @@ export function SkillRunWorkbench({ skill }: Props) {
       <Dialog
         open={Boolean(download)}
         title="报告已生成"
-        description="文件已在服务端临时生成，请在 15 分钟内下载。"
+        description={download?.historyId ? "报告已保存到运行历史，可在「开始使用」页随时回看与下载。" : "文件已在服务端临时生成，请在 15 分钟内下载。"}
         onClose={() => setDownload(null)}
         footer={
           <>
             <Button variant="secondary" onClick={() => setDownload(null)}>关闭</Button>
+            <Link href="/lili/v2/start" className="inline-flex">
+              <Button variant="secondary">查看运行历史</Button>
+            </Link>
             <a href={downloadUrl} download={download?.fileName}>
               <Button>
                 <Download aria-hidden className="h-4 w-4" /> 下载文件
