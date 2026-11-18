@@ -27,6 +27,8 @@ function fixture() {
       return state.roleAssigned.map(sellerAccountId => ({ sellerAccountId, marketplaceIds: [], actions: [], mcpEnabled: false }));
     } },
     sellerAccount: { findMany: async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.filter(id => id !== "seller-inactive").map(id => ({ id })) },
+    // P0 并集：双读期无 MCP_TOOL 授权记录 → 回退凭据自身 tools（getMcpToolGrantScope 返回 null）。
+    resourceGrant: { findMany: async () => [] },
     organizationRosterRole: { findMany: async () => { throw new Error("Read must not use module permissions"); } },
     amazonMcpCredential: { findFirst: async () => state.credential ? { id: "credential", name: "fixture", tools: [], scopes: [] } : null },
     amazonSyncDataSource: {

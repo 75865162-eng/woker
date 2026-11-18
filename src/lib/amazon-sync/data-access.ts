@@ -29,18 +29,19 @@ export async function explicitAmazonDataAccess(scope: SyncScope, actor: string, 
   if (!member || member.user.status !== "active" || !await assertWorkspaceAccess(scope.organizationId, scope.workspaceId, actor, db)) throw new SyncInputError("Amazon 数据范围不可访问。", 403);
   // An enabled user/account assignment grants every Amazon business read.
   // Legacy module, tool, action and marketplace settings apply only to mutations.
-  // Reads must honor BOTH the member grants and the grants inherited from the
-  // member's role (union), otherwise a role-only authorization is invisible to
-  // view/export while it already works for sync/edit below.
+  // P0 并集口径：view/export 也合并"成员所属角色"的店铺授权（旧逻辑仅认成员授权）。
+  // 双读期保留全部既有语义：active 店铺校验、200 安全上限、外层 boundary/MCP 链路不变。
   if (action === "view" || action === "export") {
-    const memberGrants = await db.amazonDataAccessGrant.findMany({ where: { ...scope, userId: actor, enabled: true, seller: { status: "active" } }, select: { sellerAccountId: true }, take: 201 });
+    const grants = await db.amazonDataAccessGrant.findMany({ where: { ...scope, userId: actor, enabled: true, seller: { status: "active" } }, select: { sellerAccountId: true }, take: 201 });
     const roleGrants = await db.amazonRoleDataAccessGrant.findMany({ where: { ...scope, roleId: member.role, enabled: true }, select: { sellerAccountId: true }, take: 201 });
-    // A disabled/inactive seller must not leak through a role grant.
-    const activeSellerIds = roleGrants.length ? new Set((await db.sellerAccount.findMany({ where: { ...scope, id: { in: roleGrants.map(g => g.sellerAccountId) }, status: "active" }, select: { id: true } })).map(s => s.id)) : new Set<string>();
-    const grants = [...memberGrants, ...roleGrants.filter(g => activeSellerIds.has(g.sellerAccountId))];
-    if (grants.length > 200) throw new SyncInputError("授权超过安全上限。", 403);
-    if (!grants.length) throw new SyncInputError("当前用户没有已分配的 Amazon 账号。", 403, "AMAZON_SCOPE_EMPTY");
-    return { allSellers: false, sellerIds: [...new Set(grants.map(grant => grant.sellerAccountId))] };
+    // 角色授权表无 seller 关联，需显式过滤 active 店铺，避免读到停用/删除店铺。
+    const roleSellerIds = roleGrants.length
+      ? (await db.sellerAccount.findMany({ where: { ...scope, id: { in: roleGrants.map(grant => grant.sellerAccountId) }, status: "active" }, select: { id: true }, take: 201 })).map(seller => seller.id)
+      : [];
+    const sellerIds = [...new Set([...grants.map(grant => grant.sellerAccountId), ...roleSellerIds])];
+    if (sellerIds.length > 200) throw new SyncInputError("授权超过安全上限。", 403);
+    if (!sellerIds.length) throw new SyncInputError("当前用户没有已分配的 Amazon 账号。", 403, "AMAZON_SCOPE_EMPTY");
+    return { allSellers: false, sellerIds };
   }
   await assertAmazonAction(scope, actor, action === "sync" ? "create" : action, db);
   const filter = { ...scope, enabled: true, ...(mcp ? { mcpEnabled: true } : {}) };
@@ -64,7 +65,12 @@ export async function amazonDataAccess(scope: SyncScope, actor: string | undefin
       return explicitAmazonDataAccess(scope, actor, db, effectiveAction);
     }
     const credential = await db.amazonMcpCredential.findFirst({ where: { id: current.credentialId, ...scope, userId: actor, status: "ACTIVE", expiresAt: { gt: new Date() } }, select: { id: true, scopes: true, name: true, rotatedFromId: true, tools: true } });
-    if (!credential || !await credentialAllowsTool(credential, current.tool, db)) throw new SyncInputError("数据范围不可访问。", 403);
+    if (!credential || !await credentialAllowsTool(credential, current.tool, db, {
+      organizationId: scope.organizationId,
+      workspaceId: scope.workspaceId,
+      userId: actor,
+      provider: "amazon",
+    })) throw new SyncInputError("数据范围不可访问。", 403);
     if (credential.name.startsWith("Lili device: ")) {
       let parentId = credential.rotatedFromId;
       const seen = new Set([current.credentialId]);

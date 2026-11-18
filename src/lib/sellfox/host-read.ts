@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { getSellfoxStoreScope } from "@/lib/accounts/effective-access";
 import type { HostDataset } from "./host-pages";
 import { moneyToNumber } from "./money-display";
 
@@ -45,7 +46,7 @@ export type HostResult = {
   grain: string;
 };
 
-type Scope = { organizationId: string; workspaceId: string };
+type Scope = { organizationId: string; workspaceId: string; userId?: string };
 
 type AdsDelegate = {
   findMany: (args: Record<string, unknown>) => Promise<HostRow[]>;
@@ -106,13 +107,25 @@ function sumField(rows: HostRow[], field: string) {
 }
 
 async function storeFilter(scope: Scope, query: Pick<HostQuery, "site" | "shop">) {
-  if (!query.site && !query.shop) return null;
+  // P0 数据隔离：存在明确 SELLFOX_STORE 授权时，读取前强制限定店铺范围（空集合即拒绝）。
+  // 双读期无授权数据的用户返回 null，回退现有行为，避免误伤历史账号。
+  const authorizedIds = scope.userId
+    ? await getSellfoxStoreScope({
+        organizationId: scope.organizationId,
+        workspaceId: scope.workspaceId,
+        userId: scope.userId,
+      })
+    : null;
+
+  if (!query.site && !query.shop) return authorizedIds;
+
   const stores = await prisma.sellfoxStore.findMany({
     where: {
       organizationId: scope.organizationId,
       workspaceId: scope.workspaceId,
       ...(query.site ? { marketplace: query.site } : {}),
       ...(query.shop ? { externalId: query.shop } : {}),
+      ...(authorizedIds ? { id: { in: authorizedIds } } : {}),
     },
     select: { id: true },
   });

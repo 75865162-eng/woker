@@ -12,6 +12,7 @@
     "db:push": "prisma db push",
     "db:seed-admin": "node --import ./scripts/runtime/database-bootstrap.mjs scripts/seed-admin.mjs",
     "db:sync-roster-users": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/sync-roster-login-users.ts",
+    "access:backfill": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/access-backfill.ts",
     "products:refresh-derived": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/refresh-product-derived-fields.ts",
     "products:repair-projections": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/repair-product-projections.ts",
     "products:scan-statuses": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/scan-product-statuses.ts",
