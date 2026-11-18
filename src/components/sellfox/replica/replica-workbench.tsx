@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { SellfoxTabs } from "@/components/sellfox/sellfox-nav";
 import { Dialog } from "@/components/ui/overlays";
 import { normalizeWorkspaceScope } from "@/lib/workspace/scope";
@@ -44,6 +44,50 @@ type Filters = {
 
 const noWrite = "此复刻页只读，不把同步或导入写入数据库。";
 const weekdays = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
+
+/**
+ * 进程内短期读缓存 + 同 key in-flight 去重。只缓存只读快照响应，不持久化到
+ * localStorage（避免同步后脏数据长期残留）；UI 列显隐偏好仍走原 localStorage。
+ */
+type ReadCache<T> = { body: T; ts: number };
+const readCache = new Map<string, ReadCache<unknown>>();
+const readInflight = new Map<string, Promise<unknown>>();
+const CACHE_LIMIT = 120;
+function cacheTtl(endpoint: string): number {
+  if (endpoint.includes("/overview")) return 30_000;
+  if (/\/sales($|\?)/.test(endpoint) || /domain=sales/.test(endpoint) || /\/performance/.test(endpoint) || /domain=ads_/.test(endpoint)) return 60_000;
+  if (/\/listings/.test(endpoint) || /domain=listings/.test(endpoint)) return 30_000;
+  if (/domain=inventory/.test(endpoint)) return 20_000;
+  return 60_000;
+}
+function cacheGet<T>(key: string): ReadCache<T> | undefined {
+  const hit = readCache.get(key) as ReadCache<T> | undefined;
+  if (!hit) return undefined;
+  if (Date.now() - hit.ts > cacheTtl(key)) { readCache.delete(key); return undefined; }
+  // refresh LRU-ish ordering
+  readCache.delete(key); readCache.set(key, hit);
+  return hit;
+}
+function cacheSet<T>(key: string, body: T) {
+  readCache.set(key, { body, ts: Date.now() });
+  if (readCache.size > CACHE_LIMIT) {
+    const oldest = readCache.keys().next().value;
+    if (oldest !== undefined) readCache.delete(oldest);
+  }
+}
+function clearCachePrefix(prefix: string) {
+  for (const key of readCache.keys()) if (key.startsWith(prefix)) readCache.delete(key);
+}
+/** 共享一次请求：同 key 并发只发一个 fetch。命中缓存直接返回，不走网络。 */
+function cachedFetch<T>(key: string, doFetch: () => Promise<T>, guard?: () => boolean): { promise: Promise<T>; hit: boolean } {
+  const hit = cacheGet<T>(key);
+  if (hit) return { promise: Promise.resolve(hit.body), hit: true };
+  const pending = readInflight.get(key) as Promise<T> | undefined;
+  if (pending) return { promise: pending, hit: true };
+  const task = doFetch().then((body) => { if (!guard || guard()) cacheSet(key, body); return body; }).finally(() => { readInflight.delete(key); });
+  readInflight.set(key, task);
+  return { promise: task, hit: false };
+}
 
 function readScope() {
   try { return normalizeWorkspaceScope(JSON.parse(localStorage.getItem("amazon_bulk_ad_workspace_scope") ?? "{}")); }
@@ -110,6 +154,12 @@ function rate(value: unknown) {
 
 function safeImage(value: unknown) {
   return typeof value === "string" && /^https?:\/\//.test(value) ? value : "";
+}
+function cacheTimeLabel(cachedAt: string | null) {
+  if (!cachedAt) return "";
+  const date = new Date(cachedAt);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 function cellText(column: ReplicaColumn, row: Row, metric: string) {
@@ -185,6 +235,8 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
   const [notice, setNotice] = useState("");
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const [cacheInfo, setCacheInfo] = useState<{ status: "hit" | "miss" | "bypass"; cachedAt: string | null } | null>(null);
+  const lastRefreshNonce = useRef(refreshNonce);
   const [gotoPage, setGotoPage] = useState("1");
   const [visible, setVisible] = useState<string[]>(() => page.columns.filter((column) => column.defaultVisible !== false).map((column) => column.key));
   const storageKey = `sellfox-replica-columns:${page.id}`;
@@ -205,10 +257,11 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
   useEffect(() => {
     setScope(readScope());
     setReady(true);
-    const changed = () => { setScope(readScope()); setApplied((current) => ({ ...current, page: 1 })); };
+    // 工作区作用域切换：清掉当前页客户端缓存，避免跨 scope 串数据。
+    const changed = () => { clearCachePrefix(page.endpoint); setScope(readScope()); setApplied((current) => ({ ...current, page: 1 })); };
     window.addEventListener(workspaceScopeChangedEventName, changed);
     return () => window.removeEventListener(workspaceScopeChangedEventName, changed);
-  }, []);
+  }, [page.endpoint]);
 
   const headers = useMemo(() => ({
     "x-workspace-id": scope.workspaceId,
@@ -223,8 +276,12 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
     params.set("workspaceId", scope.workspaceId);
     if (scope.accountId) params.set("accountId", scope.accountId);
     if (scope.marketplace) params.set("marketplace", scope.marketplace);
-    fetch(`/api/sellfox/overview?${params}`, { headers, cache: "no-store", signal: controller.signal })
-      .then(async (response) => response.ok ? response.json() as Promise<{ stores?: Store[] }> : { stores: [] })
+    const url = `/api/sellfox/overview?${params}`;
+    const { promise } = cachedFetch<{ stores?: Store[] }>(url, async () => {
+      const response = await fetch(url, { headers, cache: "no-store", signal: controller.signal });
+      return response.ok ? response.json() as Promise<{ stores?: Store[] }> : { stores: [] };
+    }, () => !controller.signal.aborted);
+    promise
       .then((body) => { if (!controller.signal.aborted) setStores(body.stores ?? []); })
       .catch(() => { if (!controller.signal.aborted) setStores([]); });
     return () => controller.abort();
@@ -285,14 +342,22 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
         if (applied.exact) params.set("exactMatch", "1");
       }
     }
+    // 手动刷新：nonce 变化时清掉当前页客户端缓存，强制真实回源。
+    if (lastRefreshNonce.current !== refreshNonce) {
+      lastRefreshNonce.current = refreshNonce;
+      clearCachePrefix(page.endpoint);
+    }
+    const url = `${page.endpoint}?${params}`;
     setLoading(true);
     setError("");
-    fetch(`${page.endpoint}?${params}`, { headers, cache: "no-store", signal: controller.signal })
-      .then(async (response) => {
-        const body = await response.json() as { rows?: Row[]; totals?: Row[]; summary?: SalesSummary; dates?: string[]; pagination?: { total?: number }; facets?: { productTags?: string[]; salespersons?: string[] }; failures?: { shopExternalId: string; shopName: string; error: string }[]; error?: string; message?: string };
-        if (!response.ok) throw new Error(body.error || "读取失败");
-        return body;
-      })
+    type Body = { rows?: Row[]; totals?: Row[]; summary?: SalesSummary; dates?: string[]; pagination?: { total?: number }; facets?: { productTags?: string[]; salespersons?: string[] }; failures?: { shopExternalId: string; shopName: string; error: string }[]; error?: string; message?: string; cache?: { status: "hit" | "miss" | "bypass"; cachedAt: string | null } };
+    const { promise } = cachedFetch<Body>(url, async () => {
+      const response = await fetch(url, { headers, cache: "no-store", signal: controller.signal });
+      const body = await response.json() as Body;
+      if (!response.ok) throw new Error(body.error || "读取失败");
+      return body;
+    }, () => !controller.signal.aborted);
+    promise
       .then((body) => {
         if (controller.signal.aborted) return;
         setRows(Array.isArray(body.rows) ? body.rows : []);
@@ -303,6 +368,7 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
         setTags(body.facets?.productTags ?? []);
         setPeople(body.facets?.salespersons ?? []);
         setFailures(Array.isArray(body.failures) ? body.failures : []);
+        setCacheInfo(body.cache ?? null);
       })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
@@ -312,6 +378,7 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
         setDates([]);
         setTotal(0);
         setFailures([]);
+        setCacheInfo(null);
         setError(reason instanceof Error ? reason.message : "读取失败");
       })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
@@ -549,6 +616,9 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
           <button key={action.id} type="button" className="sf-btn" disabled={action.disabled} title={action.reason} onClick={() => runAction(action.id)}>{action.label}</button>
         ))}
       </div>
+      {cacheInfo?.status === "hit" && cacheInfo.cachedAt ? (
+        <p className="sf-notice" role="status">缓存更新于 {cacheTimeLabel(cacheInfo.cachedAt)}；点「刷新」获取实时口径。</p>
+      ) : null}
       {notice ? <p className="sf-notice" role="status">{notice}</p> : null}
       {failures.length ? <div className="sf-notice" role="alert">{failures.map((failure) => <p key={`${failure.shopExternalId}-${failure.error}`}>{failure.shopName || failure.shopExternalId || "店铺"}同步失败：{failure.error}</p>)}</div> : null}
       <div className={matrix ? "sf-table-wrap sf-matrix" : "sf-table-wrap"}>
