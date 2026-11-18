@@ -224,8 +224,13 @@ export async function getSkillRun(id: string, scope: SkillRunScope): Promise<Ski
   const input = (row.input ?? {}) as Record<string, unknown>;
   const context = (row.context ?? {}) as Record<string, unknown>;
   const output = (row.output ?? {}) as Record<string, unknown>;
+  const fileId = String(context.fileId ?? "");
+  const file = fileId
+    ? await prisma.fileObject.findFirst({ where: { id: fileId, organizationId: scope.organizationId, workspaceId: scope.workspaceId, userId: scope.ownerId }, select: { originalName: true } })
+    : null;
   return {
     ...summary,
+    fileName: file?.originalName ?? "",
     title: String(output.title ?? summary.skillName),
     markdown: String(output.markdown ?? ""),
     notes: Array.isArray(output.notes) ? output.notes.filter((n): n is string => typeof n === "string") : [],
