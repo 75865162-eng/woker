@@ -33,6 +33,7 @@ import { assertSkillSyncSourcePublishable, skillSyncRetryCommand } from "./skill
 import { requestChange } from "./change-approval";
 import { assertAmazonMcpScope } from "./mcp-scope";
 import { listAmazonLocalRawTables, readAmazonLocalRawRows } from "./local-raw-read";
+import { foreignToolProvider } from "@/lib/mcp/isolation";
 
 export { amazonMcpTools, amazonMcpToolCatalog } from "./mcp-tool-registry";
 const canonicalMcpTool = (tool: string) => registeredAmazonMcpTools.find(item => item.name === tool)?.canonicalName ?? tool;
@@ -811,6 +812,15 @@ export async function listDiscoverableAmazonMcpTools(identity: McpIdentity, prot
 const amazonMcpGateway = createToolGateway({ tools: [], adapters: [] });
 export async function invokeAmazonMcp(identity: McpIdentity, tool: string, raw: unknown, requestId: string = randomUUID(), signal?: AbortSignal) {
   const startedAt = Date.now();
+  // Explicit cross-source guard: a Sellfox-named tool can never be an Amazon tool.
+  // Audited separately so cross-source attempts are attributable.
+  const foreign = foreignToolProvider(tool, "amazon");
+  if (foreign === "sellfox") {
+    await audit(identity, identity.userId, "amazon.mcp.isolation.denied", {
+      requestId, credentialId: identity.id, tool: tool.slice(0, 120), attemptedProvider: foreign, reason: "CROSS_SOURCE_TOOL",
+    });
+    throw new SyncInputError("数据源不可访问：该数据属于赛狐 MCP，禁止跨源读取。", 403);
+  }
   const registered = registeredAmazonMcpTools.find(item => item.name === tool);
   if (!registered || !isCallableAmazonMcpTool(registered)) {
     await audit(identity, identity.userId, "amazon.mcp.tool.denied", { requestId, credentialId: identity.id, tool: "UNKNOWN", reason: "TOOL_UNAVAILABLE" });
