@@ -67,3 +67,32 @@ sudo npm run check:production -- --env /opt/amazon-ad-bulk-operation/.env --gate
 - 独立部署入口须在网络操作前校验 release-check 的通过状态、commit、检查项及摘要；打包脚本的 build/lint/tests 默认 unknown 且必须显式通过。离线拒绝用例已覆盖失败/未知/缺失状态、commit 漂移、摘要错误及缺失或无效检查项；通过测试拦截 SSH/SCP 验证网络操作前阻断。仍须在固定发布版本执行测试并保留证据，不能仅凭 SHA256 相等直接部署。
 - 目标运行环境必须启用 TLS 证书校验；若构建或启动提示 `NODE_TLS_REJECT_UNAUTHORIZED=0`，先修正对应进程的环境来源并重新验证，禁止将关闭证书校验作为连接故障兜底。
 - `--gate deploy` 已检查 `AUTH_PUBLIC_ORIGIN`、`AUTH_TRUSTED_PROXY` 和 TLS 校验状态。生产公网来源必须为 HTTPS，代理为 caddy；两项 Amazon 写执行开关必须精确配置为 `false`，空值、拼写错误或 `true` 均阻断当前交付范围。数据库仅接受 postgres/postgresql，Redis 仅接受 redis/rediss；地址语法检查不替代连接、权限与恢复验收。
+
+## G. 凭证生命周期监控（2026-11 升级）
+
+依据《Amazon 数据域接入缺口清单》§9.2 / §9.10：Refresh Token 按年度重授，LWA Client Secret 每 180 天轮换。生产环境必须定期（建议每日）执行只读审计，并将非零退出码接入告警：
+
+```bash
+sudo npm run ops:credential-audit -- --env /opt/amazon-ad-bulk-operation/.env
+# JSON 格式供监控系统采集：追加 --json
+```
+
+- 审计读取 `AmazonAdsAuthorization.refreshTokenExpiresAt`（授权时按 365 天写入）、SP-API 授权的 `createdAt`（年度重授基准），以及 EnvironmentFile 中的 `AMAZON_LWA_CLIENT_SECRET_ISSUED_AT` / `AMAZON_ADS_LWA_CLIENT_SECRET_ISSUED_AT`（登记签发日期，YYYY-MM-DD）。
+- 状态含义：`OK` 正常；`DUE` 进入 60 天（Secret 为 150 天）提醒窗口；`EXPIRED` / `OVERDUE` 阻断（退出码 1）；`NOT_TRACKED` 表示未登记签发日期，必须补齐。
+- Access Token 已在客户端按 `tokenRefreshSkewMs` 提前刷新，无需每次请求换取新 token；审计不触发任何 Amazon 网络请求或数据库写入。
+- LWA Client Secret 轮换可用 Application Management API（grantless `POST /applications/2023-11-30/clientSecret`）自动化，轮换后必须同步更新 EnvironmentFile 与签发日期；加密密钥（`*_ENCRYPTION_KEY`）永不轮换，与数据库备份分开保管。
+
+**版本核对结论（2026-11-19，对照官方文档）**：Product Pricing v2022-05-01 仅提供 `getCompetitiveSummary` / `getFeaturedOfferExpectedPriceBatch`，没有卖家自有报价接口，因此 `getOwnPrices` 保留 v0 `/products/pricing/v0/price`，不得误迁；竞品摘要已用 2022-05-01。结算报告已使用新版 `GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2`（旧类型 2026-11-11 移除），无需变更。Orders v2026-01-01 / Finances v2024-06-19 / FBA Inbound v2024-03-20 / Listings 2021-08-01 / Catalog 2022-04-01 均保持现行版本。
+
+## H. 数据域架构自检（可先搭架构、后验收）
+
+项目允许在无真实数据时先搭好架构：SP-API 33 个已实现域、Ads SP 15 个已实现能力的代码能力、落地页与自动计划三件套已收敛为单一账本 `src/lib/amazon/domain-architecture.ts`（详见 `docs/amazon-domain-architecture-ledger.md`）。发布前与每次新增数据域后执行只读自检，非零退出码表示架构漂移：
+
+```bash
+npm run ops:domain-audit            # 人类可读三栏对照表 + 自检结论
+npm run ops:domain-audit -- --json  # 供 CI/监控采集
+```
+
+- 自检核对六项源码级不变量：SP/Ads 已实现能力均有落地页与自动计划、workbench 路由格式有效、`ImplementedDomain` 类型覆盖全部已实现域。只读、不连数据库、不发 Amazon 请求。
+- **架构通过不等于接入验收**：`liveAcceptance` 恒为 `NOT_VERIFIED`，到位真实凭据后必须按每域 `acceptance` 前置逐项验收（受限角色、Brand Registry、Profile 报表权限、有界审批等），并重跑 `--gate full` 收口 Amazon 凭据类 FAIL。
+- SB / SD 与 portfolios / budget-bidding / creative-brand 为规划中（P1），账本诚实标为未实现，不得对外宣称可同步。
