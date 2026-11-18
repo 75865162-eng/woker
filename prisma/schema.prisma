@@ -1483,6 +1483,8 @@ model SellfoxStore {
   workspaceId                 String                        @default("default")
   externalId                  String
   name                        String                        @default("")
+  /** 赛狐店铺列表 sellerId（Amazon Seller ID），B0 底座用于与 Amazon Seller 对齐；缺失为 null 不臆造。 */
+  sellerAccountId             String?
   marketplace                 String                        @default("")
   country                     String                        @default("")
   status                      String                        @default("")

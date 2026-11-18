@@ -107,7 +107,7 @@ async function syncStores(input: SyncInput) {
     await prisma.$transaction(async (tx) => {
       for (let index = 0; index < rows.length; index += 1) {
         const row = rows[index]; const externalId = identities[index]; const now = new Date();
-        const data = { name: field(row, "shopName", "name", "storeName"), marketplace: field(row, "marketplace", "marketplaceName", "marketplaceId"), country: field(row, "country", "countryName"), status: field(row, "status", "shopStatus"), payload: row as Prisma.InputJsonValue, lastSyncedAt: now, updatedAt: now };
+        const data = { name: field(row, "shopName", "name", "storeName"), sellerAccountId: field(row, "sellerId", "sellerAccountId") || null, marketplace: field(row, "marketplace", "marketplaceName", "marketplaceId"), country: field(row, "country", "countryName"), status: field(row, "status", "shopStatus"), payload: row as Prisma.InputJsonValue, lastSyncedAt: now, updatedAt: now };
         await tx.sellfoxStore.upsert({
           where: { organizationId_workspaceId_externalId: { organizationId: input.organizationId, workspaceId: input.workspaceId, externalId } },
           create: { id: `sellfox-store-${input.organizationId}-${input.workspaceId}-${externalId}`, organizationId: input.organizationId, workspaceId: input.workspaceId, externalId, ...data }, update: data,

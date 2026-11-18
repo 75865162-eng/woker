@@ -63,7 +63,8 @@ export function sellfoxEndpointRows(payload: unknown, rowsPath: string): Bag[] {
     }
     const bag = asBag(value);
     if (!bag) throw new SellfoxSyncInputError("赛狐端点响应结构无法识别。");
-    for (const key of ["rows", "records", "list", "itemList", "data", "result"]) {
+    // reportList：财务 V2 利润报表（monthProfit/*）实测响应行键；其余为既有赛狐约定。
+    for (const key of ["rows", "records", "list", "itemList", "reportList", "data", "result"]) {
       const nested = bag[key];
       if (Array.isArray(nested) || asBag(nested)) return collect(nested);
     }
