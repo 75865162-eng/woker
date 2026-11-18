@@ -38,8 +38,8 @@ export const sellfoxPlanGroups: SellfoxPlanGroup[] = [
     label: "数据总览",
     hint: "店铺与口径底盘，所有数据域都按店铺范围落表",
     items: [
-      { id: "stores", label: "店铺列表", api: ["/api/shop/pageList.json"], table: "SellfoxStore", resource: "stores", status: "live", priority: "P0" },
-      { id: "marketplace", label: "站点 MarketplaceId 映射", api: ["文档：站点MarketplaceId对应关系"], status: "live", priority: "P0", note: "常量映射，随店铺同步落地站点/国家" },
+      { id: "stores", label: "店铺列表", api: ["/api/shop/pageList.json"], table: "SellfoxStore", resource: "stores", status: "live", priority: "P0", note: "映射规划（B0）：SellfoxStore.externalId=赛狐 shopId；待 API 配好采样后补 sellerAccountId + marketplaceIds 两个字段与 Amazon Seller/Marketplace 对齐。店铺列表响应字段当前未文档化，不臆造取值，缺失保留 NEEDS_DATA。" },
+      { id: "marketplace", label: "站点 MarketplaceId 映射", api: ["文档：站点MarketplaceId对应关系"], status: "live", priority: "P0", note: "常量映射，随店铺同步落地站点/国家；作为 B0 底座供店铺 sellerAccountId + marketplaceIds 对齐 Amazon 站点使用" },
       { id: "sub-account", label: "子账号列表", api: ["文档：获取子账号列表"], status: "planned", priority: "P2", note: "业务员/开发员归属维度" },
       { id: "exchange-rate", label: "汇率列表", api: ["文档：汇率列表"], status: "planned", priority: "P0", note: "多币种利润汇总前置条件" },
     ],
@@ -73,8 +73,8 @@ export const sellfoxPlanGroups: SellfoxPlanGroup[] = [
       { id: "product-analysis", label: "产品分析 2.0", api: ["文档：获取产品分析数据（2.0）"], status: "planned", priority: "P1", note: "BSR / 评分 / 流量结构" },
       { id: "store-performance", label: "店铺表现按天", api: ["文档：店铺表现按天查询"], status: "planned", priority: "P1" },
       { id: "custom-report", label: "自定义报表", api: ["文档：获取自定义报表列表数据"], status: "planned", priority: "P2" },
-      { id: "profit-report", label: "利润报表／结算利润（9 维度 × 2 套）", api: ["/api/financial/v2/monthProfit/shop.json", "/api/financial/v2/monthProfit/sku.json", "/api/financial/v2/monthProfit/msku.json", "/api/financial/v2/monthProfit/asin.json", "/api/financial/v2/monthProfit/parentAsin.json", "/api/financial/v2/monthProfit/spu.json", "/api/financial/v2/monthProfit/developer.json", "/api/financial/v2/monthProfit/salesMan.json", "/api/financial/v2/monthProfit/shopSummary.json"], status: "planned", priority: "P1", note: "已登记通用端点种子（默认停用，fin_profit_*）；启用即按店铺×日期自动拉取，落 SellfoxApiRecord，口径与日利润快照不同，独立不覆盖" },
-      { id: "profit-daily", label: "按日利润（8 维度）", api: ["文档：按日利润报表-ASIN／父ASIN／MSKU／SKU／SPU／开发员／业务员／店铺"], status: "planned", priority: "P1", note: "与 performance 同为日粒度但维度更全，可做同一口径交叉校验" },
+      { id: "profit-report", label: "利润报表／结算利润（9 维度 × 2 套）", api: ["/api/financial/v2/monthProfit/shop.json", "/api/financial/v2/monthProfit/sku.json", "/api/financial/v2/monthProfit/msku.json", "/api/financial/v2/monthProfit/asin.json", "/api/financial/v2/monthProfit/parentAsin.json", "/api/financial/v2/monthProfit/spu.json", "/api/financial/v2/monthProfit/developer.json", "/api/financial/v2/monthProfit/salesMan.json", "/api/financial/v2/monthProfit/shopSummary.json"], status: "planned", priority: "P1", note: "通用采集器落地：9 维度已登记为只读端点种子（默认停用，fin_profit_*），启用即按店铺×日期拉取，payload 原样落 SellfoxApiRecord。接口文档无响应字段定义，字段字典待 API 配好后采样≥30行定型，不臆造 typed 表；口径与 performance 日快照不同，独立不覆盖" },
+      { id: "profit-daily", label: "按日利润（8 维度，接口已下线）", api: ["文档：按日利润报表-ASIN／父ASIN／MSKU／SKU／SPU／开发员／业务员／店铺"], status: "blocked", priority: "P2", note: "DEPRECATED：文档标注结算利润接口已下线（selectDailyFinancialAsin 等），不作为活跃采集域，不登记通用端点；日粒度利润以 performance 快照与 monthProfit(dateType=2) 为准。状态为 blocked 不生成端点候选" },
     ],
   },
   {
