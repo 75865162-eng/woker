@@ -5,6 +5,7 @@ import { Loader2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { StandardDataTable } from "@/components/ui/table-variants";
 import { type DataTableColumn } from "@/components/ui/data-table";
+import { Drawer } from "@/components/ui/overlays";
 
 type LedgerRow = {
   id: string;
@@ -74,10 +75,9 @@ export function PointsLedgerDrawer({ userId, userName, onClose }: { userId: stri
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/40" onClick={onClose}>
+    <Drawer open bare zIndex="drawer" onClose={onClose}>
       <div
         className="flex h-full w-full max-w-lg flex-col bg-surface shadow-xl"
-        onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-label={`${userName} 的积分流水`}
       >
@@ -115,6 +115,6 @@ export function PointsLedgerDrawer({ userId, userName, onClose }: { userId: stri
           {rows.some((row) => row.status === "HELD") ? <Badge tone="amber">存在冻结中的预扣</Badge> : null}
         </div>
       </div>
-    </div>
+    </Drawer>
   );
 }

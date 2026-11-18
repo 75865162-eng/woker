@@ -5,6 +5,7 @@ import { Check, Plus, UserCog, UsersRound, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog } from "@/components/ui/overlays";
 import { StandardDataTable } from "@/components/ui/table-variants";
 import { type DataTableColumn } from "@/components/ui/data-table";
 import { PointsQuickPanel, type PointsRow } from "@/components/accounts/points-quick-panel";
@@ -369,8 +370,8 @@ export function Modal({
   const widthClass = size === "wide" ? "max-w-6xl" : "max-w-2xl";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-8" onClick={onClose}>
-      <div className={`w-full ${widthClass} rounded-lg bg-surface shadow-xl`} onClick={(event) => event.stopPropagation()} role="dialog">
+    <Dialog open bare zIndex="modal" onClose={onClose}>
+      <div className={`mx-auto w-full ${widthClass} rounded-lg bg-surface shadow-xl`} onClick={(event) => event.stopPropagation()} role="dialog">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-md bg-brand text-white">
@@ -384,6 +385,6 @@ export function Modal({
         </div>
         <div className="p-5">{children}</div>
       </div>
-    </div>
+    </Dialog>
   );
 }

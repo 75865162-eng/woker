@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FileText, ImagePlus, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/overlays";
 import { useProductAttachmentActivity } from "./product-attachment-activity";
 import { getProductAssetDownloadUrl, isPlaceholderProductImageAssetId, uploadProductAttachmentAsset } from "@/lib/products/image-assets";
 import { getProductImageUrls, useProductImageUrls } from "@/lib/products/signed-image-urls";
@@ -157,8 +158,8 @@ export function ImageUploadSquare({
       <input ref={fileInputRef} type="file" accept={allowPdf ? "image/*,.pdf" : "image/*"} className="hidden" onChange={(event) => void handleFile(event.target.files?.[0])} />
 
       {previewOpen && (image || asset?.id) ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/70 p-6" onClick={() => setPreviewOpen(false)} role="dialog" aria-modal="true">
-          <div className="relative flex max-h-full max-w-5xl items-center justify-center" onClick={(event) => event.stopPropagation()}>
+        <Dialog open bare zIndex="viewer" busy={isUploading} onClose={() => setPreviewOpen(false)}>
+          <div className="relative mx-auto flex max-h-full max-w-5xl items-center justify-center">
             <div className="absolute right-0 top-0 z-10 flex translate-y-[-120%] gap-2">
               <Button variant="secondary" size="sm" disabled={isUploading} onClick={(event) => { event.stopPropagation(); fileInputRef.current?.click(); }}>
                 <ImagePlus className="h-4 w-4" />
@@ -186,7 +187,7 @@ export function ImageUploadSquare({
               )}
             </div>
           </div>
-        </div>
+        </Dialog>
       ) : null}
     </>
   );

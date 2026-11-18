@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ImagePlus, LoaderCircle, Minus, X } from "lucide-react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { Download, ImagePlus, LoaderCircle, Minus, RotateCcw, X, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/overlays";
 import { getProductListImage } from "@/lib/products/image-assets";
 import { isPlaceholderProductImageAssetId } from "@/lib/products/image-assets";
 import { useProductImageUrls } from "@/lib/products/signed-image-urls";
@@ -193,32 +194,85 @@ export function ProductImagePreviewModal({
   onClose: () => void;
   onLoad: () => void;
 }) {
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [panning, setPanning] = useState(false);
+  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; startPan: { x: number; y: number } } | null>(null);
+
+  function adjustZoom(delta: number) {
+    setZoom((current) => {
+      const next = Math.min(4, Math.max(0.25, Number((current + delta).toFixed(2))));
+      if (next <= 1) setPan({ x: 0, y: 0 });
+      return next;
+    });
+  }
+
+  function resetZoom() {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+    setPanning(false);
+    dragRef.current = null;
+  }
+
+  function onPointerDown(event: ReactPointerEvent<HTMLImageElement>) {
+    if (zoom <= 1) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, startPan: pan };
+    setPanning(true);
+  }
+
+  function onPointerMove(event: ReactPointerEvent<HTMLImageElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    setPan({ x: drag.startPan.x + event.clientX - drag.startX, y: drag.startPan.y + event.clientY - drag.startY });
+  }
+
+  function onPointerEnd(event: ReactPointerEvent<HTMLImageElement>) {
+    if (dragRef.current?.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    setPanning(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  }
+
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/40 p-6 backdrop-blur-sm" onClick={onClose}>
-      <div className="flex max-h-[88vh] w-full max-w-5xl flex-col rounded-lg bg-surface shadow-2xl" onClick={(event) => event.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+    <Dialog open bare zIndex="viewer" onClose={onClose}>
+      <div className="mx-auto flex max-h-[88vh] w-full max-w-5xl flex-col rounded-lg bg-surface shadow-2xl">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div>
             <h3 className="text-lg font-bold text-foreground">图片预览</h3>
-            <p className="mt-1 text-xs font-semibold text-muted">点击空白处或关闭按钮返回。</p>
+            <p className="mt-1 text-xs font-semibold text-muted">滚轮或按钮缩放，放大后拖拽平移。</p>
           </div>
-          <Button variant="secondary" size="sm" onClick={onClose}>
-            <X className="h-4 w-4" />
-            关闭
-          </Button>
+          <div className="flex shrink-0 items-center gap-1">
+            <Button variant="ghost" size="icon" onClick={() => adjustZoom(-0.25)} disabled={zoom <= 0.25} title="缩小" aria-label="缩小"><ZoomOut className="h-4 w-4" /></Button>
+            <span className="w-12 text-center text-xs font-semibold text-muted">{Math.round(zoom * 100)}%</span>
+            <Button variant="ghost" size="icon" onClick={() => adjustZoom(0.25)} disabled={zoom >= 4} title="放大" aria-label="放大"><ZoomIn className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" onClick={resetZoom} disabled={zoom === 1 && pan.x === 0 && pan.y === 0} title="复位" aria-label="复位"><RotateCcw className="h-4 w-4" /></Button>
+            <a href={image} download="product-image" target="_blank" rel="noreferrer" title="下载当前图片" aria-label="下载当前图片" className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-foreground"><Download className="h-4 w-4" /></a>
+            <Button variant="secondary" size="sm" onClick={onClose}><X className="h-4 w-4" />关闭</Button>
+          </div>
         </div>
-        <div className="flex flex-1 items-center justify-center overflow-auto p-5" onClick={onClose}>
-          {loading ? <p className="text-sm font-semibold text-white">正在下载</p> : null}
+        <div
+          className="flex flex-1 items-center justify-center overflow-auto bg-surface-muted p-5"
+          onWheel={(event) => { event.preventDefault(); adjustZoom(event.deltaY > 0 ? -0.1 : 0.1); }}
+        >
+          {loading ? <p className="text-sm font-semibold text-muted">正在下载</p> : null}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={image}
             alt="商品图片大图"
-            className={`max-h-[78vh] max-w-full object-contain ${loading ? "hidden" : ""}`}
+            className={`max-h-[78vh] max-w-full origin-center select-none object-contain ${loading ? "hidden" : ""} ${zoom > 1 ? (panning ? "cursor-grabbing" : "cursor-grab") : "cursor-zoom-in"}`}
+            style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
             onLoad={onLoad}
             onError={onLoad}
-            onClick={(event) => event.stopPropagation()}
+            draggable={false}
+            onDragStart={(event) => event.preventDefault()}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerEnd}
+            onPointerCancel={onPointerEnd}
           />
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, Copy, History, ImagePlus, LoaderCircle, RotateCcw, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/overlays";
 import { productStatusLabels, productStatusOptions, productStatusTones } from "@/data/products";
 import { useVirtualRows } from "@/lib/hooks/use-virtual-rows";
 import { getProductListImage } from "@/lib/products/image-assets";
@@ -450,8 +451,8 @@ export function ActivityLogModal({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-foreground/40 p-6 backdrop-blur-sm">
-      <div className="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-lg bg-surface shadow-2xl">
+    <Dialog open bare zIndex="modal" onClose={onClose}>
+      <div className="mx-auto flex max-h-[80vh] w-full max-w-2xl flex-col rounded-lg bg-surface shadow-2xl">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
             <h3 className="text-lg font-bold text-foreground">处理记录</h3>
@@ -476,6 +477,6 @@ export function ActivityLogModal({
           </Button>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

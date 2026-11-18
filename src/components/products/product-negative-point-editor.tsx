@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/overlays";
 import { LabeledInput } from "./product-workbench-fields";
 
 export function NegativePointEditor({
@@ -91,8 +92,8 @@ export function NegativePointEditor({
       </div>
 
       {open ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/55 p-6">
-          <div className="flex max-h-[88vh] w-full max-w-3xl flex-col rounded-lg bg-surface shadow-2xl">
+        <Dialog open bare zIndex="modal" onClose={() => setOpen(false)}>
+          <div className="mx-auto flex max-h-[88vh] w-full max-w-3xl flex-col rounded-lg bg-surface shadow-2xl">
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
               <div>
                 <h3 className="text-lg font-bold text-foreground">差评原文</h3>
@@ -140,7 +141,7 @@ export function NegativePointEditor({
               </Button>
             </div>
           </div>
-        </div>
+        </Dialog>
       ) : null}
     </>
   );

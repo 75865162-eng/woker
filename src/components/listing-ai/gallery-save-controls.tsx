@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { History, Loader2, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/overlays";
 import { useAppShellUser } from "@/components/app-shell/app-shell-context";
 import { roleCanPerformAction } from "@/lib/accounts/permissions";
 import { fieldClass } from "@/lib/listing-ai/workspace-draft";
@@ -100,8 +101,8 @@ export function GallerySaveControls({ snapshot, onRestore, disabled }: {
       {message ? <p role="status" className="text-xs text-brand">{message}</p> : null}
       {error && !open ? <p role="alert" className="text-xs text-danger-ink">{error}</p> : null}
       {open ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => { if (!busy) closeHistory(); }}>
-          <div role="dialog" aria-modal="true" aria-labelledby="gallery-history-title" className="w-full max-w-2xl rounded-lg border border-border bg-surface p-5 shadow-xl" onClick={event => event.stopPropagation()} onKeyDown={event => {
+        <Dialog open bare zIndex="modal" busy={busy} onClose={closeHistory}>
+          <div role="dialog" aria-modal="true" aria-labelledby="gallery-history-title" className="mx-auto w-full max-w-2xl rounded-lg border border-border bg-surface p-5 shadow-xl" onClick={event => event.stopPropagation()} onKeyDown={event => {
             if (event.key === "Escape" && !busy) closeHistory();
             if (event.key === "Tab") {
               const elements = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), [href], input:not(:disabled), [tabindex="0"]'));
@@ -133,7 +134,7 @@ export function GallerySaveControls({ snapshot, onRestore, disabled }: {
               <Button variant="secondary" size="sm" disabled={busy || !loaded || !history.hasMore} onClick={() => void loadHistory(page + 1)}>下一页</Button>
             </div>
           </div>
-        </div>
+        </Dialog>
       ) : null}
     </div>
   );

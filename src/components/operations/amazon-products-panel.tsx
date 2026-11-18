@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { StandardDataTable } from "@/components/ui/table-variants";
+import { ImageThumb } from "@/components/ui/image-thumb";
 import type { DataTableColumn } from "@/components/ui/data-table";
 import type { AmazonProductReadRow } from "@/lib/operations/amazon-products";
 export function AmazonProductsPanel({ headers }: { headers: () => Headers }) {
@@ -16,7 +17,7 @@ export function AmazonProductsPanel({ headers }: { headers: () => Headers }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const columns: DataTableColumn<AmazonProductReadRow>[] = [
-    { key: "thumbnail", header: "主图", render: row => row.thumbnailUrl ? <img src={row.thumbnailUrl} alt={row.title ?? row.asin ?? ""} width={150} height={150} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="h-[150px] w-[150px] object-contain" /> : <span className="flex h-[150px] w-[150px] items-center justify-center text-xs text-muted">未同步</span> },
+    { key: "thumbnail", header: "主图", render: row => <ImageThumb src={row.thumbnailUrl} alt={row.title ?? row.asin ?? ""} fallback={row.asin ?? "未同步"} className="h-[150px] w-[150px]" referrerPolicy="no-referrer" /> },
     { key: "title", header: "商品标题", className: "max-w-64", render: row => row.title ?? "未同步" },
     { key: "sellerSku", header: "Seller SKU", render: row => <span className="font-semibold">{row.sellerSku}</span> },
     { key: "asin", header: "ASIN", render: row => row.asin ?? "未同步" },

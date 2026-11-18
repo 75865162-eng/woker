@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { SellfoxTabs } from "@/components/sellfox/sellfox-nav";
+import { Dialog } from "@/components/ui/overlays";
 import { normalizeWorkspaceScope } from "@/lib/workspace/scope";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
 import { sellfoxSiteLabel } from "@/lib/sellfox/marketplace-site";
@@ -622,12 +623,12 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
         <span>页</span>
       </div>
       {columnsOpen ? (
-        <div className="sf-modal-back" role="presentation" onClick={() => setColumnsOpen(false)}>
-          <div className="sf-modal" role="dialog" aria-modal="true" aria-labelledby="sf-columns-title" onClick={(event) => event.stopPropagation()}>
+        <Dialog open bare zIndex="modal" onClose={() => setColumnsOpen(false)}>
+          <div className="sf-modal mx-auto" role="dialog" aria-modal="true" aria-labelledby="sf-columns-title">
             <h2 id="sf-columns-title">自定义列</h2>
             <ColumnPicker columns={page.columns} selected={visible} onCancel={() => setColumnsOpen(false)} onSave={saveColumns} />
           </div>
-        </div>
+        </Dialog>
       ) : null}
     </section>
   );

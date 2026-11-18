@@ -1,21 +1,16 @@
 "use client";
 
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { type ReactNode } from "react";
+import { Dialog } from "@/components/ui/overlays";
 
-/** Shared native HTML dialog: application content, focus trapping, no window.alert/confirm. */
+/**
+ * 兼容薄封装：保留原「挂载即打开、卸载即关闭」的契约（调用方不传 open），
+ * 实际承载统一到底座 Dialog，不再保留独立的原生 dialog 实现。
+ */
 export function ProductEditDialog({ title, children, onDismiss }: { title: string; children: ReactNode; onDismiss: () => void }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  const titleId = useId();
-  useEffect(() => {
-    const dialog = ref.current;
-    dialog?.showModal();
-    return () => dialog?.close();
-  }, []);
   return (
-    <dialog ref={ref} aria-labelledby={titleId} onCancel={(event) => { event.preventDefault(); onDismiss(); }}
-      className="m-auto max-h-[85vh] w-[min(94vw,850px)] overflow-auto rounded-lg border border-border bg-surface p-5 text-foreground shadow-xl backdrop:bg-black/40">
-      <h3 id={titleId} className="mb-3 text-base font-bold">{title}</h3>
+    <Dialog open title={title} onClose={onDismiss} size="md">
       {children}
-    </dialog>
+    </Dialog>
   );
 }

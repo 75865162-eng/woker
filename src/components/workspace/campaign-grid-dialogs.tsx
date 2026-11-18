@@ -4,6 +4,7 @@ import { RotateCcw, Search, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { RulesEditorShell } from "@/components/app-shell/lazy-workbenches";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/overlays";
 import { StandardDataTable } from "@/components/ui/table-variants";
 import { lifecycleGroups } from "@/data/default-rules";
 import { formatExportTime, lifecycleGroupLabel } from "./campaign-grid-home-utils";
@@ -12,12 +13,12 @@ import type { useCampaignGridHome } from "./use-campaign-grid-home";
 type Model = ReturnType<typeof useCampaignGridHome>;
 
 function CampaignDialog({ title, description, onClose, children, wide = false }: { title: string; description: ReactNode; onClose: () => void; children: ReactNode; wide?: boolean }) {
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6" onClick={onClose}>
-    <section className={`flex max-h-[90vh] w-full flex-col overflow-hidden rounded-lg border border-border bg-surface shadow-pop ${wide ? "max-w-7xl" : "max-w-4xl"}`} onClick={event => event.stopPropagation()}>
+  return <Dialog open bare zIndex="modal" onClose={onClose}>
+    <section className={`mx-auto flex max-h-[90vh] w-full flex-col overflow-hidden rounded-lg border border-border bg-surface shadow-pop ${wide ? "max-w-7xl" : "max-w-4xl"}`} onClick={event => event.stopPropagation()}>
       <header className="flex items-center justify-between gap-4 border-b border-border px-4 py-3"><div><h2 className="text-base font-black text-foreground">{title}</h2><div className="mt-1 text-xs font-semibold text-muted">{description}</div></div><button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded border border-border text-muted hover:text-foreground" title={`关闭${title}`}><X className="h-4 w-4" /></button></header>
       <div className="thin-scrollbar flex-1 space-y-3 overflow-auto p-4">{children}</div>
     </section>
-  </div>;
+  </Dialog>;
 }
 
 export function CampaignRuleDialogs({ model }: { model: Model }) {

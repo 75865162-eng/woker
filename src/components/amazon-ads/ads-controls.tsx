@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import { CalendarDays, ChevronDown, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/overlays";
 import { DEMO_TODAY } from "@/lib/amazon-ads/fixtures/catalog";
 import type { DateRange } from "@/lib/amazon-ads/types";
 export function AdsButton({ children, primary, ...props }: React.ComponentProps<typeof Button> & { primary?: boolean }) { return <Button size="sm" variant={primary ? "primary" : "secondary"} {...props}>{children}</Button>; }
@@ -20,7 +21,7 @@ export function Modal({ title, children, onClose }: { title: string; children: R
     element?.addEventListener("keydown", trap);
     return () => { element?.removeEventListener("keydown", trap); previous?.focus(); };
   }, []);
-  return <div className="ads-modal-backdrop" onClick={onClose} onKeyDown={e => { if (e.key === "Escape") onClose(); }}><section ref={ref} role="dialog" aria-modal="true" aria-label={title} className="ads-modal" onClick={e => e.stopPropagation()}><header><h2>{title}</h2><button autoFocus aria-label="关闭对话框" onClick={onClose}><X size={18} /></button></header>{children}</section></div>;
+  return <Dialog open bare zIndex="modal" onClose={onClose}><section ref={ref} role="dialog" aria-modal="true" aria-label={title} className="ads-modal mx-auto"><header><h2>{title}</h2><button autoFocus aria-label="关闭对话框" onClick={onClose}><X size={18} /></button></header>{children}</section></Dialog>;
 }
 export function shiftDate(date: string, days: number) { return new Date(Date.parse(date) + days * 86400000).toISOString().slice(0, 10); }
 export function presetRange(name: string): DateRange {

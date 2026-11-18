@@ -7,6 +7,7 @@ import { PendingDraftQueue } from "@/components/workspace/pending-draft-queue";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog } from "@/components/ui/overlays";
 import { defaultRules, lifecycleGroups } from "@/data/default-rules";
 import { useWorkspaceStore } from "@/lib/stores/workspace-store";
 import type { OverallAdDataRow } from "@/lib/types";
@@ -291,8 +292,8 @@ function OverallDetailDialog({
   const visibleRows = rows.slice(0, 300);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
-      <div className="flex max-h-[86vh] w-full max-w-6xl flex-col rounded-lg border border-border bg-surface shadow-xl">
+    <Dialog open bare zIndex="modal" onClose={onClose}>
+      <div className="mx-auto flex max-h-[86vh] w-full max-w-6xl flex-col rounded-lg border border-border bg-surface shadow-xl">
         <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div>
             <h2 className="text-lg font-black text-foreground">{title}</h2>
@@ -358,6 +359,6 @@ function OverallDetailDialog({
           )}
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }
