@@ -20,6 +20,12 @@ export type SalesSummary = {
   daily: Record<string, { value: number | null; entities: number }>;
 };
 export type WorkbenchDomain = "sales" | "performance" | "listings" | "ads_report" | "ads_targeting" | "ads_search_term" | "ads_campaign" | "ads_ad_group" | "ads_placement";
+// P1 3.2: the listing source used by the sales LATERAL/facets path. Same columns as the
+// view, so switching to the materialized profile is a pure name swap. Gated + reconciled.
+// Function form so the switch is read at query time (consistent with listings-read.ts).
+function workbenchListingSource() {
+  return process.env.SELLFOX_LISTING_PROFILE_READ_ENABLED === "true" ? '"SellfoxListingProfile"' : "sellfox_listing_current";
+}
 const sources = { sales: "sellfox_sales_daily", performance: '"SellfoxProductDailySnapshot"', listings: "sellfox_listing_current", ads_report: "sellfox_ads_product_daily", ads_targeting: "sellfox_ads_targeting_daily", ads_search_term: "sellfox_ads_search_term_daily", ads_campaign: "sellfox_ads_campaign_daily", ads_ad_group: "sellfox_ads_ad_group_daily", ads_placement: "sellfox_ads_placement_daily" };
 function scoped(alias: string, scope: Scope) {
   const a = Prisma.raw(alias);
@@ -48,6 +54,7 @@ export function workbenchDateRange(query: SellfoxBrowseQuery) {
 // never historical parent identity, price or inventory at the sale date.
 export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQuery, scope: Scope, exporting = false) {
   if (domain === "listings") return listingsReadSql(query, scope, exporting);
+  const listingSource = Prisma.raw(workbenchListingSource());
   const dimension = domain === "performance" && query.dimension === "spu" ? "asin" : query.dimension;
   const sortKey = sellfoxSortKey(domain, query);
   const sortDay = sortKey ? sellfoxDaySortDate(domain, sortKey) : null;
@@ -172,7 +179,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
       ${needTagFilter ? Prisma.sql`l."productTagNames" @> ARRAY[${query.productTag}]::text[] AS "matchesProductTag",` : Prisma.empty}
       COALESCE(l.developer,'未分配开发员') AS developer,
       COALESCE(l.spu,'未分配SPU') AS spu
-    FROM sellfox_listing_current l
+    FROM ${listingSource} l
     WHERE ${scoped("l", scope)}
   )`;
   const base = Prisma.sql`base AS (SELECT ${fields},st.name AS "storeName",st.marketplace AS "storeSite",
@@ -289,11 +296,11 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   if (query.storeId) facetFilters.push(Prisma.sql`l."storeId"=${query.storeId}`);
   if (query.site) facetFilters.push(Prisma.sql`st.marketplace=${query.site}`);
   const facets = needTagFacets ? Prisma.sql`,jsonb_build_object('productTags',
-    ARRAY(SELECT DISTINCT tag."labelName" FROM sellfox_listing_current l
+    ARRAY(SELECT DISTINCT tag."labelName" FROM ${listingSource} l
       JOIN "SellfoxStore" st ON st.id=l."storeId" AND ${scoped("st", scope)}
       CROSS JOIN LATERAL unnest(l."productTagNames") tag("labelName")
       WHERE ${Prisma.join(facetFilters, " AND ")} ORDER BY tag."labelName")
-    ,'brands', ARRAY(SELECT DISTINCT l.brand FROM sellfox_listing_current l
+    ,'brands', ARRAY(SELECT DISTINCT l.brand FROM ${listingSource} l
       JOIN "SellfoxStore" st ON st.id=l."storeId" AND ${scoped("st", scope)}
       WHERE ${Prisma.join(facetFilters, " AND ")} AND l.brand IS NOT NULL ORDER BY 1)
     ${domain === "performance" ? Prisma.sql`,'salespersons',ARRAY(

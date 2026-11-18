@@ -1574,6 +1574,117 @@ model SellfoxCoverage {
   @@index([organizationId, workspaceId, resource])
 }
 
+// ---- P2 L4 预聚合层 ----
+// 全部金额列沿用仓库存量 Decimal(20,4) 口径（与 7+ 只读视图/查询一致）；保留
+// currencyOriginal/fxRate/amountBase 三列以便将来跨币种对账，但本期不跨币种合并，
+// 与现有 totals 按币种分组的口径保持一致。缺失聚合维度一律 NULL，绝不补 0。
+// 所有表都带 organizationId/workspaceId 隔离并纳入唯一键，赛狐专用前缀，不与 Amazon 共用。
+
+/// 销量日聚合：(org,ws,store,msku,reportDate) 粒度，来自 SellfoxSalesDailySnapshot。
+model SellfoxSalesAggDaily {
+  id               String    @id
+  organizationId   String
+  workspaceId      String    @default("default")
+  storeId          String
+  msku             String
+  asin             String?
+  reportDate       String
+  quantity         Int?
+  orders           Int?
+  revenueOriginal  Decimal?  @db.Decimal(20, 4)
+  currencyOriginal String?
+  fxRate           Decimal?  @db.Decimal(20, 8)
+  amountBase       Decimal?  @db.Decimal(20, 4)
+  complete         Boolean?
+  sourceCapturedAt DateTime?
+  refreshedAt      DateTime  @default(now())
+
+  @@unique([organizationId, workspaceId, storeId, msku, reportDate], map: "sellfox_sales_agg_daily_identity")
+  @@index([organizationId, workspaceId, reportDate], map: "sellfox_sales_agg_daily_date")
+}
+
+/// 销量实体区间聚合：由 AggDaily 再聚合，日矩阵 jsonb 落表，页面可直接取。
+model SellfoxSalesAggEntity {
+  id              String    @id
+  organizationId  String
+  workspaceId     String    @default("default")
+  identity        String
+  currency        String
+  dimension       String
+  fromDate        String
+  toDate          String
+  quantity        Int?
+  orders          Int?
+  revenueOriginal Decimal?  @db.Decimal(20, 4)
+  daily           Json?
+  sourceVersion   String?
+  refreshedAt     DateTime  @default(now())
+
+  @@unique([organizationId, workspaceId, identity, currency, dimension, fromDate, toDate], map: "sellfox_sales_agg_entity_identity")
+  @@index([organizationId, workspaceId, dimension, fromDate, toDate], map: "sellfox_sales_agg_entity_range")
+}
+
+/// 利润日聚合：(org,ws,store,msku,reportDate,onlySettle) 粒度，来自 SellfoxProductDailySnapshot。
+model SellfoxProfitAggDaily {
+  id               String    @id
+  organizationId   String
+  workspaceId      String    @default("default")
+  storeId          String
+  msku             String
+  reportDate       String
+  onlySettle       Boolean   @default(false)
+  saleQuantity     Int?
+  saleRevenue      Decimal?  @db.Decimal(20, 4)
+  grossProfit      Decimal?  @db.Decimal(20, 4)
+  netRevenue       Decimal?  @db.Decimal(20, 4)
+  adCost           Decimal?  @db.Decimal(20, 4)
+  currency         String?
+  sourceCapturedAt DateTime?
+  refreshedAt      DateTime  @default(now())
+
+  @@unique([organizationId, workspaceId, storeId, msku, reportDate, onlySettle], map: "sellfox_profit_agg_daily_identity")
+  @@index([organizationId, workspaceId, reportDate], map: "sellfox_profit_agg_daily_date")
+}
+
+/// 广告日聚合：统一 6 张 ads 日快照的公共指标粒度。
+model SellfoxAdsAggDaily {
+  id          String    @id
+  organizationId String
+  workspaceId String    @default("default")
+  storeId     String
+  reportDate  String
+  adType      String
+  campaignId  String
+  adGroupId   String?
+  targetingId String?
+  entityType  String
+  impressions Int?
+  clicks      Int?
+  cost        Decimal?  @db.Decimal(20, 4)
+  adOrders    Int?
+  adSales     Decimal?  @db.Decimal(20, 4)
+  currency    String?
+  sourceCapturedAt DateTime?
+  refreshedAt DateTime  @default(now())
+
+  @@unique([organizationId, workspaceId, storeId, reportDate, adType, campaignId, adGroupId, targetingId, entityType], map: "sellfox_ads_agg_daily_identity")
+  @@index([organizationId, workspaceId, reportDate], map: "sellfox_ads_agg_daily_date")
+}
+
+/// 概览聚合：每个 org/ws 一行的店铺级 KPI 快照，来自各快照 head。
+model SellfoxOverviewAgg {
+  organizationId   String
+  workspaceId      String   @default("default")
+  storeCount       Int?
+  inventoryCount   Int?
+  latestSalesDate  String?
+  latestProfitDate String?
+  sourceVersion    String?
+  refreshedAt      DateTime @default(now())
+
+  @@id([organizationId, workspaceId])
+}
+
 /// 后台配置的赛狐 API 端点。新增接口只需填一条配置，编排器自动生成全量计划、定时与回填。
 model SellfoxApiEndpoint {
   id             String    @id
@@ -1674,6 +1785,8 @@ model SellfoxSalesDailySnapshot {
   quantity       Int?
   revenue        Decimal?     @db.Decimal(20, 4)
   currency       String       @default("")
+  // P1: complete 从视图的每行 coverage EXISTS 子查询落成物理列；null = 未知（老数据回填前），不补零值。
+  complete       Boolean?
   payload        Json
   syncedAt       DateTime     @default(now())
   createdAt      DateTime     @default(now())
@@ -2935,6 +3048,7 @@ model SellfoxListingSnapshot {
   @@unique([storeId, capturedAt, sourceKey])
   @@index([organizationId, workspaceId, storeId, msku, capturedAt])
   @@index([organizationId, workspaceId, asin])
+  @@index([organizationId, workspaceId, storeId, asin, capturedAt], map: "sellfox_listing_lateral_asin")
   @@index([organizationId, workspaceId, storeId, capturedAt, id], map: "sellfox_listing_current_page")
   @@index([organizationId, workspaceId, id], map: "sellfox_listing_scope_id")
   @@index([organizationId, workspaceId, brand, storeId, capturedAt], map: "sellfox_listing_brand")
@@ -2942,6 +3056,80 @@ model SellfoxListingSnapshot {
   @@index([organizationId, workspaceId, sales7, id], map: "sellfox_listing_sales7")
   @@index([organizationId, workspaceId, price, id], map: "sellfox_listing_price")
   @@index([productTagNames], type: Gin, map: "sellfox_listing_tags")
+}
+
+// P1 3.2: flattened "current listing" profile, materialized at sync time to remove the
+// two-layer join of sellfox_listing_current (Snapshot JOIN Store JOIN SnapshotHead) from
+// the workbench hot path. Columns mirror sellfox_listing_current exactly so the read-side
+// switch is a pure table-name substitution with zero SQL changes. Read path is gated by
+// SELLFOX_LISTING_PROFILE_READ_ENABLED and stays OFF until consistency reconciliation passes.
+model SellfoxListingProfile {
+  id              String    @id
+  organizationId  String
+  workspaceId     String
+  storeId         String
+  sourceKey       String
+  capturedAt      DateTime
+  asin            String
+  msku            String?
+  sku             String
+  parentAsin      String?
+  title           String?
+  status          String?
+  price           Decimal?  @db.Decimal(20, 4)
+  currency        String?
+  fulfillable     Int?
+  sales7          Int?
+  sales14         Int?
+  sales30         Int?
+  revenue7        Decimal?  @db.Decimal(20, 4)
+  revenue14       Decimal?  @db.Decimal(20, 4)
+  revenue30       Decimal?  @db.Decimal(20, 4)
+  adSpend7        Decimal?  @db.Decimal(20, 4)
+  adSpend14       Decimal?  @db.Decimal(20, 4)
+  adSpend30       Decimal?  @db.Decimal(20, 4)
+  sourceUpdatedAt String?
+  shopExternalId  String?
+  name            String?
+  marketplace     String?
+  fnsku           String?
+  parentSku       String?
+  mainImage       String?
+  brand           String?
+  amazonBrand     String?
+  productTags     String?
+  openDate        String?
+  firstSaleDate   String?
+  bsrCategory     String?
+  buyBoxWinner    String?
+  fulfillment     String?
+  rating          String?
+  ratingCount     Float?
+  bsrRank         Float?
+  purchaseCost    Decimal?  @db.Decimal(20, 4)
+  fbaFees         Decimal?  @db.Decimal(20, 4)
+  referralFee     Decimal?  @db.Decimal(20, 4)
+  totalFee        Decimal?  @db.Decimal(20, 4)
+  headTripCost    Decimal?  @db.Decimal(20, 4)
+  reservedQty     Float?
+  shippingPrice   Decimal?  @db.Decimal(20, 4)
+  profitPrice     Decimal?  @db.Decimal(20, 4)
+  profitRate      Float?
+  listingQuantity Float?
+  unsellable      Float?
+  warehousing     Float?
+  productTagNames String[]  @default([])
+  ratingValue     Float?
+  dxmPublishState String?
+  developer       String?
+  spu             String?
+  headCapturedAt  DateTime?
+  syncedAt        DateTime?
+
+  @@unique([organizationId, workspaceId, storeId, sourceKey], map: "sellfox_listing_profile_identity")
+  @@index([organizationId, workspaceId, storeId, msku, capturedAt], map: "sellfox_listing_profile_lookup")
+  @@index([organizationId, workspaceId, brand, storeId, capturedAt], map: "sellfox_listing_profile_brand")
+  @@index([productTagNames], type: Gin, map: "sellfox_listing_profile_tags")
 }
 
 model SellfoxReportTask {
@@ -2999,6 +3187,7 @@ model SellfoxSalesDayCoverage {
   SellfoxStore SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
 
   @@id([storeId, reportDate])
+  @@index([storeId, reportDate, capturedAt], map: "sellfox_sales_day_coverage_batch")
 }
 
 model SellfoxAdsTargetingDaily {
