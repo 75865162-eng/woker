@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { assertWorkspaceAccess } from "@/lib/workspace/access";
 import { type PermissionAction } from "@/lib/accounts/permissions";
-import { normalizeRolePermissions } from "@/lib/accounts/role-permissions-utils";
+import { normalizeCatalogRolePermissions } from "@/lib/accounts/role-permissions-utils";
 import { WmsInputError } from "./rules";
 import type { WmsScope } from "./contracts";
 
@@ -73,7 +73,7 @@ export async function assertWmsAccess(
     FOR SHARE
   `;
   if (!roles[0]) throw new WmsInputError("组织角色目录尚未就绪。", 403);
-  const permissions = normalizeRolePermissions(roles[0].permissions);
+  const permissions = normalizeCatalogRolePermissions(roleId, roles[0].permissions);
   if (!permissions.wms?.includes(input.action)) throw new WmsInputError("当前账号没有此 WMS 操作权限。", 403);
 
   const workspace = await assertWorkspaceAccess(input.organizationId, input.workspaceId, input.userId, tx);
