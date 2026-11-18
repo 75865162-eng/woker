@@ -100,13 +100,34 @@ export async function POST(
             {
               persistReport: async (report, fileName) => {
                 const bytes = await exportReport(loaded.view.exportFormat, report, fileName);
-                return putReport({
+                const downloadId = putReport({
                   bytes,
                   fileName,
                   format: loaded.view.exportFormat,
                   organizationId: user.organizationId,
                   userId: user.id,
                 });
+                // 持久化历史是尽力而为：失败不影响当次下载，但如实返回 null，不伪造历史 id。
+                let historyId: string | null = null;
+                try {
+                  const { saveSkillRun } = await import("@/lib/skill-engine/run-history");
+                  historyId = await saveSkillRun({
+                    scope: { organizationId: user.organizationId, workspaceId: scope.workspaceId, ownerId: user.id },
+                    slug: loaded.view.slug,
+                    skillName: loaded.view.name,
+                    inputs,
+                    exportFormat: loaded.view.exportFormat,
+                    fileName,
+                    report,
+                    bytes,
+                    model: aiSettings.model,
+                    provider: aiSettings.provider,
+                    marketplace: String(inputs.marketplace ?? "").toUpperCase(),
+                  });
+                } catch {
+                  historyId = null;
+                }
+                return { downloadId, historyId };
               },
             },
           );

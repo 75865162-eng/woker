@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import type { Locale } from "@/lib/lili/tx";
 import { tx } from "@/lib/lili/tx";
 
-export type ToolCard = { name: string; description: string; category: string; readOnly: boolean; availability: "catalog" | "unmapped" };
+export type ToolCard = { name: string; description: string; category: string; readOnly: boolean; availability: "catalog" | "unmapped"; nameZh?: string; descriptionZh?: string; kindLabel?: string };
 
 export function ToolLab({ locale, tools }: { locale: Locale; tools: ToolCard[] }) {
   const [q, setQ] = useState("");
@@ -14,7 +14,7 @@ export function ToolLab({ locale, tools }: { locale: Locale; tools: ToolCard[] }
   const cats = useMemo(() => ["all", ...Array.from(new Set(tools.map((t) => t.category)))], [tools]);
   const shown = tools.filter((tool) => {
     if (cat !== "all" && tool.category !== cat) return false;
-    const hay = `${tool.name} ${tool.description}`.toLowerCase();
+    const hay = `${tool.name} ${tool.description} ${tool.nameZh ?? ""} ${tool.descriptionZh ?? ""}`.toLowerCase();
     return hay.includes(q.trim().toLowerCase());
   });
   return (
@@ -36,10 +36,12 @@ export function ToolLab({ locale, tools }: { locale: Locale; tools: ToolCard[] }
             <span className={`mt-0.5 rounded-full px-2 py-0.5 text-xs ${tool.readOnly ? "bg-success-soft text-success-ink" : "bg-surface-muted text-brand"}`}>
               {tool.readOnly ? "read" : "write"}
             </span>
-            <span>
-              <span className="font-medium">{tool.name}</span>
+            <span className="min-w-0">
+              <span className="font-medium">{locale === "zh" && tool.nameZh ? tool.nameZh : tool.name}</span>
+              <span className="ml-2 text-xs font-normal text-muted">{tool.name}</span>
+              {tool.kindLabel && <span className="ml-2 rounded-full bg-surface-muted px-1.5 py-0.5 text-xs text-muted">{tool.kindLabel}</span>}
               <span className="ml-2 text-xs text-muted">{tool.availability === "catalog" ? tx(locale, "目录查询可用", "Catalog available") : tx(locale, "未映射", "Not mapped")}</span>
-              <span className="mt-0.5 block text-sm text-muted line-clamp-2">{tool.description}</span>
+              <span className="mt-0.5 block text-sm text-muted line-clamp-2">{locale === "zh" && tool.descriptionZh ? tool.descriptionZh : tool.description}</span>
             </span>
           </Link>
         ))}

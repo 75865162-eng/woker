@@ -3,6 +3,7 @@ import rawSkills from "@/data/lili/skills.json";
 import rawTaxonomy from "@/data/lili/taxonomy.json";
 import rawTools from "@/data/lili/tools.json";
 import rawDocs from "@/data/lili/tool-docs.json";
+import rawLabels from "@/data/lili/tool-labels.json";
 import rawEnglish from "@/data/lili/workflows-en.json";
 import rawChinese from "@/data/lili/workflows-zh.json";
 
@@ -27,10 +28,13 @@ export type CatalogWorkflow = {
 export type CatalogTool = {
   name: string; description: string; category: string; readOnly: boolean;
   inputSchema: InputSchema; docs: string; availability: "catalog" | "unmapped";
+  /** 中文元数据来自 shipped 的《粒粒工具与技能中文对照表》，仅展示，不授予任何权限或执行能力。 */
+  nameZh?: string; descriptionZh?: string; kindLabel?: string;
 };
 const catalogTools = new Set(["meta_search_skills", "meta_load_skill", "meta_list_workflows"]);
 const taxonomy = rawTaxonomy as Record<string, { cat?: string; nameEn?: string; summaryEn?: string; sort?: number; featured?: boolean; isNew?: boolean }>;
 const docs = rawDocs as Record<string, string>;
+const labels = rawLabels as Record<string, { zh: string; type: string; kind: "readonly" | "controlled"; desc: string }>;
 
 // Shipped definitions only. Never initialize a second database or seed business rows.
 export function listSkills(): CatalogSkill[] {
@@ -62,12 +66,16 @@ export async function skillMarkdown(slug: string): Promise<string | undefined> {
 }
 
 export function listTools(): CatalogTool[] {
-  return rawTools.tools.map((tool) => ({
-    name: tool.name, description: tool.description, category: tool.name.split("_")[0],
-    readOnly: Boolean(tool.annotations.readOnlyHint), inputSchema: tool.inputSchema as InputSchema,
-    docs: docs[tool.name] ?? tool.description,
-    availability: catalogTools.has(tool.name) ? "catalog" as const : "unmapped" as const,
-  })).sort((a, b) => a.name.localeCompare(b.name));
+  return rawTools.tools.map((tool) => {
+    const label = labels[tool.name];
+    return {
+      name: tool.name, description: tool.description, category: tool.name.split("_")[0],
+      readOnly: Boolean(tool.annotations.readOnlyHint), inputSchema: tool.inputSchema as InputSchema,
+      docs: docs[tool.name] ?? tool.description,
+      availability: catalogTools.has(tool.name) ? "catalog" as const : "unmapped" as const,
+      nameZh: label?.zh, descriptionZh: label?.desc, kindLabel: label?.type,
+    };
+  }).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function listWorkflows(): CatalogWorkflow[] {

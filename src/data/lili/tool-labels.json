@@ -1,0 +1,692 @@
+{
+  "ads_generate_recommendations": {
+    "zh": "生成广告优化建议批次",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "基于最新同步数据生成一批否定/调价/预算建议，按批次计费。"
+  },
+  "ads_get_bid_recommendations": {
+    "zh": "查询建议竞价",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "取亚马逊官方建议竞价及区间：可按 ASIN 在新建广告组前预估，或按现有活动/广告组/关键词/自动定向主题查询；免费实时 Ads 只读。"
+  },
+  "ads_get_connection_status": {
+    "zh": "广告连接状态",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "查卖家名下有几个 Ads 授权、全部广告 Profile（店铺/站点）及 id；后续 ads\\_* 工具用该 Profile id 作为 store_scope。"
+  },
+  "ads_get_data_health": {
+    "zh": "广告数据健康度",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "判断某 Profile 同步报表是否新鲜、完整、足以据此决策。"
+  },
+  "ads_get_settings": {
+    "zh": "广告优化器设置",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "读取某 Profile 生效的 ACOS 阈值、点击/花费门槛等规则设置。"
+  },
+  "ads_get_sync_status": {
+    "zh": "广告同步状态",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "查某 Profile 最近报表同步的时间与成败；按报表族展示进度，已落库的族可先查，不必等最慢报表。"
+  },
+  "ads_list_entities": {
+    "zh": "广告实体实时列表",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "直连 Ads API 读 SP/SD/SB 活动、广告组、广告、关键词、投放、否定的当前出价/预算/状态；历史指标不在本工具，走 data_query。"
+  },
+  "ads_list_recommendations": {
+    "zh": "广告建议列表",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "列最新优化建议（否定、调价、预算复盘、收割机会）及证据，可按处理状态过滤。"
+  },
+  "ads_mark_recommendation": {
+    "zh": "标记建议处理状态",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "把建议标记为已采纳（卖家已在亚马逊操作）或已忽略。"
+  },
+  "ads_prepare_apply": {
+    "zh": "建议应用预检",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "应用建议前第一步：对照实时亚马逊状态校验待处理建议，生成一次性写计划（30 分钟有效）与确认话术；预览免费。"
+  },
+  "ads_prepare_changes": {
+    "zh": "自定义改动预检",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "自行编写改动清单第一步：校验并生成一次性写计划，支持创建活动/组/广告/关键词/投放及出价/预算/状态/否定变更，最多 50 条；不写入。"
+  },
+  "ads_start_sync": {
+    "zh": "拉取广告报表",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "为某 Profile 后台拉取活动、搜索词、投放、广告位等新报表。"
+  },
+  "ads_update_settings": {
+    "zh": "修改广告优化器设置",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "改目标 ACOS 或规则阈值等，只传需要修改的键。"
+  },
+  "brand_get_search_query_performance": {
+    "zh": "搜索查询表现 SQP",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "品牌备案直通：本店 ASIN 在各搜索词的展示/点击/加购/购买漏斗与份额、各环节转化指数、最弱环节；报告 pending 时等待 1-2 分钟带同一 report_id 轮询。"
+  },
+  "catalog_get_product_type": {
+    "zh": "商品类型字段要求",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "读取某商品类型在本站点的属性字段、必填/条件字段与属性分组，用于构造 Listing 属性载荷。"
+  },
+  "catalog_search_product_types": {
+    "zh": "搜索商品类型",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "按关键词或标题找候选商品类型，Listing 载荷编写第 0 步；免费实时 SP-API 只读。"
+  },
+  "competitor_find_similar": {
+    "zh": "亚马逊相似品",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "取亚马逊官方关联的相似/可比商品（每调用 ≤20 ASIN），含标题/品牌/排名/主图/参考价；每店约 30 秒一次限流，结果缓存 24 小时。"
+  },
+  "data_describe_table": {
+    "zh": "表结构说明",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "查看本地抽取库某张表的列名、类型与含义，写 SQL 前先查。"
+  },
+  "data_list_tables": {
+    "zh": "本地数据表清单",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "业务问题入口：列出真实店铺抽取库的 SQL 表（订单/库存/退货/换货/广告日报/财务/补货引擎等）及行数与说明。"
+  },
+  "data_query": {
+    "zh": "本地数据 SQL 查询",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "只读 DuckDB SQL，分析销量/订单/广告花费/ACOS/库存/退货率/利润，支持跨表关联；结果 ≤200 行；拒绝写操作与多语句脚本。"
+  },
+  "data_sync_start": {
+    "zh": "全量同步店铺数据",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "后台从 SP-API 同步订单/库存/退货/换货/财务/流量/仓储费/Listing/购物车/排名等；广告报表另走 ads_start_sync。"
+  },
+  "data_sync_status": {
+    "zh": "数据同步状态",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "查各类数据最近一次同步成败与行数、抽取库最近构建时间；data_sync_start 后轮询。"
+  },
+  "finance_get_balances": {
+    "zh": "账户余额",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "Finances v2024-06-19 直通：各站点/账户类型可放款与预留余额，可查历史时点；押款明细走 data_query。"
+  },
+  "finance_get_fee_estimate": {
+    "zh": "费用试算",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "Product Fees 直通：按 ASIN/SKU + 售价估算佣金/FBA 费用与到手净额；事前估算，不含仓储/广告/退货/采购成本。"
+  },
+  "listing_check_restrictions": {
+    "zh": "可售性检查",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "Listings Restrictions 直通：查 ASIN 是否可售、品牌门槛/类目限制与申请链接。"
+  },
+  "listing_create_aplus": {
+    "zh": "创建 A+ 草稿",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "低风险写：按文案 + 图片 URL 生成标准 A+ 内容草稿（买家不可见），发布需另行高风险确认；需品牌备案。"
+  },
+  "listing_create_image_upload": {
+    "zh": "图片上传地址",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "取一次性上传 URL（15 分钟有效）与永久公网 URL，需自行 PUT 上传文件，文件字节不经本工具。"
+  },
+  "listing_get_aplus": {
+    "zh": "A+ 详情",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "按 content_reference_key 读单篇 A+ 模块结构与挂载 ASIN，实时只读。"
+  },
+  "listing_get_live": {
+    "zh": "在线 Listing 读取",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "实时读亚马逊在线 Listing（非日报快照）：摘要、属性、问题清单、报价、履约可用性。"
+  },
+  "listing_import_image_from_url": {
+    "zh": "公网图片转存",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "把公网已有图片服务端下载到卖家自有图床并返回稳定公网 URL（20MB 内，仅图片类型）。"
+  },
+  "listing_list_aplus": {
+    "zh": "A+ 列表",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "列店铺 A+ 文档名称/审核状态/key 及挂载 ASIN，可按状态过滤；需品牌备案。"
+  },
+  "listing_prepare_change": {
+    "zh": "Listing 变更预检",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "服务端全量校验 Listing 载荷（put 全量 / patch 局部 / 变体族 items_json），无 ERROR 才生成一次性写计划；免费。"
+  },
+  "market_aba_keywords": {
+    "zh": "ABA 关键词大盘",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "卖家精灵副本 ABA：全站词的搜索排名/趋势/搜索量/点击/展示/购买/购买率/点击集中度/Top3 ASIN 与品牌/标题密度/PPC 出价区间；按调用扣积分。"
+  },
+  "market_aba_trend": {
+    "zh": "关键词 ABA 趋势",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "单词周/月搜索排名与搜索量历史，看季节性与升降趋势，数据回溯至 2022；扣积分。"
+  },
+  "market_find_node": {
+    "zh": "类目节点解析",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "类目名/节点 id 解析出完整类目路径、节点 id 路径与在售商品数；扣积分。"
+  },
+  "market_find_products": {
+    "zh": "类目/关键词选品抽样",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "按价格带/月销/评分筛商品，按销量/价格/评分/评论/利润/上架时间排序，含单 ASIN 价格/销量/收入/评分/评论/品牌/卖家；扣积分。"
+  },
+  "market_get_asin": {
+    "zh": "单 ASIN 详情",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "一个竞品 ASIN 的价格促销/评分评论数/上架日期/变体数/卖家履约/五点/Listing 质量分/徽章；扣积分。"
+  },
+  "market_get_reviews": {
+    "zh": "ASIN 评论",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "取 ASIN 评论标题/正文/星级/日期，可按星级过滤；竞品差评挖痛点；扣积分。"
+  },
+  "market_list_competitors": {
+    "zh": "关联竞品",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "亚马逊与买家实际关联到某 ASIN 的竞品清单；扣积分。"
+  },
+  "market_list_sorftime_tools": {
+    "zh": "Sorftime 工具清单",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "列 Sorftime 多平台工具（Walmart/TikTok Shop/Shopee/Temu/1688/Reddit/Quora 及补充 Amazon 视角）的名称/用途/参数/积分成本；免费。"
+  },
+  "market_list_xiyou_tools": {
+    "zh": "西柚工具清单",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "列西柚洞察竞品流量工具：ASIN 反查词、词反查 ASIN、多 ASIN 对比、流量/排名/BSR 趋势；免费。"
+  },
+  "market_mine_keywords": {
+    "zh": "关键词拓展",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "种子词拓展词库，含搜索量/购买/购买率/商品与广告竞品数/标题密度/相关性/SPR/点击集中度/PPC 出价；扣积分。"
+  },
+  "market_query_sorftime": {
+    "zh": "查询 Sorftime 工具",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "调一个 Sorftime 多平台工具，按工具参数传 JSON；每次 1-2 积分，无数据不收费。"
+  },
+  "market_query_xiyou": {
+    "zh": "查询西柚工具",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "调一个西柚工具：竞品 ASIN 词流量与排名、词反查 ASIN、流量/排名/BSR 趋势；按西柚计费 1:1；扣积分。"
+  },
+  "market_research_keyword": {
+    "zh": "关键词市场评估",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "单词/词市场的月搜索量/购买/购买率/供需比/商品数/点击集中度/均价/PPC 出价区间/增长趋势；卖家精灵数据，扣积分。"
+  },
+  "market_scan_node": {
+    "zh": "类目节点扫描",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "一键类目健康：商品数/均价/利润率/评分/评论/新品占比/头部集中度、价格带/评分/上架时间分布；默认约 5 积分（加品牌卖家 7）。"
+  },
+  "meta_deep_analysis": {
+    "zh": "深度分析委派",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "把数据量大/多角度的只读分析交给独立分析员（只读，不能改数据），返回结论报告。"
+  },
+  "meta_get_usage": {
+    "zh": "用量与余额",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "本账号近 30 天每日调用与积分消耗、剩余积分。"
+  },
+  "meta_get_workflow_run": {
+    "zh": "工作流运行详情",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "单次工作流运行的分步结果、错误、跳过的写步骤数。"
+  },
+  "meta_list_stores": {
+    "zh": "店铺清单",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "本账号连接的全部店铺及 store_scope id：广告 Profile（ads\\_*）与 Amazon 店铺连接（restock\\_*）。"
+  },
+  "meta_list_workflows": {
+    "zh": "工作流清单",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "已保存工作流（含计划与最近运行）+ 可保存的内置模板。"
+  },
+  "meta_load_skill": {
+    "zh": "加载技能",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "按名从内部技能库加载完整流程与引用工具。"
+  },
+  "meta_run_workflow": {
+    "zh": "运行工作流",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "立即跑已保存工作流；只读步骤执行，写步骤跳过并引导；dry_run 默认彩排。"
+  },
+  "meta_save_workflow": {
+    "zh": "保存工作流",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "保存可复用工具步骤清单（手动/每日）；工作流只跑只读步骤；需卖家批准。"
+  },
+  "meta_search_skills": {
+    "zh": "搜索技能",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "按问题检索内部技能库中的操作流程/分析剧本；多步分析先走这里。"
+  },
+  "meta_set_workflow_schedule": {
+    "zh": "工作流定时开关",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "启用/停用工作流每日计划；启用前必须先完成彩排；停用是该工作流的熔断开关。"
+  },
+  "meta_submit_feedback": {
+    "zh": "提交反馈",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "把卖家明确提出的需求/问题反馈给粒粒团队；仅文字，截图表格走网页反馈入口。"
+  },
+  "orders_check_review_eligibility": {
+    "zh": "评价资格检查",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "订单号列表（≤20）逐单查「请求评价」是否可用；规划批量发送前先 dry-run。"
+  },
+  "orders_get_recent": {
+    "zh": "实时最近订单",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "Orders API 直通：近 N 小时（默认 24，上限 72）订单数/状态分布/金额/SKU Top；Pending 单报表里看不到。"
+  },
+  "orders_request_reviews": {
+    "zh": "批量请求评价",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "低风险写：对可用订单发亚马逊官方评价+反馈请求邮件，不可自定义内容；每单一生一次，≤20 单，先查资格并确认数量。"
+  },
+  "promotions_get": {
+    "zh": "促销详情",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "按 promotion_id 实时读促销档期/预算/优惠/购买条件/费用预估/人群/问题/待生效修订。"
+  },
+  "promotions_get_items": {
+    "zh": "促销参与商品",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "列某促销挂载的 ASIN/SKU、单品优惠/限购/预算/被拒原因；仅 ITEMS 型促销。"
+  },
+  "promotions_search": {
+    "zh": "促销列表",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "实时列店铺优惠券/秒杀/折扣/凑单优惠，含状态/档期/预算/折扣/费用预估/问题，可多条件过滤与翻页。"
+  },
+  "restock_cancel_mcf_order": {
+    "zh": "取消 MCF 履约单",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "低风险写：Received 状态内免费撤销，已拣货/发货不可取消。"
+  },
+  "restock_check_inbound_eligibility": {
+    "zh": "FBA 入库资格检查",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "Inbound Eligibility 直通：ASIN 能否进 FBA 及不合格原因；与发货预览互补（查亚马逊侧资格）。"
+  },
+  "restock_confirm_delivery_window": {
+    "zh": "确认送达时间窗",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "确认某货件选定的送达时间窗；复核实时选项，过期/失效拒绝；确认后仍可在货件关闭前改选。"
+  },
+  "restock_confirm_packing": {
+    "zh": "确认装箱方案",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "第 3 步：确认装箱选项并提交箱规明细；一箱可多 MSKU；同包装组；总量须与计划一致；同选项幂等重试。"
+  },
+  "restock_create_shipment_draft": {
+    "zh": "创建入库计划草稿",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "第 1 步：按补货行在亚马逊建 FBA 入库计划草稿（不提交不扣费）；先跑预览；亚马逊慢则返回 operation_pending，勿重复建。"
+  },
+  "restock_get_awd_status": {
+    "zh": "AWD 仓配全貌",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "实时只读：AWD 库存/入库货件/补货单/出库单各 ≤25 条；未用 AWD 返回 in_use=false。"
+  },
+  "restock_get_clearance": {
+    "zh": "清仓建议",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "滞销过量库存清单（促销/处置候选）；多站点按库存池（EU/UK/US/CA/国家）出计划。"
+  },
+  "restock_get_delivery_challan": {
+    "zh": "印度送货单据",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "仅印度：取货件 Delivery Challan 下载链接，链接过期需立即下载。"
+  },
+  "restock_get_delivery_windows": {
+    "zh": "生成送达时间窗",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "为分仓确认后的草稿生成预计送达时间窗选项（状态/有效期），供卖家选择；可重新生成，确认后锁定。"
+  },
+  "restock_get_forecast": {
+    "zh": "12 个月需求预测",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "去季节化后重季节化的月度预测 + 历史月销；按库存池出计划。"
+  },
+  "restock_get_hygiene": {
+    "zh": "补货数据卫生",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "未映射 SKU、缺失参考表条目等悄悄影响计划的问题清单。"
+  },
+  "restock_get_inbound_plan": {
+    "zh": "读取入库计划",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "按 inbound_plan_id 读计划状态/发货地址/商品 FNSKU 与货件；只读，MCP 只能续建粒粒草稿。"
+  },
+  "restock_get_inbound_settings": {
+    "zh": "入库前置设置",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "一次性读发货地址/联系人/箱规/SKU 映射/SP-API 入库授权；建货件前先查，ready=false 先补缺口。"
+  },
+  "restock_get_item_compliance": {
+    "zh": "商品合规详情",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "草稿 SKU/指定 MSKU 的 ASIN、FNSKU、税务细节（HSN/申报价值/GST/cess）；主要印度站。"
+  },
+  "restock_get_item_labels": {
+    "zh": "FNSKU 商品标签",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "卖家为标签责任方时生成 FNSKU 商品标签下载链接；支持标准纸/热敏；≤100 SKU；链接过期即取。"
+  },
+  "restock_get_mcf_order": {
+    "zh": "MCF 履约单详情",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "按 order_id 查 MCF 单状态/货件/包裹追踪号。"
+  },
+  "restock_get_packing_options": {
+    "zh": "生成装箱选项",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "第 2 步：在亚马逊侧生成装箱选项资源（免费可重建），选一项后确认装箱。"
+  },
+  "restock_get_placement_options": {
+    "zh": "生成分仓选项",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "第 4 步：生成分仓方案选项（分到哪些仓、各方案分仓费），免费可重建；选一项后准备确认。"
+  },
+  "restock_get_plan": {
+    "zh": "补货计划",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "按 SKU 给出建议补货量（含速度/季节性/交期）与计划 KPI；按库存池。"
+  },
+  "restock_get_plan_contents": {
+    "zh": "计划明细清单",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "读计划的箱/商品/托盘清单与内容更新预览，≤500 行加合计；只读。"
+  },
+  "restock_get_reference_summary": {
+    "zh": "参考表完备度",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "卖家自维护参考表（SKU 映射/季节指数/箱规等）行数统计，补货设置完备性快检。"
+  },
+  "restock_get_self_ship_slots": {
+    "zh": "自发货预约时段",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "仅 MX/BR/EG/SA/AE/IN：生成并列出自发货预约时段，再管理预约。"
+  },
+  "restock_get_shipment_draft": {
+    "zh": "草稿详情",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "单个 FBA 入库草稿全量：阶段/商品/合计/当前步选项/已选选项 id/上次错误/下一步工具。"
+  },
+  "restock_get_shipment_labels": {
+    "zh": "箱唛下载",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "第 10 步：每货件箱唛链接（约 15 秒过期，立即下载）；支持分页与托盘标签。"
+  },
+  "restock_get_shipments": {
+    "zh": "货件详情",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "getShipment 读各货件目的地仓/地址/FBA 货件号/状态/时间窗/承运选项/跟踪与校验状态。"
+  },
+  "restock_get_stockout_alerts": {
+    "zh": "断货预警",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "补货引擎给出的近期断货风险 SKU 清单；按库存池。"
+  },
+  "restock_get_transportation_options": {
+    "zh": "生成承运选项",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "第 7 步：为分仓确认草稿按货件生成承运商选项（合作承运含报价，自承运免费登记）；托盘货件传 freight_json 报价。"
+  },
+  "restock_list_inbound_plans": {
+    "zh": "入库计划列表",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "店铺在亚马逊上的全部入库计划（含后台/第三方建），按状态过滤；粒粒草稿带 draft_id。"
+  },
+  "restock_list_mcf_orders": {
+    "zh": "MCF 履约单列表",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "最近 N 天多渠道履约单（含非粒粒建）单号/状态/速度；详情走 get_mcf_order。"
+  },
+  "restock_list_shipment_drafts": {
+    "zh": "入库草稿列表",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "最近 FBA 入库草稿：id/名称/阶段/箱件合计/创建时间/下一步。"
+  },
+  "restock_manage_self_ship_appointment": {
+    "zh": "自发货预约管理",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "仅上述地区：预约/改约/取消自发货时段；取消/改约需原因码。"
+  },
+  "restock_prepare_cancel_plan": {
+    "zh": "取消计划预检",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "预检取消入库计划：已承诺内容、各合作承运免费取消时限与警告，生成 30 分钟写计划；先给卖家确认。"
+  },
+  "restock_prepare_content_update": {
+    "zh": "货件内容变更预检",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "承运确认后改箱/商品（生成内容更新预览），返回新旧承运报价与 30 分钟写计划；先确认。"
+  },
+  "restock_prepare_placement": {
+    "zh": "分仓确认预检",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "第 5 步：重读实时分仓选项、校验所选未过期、标记费用变动，生成 30 分钟写计划；分仓确认收费且不可逆。"
+  },
+  "restock_prepare_transportation": {
+    "zh": "承运确认预检",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "第 8 步：重读实时承运选项、校验每货件已选有效报价，生成 30 分钟写计划；逐货件预览费用。"
+  },
+  "restock_preview_mcf": {
+    "zh": "MCF 发货预览",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "免费只读：用 FBA 库存给站外订单发货前，看三档速度运费/时效/可行性；不产生费用或订单。"
+  },
+  "restock_preview_shipment": {
+    "zh": "发货 Dry-run 预览",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "建单前空跑：校验补货行转 MSKU、有箱规则算真实箱数；不写亚马逊；含预处理/标签责任方解析。"
+  },
+  "restock_query_plan": {
+    "zh": "补货计划明细查询",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "全量计划行（速度窗口/在途/建议量/计算说明），文本过滤 + 分页；可只看建议 >0。"
+  },
+  "restock_rename_shipment": {
+    "zh": "货件/计划改名",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "改入库计划（默认）或某货件名称，1-100 字符，免费。"
+  },
+  "restock_set_inbound_settings": {
+    "zh": "入库前置设置维护",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "免后台补发货地址/联系人/箱规/SKU 映射；仅写粒粒自有库，不写亚马逊；按 style/asin upsert，≤200/次。"
+  },
+  "restock_set_item_compliance": {
+    "zh": "印度商品合规设置",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "仅印度：按 SKU 设置合规/税务细节；值须来自卖家税务记录，禁止臆测。"
+  },
+  "restock_set_prep_details": {
+    "zh": "FBA 预处理分类",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "在亚马逊设置 MSKU 预处理分类与预处理类型；分类须卖家确认；免费可改；≤100 SKU。"
+  },
+  "restock_set_shipment_tracking": {
+    "zh": "自承运跟踪号",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "自承运货件提货后上报跟踪号（小包裹按箱顺序单号/托盘运单+提单）；合作承运自动跟踪，拒绝上报。"
+  },
+  "restock_update_source_address": {
+    "zh": "修改发货来源地址",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "承运确认前改货件发货地；改后旧承运选项失效需重新生成报价。"
+  },
+  "research_prepare": {
+    "zh": "调研准备（免鉴权）",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "调研阶段 0：解析自然语言需求、加载五阶段技能模板、预览规划步数与积分；不读账号数据、不持久化、不调用模型或市场 API。"
+  },
+  "research_start": {
+    "zh": "创建调研任务",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "用当前客户端推理 + 技能 + 注册 MCP 源创建五阶段选品调研任务；可设调用上限；首次付费请求需任务级人工批准。"
+  },
+  "research_step": {
+    "zh": "调研执行步骤",
+    "type": "受控",
+    "kind": "controlled",
+    "desc": "按已保存的同意继续下一步执行调研；保存的封顶/不封顶授权内付费只读调用不再逐次审批。"
+  },
+  "research_pause": {
+    "zh": "暂停调研任务",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "持久化暂停；在跑请求完成后生效，后续步骤不再派发。"
+  },
+  "research_list": {
+    "zh": "调研任务列表",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "分页列当前用户在本凭证/工作区下持有的调研任务摘要；不调模型或外部供应商。"
+  },
+  "research_evidence": {
+    "zh": "调研证据读取",
+    "type": "只读",
+    "kind": "readonly",
+    "desc": "读已存调用摘要或原始响应分块；按 UTF-16 偏移重组并校验全量 SHA-256；不发外部请求。"
+  },
+  "research_confirm": {
+    "zh": "人工确认闸门",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "记录人对当前闸门/版本的显式确认（SELECT 选候选 / CONFIRM 接受结论 / AUTHORIZE_TOOL 授权付费请求）；不得编造同意。"
+  },
+  "research_record_charge": {
+    "zh": "记录调研扣费",
+    "type": "写/受控",
+    "kind": "controlled",
+    "desc": "记录人确认过的调研服务收据或估算换算；不改余额、不对账；1 积分 = 0.01 元。"
+  }
+}

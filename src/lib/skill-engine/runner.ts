@@ -117,8 +117,8 @@ export type RunOptions = {
 export type RunResult = { report: StructuredReport };
 
 export type RunHooks = {
-  /** 报告生成后调用，返回临时下载 id；由路由层负责导出与存储。 */
-  persistReport: (report: StructuredReport, fileName: string) => Promise<string>;
+  /** 报告生成后调用，返回临时下载 id 与可持久化历史 id；由路由层负责导出、存储与历史落库。 */
+  persistReport: (report: StructuredReport, fileName: string) => Promise<{ downloadId: string; historyId: string | null }>;
 };
 
 /**
@@ -200,8 +200,11 @@ export async function* runSkill(options: RunOptions, hooks: RunHooks): AsyncGene
   const exportFileName = `${view.name.replace(/[\\/:*?"<>|]/g, "_")}_${inputs.asin?.trim() || view.slug}_${stamp}.${view.exportFormat}`;
   yield { type: "step", step: { id: "export", label: "生成导出文件", status: "running" } };
   let downloadId: string;
+  let historyId: string | null = null;
   try {
-    downloadId = await hooks.persistReport(report, exportFileName);
+    const persisted = await hooks.persistReport(report, exportFileName);
+    downloadId = persisted.downloadId;
+    historyId = persisted.historyId;
   } catch {
     yield { type: "error", code: "EXPORT_FAILED", message: "报告已生成，但导出文件创建失败。" };
     return;
@@ -213,6 +216,7 @@ export async function* runSkill(options: RunOptions, hooks: RunHooks): AsyncGene
     exportFormat: view.exportFormat,
     exportFileName,
     downloadId,
+    historyId,
   };
   void options.actor;
 }

@@ -8,6 +8,7 @@ import { ToolRunner } from "./tool-runner";
 import { ToolConfigView } from "./tool-config-view";
 import { RunLiveButton } from "./run-live-button";
 import { CallQuotaView } from "./call-quota-view";
+import { SkillRunHistory } from "./skill-run-history";
 import { findSkill, listSkills, listTools, listWorkflows, skillMarkdown } from "@/lib/lili/catalog";
 import { tx, type Locale } from "@/lib/lili/tx";
 
@@ -23,9 +24,10 @@ export async function CatalogContent({ kind, slug, locale, quotaScopeKey }: { ki
       <a className="lili-btn-orange" href="/api/lili/codex-bundle" download>下载全部技能</a>
       <p className="text-xs text-muted">下载包含技能说明。个人 Amazon MCP 继续在同步中心创建凭证；本目录不会自动授予工具或店铺访问权限。</p>
     </section>
+    <SkillRunHistory locale={locale} />
     <div className="grid gap-3 md:grid-cols-2">
       {[
-        ["/lili/v2/skills", "查技能", "搜索、分类、复制提示词并查看完整步骤。"],
+        ["/lili/v2/skills", "查技能并运行", "搜索、分类，点右侧「运行」调用系统大模型生成表格或 Word 报告。"],
         ["/lili/v2/cases", "选工作流", "按定义逐步查看，不自动执行店铺操作。"],
         ["/agents/selection-research", "ASIN 选品研究", "真实来源取证、两次人工确认、HTML 报告和历史恢复。"],
         ["/agents", "Agent 执行与审批", "进入主系统已有执行轨迹和人工审批。"],
@@ -44,7 +46,12 @@ export async function CatalogContent({ kind, slug, locale, quotaScopeKey }: { ki
       <Link href="/lili/v2/skills">← 全部技能</Link>
       <h1 className="text-xl font-bold">{tx(locale, skill.nameZh, skill.nameEn)}</h1>
       <p>{tx(locale, skill.summaryZh, skill.summaryEn)}</p>
-      <CopyButton locale={locale} text={tx(locale, skill.promptZh, skill.promptEn)} />
+      <div className="flex flex-wrap items-center gap-3">
+        <Link className="lili-btn-orange inline-flex items-center gap-1" href={`/skills/${encodeURIComponent(skill.slug)}`}>
+          运行此技能（生成表格 / Word 报告）
+        </Link>
+        <CopyButton locale={locale} text={tx(locale, skill.promptZh, skill.promptEn)} />
+      </div>
       <h2 className="font-semibold">{tx(locale, "完整技能说明", "Full skill procedure")}</h2>
       <pre className="lili-card overflow-auto whitespace-pre-wrap p-4 text-sm leading-7">{markdown}</pre>
       <h2 className="font-semibold">相关工具</h2><ul className="flex flex-wrap gap-3">{skill.tools.map((name) => <li key={name}><Link className="underline" href={`/lili/v2/tools/${name}`}>{name}</Link></li>)}</ul>
@@ -70,10 +77,13 @@ export async function CatalogContent({ kind, slug, locale, quotaScopeKey }: { ki
   }
 
   if (kind === "tools") {
-    if (!slug) return <ToolLab locale={locale} tools={listTools().map(({ name, description, category, readOnly, availability }) => ({ name, description, category, readOnly, availability }))} />;
+    if (!slug) return <ToolLab locale={locale} tools={listTools().map(({ name, description, category, readOnly, availability, nameZh, descriptionZh, kindLabel }) => ({ name, description, category, readOnly, availability, nameZh, descriptionZh, kindLabel }))} />;
     const tool = listTools().find((row) => row.name === slug);
     if (!tool) notFound();
-    return <div className="space-y-4"><Link href="/lili/v2/tools">← 全部工具</Link><h1 className="text-xl font-bold">{tool.name}</h1>
+    return <div className="space-y-4"><Link href="/lili/v2/tools">← 全部工具</Link>
+      <h1 className="text-xl font-bold">{tool.name}{tool.nameZh && locale === "zh" ? ` · ${tool.nameZh}` : ""}</h1>
+      {tool.kindLabel && <p className="text-sm"><span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs">{tool.kindLabel}</span></p>}
+      {tool.descriptionZh && locale === "zh" && <p className="rounded-lg bg-surface-muted p-3 text-sm leading-6">{tool.descriptionZh}</p>}
       <p className="rounded-lg bg-warning-soft p-3 text-sm">{tool.availability === "catalog" ? "已接入本应用的静态目录查询，不读取店铺业务数据。" : "定义已保留，主系统业务执行器尚未映射。运行会明确返回未实现，不产生业务写入。"}</p>
       <ToolRunner locale={locale} name={tool.name} description={tool.description} docs={tool.docs} schema={tool.inputSchema} readOnly={tool.readOnly} profileId="" />
       <p className="text-sm text-muted">原独立 Lili 调用历史未迁移。现有业务执行轨迹请在 <Link href="/agents" className="underline">Agent 中心</Link>查看。</p>

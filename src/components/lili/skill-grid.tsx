@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronDown, Copy, Sparkles } from "lucide-react";
+import { ChevronDown, Copy, Play, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Locale } from "@/lib/lili/tx";
 import { tx } from "@/lib/lili/tx";
@@ -128,14 +128,21 @@ export function SkillGrid({ locale, items }: { locale: Locale; items: SkillCard[
                   </Link>
                 </div>
               )}
-              <div className="mt-3 flex items-center gap-2">
+              <div className="mt-3 flex flex-wrap items-center gap-2">
                 <button className="flex min-w-0 items-center gap-1 text-xs text-muted" onClick={() => setOpen(expanded ? null : item.slug)}>
                   <span className="truncate">{label}</span>
                   <ChevronDown className={`h-3.5 w-3.5 shrink-0 ${expanded ? "rotate-180" : ""}`} />
                   {expanded ? tx(locale, "收起", "Show less") : tx(locale, "展开", "Show more")}
                 </button>
+                <Link
+                  className="lili-btn-orange ml-auto inline-flex items-center gap-1"
+                  href={`/skills/${encodeURIComponent(short)}`}
+                  title={tx(locale, "调用系统大模型运行此技能，生成表格或 Word 报告", "Run this skill with the configured model")}
+                >
+                  <Play className="h-3.5 w-3.5" /> {tx(locale, "运行", "Run")}
+                </Link>
                 <button
-                  className="lili-btn-orange ml-auto "
+                  className="lili-btn-ghost"
                   onClick={() => {
                     copyText(tx(locale, item.promptZh, item.promptEn));
                     flash(tx(locale, "已复制", "Copied"));

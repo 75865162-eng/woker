@@ -54,7 +54,7 @@ export type SkillRunStep = {
 export type SkillRunEvent =
   | { type: "step"; step: SkillRunStep }
   | { type: "delta"; text: string }
-  | { type: "done"; report: string; exportFormat: ExportFormat; exportFileName: string; downloadId: string }
+  | { type: "done"; report: string; exportFormat: ExportFormat; exportFileName: string; downloadId: string; historyId: string | null }
   | { type: "error"; code: string; message: string };
 
 export type SkillReportRow = Record<string, string | number | null>;
