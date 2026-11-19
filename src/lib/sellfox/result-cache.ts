@@ -109,9 +109,27 @@ export type CachedBody<T> = { version: string; cachedAt: string; empty: boolean;
 export function cacheEnabled(): boolean {
   return process.env.SELLFOX_CACHE_ENABLED === "true";
 }
-function ttlFor(domain: string) {
+
+/**
+ * Cache-avalanche protection: spread expiry by ±JITTER_RATIO around the base TTL
+ * so keys written in the same sync burst do not all expire at the same instant.
+ * Pure and deterministic given `random`; the caller injects Math.random by default,
+ * tests inject a fixed value. Bounds are clamped to >= 1 second.
+ */
+export const SELLFOX_TTL_JITTER_RATIO = 0.1;
+export function ttlWithJitter(
+  baseTtl: number,
+  random: () => number = Math.random,
+  ratio: number = SELLFOX_TTL_JITTER_RATIO,
+): number {
+  if (!Number.isFinite(baseTtl) || baseTtl <= 0) return baseTtl;
+  const r = Math.min(1, Math.max(0, random()));
+  return Math.max(1, Math.round(baseTtl * (1 - ratio + 2 * ratio * r)));
+}
+function ttlFor(domain: string, random?: () => number) {
   const override = Number(process.env[`SELLFOX_CACHE_TTL_${domain.toUpperCase()}`]);
-  return Number.isFinite(override) && override > 0 ? override : (SELLFOX_CACHE_TTL[domain] ?? SELLFOX_DEFAULT_TTL);
+  const base = Number.isFinite(override) && override > 0 ? override : (SELLFOX_CACHE_TTL[domain] ?? SELLFOX_DEFAULT_TTL);
+  return random ? ttlWithJitter(base, random) : base;
 }
 
 type RedisLike = {
@@ -147,6 +165,12 @@ function getRedis(): RedisLike | undefined {
 let injectedRedis: RedisLike | null | undefined;
 export function setSellfoxCacheRedisForTest(client: RedisLike | null | undefined) {
   injectedRedis = client;
+}
+
+/** Test seam: inject the TTL jitter random source (default Math.random). */
+let ttlRandom: () => number = Math.random;
+export function setSellfoxTtlRandomForTest(random: (() => number) | undefined) {
+  ttlRandom = random ?? Math.random;
 }
 function client(): RedisLike | undefined {
   return injectedRedis !== undefined ? (injectedRedis ?? undefined) : getRedis();
@@ -206,7 +230,7 @@ export async function readThroughSellfox<T>(
     if (c && currentVersion) {
       try {
         const empty = options.isEmpty ? options.isEmpty(body) : false;
-        const ttl = empty ? SELLFOX_EMPTY_TTL : ttlFor(domain);
+        const ttl = empty ? SELLFOX_EMPTY_TTL : ttlFor(domain, ttlRandom);
         const value: CachedBody<T> = { version: currentVersion, cachedAt, empty, body };
         await c.set(key, JSON.stringify(value), "EX", ttl);
         // Store the version alongside for observability; expiry matches the body.
