@@ -83,7 +83,7 @@ export function WorkspaceTabBar({ tabs, activeId, cachedIds, onSelect, onClose, 
   }, [menuOpen]);
 
   return (
-    <div className="sticky top-[var(--shell-topbar)] z-[9] flex h-[var(--shell-tabbar)] items-center gap-2 border-b border-border bg-surface/95 px-6 backdrop-blur">
+    <div data-workspace-tabbar className="sticky top-[var(--shell-topbar)] z-[9] flex h-[var(--shell-tabbar)] items-center gap-2 border-b border-border bg-surface/95 px-6 backdrop-blur">
       <div className="thin-scrollbar flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto py-1">
         {tabs.map((tab) => {
           const active = tab.id === activeId;
@@ -92,6 +92,7 @@ export function WorkspaceTabBar({ tabs, activeId, cachedIds, onSelect, onClose, 
             <div
               key={tab.id}
               role="tab"
+              data-tab-href={tab.href}
               aria-selected={active}
               title={`${tab.label}${cached ? " · 已缓存，切换不重新加载" : ""}`}
               className={`group flex h-6 shrink-0 items-center gap-1 rounded-full border px-2.5 text-xs font-medium transition-colors ${

@@ -22,6 +22,7 @@ test("每个一级板块都有可点击的落地链接", () => {
     purchase: "/purchase/plans",
     warehouse: "/wms/logistics",
     finance: "/fin/transactions",
+    // AI 一级走 /ai/lili 命名空间，由服务端 rewrite 直达 /lili（无 redirect 跳板）。
     ai: "/ai/lili",
   };
   for (const group of navigationGroups) {
@@ -157,8 +158,8 @@ test("每个导航二级链接的 href 都有 rewrite 或真实命名空间落�
   for (const group of navigationGroups) {
     for (const item of group.items) {
       const ok = rewriteSources.has(item.href) || namespaceHrefs.has(item.href) || amazonSources.has(item.href)
-        // 赛狐 /sellfox/*、商品主档 /product 与 Lili /ai/lili 由真实 page.tsx 提供
-        || item.href.startsWith("/sellfox/") || item.href === "/product" || item.href === "/ai/lili";
+        // 赛狐 /sellfox/*、商品主档 /product 由真实 page.tsx 提供；/ai/lili 由 namespace rewrite 直达 /lili
+        || item.href.startsWith("/sellfox/") || item.href === "/product";
       assert.ok(ok, `${item.id} 的 ${item.href} 应有 rewrite 或真实页兜底`);
     }
   }

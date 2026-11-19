@@ -24,6 +24,7 @@ import { AppShellClient } from "./app-shell-client";
 import { TabActivityProvider, useTabActive } from "./tab-activity";
 import { setWorkspaceApiCacheScope } from "@/lib/workspace/workspace-api-cache";
 import { prefetchRouteData } from "@/lib/workspace/route-data-prefetch";
+import { bumpShellCause, captureTabEvent, diagRefId, installTabDiagnostics } from "@/lib/app-shell/tab-navigation-diagnostics";
 import {
   HOME_HREF,
   MAX_TABS,
@@ -41,6 +42,8 @@ export type AppShellConfiguration = Omit<
 > & { authorizationRevision?: string };
 
 const ConfigurationContext = createContext<Dispatch<SetStateAction<AppShellConfiguration>> | null>(null);
+/** dev-only：AppShellPage 全局渲染序号，用于定位 configuration 回写风暴。 */
+let appShellRenderSeq = 0;
 const STORAGE_KEY = "woker:workspace-tabs:v3";
 const PREFETCH_DELAY_MS = 60;
 /** 页面稳定多久之后开始预热同组路由：太早会和首屏自己的请求抢带宽。 */
@@ -62,7 +65,7 @@ type SegmentContext = ContextType<typeof LayoutRouterContext>;
  * 注意：`LayoutRouterContext` 是 Next 的内部模块（`next/dist/shared/lib/app-router-context`），
  * 在 15.5.x 上验证有效；升级 Next 后需要复核这条保活路径（页面若整片渲染成当前路由就是它失效了）。
  */
-type CachedView = { href: string; element: ReactNode; context: SegmentContext; seq: number };
+export type CachedView = { href: string; element: ReactNode; context: SegmentContext; seq: number };
 
 /**
  * 单文档多标签外壳。
@@ -93,12 +96,20 @@ export function WorkspaceShell({ children, configuration }: {
   );
 
   const [display, setDisplay] = useState<AppShellConfiguration>(configuration);
+  // 当前分段的路由上下文：视图登记时一并快照，隐藏视图靠它固定住自己的页面。
+  const segmentContext = useContext(LayoutRouterContext);
+  if (process.env.NODE_ENV !== "production") {
+    captureTabEvent({
+      t: "shellrender", at: Date.now(),
+      childrenId: diagRefId(children), segmentContextId: diagRefId(segmentContext),
+      configurationId: diagRefId(configuration), displayId: diagRefId(display),
+      views: 0, tabs: 0,
+    });
+  }
   const [tabs, setTabs] = useState<WorkspaceTab[]>(() => {
     const { label, locked } = labelForHref(currentHref);
     return [{ id: currentHref, href: currentHref, src: currentHref, label, locked }];
   });
-  // 当前分段的路由上下文：视图登记时一并快照，隐藏视图靠它固定住自己的页面。
-  const segmentContext = useContext(LayoutRouterContext);
   const [views, setViews] = useState<CachedView[]>(() => [{ href: currentHref, element: children, context: segmentContext, seq: 1 }]);
   const [restored, setRestored] = useState(false);
   // 当前展示的视图严格跟随真实路由。此前这里叠加了一层"乐观切换"（pendingHref）：
@@ -115,9 +126,17 @@ export function WorkspaceShell({ children, configuration }: {
   const restoringRef = useRef(false);
   const shownHrefRef = useRef(shownHref);
   const seqRef = useRef(0);
+  // 只在登记/更新视图的那一刻读取最新 segmentContext；不把它作为 effect 依赖。
+  // Next 会在 router 内部状态变化时反复新建这个 context 对象（实测静止页面 3 秒变化数百次），
+  // 若进入依赖，effect 会被无意义地调度同样多次（守卫虽拦住 setViews，但调度本身是浪费）。
+  const segmentContextRef = useRef(segmentContext);
+  segmentContextRef.current = segmentContext;
   currentHrefRef.current = currentHref;
   tabsRef.current = tabs;
   shownHrefRef.current = shownHref;
+
+  // dev-only 诊断探针：安装全局监听（异常/长任务/fetch/heap），生产环境为 no-op。
+  useEffect(() => installTabDiagnostics(), []);
 
   useLayoutEffect(() => {
     setWorkspaceApiCacheScope(`${configuration.organizationId ?? ""}:${configuration.userId ?? ""}:${configuration.userRole ?? ""}:${configuration.authorizationRevision ?? ""}`);
@@ -172,12 +191,18 @@ export function WorkspaceShell({ children, configuration }: {
   // 地址变化（标签点击、浏览器前进后退、代码里的 router.push）统一同步进标签栏。
   useEffect(() => {
     if (!restored) return;
+    captureTabEvent({ t: "route", at: Date.now(), href: currentHref, phase: "start" });
+    // 路由稳定后记一条 end：不阻塞导航，纯观察。
+    const endTimer = window.setTimeout(() => {
+      captureTabEvent({ t: "route", at: Date.now(), href: currentHref, phase: "end" });
+    }, 0);
     touch(currentHref);
     setTabs((prev) => {
       if (prev.some((tab) => tab.href === currentHref)) return prev;
       const { label, locked } = labelForHref(currentHref);
       return appendTab(prev, { id: currentHref, href: currentHref, src: currentHref, label, locked });
     });
+    return () => window.clearTimeout(endTimer);
   }, [currentHref, restored, touch, appendTab]);
 
   // 视图登记：只有「没见过的地址」在渲染期登记，保证新页面第一帧就渲染出来。
@@ -186,18 +211,26 @@ export function WorkspaceShell({ children, configuration }: {
   const activeView = views.find((view) => view.href === currentHref);
   const needsRegister = !activeView;
   const syncedViews = needsRegister ? upsertView(views, currentHref, children, segmentContext) : views;
-  if (needsRegister) setViews(syncedViews);
+  if (needsRegister) {
+    if (process.env.NODE_ENV !== "production") bumpShellCause("renderSetViews");
+    setViews(syncedViews);
+  }
 
   const viewsRef = useRef(views);
   viewsRef.current = views;
 
   useEffect(() => {
     const current = viewsRef.current.find((view) => view.href === currentHref);
-    if (!current || current.element === children) return;
+    if (!current || current.element === children) {
+      if (process.env.NODE_ENV !== "production") bumpShellCause("effectBail");
+      return;
+    }
+    if (process.env.NODE_ENV !== "production") bumpShellCause("effectSetViews");
+    const latestContext = segmentContextRef.current;
     startTransition(() => {
-      setViews((prev) => upsertView(prev, currentHref, children, segmentContext));
+      setViews((prev) => upsertView(prev, currentHref, children, latestContext));
     });
-  }, [children, currentHref, segmentContext]);
+  }, [children, currentHref]);
 
   // 只渲染仍在标签栏里的视图；被关掉或被标签上限挤掉的视图顺带释放。
   const renderedViews = syncedViews.filter(
@@ -356,6 +389,7 @@ export function WorkspaceShell({ children, configuration }: {
             cachedIds={renderedViews.map((view) => view.href)}
             onSelect={(id) => {
               const target = tabsRef.current.find((tab) => tab.id === id);
+              captureTabEvent({ t: "click", at: Date.now(), target: target?.href ?? id, tabs: tabsRef.current.length, activeId: shownHrefRef.current });
               if (!target || target.href === shownHrefRef.current) return;
               scrollRef.current.set(shownHrefRef.current, window.scrollY);
               // 导航交给 Next 的路由，视图由 currentHref 驱动；不再乐观切换，
@@ -376,7 +410,13 @@ export function WorkspaceShell({ children, configuration }: {
             href={view.href}
             visible={view.href === shownHref}
             element={view.element}
-            context={view.href === currentHref ? segmentContext : view.context}
+            // 始终用登记时快照的 context，绝不把 Next 每帧刷新的 live segmentContext 注入子树。
+            // Live context 的对象引用会随 router 内部状态变化而反复更换，一旦作为 prop 传给
+            // memo 的 KeptView，就会击穿 memo，让整棵保活子树（含重表单/表格）跟着空转重渲染，
+            // 主线程被占满后表现为「点击假死」。路由段的正确性由登记时的 context 快照保证：
+            // 新页面在 needsRegister 分支登记的就是当时的 segmentContext，RSC 更新则由下方
+            // effect 用最新 children + segmentContext 重建快照，两者配对始终正确。
+            context={view.context}
           />
         ))}
       </AppShellClient>
@@ -402,6 +442,21 @@ const KeptView = memo(function KeptView({ href, visible, element, context }: {
   // 每次切标签都会被牵动重渲染并重发自己的查询（实测同一条 sync-center 查询会重复 2–4 次）。
   const { pathname, search } = splitHref(href);
   const searchParams = useMemo(() => new URLSearchParams(search), [search]);
+  const diagRenderRef = useRef(0);
+  const diagKey = href;
+  if (process.env.NODE_ENV !== "production") {
+    diagRenderRef.current += 1;
+    captureTabEvent({ t: "render", at: Date.now(), href: diagKey, count: diagRenderRef.current });
+    captureTabEvent({
+      t: "viewsig", at: Date.now(), href: diagKey,
+      elementId: diagRefId(element), contextId: diagRefId(context), visible,
+    });
+  }
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return;
+    captureTabEvent({ t: "mount", at: Date.now(), href: diagKey, count: 1 });
+    return () => { captureTabEvent({ t: "unmount", at: Date.now(), href: diagKey, count: 1 }); };
+  }, [diagKey]);
   return (
     <TabActivityProvider value={visible}>
       <LayoutRouterContext.Provider value={context}>
@@ -421,7 +476,7 @@ const KeptView = memo(function KeptView({ href, visible, element, context }: {
  * 登记/更新一个视图并做 LRU 淘汰。
  * `seq` 由现有视图的最大值推出来，函数本身是纯的，重复调用结果一致（渲染期同步 state 要求这点）。
  */
-function upsertView(views: CachedView[], href: string, element: ReactNode, context: SegmentContext): CachedView[] {
+export function upsertView(views: CachedView[], href: string, element: ReactNode, context: SegmentContext): CachedView[] {
   const seq = views.reduce((max, view) => Math.max(max, view.seq), 0) + 1;
   const index = views.findIndex((view) => view.href === href);
   const next: CachedView[] = index >= 0
@@ -466,8 +521,19 @@ export function AppShellPage({ children, configuration }: {
 }) {
   const setConfiguration = useContext(ConfigurationContext);
   const active = useTabActive();
+  if (process.env.NODE_ENV !== "production") {
+    appShellRenderSeq += 1;
+    captureTabEvent({
+      t: "appshellrender", at: Date.now(),
+      key: String(configuration.title ?? "?"), count: appShellRenderSeq,
+      configId: diagRefId(configuration),
+    });
+  }
   useLayoutEffect(() => {
-    if (active) setConfiguration?.(configuration);
+    if (active) {
+      if (process.env.NODE_ENV !== "production") bumpShellCause("setConfig");
+      setConfiguration?.(configuration);
+    }
   }, [active, configuration, setConfiguration]);
   if (!setConfiguration) throw new Error("Business pages must use the persistent ERP layout.");
   return children;
