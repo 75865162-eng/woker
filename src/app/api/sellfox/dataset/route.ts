@@ -63,7 +63,8 @@ export async function GET(request: Request) {
       sortOrder: url.searchParams.get("sortOrder") === "asc" ? "asc" : "desc",
     };
     const result = await readHostDataset(dataset, fullScope, query);
-    return NextResponse.json(result);
+    // 原始行数据集的列由真实 payload 派生，随结果一并回传给前端渲染。
+    return NextResponse.json({ ...result, columns: result.columns ?? null });
   } catch (error) {
     if (error instanceof SellfoxBrowseError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

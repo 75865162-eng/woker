@@ -143,7 +143,9 @@ test("product tag selects use dynamic distinct names, preserve URL selections, c
       assert.deepEqual(patches.at(-1), { productTag: "标签、完整" });
       nodes.find(node => node.type === "button" && node.props.children === "重置")!.props.onClick!();
       assert.equal(patches.at(-1)?.productTag, "");
-      assert.equal(nodes.some(node => node.props["aria-label"] === "业务员（未同步）"), view.domain === "sales");
+      // 业务员筛选已全局化：sales/performance 都有启用下拉，其余域不渲染未同步占位。
+      assert.equal(nodes.some(node => node.props["aria-label"] === "业务员（未同步）"), false);
+      assert.equal(nodes.some(node => node.props["aria-label"] === "业务员"), view.domain === "sales" || view.domain === "performance");
     }
   } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
 });
@@ -180,7 +182,9 @@ test("brand selects use dynamic distinct names, preserve URL selections, change 
       assert.deepEqual(patches.at(-1), { brand: "" });
       nodes.find(node => node.type === "button" && node.props.children === "重置")!.props.onClick!();
       assert.equal(patches.at(-1)?.brand, "");
-      assert.equal(nodes.some(node => node.props["aria-label"] === "业务员（未同步）"), view.domain === "sales");
+      // 业务员筛选已全局化：sales/performance 都有启用下拉，其余域不渲染未同步占位。
+      assert.equal(nodes.some(node => node.props["aria-label"] === "业务员（未同步）"), false);
+      assert.equal(nodes.some(node => node.props["aria-label"] === "业务员"), view.domain === "sales" || view.domain === "performance");
       const emptyNodes = elements(SellfoxBrowseFilters({ view, stores: [], onChange: () => {}, onColumns: () => {} }));
       const emptySelect = emptyNodes.find(node => node.type === "select" && node.props["aria-label"] === "品牌")!;
       assert.equal(emptySelect.props.value, "");
@@ -247,26 +251,24 @@ test("listing pairing and strikethrough type stay disabled with specific evidenc
 });
 
 
-test("performance salesperson select uses facets/current value and resets; sales and dimension remain disabled", () => {
+test("performance and sales salesperson selects use facets/current value and reset; dimension grouping stays disabled", () => {
   const globals = globalThis as unknown as { React?: typeof React }, previous = globals.React;
   globals.React = React;
   try {
-    const patches: Partial<SellfoxView>[] = [];
-    const nodes = elements(SellfoxBrowseFilters({ view: { ...defaultSellfoxView, domain: "performance", salesperson: "URL姓名" }, stores: [], salespersons: ["陈馨", "温见清", "陈馨"], onChange: patch => patches.push(patch), onColumns: () => {} }));
-    const select = nodes.find(n => n.type === "select" && n.props["aria-label"] === "业务员")!;
-    assert.ok(select); assert.ok(!select.props.disabled); assert.equal(select.props.value, "URL姓名");
-    assert.deepEqual(elements(select.props.children).filter(n => n.type === "option").map(n => n.props.value), ["", ...["URL姓名", "温见清", "陈馨"].sort()]);
-    assert.ok(nodes.some(n => n.props.title?.includes("非 Listing developer/开发员")));
-    assert.equal(nodes.some(n => n.props["aria-label"] === "业务员（未同步）"), false);
-    select.props.onChange!({ target: { value: " 温见清 " } }); assert.deepEqual(patches.at(-1), { salesperson: "温见清" });
-    nodes.find(n => n.type === "button" && n.props.children === "重置")!.props.onClick!(); assert.equal(patches.at(-1)?.salesperson, "");
+    for (const domain of ["performance", "sales"] as const) {
+      const patches: Partial<SellfoxView>[] = [];
+      const nodes = elements(SellfoxBrowseFilters({ view: { ...defaultSellfoxView, domain, salesperson: "URL姓名" }, stores: [], salespersons: ["陈馨", "温见清", "陈馨"], onChange: patch => patches.push(patch), onColumns: () => {} }));
+      const select = nodes.find(n => n.type === "select" && n.props["aria-label"] === "业务员")!;
+      assert.ok(select, `${domain} 应有业务员下拉`); assert.ok(!select.props.disabled); assert.equal(select.props.value, "URL姓名");
+      assert.deepEqual(elements(select.props.children).filter(n => n.type === "option").map(n => n.props.value), ["", ...["URL姓名", "温见清", "陈馨"].sort()]);
+      assert.equal(nodes.some(n => n.props["aria-label"] === "业务员（未同步）"), false);
+      select.props.onChange!({ target: { value: " 温见清 " } }); assert.deepEqual(patches.at(-1), { salesperson: "温见清" });
+      nodes.find(n => n.type === "button" && n.props.children === "重置")!.props.onClick!(); assert.equal(patches.at(-1)?.salesperson, "");
+    }
+    const nodes = elements(SellfoxBrowseFilters({ view: { ...defaultSellfoxView, domain: "performance" }, stores: [], onChange: () => {}, onColumns: () => {} }));
     assert.ok(nodes.find(n => n.type === "button" && n.props.children === "业务员")?.props.disabled);
     assert.ok(nodes.some(n => n.props.title === "userNameList 为多人数组，无独立业务员主键，不做分组维度"));
     assert.ok(nodes.find(n => n.props["aria-label"] === "销售小组（未同步）")?.props.disabled);
-    const sales = elements(SellfoxBrowseFilters({ view: { ...defaultSellfoxView, domain: "sales" }, stores: [], onChange: () => {}, onColumns: () => {} }));
-    assert.ok(sales.find(n => n.props["aria-label"] === "业务员（未同步）")?.props.disabled);
-    assert.ok(sales.some(n => n.props.title === "销量日快照无 userNameList；不从 Listing developer 伪造"));
-    assert.equal(sales.some(n => n.props["aria-label"] === "业务员"), false);
   } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
 });
 

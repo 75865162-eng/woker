@@ -7,8 +7,7 @@ import { adsHostPage } from "./host-page-ads";
 import { inventoryHostPage } from "./host-page-inventory";
 import { purchaseHostPage } from "./host-page-purchase";
 import { financeHostPage } from "./host-page-finance";
-import { stockOpsHostPage } from "./host-page-stock-ops";
-export const hostPages: HostPage[] = [productsHostPage, profitHostPage, adsHostPage, inventoryHostPage, purchaseHostPage, financeHostPage, stockOpsHostPage];
+export const hostPages: HostPage[] = [productsHostPage, profitHostPage, adsHostPage, inventoryHostPage, purchaseHostPage, financeHostPage];
 
 export function hostPage(id: string) {
   return hostPages.find((page) => page.id === id);
@@ -35,7 +34,6 @@ export const sellfoxNavOrder = [
   "/sellfox/purchase",
   "/sellfox/shipments",
   "/sellfox/finance",
-  "/sellfox/stock-ops",
   "/sellfox/sync",
   "/sellfox",
 ] as const;

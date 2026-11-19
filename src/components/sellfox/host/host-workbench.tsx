@@ -19,7 +19,7 @@ type Totals = {
   totalInventory?: number | null;
   unfulfillable?: number | null;
 };
-type Payload = { rows?: Row[]; total?: number; totals?: Totals; coverage?: { stores: number; rows: number }; error?: string };
+type Payload = { rows?: Row[]; total?: number; totals?: Totals; coverage?: { stores: number; rows: number }; error?: string; columns?: HostColumn[] | null };
 
 const emptyTotals: Totals = { impressions: null, clicks: null, adOrders: null, byCurrency: [] };
 const presets: { id: Exclude<DatePreset, "today" | "yesterday" | "thisMonth" | "lastMonth">; label: string }[] = [
@@ -102,6 +102,7 @@ export function HostWorkbench({ page }: { page: HostPage }) {
   const [applied, setApplied] = useState({ from: rangeForPreset("d30", today).from, to: rangeForPreset("d30", today).to, site: "", shop: "", adType: "", search: "" });
   const [draft, setDraft] = useState({ site: "", shop: "", adType: "", search: "" });
   const [rows, setRows] = useState<Row[]>([]);
+  const [dynamicColumns, setDynamicColumns] = useState<HostColumn[] | null>(null);
   const [total, setTotal] = useState(0);
   const [totals, setTotals] = useState<Totals>(emptyTotals);
   const [coverage, setCoverage] = useState({ stores: 0, rows: 0 });
@@ -146,6 +147,7 @@ export function HostWorkbench({ page }: { page: HostPage }) {
       .then((body) => {
         if (controller.signal.aborted) return;
         setRows(Array.isArray(body.rows) ? body.rows : []);
+        setDynamicColumns(Array.isArray(body.columns) && body.columns.length ? body.columns : null);
         setTotal(body.total ?? 0);
         setTotals(body.totals ?? emptyTotals);
         setCoverage(body.coverage ?? { stores: 0, rows: 0 });
@@ -153,6 +155,7 @@ export function HostWorkbench({ page }: { page: HostPage }) {
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
         setRows([]);
+        setDynamicColumns(null);
         setTotal(0);
         setTotals(emptyTotals);
         setError(reason instanceof Error ? reason.message : "读取失败");
@@ -166,7 +169,7 @@ export function HostWorkbench({ page }: { page: HostPage }) {
   // 没有可加总的列时不渲染汇总行，避免只显示一个「汇总」空行。
   const hasTotals = totals.byCurrency.length > 0 || totals.quantity != null || totals.totalInventory != null
     || totals.impressions != null || totals.clicks != null || totals.adOrders != null;
-  const columns = dataset?.columns ?? [];
+  const columns = dynamicColumns ?? dataset?.columns ?? [];
 
   function applyPreset(next: "d7" | "d14" | "d30" | "d90" | "custom") {
     setPreset(next);

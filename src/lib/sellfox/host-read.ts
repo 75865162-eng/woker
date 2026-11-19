@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { getSellfoxStoreScope } from "@/lib/accounts/effective-access";
 import type { HostDataset } from "./host-pages";
+import type { HostColumn } from "./host-page-schema";
 import { moneyToNumber } from "./money-display";
 
 /**
@@ -44,6 +45,8 @@ export type HostResult = {
   };
   coverage: { stores: number; rows: number };
   grain: string;
+  /** 原始行数据集：列由真实 payload 键动态派生，前端据此渲染，不套用规划列。 */
+  columns?: HostColumn[];
 };
 
 type Scope = { organizationId: string; workspaceId: string; userId?: string };
@@ -333,7 +336,99 @@ async function readInventoryFba(scope: Scope, query: HostQuery): Promise<HostRes
   };
 }
 
+/**
+ * 原始行数据集：从 SellfoxApiRecord 按 endpointCode 读真实 payload 行，
+ * 列由样本 payload 的真实键派生（不猜字段、不补零、不做金额换算）。
+ * 用于把「有真实数据但从未接 typed 表」的域（采购/商品/财务）以原始行方式诚实呈现。
+ */
+
+/** 原始行里稳定展示的键优先序：身份/时间/金额在前，其余按出现顺序。 */
+const RAW_KEY_ORDER = [
+  "name", "supplierName", "purchaseNo", "purchaseOrderNo", "sku", "spu", "msku", "asin",
+  "commodityName", "title", "status", "currency", "amount", "price", "quantity", "num",
+  "createdTime", "createTime", "updateTime", "syncedAt", "id",
+];
+
+const RAW_LABELS: Record<string, string> = {
+  id: "行 ID", name: "名称", supplierName: "供应商", supplierId: "供应商ID",
+  purchaseNo: "采购单号", purchaseOrderNo: "采购单号", sku: "SKU", spu: "SPU",
+  msku: "MSKU", asin: "ASIN", commodityName: "品名", title: "标题", status: "状态",
+  currency: "币种", amount: "金额", price: "价格", quantity: "数量", num: "数量",
+  createdTime: "创建时间", createTime: "创建时间", updateTime: "更新时间",
+  syncedAt: "同步时间", reportDate: "报告日期", period: "期间", externalId: "行身份",
+  brand: "品牌", model: "型号", purchaseCost: "采购成本", developer: "开发员",
+  memberName: "业务员", ownerName: "负责人", storage: "仓库", warehouse: "仓库",
+};
+
+const RAW_MAX_COLUMNS = 30;
+
+function rawKeyKind(key: string): HostColumn["kind"] {
+  if (/amount|price|cost|fee|revenue|profit|balance/i.test(key)) return "money";
+  if (/quantity|qty|num|count/i.test(key)) return "qty";
+  if (/at$|time|date/i.test(key)) return "text";
+  return "text";
+}
+
+function deriveRawColumns(rows: HostRow[]): HostColumn[] {
+  const seen = new Set<string>();
+  for (const row of rows) for (const key of Object.keys(row)) if (!key.startsWith("_")) seen.add(key);
+  const ordered = [
+    ...RAW_KEY_ORDER.filter((key) => seen.has(key)),
+    ...[...seen].filter((key) => !RAW_KEY_ORDER.includes(key)).sort(),
+  ].slice(0, RAW_MAX_COLUMNS);
+  return ordered.map((key) => ({ key, label: RAW_LABELS[key] ?? key, kind: rawKeyKind(key) }));
+}
+
+async function readRawEndpoint(dataset: HostDataset, scope: Scope, query: HostQuery): Promise<HostResult> {
+  const code = dataset.rawCode;
+  if (!code || !/^[a-z0-9][a-z0-9_-]{1,63}$/.test(code)) throw new Error("原始端点 code 无效。");
+  const endpoint = await prisma.sellfoxApiEndpoint.findUnique({
+    where: { organizationId_workspaceId_code: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, code } },
+    select: { scopeMode: true },
+  });
+  if (!endpoint) throw new Error("该原始端点在本工作区未登记。");
+
+  const storeIds = await storeFilter(scope, query);
+  // 原始行 storeId 存的是 SellfoxStore.id；授权收窄传的是同一 id 集合。
+  const storeClause = endpoint.scopeMode === "store" && storeIds
+    ? Prisma.sql`AND r."storeId" IN (${Prisma.join(storeIds)})`
+    : Prisma.empty;
+  const search = query.search.trim();
+  const searchClause = search ? Prisma.sql`AND r."payload"::text ILIKE ${`%${search}%`}` : Prisma.empty;
+  const base = Prisma.sql`
+    FROM "SellfoxApiRecord" r
+    WHERE r."organizationId" = ${scope.organizationId}
+      AND r."workspaceId" = ${scope.workspaceId}
+      AND r."endpointCode" = ${code}
+      ${storeClause} ${searchClause}`;
+
+  const [countRows, records] = await Promise.all([
+    prisma.$queryRaw<{ total: bigint }[]>(Prisma.sql`SELECT count(*)::bigint AS total ${base}`),
+    prisma.$queryRaw<{ payload: Prisma.JsonValue; syncedAt: Date; storeId: string | null }[]>(Prisma.sql`
+      SELECT r."payload", r."syncedAt", r."storeId" ${base}
+      ORDER BY r."syncedAt" DESC, r."id" DESC
+      LIMIT ${query.pageSize} OFFSET ${(query.page - 1) * query.pageSize}`),
+  ]);
+
+  const rows: HostRow[] = records.map((record) => {
+    const payload = record.payload && typeof record.payload === "object" && !Array.isArray(record.payload)
+      ? record.payload as HostRow
+      : {};
+    return { ...payload, id: payload.id ?? payload.externalId ?? record.syncedAt.toISOString(), _syncedAt: record.syncedAt.toISOString() };
+  });
+  const total = Number(countRows[0]?.total ?? 0);
+  return {
+    rows,
+    total,
+    totals: { impressions: null, clicks: null, adOrders: null, byCurrency: [] },
+    coverage: { stores: 0, rows: total },
+    grain: dataset.grain,
+    columns: deriveRawColumns(rows),
+  };
+}
+
 export async function readHostDataset(dataset: HostDataset, scope: Scope, query: HostQuery): Promise<HostResult> {
+  if (dataset.rawCode) return readRawEndpoint(dataset, scope, query);
   if (dataset.reader && adsReaders[dataset.reader]) return readAds(dataset.reader, scope, query);
   if (dataset.reader === "hourly") return readHourly(scope, query);
   if (dataset.reader === "inventory_fba") return readInventoryFba(scope, query);

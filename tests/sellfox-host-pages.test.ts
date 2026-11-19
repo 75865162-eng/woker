@@ -16,9 +16,9 @@ test("承接页与数据集目录结构合法", () => {
       assert.ok(dataset.table, `${dataset.id} 必须声明落表`);
       assert.ok(dataset.api.length > 0, `${dataset.id} 必须声明接口`);
       assert.ok(dataset.columns.length > 0, `${dataset.id} 必须声明列`);
-      // live 必须有读取路径，planned/blocked 一定不能有（否则页面会读到空表冒充数据）。
-      if (dataset.status === "live") assert.ok(dataset.reader || dataset.endpoint, `${dataset.id} 已接入但没有读取路径`);
-      else assert.equal(dataset.reader ?? dataset.endpoint, undefined, `${dataset.id} 未接入却声明了读取路径`);
+      // live 必须有读取路径（reader / endpoint / rawCode 原始行读取），planned/blocked 一定不能有（否则页面会读到空表冒充数据）。
+      if (dataset.status === "live") assert.ok(dataset.reader || dataset.endpoint || dataset.rawCode, `${dataset.id} 已接入但没有读取路径`);
+      else assert.equal(dataset.reader ?? dataset.endpoint ?? dataset.rawCode, undefined, `${dataset.id} 未接入却声明了读取路径`);
     }
   }
 });

@@ -30,6 +30,8 @@ export type HostDataset = {
   /** live 数据集的读取方式：直连已有接口，或走 host-read 注册表。 */
   endpoint?: string;
   reader?: string;
+  /** 原始行读取：命中 SellfoxApiRecord.endpointCode，按真实 payload 键动态出列，不猜字段。 */
+  rawCode?: string;
   columns: HostColumn[];
   /** 是否支持站点/店铺/搜索/日期筛选。 */
   searchable?: boolean;

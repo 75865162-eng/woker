@@ -9,13 +9,14 @@ export const financeHostPage: HostPage = {
     datasets: [
       {
         id: "settlement",
-        label: "结算汇总",
-        status: "planned",
+        label: "结算明细",
+        status: "live",
         priority: "P0",
-        table: "SellfoxSettlement",
-        api: ["/api/financial/selectGroupPage.json", "文档：查询结算明细-分页查询"],
-        grain: "按结算周期",
-        note: "先把「结算汇总（按店铺/周期）」和「结算明细（行级费用项）」分开落表，明细用于复算利润。",
+        table: "SellfoxApiRecord",
+        rawCode: "fin_settlement_detail_v2",
+        api: ["/api/financial/v2/settlementSummary/detailPage.json"],
+        grain: "最近一次结算周期采集（原始行）",
+        note: "赛狐结算明细原始响应行（生产已同步约 56 万行，字段见真实 payload）：按接口真实字段动态出列，不猜字段、不补零、不做金额换算。结算口径不与日利润快照相加。",
         columns: [
           { key: "settlementId", label: "结算单号" },
           storeColumn,
@@ -36,9 +37,9 @@ export const financeHostPage: HostPage = {
         status: "planned",
         priority: "P1",
         table: "SellfoxReceivable",
-        api: ["文档：获取应收报表数据"],
+        api: ["/api/financial/accountReceivable/pageList.json"],
         grain: "按账期",
-        note: "按店铺/账期的应收余额，用于资金预测。",
+        note: "赛狐应收接口文档标注即将下线，实测调用返回 40014 参数异常，当前无可用数据，不渲染占位行。待接口恢复后再接入。",
         columns: [
           storeColumn,
           { key: "periodMonth", label: "账期" },
