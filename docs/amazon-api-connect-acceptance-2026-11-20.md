@@ -152,3 +152,43 @@ process.env.AMAZON_API_EXECUTION_ROLE === "cloud"
 | `navigation-7-sections` + `amazon-domain-architecture` + `sync-center-navigation` | 33/33 通过 |
 | `npm run typecheck` | 通过 |
 | ESLint（3 个改动文件） | 无错误 |
+
+## 11. 生产执行与验证（2026-11-20）
+
+### 11.1 顺序
+
+按用户指示：**先完善 → 推 GitHub → 再推服务器**。第 9、10 章的代码完善已全部推送 GitHub 并部署生产。
+
+### 11.2 生产前置配置
+
+| 项 | 执行前 | 执行后 | 说明 |
+|---|---|---|---|
+| `AMAZON_API_EXECUTION_ROLE` | 缺失（409 根因） | `cloud`（`.env` 第 37 行） | 先备份 `.env`（`.bak.20261120034023`），仅追加一行，权限 600 不变 |
+| Ads/SP-API 加密密钥 `AMAZON_SP_API_ENCRYPTION_KEY` | 已存在 | 未改动 | 44 字符 Base64、valid32bytes=true；Ads 与 SP-API 共用此密钥，故"确认 Ads 密钥存在"已满足 |
+| 服务重启 | — | 6 服务逐个重启并确认 active | 每个进程 `/proc/<pid>/environ` 均确认加载 `cloud` |
+
+### 11.3 配置页 409 消除验证
+
+新增只读脚本 `scripts/verify-amazon-cloud-execution.mts`：加载 `.env` 后**直接 import 真实代码** `assertAmazonCloudExecution()`，不发 Amazon 请求、不改数据。
+
+- 反向对照（无 cloud）：`verdict=CLOUD_EXECUTION_MISSING`，抛出原 409 报错文案 → 证明脚本能捕获该错误。
+- 生产环境（部署前 + 部署后各一次）：`verdict=CLOUD_EXECUTION_OK`、`assertThrew=false` → **409 已从代码路径消除**。
+
+配套 HTTP 证据：`/api/health`=200；配置页 `/settings/amazon-connections`=307（跳登录，非 409/500）。
+
+### 11.4 部署结果
+
+| 项 | 结果 |
+|---|---|
+| 部署基线 | `base=1e264be`（生产原 commit）→ `head=fef74a6`；本轮 diff 11 文件，**无迁移、无锁文件变更、无需人工审核** |
+| 全量单测 | 2567/2568 通过；唯一失败为 `production-readiness` 的**本地 Node 22.13.1 < 22.19 环境门禁**（服务器为 22.23.4，达标；与代码改动无关） |
+| typecheck / ESLint / 生产构建 | 通过 / 无错误 / 编译成功 + 235 静态页 |
+| 新 release | `20261119-200250-main-fef74a64ce...`，health=passed，runtimeReleaseVerified=true |
+| 服务 | 6 服务全 active；迁移 skipped（本就无需）；rollback not_needed |
+| 承接页连通性 | 17 个 `/amazon/<slug>` 全部返回 307（rewrite 生效、跳登录），异常数 0；新 release 源码确认 17 个 view 全部注册 |
+| GitHub | 远端 main 线性推至 `54eb8f3`，tree 与本地一致；合入远端 7 提交后推送 |
+
+### 11.5 仍待用户操作（未擅自执行）
+
+- 在 UI 填入真实 SP-API / Ads 凭据并完成授权同步——按用户"验收完我再填入 api"的安排，凭据仍由用户在系统内自行管理。
+- 数据库物理双只读角色 (`amazon_mcp_ro`/`sellfox_mcp_ro`) 仍待 DBA 在真实库授权（外部阻塞，不影响本轮）。
