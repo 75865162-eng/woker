@@ -100,7 +100,7 @@ export async function exerciseSyncCenterBrowser(input: { organizationId: string;
     await page.getByRole("button", { name: "保存数据源", exact: true }).click();
     await applyApproval(await bound);
     await page.getByRole("button", { name: "刷新", exact: true }).click();
-    const binding = page.locator("div.border-t").filter({ hasText: "Browser Fixture Store / ATVPDKIKX0DER / FBA 库存" });
+    const binding = page.locator("div.border-t").filter({ hasText: "US-Browser Fixture Store / FBA 库存" });
     const created = postAction("run");
     await binding.getByRole("button", { name: "同步此范围", exact: true }).click();
     const changeId = await applyApproval(await created);

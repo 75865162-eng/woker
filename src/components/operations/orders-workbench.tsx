@@ -1,4 +1,5 @@
 "use client";
+import { formatSiteStore } from "@/lib/sellfox/marketplace-site";
 import { OrderFulfillmentRecoveryPanel } from "./order-fulfillment-recovery-panel";
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, RotateCcw, RefreshCw } from "lucide-react";
@@ -172,7 +173,7 @@ export function OrdersWorkbench({ sellerAccountId = "", marketplaceId = "", getH
               return <div key={source.id} className="grid gap-3 px-4 py-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate text-sm font-bold text-foreground">{source.seller.displayName}</p>
+                    <p className="truncate text-sm font-bold text-foreground">{formatSiteStore(source.marketplaceId, source.seller.displayName)}</p>
                     <span className="text-xs text-muted">{source.marketplaceId}</span>
                     <StatusPill tone={window.tone} dot>{window.label}</StatusPill>
                   </div>

@@ -1,0 +1,28 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { formatSiteStore, siteCodeOf } from "@/lib/sellfox/marketplace-site";
+
+test("siteCodeOf maps known marketplaces to country codes", () => {
+  assert.equal(siteCodeOf("ATVPDKIKX0DER"), "US");
+  assert.equal(siteCodeOf("A2EUQ1WTGCTBG2"), "CA");
+  assert.equal(siteCodeOf("A1PA6795UKMFR9"), "DE");
+  assert.equal(siteCodeOf("A1VC38T7YXB528"), "JP");
+});
+
+test("siteCodeOf falls back to raw id without guessing", () => {
+  assert.equal(siteCodeOf("UNKNOWN_MARKETPLACE"), "UNKNOWN_MARKETPLACE");
+  assert.equal(siteCodeOf(""), "");
+  assert.equal(siteCodeOf(null), "");
+});
+
+test("formatSiteStore produces site-store label", () => {
+  assert.equal(formatSiteStore("ATVPDKIKX0DER", "aoocy"), "US-aoocy");
+  assert.equal(formatSiteStore("A2EUQ1WTGCTBG2", "aoocy"), "CA-aoocy");
+  assert.equal(formatSiteStore("A1PA6795UKMFR9", "德国店"), "DE-德国店");
+});
+
+test("formatSiteStore handles missing parts", () => {
+  assert.equal(formatSiteStore("ATVPDKIKX0DER", ""), "US");
+  assert.equal(formatSiteStore("", "aoocy"), "aoocy");
+  assert.equal(formatSiteStore("", ""), "—");
+});

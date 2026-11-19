@@ -6,6 +6,7 @@ import { BrandAnalyticsWorkbench } from "./brand-analytics-workbench";
 import { SyncCoverageWorkbench } from "./sync-coverage-workbench";
 import { ObservationsWorkbench } from "./observations-workbench";
 import { cloneElement, useCallback, useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { getJson } from "@/lib/workspace/get-json";
 import { ExternalLink, RefreshCw } from "lucide-react";
@@ -29,10 +30,12 @@ import { OperationsHubWorkbench, type OperationsBusinessTab } from "./operations
 import { UnconnectedBusinessWorkbench } from "./unconnected-business-workbench";
 import { useAppShellUser } from "@/components/app-shell/app-shell-context";
 import { roleCanPerformAction } from "@/lib/accounts/permissions";
+import { formatSiteStore } from "@/lib/sellfox/marketplace-site";
 import { FbaLocalPlansWorkbench } from "./fba-local-plans-workbench";
 import { ProcurementWorkbench } from "./procurement-workbench";
 
-import { operationsSections, operationsEntries, operationsAdminNav, OperationsSectionCards, OperationsSectionGuide, syncNavGroups, adminLabelByView, businessViewEntries, pendingEntries, localBusinessEntries, localBusinessSubgroups, adsNavLinks, groupLabelForView } from "./operations-sections";
+import { operationsSections, operationsEntries, operationsAdminNav, OperationsSectionCards, OperationsSectionGuide, syncNavGroups, adminLabelByView, businessViewEntries, pendingEntries, localBusinessSubgroups, adsNavLinks, groupLabelForView } from "./operations-sections";
+import type { SyncNavGroup } from "./operations-sections";
 
 const base = "/api/operations/sync-center";
 function headers() {
@@ -126,6 +129,32 @@ export function SyncCenterWorkbench() {
   const locationSearch = searchParams.toString();
   const shellUser = useAppShellUser();
   const canViewWms = roleCanPerformAction(shellUser?.userRole, "wms", "view", shellUser?.rolePermissions);
+
+  // 左侧一级导航 + hover 二级浮层（与主导航交互一致）：aside 只显示 7 个一级组，
+  // 二级项渲染到 body 的 fixed 浮层，鼠标移入/聚焦/点击打开，移出延迟关闭。
+  const [openNavGroup, setOpenNavGroup] = useState<string | null>(null);
+  const [navAnchor, setNavAnchor] = useState<{ left: number; top: number } | null>(null);
+  const [navMounted, setNavMounted] = useState(false);
+  const navCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { setNavMounted(true); }, []);
+  useEffect(() => () => { if (navCloseTimer.current) clearTimeout(navCloseTimer.current); }, []);
+  const cancelNavClose = useCallback(() => {
+    if (navCloseTimer.current) { clearTimeout(navCloseTimer.current); navCloseTimer.current = null; }
+  }, []);
+  const scheduleNavClose = useCallback(() => {
+    cancelNavClose();
+    navCloseTimer.current = setTimeout(() => setOpenNavGroup(null), 180);
+  }, [cancelNavClose]);
+  const openNavGroupAt = useCallback((groupId: string, button: HTMLElement) => {
+    cancelNavClose();
+    const rect = button.getBoundingClientRect();
+    const aside = button.closest("aside");
+    const left = aside ? aside.getBoundingClientRect().right + 4 : rect.right + 6;
+    setNavAnchor({ left, top: Math.min(Math.max(8, rect.top), Math.max(8, (typeof window !== "undefined" ? window.innerHeight : 800) - 460)) });
+    setOpenNavGroup(groupId);
+  }, [cancelNavClose]);
+  const closeNavNow = useCallback(() => { cancelNavClose(); setOpenNavGroup(null); }, [cancelNavClose]);
+
   const [page, setPage] = useState("overview"), [data, setData] = useState<Payload>({}), [sources, setSources] = useState<SyncSourceView[]>([]);
   const [store, setStore] = useState(""), [site, setSite] = useState(""), [resource, setResource] = useState(""), [status, setStatus] = useState(""), [trigger, setTrigger] = useState(""), [from, setFrom] = useState(""), [to, setTo] = useState(""), [taskPage, setTaskPage] = useState(1);
   const pageRef = useRef(page);
@@ -263,7 +292,7 @@ export function SyncCenterWorkbench() {
   useEffect(() => { if (authorizationFeedbackVisible && authorizationAction) authorizationFeedbackRef.current?.scrollIntoView({ block: "center" }); }, [authorizationFeedbackVisible, authorizationAction, busy, notice, error]);
   const taskColumns: DataTableColumn<SyncTaskView>[] = [
     { key: "task", header: "任务 / 数据域", width: 210, render: (t) => <>{domainName(t.resource)}<span className="block text-muted">{t.id.slice(0, 12)} · {t.trigger === "schedule" ? "定时" : "手动"}</span></> },
-    { key: "scope", header: "店铺 / 站点", width: 165, render: (t) => <>{t.scope?.seller.displayName || t.scope?.seller.accountKey}<span className="block text-muted">{t.scope?.marketplaceId}</span></> },
+    { key: "scope", header: "店铺 / 站点", width: 165, render: (t) => <>{formatSiteStore(t.scope?.marketplaceId, t.scope?.seller.displayName || t.scope?.seller.accountKey)}</> },
     { key: "status", header: "状态", width: 125, render: (t) => <StateBadge value={t.stage === "ARCHIVED_SITE_PENDING" ? "卖家归档完成·站点待核验" : t.status} /> },
     { key: "queuedAt", header: "请求时间", width: 155, render: (t) => stamp(t.queuedAt) },
     { key: "progress", header: "分页 / 记录", width: 120, render: (t) => <>{t.pagesCompleted} 页 / {t.processedCount} 条</> },
@@ -289,52 +318,53 @@ export function SyncCenterWorkbench() {
   return <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-background text-sm text-foreground" data-testid="sync-center-frame">
     <header className="flex min-h-11 flex-wrap items-center justify-between gap-2 border-b border-border bg-surface px-4 py-3 text-xs"><div><a href="/operations" className="font-semibold">经营中台</a><span className="mx-1.5 text-muted">/</span><span className="text-muted">Amazon 数据同步中心</span>{groupLabelForView(page) && <><span className="mx-1.5 text-muted">/</span><span className="text-muted">{groupLabelForView(page)}</span></>}</div><span className="text-label text-muted">Amazon SP-API · 后台持续执行</span></header>
     <WorkbenchPageTemplate className="min-w-0 gap-0" context={
-    <aside className="border-b border-border bg-surface p-3" data-testid="sync-center-sidebar">
-      {syncNavGroups.map((group, groupIndex) => {
-        const title = <h2 className={`mb-1.5 px-2 text-label font-semibold text-muted ${groupIndex > 0 ? "border-t border-border pt-3" : ""}`}>{group.id}. {group.label}</h2>;
-        if (group.kind === "admin") {
-          return <nav key={group.id} aria-label={`同步中心-${group.label}`} className="mb-3">
-            {title}
-            <div className="flex flex-wrap gap-1">{(group.viewKeys ?? []).map(view => <button key={view} type="button" aria-current={page === view ? "page" : undefined} onClick={() => navigate(view)} className={`min-h-9 rounded px-2 py-2 text-left text-xs ${page === view ? "bg-brand/10 font-semibold text-brand-dark" : "text-foreground hover:bg-surface-muted"}`}>{adminLabelByView.get(view) ?? view}</button>)}</div>
-          </nav>;
-        }
-        if (group.kind === "business") {
-          return <nav key={group.id} aria-label={`业务数据-${group.label}`} className="mb-3">
-            {title}
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">{(group.sectionIds ?? []).map(sectionId => {
-              const section = operationsSections.find(item => item.id === sectionId);
-              if (!section) return null;
-              const live = businessViewEntries(sectionId);
-              const pending = pendingEntries(sectionId);
-              if (!live.length && !pending.length) return null;
-              return <section key={sectionId} aria-label={section.label} className="min-w-0">
-                <h3 className="mb-1 px-2 text-label font-medium text-muted">{section.label}</h3>
-                <div className="grid gap-0.5">{live.map(entry => <button key={entry.view} type="button" aria-current={page === entry.view ? "page" : undefined} onClick={() => navigate(entry.view)} className={`min-h-9 rounded px-2 py-2 text-left text-xs ${page === entry.view ? "bg-brand/10 font-semibold text-brand-dark" : "text-foreground hover:bg-surface-muted"}`}>{entry.label}</button>)}
-                  {pending.length > 0 && <details className="mt-0.5 px-2" data-testid={`pending-group-${sectionId}`}><summary className="min-h-8 cursor-pointer py-1.5 text-label text-muted hover:text-foreground">待接入（{pending.length}）</summary><div className="grid gap-0.5">{pending.map(entry => <button key={entry.view} type="button" aria-current={page === entry.view ? "page" : undefined} onClick={() => navigate(entry.view)} className={`min-h-9 rounded px-2 py-2 text-left text-xs ${page === entry.view ? "bg-brand/10 font-semibold text-brand-dark" : "text-muted hover:bg-surface-muted"}`}>{entry.label}<span className="ml-1 text-label">· 待接入</span></button>)}</div></details>}
-                </div>
-              </section>;
-            })}</div>
-          </nav>;
-        }
-        if (group.kind === "ads") {
-          return <nav key={group.id} aria-label={`广告-${group.label}`} className="mb-3">
-            {title}
-            <div className="grid gap-0.5 sm:grid-cols-2">{adsNavLinks.map(link => <a key={link.href} href={link.href} className="flex min-h-9 items-center justify-between gap-2 rounded px-2 py-2 text-xs text-foreground hover:bg-surface-muted"><span>{link.label}</span><span className={`shrink-0 text-label ${link.real ? "text-brand-dark" : "text-muted"}`}>{link.real ? "已同步 · 真实" : "原型 · Mock"}</span></a>)}</div>
-          </nav>;
-        }
-        // G 组：本地业务从 Amazon 板块抽出，按仓储/财务/经营工具三子分组。
-        return <nav key={group.id} aria-label={`本地业务-${group.label}`} className="mb-3">
-          {title}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {localBusinessSubgroups.map(sub => {
-              const visible = sub.entries.filter(entry => !entry.href || entry.href.startsWith("/operations/") || canViewWms);
-              if (!visible.length) return null;
-              return <section key={sub.id} aria-label={sub.label} className="min-w-0"><h3 className="mb-1 px-2 text-label font-medium text-muted">{sub.label}</h3><div className="grid gap-0.5">{visible.map(entry => <a key={entry.view} href={entry.href} className="min-h-9 rounded px-2 py-2 text-left text-xs text-foreground hover:bg-surface-muted">{entry.label}</a>)}</div></section>;
-            })}
-          </div>
-        </nav>;
+    <>
+    <aside
+      className="flex min-h-0 flex-col gap-0.5 overflow-y-auto border-b border-border bg-surface p-2"
+      data-testid="sync-center-sidebar"
+      onScroll={closeNavNow}
+      onMouseLeave={scheduleNavClose}
+    >
+      {syncNavGroups.map(group => {
+        const isOpen = openNavGroup === group.id;
+        const groupActive = group.kind === "admin"
+          ? Boolean(group.viewKeys?.includes(page))
+          : group.kind === "business"
+            ? group.sectionIds?.some(id => operationsSections.find(s => s.id === id)?.entries.some(e => e.view === page && !e.href && !e.pending))
+            : false;
+        return <button
+          key={group.id}
+          type="button"
+          aria-expanded={isOpen}
+          aria-label={`同步中心-${group.label} 二级菜单`}
+          onMouseEnter={event => openNavGroupAt(group.id, event.currentTarget)}
+          onFocus={event => openNavGroupAt(group.id, event.currentTarget)}
+          onClick={event => openNavGroupAt(group.id, event.currentTarget)}
+          className={`flex min-h-10 items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand ${isOpen || groupActive ? "bg-brand/10 font-semibold text-brand-dark" : "text-foreground/80 hover:bg-surface-muted hover:text-foreground"}`}
+        >
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-surface-muted text-label font-semibold text-muted">{group.id}</span>
+          <span className="truncate">{group.label}</span>
+        </button>;
       })}
     </aside>
+    {navMounted && openNavGroup && navAnchor ? (() => {
+      const group = syncNavGroups.find(g => g.id === openNavGroup);
+      if (!group) return null;
+      return createPortal(
+        <SyncGroupFlyout
+          group={group}
+          page={page}
+          canViewWms={canViewWms}
+          anchor={navAnchor}
+          navigate={navigate}
+          onMouseEnter={cancelNavClose}
+          onMouseLeave={scheduleNavClose}
+          onNavigate={closeNavNow}
+        />,
+        document.body,
+      );
+    })() : null}
+    </>
     } main={
     <main className="min-w-0 space-y-[var(--gap-section)] p-[var(--pad-card)]" data-testid="sync-center-main"><div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-display text-foreground">{allNav.find(n => n[0] === page)?.[1]}</h1><p className="mt-1.5 text-meta text-muted">{pageDescriptions[page] ?? "查看能力范围、字段来源与接入条件"}</p></div>{!businessPage && !pendingPage && !procurementPage && <Button variant="secondary" size="sm" onClick={() => void load()} disabled={loading || busy}><RefreshCw className="h-3.5 w-3.5" />刷新</Button>}</div>
     {!businessPage && !pendingPage && !procurementPage && !focusedFbaPlan && <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-surface px-3.5 py-3"><Field name="店铺" inline><select className={`${inputClass} min-w-[104px] bg-surface`} value={store} onChange={e => { setStore(e.target.value); setTaskPage(1); }}><option value="">全部店铺</option>{stores.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></Field><Field name="站点" inline><select className={`${inputClass} min-w-[104px] bg-surface`} value={site} onChange={e => { setSite(e.target.value); setTaskPage(1); }}><option value="">全部站点</option>{sites.map(id => <option key={id}>{id}</option>)}</select></Field><span className="ml-auto text-label text-muted">时间按本机显示 · 日期筛选按 UTC</span></div>}
@@ -384,7 +414,7 @@ export function SyncCenterWorkbench() {
       {!visiblePlans.length && <Panel title={domainPlans.length ? "当前筛选下无计划" : boundedPlanGuidance[planDomain] ? "需配置采集范围" : planDomain === "order_items" ? "复用订单同步" : "等待自动计划就绪"}><p className="text-xs leading-relaxed text-muted">{domainPlans.length ? "该数据域已有计划，但不匹配当前店铺／站点筛选。" : boundedPlanGuidance[planDomain] ?? (planDomain === "order_items" ? "订单商品复用 orders 的 getOrder 详情；不创建独立来源或计划，详情采集受订单来源策略与授权约束。" : "该数据域在合格授权、数据源策略及管理员权限就绪后自动生成计划；后台发现与执行需要正常 Worker。当前尚未读取到计划，不表示已启动或已完成同步。")}</p><div className="mt-3 flex flex-wrap gap-2">{(store || site) && <Button size="sm" variant="secondary" onClick={() => { setStore(""); setSite(""); }}>清除店铺／站点筛选</Button>}{["catalog_items", "listing_details"].includes(planDomain) && <Button size="sm" variant="secondary" onClick={() => { setPlanDomain("catalog"); setEditor(undefined); }}>查看在线商品全量计划</Button>}<Button size="sm" variant="secondary" onClick={() => navigate("connections")}>查看数据源与授权</Button><Button size="sm" variant="secondary" onClick={() => navigate("settings")}>查看后台状态</Button></div></Panel>}
     </div></div>}
     {(page === "sync" && syncTab === "tasks" || page === "tasks") && (taskId ? data.task ? <><Button variant="secondary" size="sm" onClick={() => { setTaskId(""); setLogAfter(0); }}>返回任务列表</Button><TaskDetail task={data.task} orderRecovery={data.orderRecovery} source={data.source} logs={data.logs ?? []} access={access} busy={busy} control={control => void act({ action: "control-task", id: taskId, control })} />{data.task.resource === "catalog" && data.task.status === "SUCCEEDED" && data.task.stage !== "PURGED" && data.source && access.canConfigure && <ListingAttributeRecoveryPanel key={`${data.task.sourceId}:${data.task.id}`} sourceId={data.task.sourceId} taskId={data.task.id} sellerName={data.source.seller.displayName || data.source.seller.accountKey} marketplaceId={data.source.marketplaceId} busy={busy} requestHeaders={headers} requestApproval={act} openApprovals={() => navigate("approvals")} />}{data.task.resource === "orders" && data.task.status === "SUCCEEDED" && data.source && access.canConfigure && <OrderFulfillmentRecoveryPanel key={`${data.task.sourceId}:${data.task.id}`} sourceId={data.task.sourceId} taskId={data.task.id} sellerName={data.source.seller.displayName || data.source.seller.accountKey} marketplaceId={data.source.marketplaceId} busy={busy} requestHeaders={headers} requestApproval={act} openApprovals={() => navigate("approvals")} />}{["inventory_events", "reimbursements"].includes(data.task.resource) && data.task.status === "SUCCEEDED" && data.task.stage === "ARCHIVED_SITE_PENDING" && data.source && access.canConfigure && <ReportAttributionRecoveryPanel key={`${data.task.sourceId}:${data.task.id}`} sourceId={data.task.sourceId} sellerName={data.source.seller.displayName || data.source.seller.accountKey} marketplaceId={data.source.marketplaceId} busy={busy} requestHeaders={headers} requestApproval={act} openApprovals={() => navigate("approvals")} />}<div className="flex gap-2"><Button size="sm" variant="secondary" disabled={!logAfter} onClick={() => setLogAfter(Math.max(0, logAfter - 100))}>上一页日志</Button><Button size="sm" variant="secondary" disabled={data.nextAfter == null} onClick={() => setLogAfter(data.nextAfter!)}>下一页日志</Button></div></> : <p>任务不可用。</p> : <Panel title="任务记录">{showTaskList()}</Panel>)}
-      {page === "domains" && data.inventoryReplicaAvailable && access.canCreate && <Panel title="云端快照回传"><p className="mb-3 text-xs text-muted">回传云端库存、商品快照、已入库订单或财务交易，供 ERP 和 MCP 查询。库存、商品每来源最多 500 条；订单和财务每批最多 500 条，订单每批明细最多 1000 条，可继续下一批，刷新后可从首批幂等重跑；订单只回传普通业务字段，财务隔离原件不回传；不代表历史同步完整或最终结算。</p><div className="flex flex-wrap gap-2">{visibleSources.filter(s => ["inventory", "catalog", "orders", "finance"].includes(s.resource) && s.enabled).map(s => <Button key={s.id} size="sm" variant="secondary" disabled={busy} onClick={() => void pullSnapshot(s.id, s.resource as "inventory" | "catalog" | "orders" | "finance")}>{["finance", "orders"].includes(s.resource) && replicaProgress[s.id]?.cursor ? "继续回传" : "回传"}{domainName(s.resource)} · {s.seller.displayName || s.seller.accountKey} / {s.marketplaceId}{["finance", "orders"].includes(s.resource) && replicaProgress[s.id] ? ` · ${replicaProgress[s.id].rows}/${replicaProgress[s.id].total}` : ""}</Button>)}</div>{Object.values(replicaProgress).some(progress => progress.cursor) && <Button size="sm" variant="secondary" disabled={busy} onClick={() => { setReplicaProgress({}); setNotice("订单和财务回传进度已重置；已入库数据保留，可从首批幂等重跑。"); }}>订单／财务从首批重跑</Button>}</Panel>}
+      {page === "domains" && data.inventoryReplicaAvailable && access.canCreate && <Panel title="云端快照回传"><p className="mb-3 text-xs text-muted">回传云端库存、商品快照、已入库订单或财务交易，供 ERP 和 MCP 查询。库存、商品每来源最多 500 条；订单和财务每批最多 500 条，订单每批明细最多 1000 条，可继续下一批，刷新后可从首批幂等重跑；订单只回传普通业务字段，财务隔离原件不回传；不代表历史同步完整或最终结算。</p><div className="flex flex-wrap gap-2">{visibleSources.filter(s => ["inventory", "catalog", "orders", "finance"].includes(s.resource) && s.enabled).map(s => <Button key={s.id} size="sm" variant="secondary" disabled={busy} onClick={() => void pullSnapshot(s.id, s.resource as "inventory" | "catalog" | "orders" | "finance")}>{["finance", "orders"].includes(s.resource) && replicaProgress[s.id]?.cursor ? "继续回传" : "回传"}{domainName(s.resource)} · {formatSiteStore(s.marketplaceId, s.seller.displayName || s.seller.accountKey)}{["finance", "orders"].includes(s.resource) && replicaProgress[s.id] ? ` · ${replicaProgress[s.id].rows}/${replicaProgress[s.id].total}` : ""}</Button>)}</div>{Object.values(replicaProgress).some(progress => progress.cursor) && <Button size="sm" variant="secondary" disabled={busy} onClick={() => { setReplicaProgress({}); setNotice("订单和财务回传进度已重置；已入库数据保留，可从首批幂等重跑。"); }}>订单／财务从首批重跑</Button>}</Panel>}
     {page === "domains" && (() => { const selectedDomain = domainCatalog.find(d => d.id === domain); return <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[190px_minmax(0,1fr)]"><DomainPicker domains={domainCatalog} selected={domain} label="数据域目录" choose={setDomain} /><Panel title={`${selectedDomain?.name ?? domain} · 数据域详情`}><dl className="grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-xs text-muted">来源 API / Report</dt><dd className="mt-1 break-words">{selectedDomain?.api ?? "—"}</dd></div><div><dt className="text-xs text-muted">接入状态</dt><dd className="mt-1">{selectedDomain?.implemented ? "已接入，可按权限查看或执行" : "规划中，不可创建计划或发起请求"}</dd></div><div><dt className="text-xs text-muted">采集模式</dt><dd className="mt-1">{domainModeName[selectedDomain?.mode ?? ""] ?? "—"}</dd></div><div><dt className="text-xs text-muted">默认策略</dt><dd className="mt-1">每 {selectedDomain?.frequency ?? "—"} 分钟 · P{Math.max(0, (selectedDomain?.priority ?? 1) - 1)}</dd></div><div><dt className="text-xs text-muted">授权检测</dt><dd className="mt-1">{authorizationName[selectedDomain?.authorization ?? ""] ?? "—"}</dd></div><div><dt className="text-xs text-muted">下一步</dt><dd className="mt-1">{selectedDomain?.nextStep ?? "—"}</dd></div><div className="sm:col-span-2"><dt className="text-xs text-muted">业务边界</dt><dd className="mt-1">Amazon 数据作为外部校准源，不自动覆盖 ProductRecord；赛狐指标保持独立口径。</dd></div></dl><div className="mt-4"><SourceTable sources={visibleSources.filter(s => s.resource === domain)} openTask={openTask} /></div></Panel></div>; })()}
     {page === "quality" && <Panel title="基础数据质量与新鲜度"><p className="mb-4 text-xs text-muted">Phase 1：完整分页、关键字段、数量及发布验证由 Worker 执行。完整跨域质量规则和问题生命周期在 Phase 4 实施。</p><QualityTable sources={visibleSources} openTask={openTask} /></Panel>}
     {page === "connections" && <><AmazonStoresPanel canEdit={access.canConfigure} /><p className="text-xs text-muted">优先使用 Amazon OAuth 验证身份；手动凭证仅验证参与站点，不能据此确认 Seller ID。</p>{authEditor !== undefined && <AuthorizationEditor key={authEditor?.id ?? "new"} value={authEditor} busy={busy} error={error} close={() => setAuthEditor(undefined)} save={async b => { if (await act({ action: "save-authorization", ...b })) { setAuthEditor(undefined); requestAnimationFrame(() => authorizationResultRef.current?.focus()); } }} />}
@@ -392,7 +422,7 @@ export function SyncCenterWorkbench() {
       {access.canConfigure && <ScopeGrantEditor key={data.grants?.map(g => `${g.id}:${g.revision}`).join(",")} grants={[...(data.grants ?? []), ...(data.roleGrants ?? [])]} roles={data.grantRoles ?? []} members={data.grantMembers ?? []} sellers={data.sellers ?? []} busy={busy} save={b => act({ action: "save-access-grant", ...b })} />}
       <Panel title="授权后自动采集"><p className="text-sm">完成授权验证后，由服务器自动发现已支持的站点和数据域、创建任务并持续同步。无需在此选择店铺、站点、字段或逐项开启任务；下方筛选仅影响查看结果。</p><p className="mt-2 text-xs text-muted">未适配的 API、独立授权缺失及历史覆盖缺口会保持待处理状态，不计为已同步。</p></Panel>
       {access.canConfigure && <details className="rounded-lg border border-border p-3"><summary className="cursor-pointer text-sm">高级维护：现有来源策略</summary><p className="my-3 text-xs text-muted">用于排障与兼容既有来源，自动同步无需填写此表单。</p><SourceEditor auths={data.authorizations ?? []} sellers={data.sellers ?? []} busy={busy} save={b => act({ action: "save-source", ...b })} /></details>}
-      <Panel title="店铺／站点／数据域绑定"><SourceTable sources={visibleSources} openTask={openTask} />{visibleSources.map(s => <div key={s.id} className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3 text-xs"><span>{s.seller.displayName || s.seller.accountKey} / {s.marketplaceId} / {domainName(s.resource)}</span><Button size="sm" variant="secondary" disabled={!access.canConfigure || busy} onClick={() => void act({ action: "save-source", authorizationId: s.authorizationId, sellerAccountId: s.sellerAccountId, marketplaceId: s.marketplaceId, resource: s.resource, freshnessMinutes: s.freshnessMinutes, enabled: !s.enabled })}>{s.enabled ? "停用数据源" : "启用数据源"}</Button><Button size="sm" variant="secondary" disabled={!s.enabled || !access.canCreate || busy} onClick={() => runSources([s.id])}>同步此范围</Button></div>)}</Panel>
+      <Panel title="店铺／站点／数据域绑定"><SourceTable sources={visibleSources} openTask={openTask} />{visibleSources.map(s => <div key={s.id} className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3 text-xs"><span>{formatSiteStore(s.marketplaceId, s.seller.displayName || s.seller.accountKey)} / {domainName(s.resource)}</span><Button size="sm" variant="secondary" disabled={!access.canConfigure || busy} onClick={() => void act({ action: "save-source", authorizationId: s.authorizationId, sellerAccountId: s.sellerAccountId, marketplaceId: s.marketplaceId, resource: s.resource, freshnessMinutes: s.freshnessMinutes, enabled: !s.enabled })}>{s.enabled ? "停用数据源" : "启用数据源"}</Button><Button size="sm" variant="secondary" disabled={!s.enabled || !access.canCreate || busy} onClick={() => runSources([s.id])}>同步此范围</Button></div>)}</Panel>
     </>}
     {page === "settings" && <><AmazonMcpPanel /><Panel title="后台执行状态"><p className="mb-3 text-sm">队列：amazon-data-center-jobs · {data.queueConfigured ? "Redis 已配置" : "Redis 未配置，不能执行同步"}</p>{!!data.heartbeats?.length && <StandardDataTable ariaLabel="Worker 心跳状态" rows={data.heartbeats} getRowKey={w => w.workerName} columns={heartbeatColumns} />}{!data.heartbeats?.length && <p className="text-sm text-muted">尚无 Worker 心跳，不能据此认定后台在线。</p>}</Panel><Panel title="运行策略"><ul className="space-y-2 text-sm"><li>每个组织、工作区、店铺、站点、数据域独立任务和成功快照。</li><li>每 5 页提交并释放执行槽位，实时任务可在分片之间运行。</li><li>429／网络／5xx 采用有界指数退避和抖动；可用限流头参与预算，缺失时保守等待。</li><li>每计划可配置重试次数与快照保留天数；current 与运行中快照受保护。</li><li>保留天数目前仅为配置；未开放自动清理。</li><li>销售流量支持日期报告；订单 P1 单页提交、窗口完整性独立展示；财务及其他报告仍待接入。</li></ul><p className="mt-4 text-xs text-muted">并发上限保留现状；提高并发、容量阈值或保留期限需单独性能评审。</p></Panel></>}
     </>}
@@ -402,10 +432,73 @@ export function SyncCenterWorkbench() {
   </div>;
 }
 
+/** 同步中心一级导航的二级浮层：与主导航一致，fixed 定位到 body，避免被容器裁切。 */
+function SyncGroupFlyout({
+  group, page, canViewWms, anchor, navigate, onMouseEnter, onMouseLeave, onNavigate,
+}: {
+  group: SyncNavGroup;
+  page: string;
+  canViewWms: boolean;
+  anchor: { left: number; top: number };
+  navigate: (next: string, tab?: "plans" | "tasks") => void;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+  onNavigate: () => void;
+}) {
+  const itemClass = (active: boolean) => `min-h-9 rounded px-2 py-2 text-left text-xs ${active ? "bg-brand/10 font-semibold text-brand-dark" : "text-foreground hover:bg-surface-muted"}`;
+  const navButton = (view: string, label: string, pendingLabel?: string) => <button
+    key={view}
+    type="button"
+    aria-current={page === view ? "page" : undefined}
+    onClick={() => { onNavigate(); navigate(view); }}
+    className={itemClass(page === view)}
+  >{label}{pendingLabel && <span className="ml-1 text-label">{pendingLabel}</span>}</button>;
+
+  return <div
+    onMouseEnter={onMouseEnter}
+    onMouseLeave={onMouseLeave}
+    style={{ left: anchor.left, top: anchor.top }}
+    className="fixed z-dropdown max-h-[76vh] w-80 overflow-y-auto rounded-xl border border-border bg-surface p-3 shadow-lg"
+    data-testid={`sync-nav-flyout-${group.id}`}
+  >
+    <div className="mb-2 flex items-center gap-2 border-b border-border px-1 pb-2">
+      <span className="flex h-5 w-5 items-center justify-center rounded bg-brand/10 text-label font-semibold text-brand-dark">{group.id}</span>
+      <h3 className="text-section text-foreground">{group.label}</h3>
+    </div>
+    {group.kind === "admin" && <div className="flex flex-col gap-0.5">{(group.viewKeys ?? []).map(view => navButton(view, adminLabelByView.get(view) ?? view))}</div>}
+    {group.kind === "business" && <div className="space-y-2">{(group.sectionIds ?? []).map(sectionId => {
+      const section = operationsSections.find(item => item.id === sectionId);
+      if (!section) return null;
+      const live = businessViewEntries(sectionId);
+      const pending = pendingEntries(sectionId);
+      if (!live.length && !pending.length) return null;
+      return <section key={sectionId} aria-label={section.label}>
+        <h4 className="mb-0.5 px-2 text-label font-medium text-muted">{section.label}</h4>
+        <div className="grid gap-0.5">
+          {live.map(entry => navButton(entry.view, entry.label))}
+          {pending.length > 0 && <details className="px-2" data-testid={`pending-group-${sectionId}`}>
+            <summary className="min-h-8 cursor-pointer py-1.5 text-label text-muted hover:text-foreground">待接入（{pending.length}）</summary>
+            <div className="grid gap-0.5">{pending.map(entry => navButton(entry.view, entry.label, "· 待接入"))}</div>
+          </details>}
+        </div>
+      </section>;
+    })}</div>}
+    {group.kind === "ads" && <div className="grid gap-0.5">{adsNavLinks.map(link => <a key={link.href} href={link.href} className="flex min-h-9 items-center justify-between gap-2 rounded px-2 py-2 text-xs text-foreground hover:bg-surface-muted"><span>{link.label}</span><span className={`shrink-0 text-label ${link.real ? "text-brand-dark" : "text-muted"}`}>{link.real ? "已同步 · 真实" : "原型 · Mock"}</span></a>)}</div>}
+    {group.kind === "local" && <div className="space-y-2">{localBusinessSubgroups.map(sub => {
+      const visible = sub.entries.filter(entry => !entry.href || entry.href.startsWith("/operations/") || canViewWms);
+      if (!visible.length) return null;
+      return <section key={sub.id} aria-label={sub.label}>
+        <h4 className="mb-0.5 px-2 text-label font-medium text-muted">{sub.label}</h4>
+        <div className="grid gap-0.5">{visible.map(entry => <a key={entry.view} href={entry.href} className="min-h-9 rounded px-2 py-2 text-left text-xs text-foreground hover:bg-surface-muted">{entry.label}</a>)}</div>
+      </section>;
+    })}</div>}
+  </div>;
+}
+
 function SourceTable({ sources, openTask }: { sources: SyncSourceView[]; openTask: (id: string) => void }) {
   if (!sources.length) return <p className="p-4 text-sm text-muted">此范围尚无数据源／成功快照，未接入数据域保持规划中。</p>;
   const columns: DataTableColumn<SyncSourceView>[] = [
-    { key: "scope", header: "数据域 / 范围", width: 220, render: s => <>{s.latestTask ? <button type="button" className="text-brand-dark hover:underline" title="查看关联任务" onClick={() => openTask(s.latestTask!.id)}>{domainName(s.resource)}</button> : <span className="text-brand-dark">{domainName(s.resource)}</span>}<span className="mt-0.5 block text-xs text-muted">{s.seller.displayName || s.seller.accountKey} / {s.marketplaceId}</span></> },
+    { key: "scope", header: "数据域 / 范围", width: 220, render: s => <>{s.latestTask ? <button type="button" className="text-brand-dark hover:underline" title="查看关联任务" onClick={() => openTask(s.latestTask!.id)}>{domainName(s.resource)}</button> : <span className="text-brand-dark">{domainName(s.resource)}</span>}<span className="mt-0.5 block text-xs text-muted">{formatSiteStore(s.marketplaceId, s.seller.displayName || s.seller.accountKey)}</span></> },
     { key: "lastSuccess", header: "最近成功", width: 140, render: s => <span title={stamp(s.lastSuccessAt)}>{shortStamp(s.lastSuccessAt)}</span> },
     { key: "coverage", header: "覆盖范围", width: 250, render: s => <>{s.resource === "returns" ? (s.activeRunId ? "单份报告已发布，请进入退货页查看" : "尚无已发布退货报告") : ["orders", "finance"].includes(s.resource) ? (s.activeRunId ? `最近窗口完成 · 累计 ${s.rowCount.toLocaleString()} 条` : "尚无完整窗口，请查看对应资源进度") : s.activeRunId ? `完整快照 · ${s.rowCount.toLocaleString()} 条` : "尚无已发布快照"}{s.health === "STALE" && <span className="mt-0.5 block text-xs text-muted">已过新鲜度阈值</span>}</> },
     { key: "health", header: "当前状态", width: 190, render: s => <><StateBadge value={s.health} />{s.health === "SYNCING" && s.latestTask ? <SyncInlineProgress task={s.latestTask} /> : s.resourceCursor && <span className="mt-1 block text-xs text-muted">窗口 {s.resourceCursor.status} · {stamp(s.resourceCursor.watermarkFrom)} — {stamp(s.resourceCursor.watermarkTo)}{s.resourceCursor.hasIncompleteWindow ? " · 未完成，恢复前核对审批与日志" : " · 最近窗口完成"}</span>}</> },
@@ -425,7 +518,7 @@ function Issues({ sources, openTask }: { sources: SyncSourceView[]; openTask: (i
   if (!issues.length) return <p className="py-4 text-xs leading-relaxed text-muted">当前范围没有已发现的基础质量异常；不代表所有后续规则已检查。</p>;
   const columns: DataTableColumn<SyncSourceView>[] = [
     { key: "issue", header: "问题", width: 135, render: s => <StateBadge value={s.health} /> },
-    { key: "scope", header: "数据域 / 范围", width: 210, render: s => <>{domainName(s.resource)}<span className="mt-1 block text-xs text-muted">{s.seller.displayName || s.seller.accountKey} / {s.marketplaceId}</span></> },
+    { key: "scope", header: "数据域 / 范围", width: 210, render: s => <>{domainName(s.resource)}<span className="mt-1 block text-xs text-muted">{formatSiteStore(s.marketplaceId, s.seller.displayName || s.seller.accountKey)}</span></> },
     { key: "details", header: "说明", render: s => s.latestTask?.error || (s.health === "STALE" ? `上次成功 ${stamp(s.lastSuccessAt)}；已超过 ${s.freshnessMinutes} 分钟。` : "请检查授权、店铺状态和域权限。") },
     { key: "action", header: "操作", width: 130, render: s => s.latestTask ? <Button size="sm" variant="secondary" onClick={() => openTask(s.latestTask!.id)}>查看关联任务 →</Button> : null },
   ];
@@ -433,7 +526,7 @@ function Issues({ sources, openTask }: { sources: SyncSourceView[]; openTask: (i
 }
 function QualityTable({ sources, openTask }: { sources: SyncSourceView[]; openTask: (id: string) => void }) {
   const issues = sources.filter(s => ["FAILED", "BLOCKED", "STALE", "PARTIAL_SUCCESS"].includes(s.health));
-  return <><div className="mb-4 flex flex-wrap gap-2 text-xs">{[["同步失败", "FAILED"], ["执行阻断", "BLOCKED"], ["数据过期", "STALE"], ["报告不完整", "PARTIAL_SUCCESS"]].map(([name, health]) => <span key={health} className="rounded border border-border bg-background px-3 py-2">{name}<strong className="ml-2 tabular-nums">{issues.filter(s => s.health === health).length}</strong></span>)}</div><div className="overflow-x-auto"><table className="w-full min-w-[860px] text-left text-sm"><thead className="border-b border-border bg-background text-muted"><tr>{["问题类型", "店铺 / 站点", "数据域", "影响范围", "建议操作", "关联任务"].map(label => <th key={label} className="bg-surface-muted px-3 py-3 text-xs font-normal text-muted">{label}</th>)}</tr></thead><tbody>{issues.map(s => <tr key={s.id} className="border-b border-border align-top last:border-0"><td className="px-3 py-3"><StateBadge value={s.health} />{s.resourceCursor && <span className="mt-1 block text-xs text-muted">窗口 {s.resourceCursor.status} · {stamp(s.resourceCursor.watermarkFrom)} — {stamp(s.resourceCursor.watermarkTo)}{s.resourceCursor.hasIncompleteWindow ? " · 未完成，恢复前核对审批与日志" : " · 最近窗口完成"}</span>}</td><td className="px-3 py-3">{s.seller.displayName || s.seller.accountKey}<span className="mt-1 block text-muted">{s.marketplaceId}</span></td><td className="px-3 py-3">{domainName(s.resource)}</td><td className="max-w-[240px] px-3 py-3 leading-relaxed">{s.activeRunId ? `已发布快照 ${s.rowCount.toLocaleString()} 条；最近成功 ${stamp(s.lastSuccessAt)}` : "尚无已发布快照"}<span className="mt-1 block text-muted">{s.latestTask?.error || (s.health === "STALE" ? `超过 ${s.freshnessMinutes} 分钟阈值` : "检查授权、店铺状态与数据域权限")}</span></td><td className="px-3 py-3 leading-relaxed">{s.health === "STALE" ? "检查计划及 Worker，按需重新同步" : s.health === "BLOCKED" ? "核对授权与执行条件后重试" : "查看失败原因，修复后重试"}</td><td className="px-3 py-3">{s.latestTask ? <Button size="sm" variant="secondary" onClick={() => openTask(s.latestTask!.id)}>查看任务</Button> : <span className="text-muted">暂无关联任务</span>}</td></tr>)}</tbody></table>{!issues.length && <p className="py-8 text-center text-xs text-muted">当前范围没有已发现的基础质量异常；不代表所有后续规则已检查。</p>}</div><p className="mt-3 text-label leading-relaxed text-muted">按店铺、站点和数据域列示当前问题；尚未建立独立问题发现时间与处理记录，不将任务时间作为发现时间。</p></>;
+  return <><div className="mb-4 flex flex-wrap gap-2 text-xs">{[["同步失败", "FAILED"], ["执行阻断", "BLOCKED"], ["数据过期", "STALE"], ["报告不完整", "PARTIAL_SUCCESS"]].map(([name, health]) => <span key={health} className="rounded border border-border bg-background px-3 py-2">{name}<strong className="ml-2 tabular-nums">{issues.filter(s => s.health === health).length}</strong></span>)}</div><div className="overflow-x-auto"><table className="w-full min-w-[860px] text-left text-sm"><thead className="border-b border-border bg-background text-muted"><tr>{["问题类型", "店铺 / 站点", "数据域", "影响范围", "建议操作", "关联任务"].map(label => <th key={label} className="bg-surface-muted px-3 py-3 text-xs font-normal text-muted">{label}</th>)}</tr></thead><tbody>{issues.map(s => <tr key={s.id} className="border-b border-border align-top last:border-0"><td className="px-3 py-3"><StateBadge value={s.health} />{s.resourceCursor && <span className="mt-1 block text-xs text-muted">窗口 {s.resourceCursor.status} · {stamp(s.resourceCursor.watermarkFrom)} — {stamp(s.resourceCursor.watermarkTo)}{s.resourceCursor.hasIncompleteWindow ? " · 未完成，恢复前核对审批与日志" : " · 最近窗口完成"}</span>}</td><td className="px-3 py-3">{formatSiteStore(s.marketplaceId, s.seller.displayName || s.seller.accountKey)}</td><td className="px-3 py-3">{domainName(s.resource)}</td><td className="max-w-[240px] px-3 py-3 leading-relaxed">{s.activeRunId ? `已发布快照 ${s.rowCount.toLocaleString()} 条；最近成功 ${stamp(s.lastSuccessAt)}` : "尚无已发布快照"}<span className="mt-1 block text-muted">{s.latestTask?.error || (s.health === "STALE" ? `超过 ${s.freshnessMinutes} 分钟阈值` : "检查授权、店铺状态与数据域权限")}</span></td><td className="px-3 py-3 leading-relaxed">{s.health === "STALE" ? "检查计划及 Worker，按需重新同步" : s.health === "BLOCKED" ? "核对授权与执行条件后重试" : "查看失败原因，修复后重试"}</td><td className="px-3 py-3">{s.latestTask ? <Button size="sm" variant="secondary" onClick={() => openTask(s.latestTask!.id)}>查看任务</Button> : <span className="text-muted">暂无关联任务</span>}</td></tr>)}</tbody></table>{!issues.length && <p className="py-8 text-center text-xs text-muted">当前范围没有已发现的基础质量异常；不代表所有后续规则已检查。</p>}</div><p className="mt-3 text-label leading-relaxed text-muted">按店铺、站点和数据域列示当前问题；尚未建立独立问题发现时间与处理记录，不将任务时间作为发现时间。</p></>;
 }
 function TaskTrend({ trend }: { trend: Overview["trend"] }) {
   const bucketMs = 7200000, lastBucket = Math.floor(Date.now() / bucketMs) * bucketMs;
@@ -463,7 +556,7 @@ function TaskDetail({ task: t, orderRecovery, source, logs, access, busy, contro
     { key: "status", header: "HTTP / 代码", width: 130, render: l => <>{l.statusCode ?? "—"} / {l.code ?? "—"}</> },
     { key: "request", header: "Request ID / 配额头", render: l => <>{l.requestId ?? "—"} / {l.rateLimit ?? "—"}</> },
   ];
-  return <><Panel title={`任务 ${t.id}`}><div className="mb-4 flex flex-wrap items-center gap-2"><StateBadge value={t.stage === "ARCHIVED_SITE_PENDING" ? "卖家归档完成·站点待核验" : t.status} /><span className="text-xs text-muted">{t.stage} {t.control ? `· 等待${t.control === "CANCEL" ? "取消" : "暂停"}检查点` : ""}</span></div><dl className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-3">{[["店铺 / 站点", `${source?.seller.displayName || source?.seller.accountKey || "—"} / ${source?.marketplaceId || "—"}`], ["数据域 / 类型", `${domainName(t.resource)} / ${t.trigger === "schedule" ? "定时同步" : "手动同步"}`], ["入队 / 开始", `${stamp(t.queuedAt)} / ${stamp(t.startedAt)}`], ["结束 / 耗时", `${stamp(t.finishedAt)} / ${t.elapsedMs === null ? "—" : `${Math.round(t.elapsedMs / 1000)} 秒`}`], ["分页 / 处理记录", `${t.pagesCompleted} 页 / ${t.processedCount} 条`], ["写入新快照 / 更新 / 跳过", `${t.insertedCount} / ${t.updatedCount} / ${t.skippedCount}`], ["API 请求 / 限流", `${t.apiRequests} / ${t.throttles}`], ["失败尝试", String(t.failedCount ?? 0)], ["执行尝试 / 最大次数", `${t.attempts} / ${t.maxAttempts}`], ["计划版本", `${t.scheduleId || "手动"} / ${t.scheduleRevision ?? "—"}`]].map(([k, v]) => <div key={k}><dt className="text-xs text-muted">{k}</dt><dd className="mt-1 break-words">{v}</dd></div>)}</dl><details className="mt-3 text-xs"><summary className="cursor-pointer text-brand">日期范围与质量证据</summary><pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all">{JSON.stringify({ requestedRange: t.requestedRange ?? null, orderWindow: t.orderWindow ?? null, financeWindow: t.financeWindow ?? null, returnWindow: t.returnWindow ?? null, result: t.summary }, null, 2)}</pre></details><p className="mt-4 text-xs text-muted">{t.resource === "returns" ? "退货按报告与行 hash 幂等；重试保留报告和解析批次，不跨报告累加件数。" : ["orders", "finance"].includes(t.resource) ? "增量按业务键更新，重试保留已提交页和游标；财务窗口完成不代表最终结算。" : "新快照不覆盖旧行，因此更新计数为 0；插入／跳过按此快照计数，API／尝试计数包含历史重试。"}</p>{t.operatorAction && <p role="status" className="mt-3 rounded border border-border p-3 text-xs text-muted">{t.operatorAction}</p>}{t.error && <p role="alert" className="mt-3 rounded border border-danger/30 bg-danger-soft p-3 text-xs leading-relaxed text-danger-ink">{t.error}</p>}{t.resource === "orders" && ["FAILED", "BLOCKED", "PARTIAL_SUCCESS", "PAUSED"].includes(t.status) && <div className="mt-3 rounded border border-border p-3 text-xs" data-testid="order-recovery-readiness"><p className="font-medium">订单检查点恢复核对</p><p className="mt-1">{orderRecovery?.message ?? "尚未取得检查点核对结果，请重新读取任务；暂不能申请恢复。"}</p>{orderRecovery?.checkpoint && <><p className="mt-1">原窗口：{stamp(orderRecovery.checkpoint.window.from)} — {stamp(orderRecovery.checkpoint.window.to)}</p><p className="mt-1">已提交 {orderRecovery.checkpoint.pagesCompleted} 页 · 已补齐 {orderRecovery.checkpoint.detailsCompleted} 笔 · 当前窗口待处理 {orderRecovery.checkpoint.pendingDetails} 笔 · 已存原件 {orderRecovery.checkpoint.archivedResponses} 份</p><p className="mt-1">下一步：{({ getOrder: "继续采集订单详情", searchOrders: "继续订单列表分页", COMPLETE_WINDOW: "核对并完成当前窗口" } as Record<string, string>)[orderRecovery.checkpoint.nextOperation] ?? "待核对"}；保留已提交数据及检查点。</p></>}<p className="mt-1 text-muted">仅为只读核对；申请、批准并应用后才可执行，届时再次校验权限及检查点。当前窗口完成不代表全历史完整。</p></div>}<div className="mt-4 flex flex-wrap gap-2"><Button size="sm" variant="secondary" disabled={["orders", "finance", "returns", "fulfillment", "pricing", "brand_analytics", "buy_box_history", "listing_details", "catalog_items"].includes(t.resource) || t.status !== "SUCCEEDED" || t.stage === "PURGED"} onClick={() => setShowSnapshot(v => !v)}>{showSnapshot ? "收起快照" : "查看本次快照"}</Button>{["fulfillment", "pricing", "brand_analytics", "buy_box_history", "listing_details", "catalog_items"].includes(t.resource) && <a className="text-xs text-brand" href={`/operations?view=${t.resource}`}>查看该域已发布观察版本</a>}{active && t.status !== "PAUSED" && <Button size="sm" variant="secondary" disabled={!access.canEdit || busy || !!t.control} onClick={() => control("pause")}>暂停任务</Button>}{t.status === "PAUSED" && <Button size="sm" disabled={!access.canEdit || !access.canCreate || busy || recoveryBlocked} onClick={() => control("resume")}>从检查点恢复</Button>}{t.resource === "catalog_items" && t.status === "PARTIAL_SUCCESS" && t.stage === "OBJECTS_UNAVAILABLE" && access.canEdit && access.canCreate && <Button size="sm" variant="secondary" disabled={busy} onClick={() => control("publish-available")}>申请部分发布（保留404缺口）</Button>}{(["FAILED", "BLOCKED", "PARTIAL_SUCCESS"].includes(t.status) || cancelledProduct) && <Button size="sm" disabled={!access.canEdit || !access.canCreate || busy || recoveryBlocked} onClick={() => control("retry")}>{cancelledProduct ? "申请恢复已取消任务（保留进度）" : ["orders", "finance", "returns", "settlements", "reimbursements", "inventory_age", "inventory_events"].includes(t.resource) ? "从增量游标重试" : ["fulfillment", "pricing", "brand_analytics", "buy_box_history", "listing_details", "catalog_items"].includes(t.resource) ? "从观察检查点重试" : "重试完整快照"}</Button>}{active && <Button size="sm" variant="secondary" disabled={!access.canEdit || busy || t.control === "CANCEL"} onClick={() => control("cancel")}>取消任务</Button>}</div></Panel>{showSnapshot && (t.resource === "sales_traffic" ? <Panel title="本次报告"><SalesTrafficWorkbench sources={source ? [source] : []} canSync={false} canExport={access.canExport ?? false} taskId={t.id} /></Panel> : <SnapshotBrowser key={t.id} taskId={t.id} />)}<Panel title="结构日志"><p className="mb-3 text-xs text-muted">只记录阶段、错误码和非敏感请求 ID；不返回 token、分页内容或 Amazon 原始响应。</p><StandardDataTable ariaLabel="结构日志" rows={logs} getRowKey={l => l.id} columns={logColumns} empty="尚无执行日志。" /></Panel></>;
+  return <><Panel title={`任务 ${t.id}`}><div className="mb-4 flex flex-wrap items-center gap-2"><StateBadge value={t.stage === "ARCHIVED_SITE_PENDING" ? "卖家归档完成·站点待核验" : t.status} /><span className="text-xs text-muted">{t.stage} {t.control ? `· 等待${t.control === "CANCEL" ? "取消" : "暂停"}检查点` : ""}</span></div><dl className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-3">{[["店铺 / 站点", formatSiteStore(source?.marketplaceId || "—", source?.seller.displayName || source?.seller.accountKey || "—")], ["数据域 / 类型", `${domainName(t.resource)} / ${t.trigger === "schedule" ? "定时同步" : "手动同步"}`], ["入队 / 开始", `${stamp(t.queuedAt)} / ${stamp(t.startedAt)}`], ["结束 / 耗时", `${stamp(t.finishedAt)} / ${t.elapsedMs === null ? "—" : `${Math.round(t.elapsedMs / 1000)} 秒`}`], ["分页 / 处理记录", `${t.pagesCompleted} 页 / ${t.processedCount} 条`], ["写入新快照 / 更新 / 跳过", `${t.insertedCount} / ${t.updatedCount} / ${t.skippedCount}`], ["API 请求 / 限流", `${t.apiRequests} / ${t.throttles}`], ["失败尝试", String(t.failedCount ?? 0)], ["执行尝试 / 最大次数", `${t.attempts} / ${t.maxAttempts}`], ["计划版本", `${t.scheduleId || "手动"} / ${t.scheduleRevision ?? "—"}`]].map(([k, v]) => <div key={k}><dt className="text-xs text-muted">{k}</dt><dd className="mt-1 break-words">{v}</dd></div>)}</dl><details className="mt-3 text-xs"><summary className="cursor-pointer text-brand">日期范围与质量证据</summary><pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all">{JSON.stringify({ requestedRange: t.requestedRange ?? null, orderWindow: t.orderWindow ?? null, financeWindow: t.financeWindow ?? null, returnWindow: t.returnWindow ?? null, result: t.summary }, null, 2)}</pre></details><p className="mt-4 text-xs text-muted">{t.resource === "returns" ? "退货按报告与行 hash 幂等；重试保留报告和解析批次，不跨报告累加件数。" : ["orders", "finance"].includes(t.resource) ? "增量按业务键更新，重试保留已提交页和游标；财务窗口完成不代表最终结算。" : "新快照不覆盖旧行，因此更新计数为 0；插入／跳过按此快照计数，API／尝试计数包含历史重试。"}</p>{t.operatorAction && <p role="status" className="mt-3 rounded border border-border p-3 text-xs text-muted">{t.operatorAction}</p>}{t.error && <p role="alert" className="mt-3 rounded border border-danger/30 bg-danger-soft p-3 text-xs leading-relaxed text-danger-ink">{t.error}</p>}{t.resource === "orders" && ["FAILED", "BLOCKED", "PARTIAL_SUCCESS", "PAUSED"].includes(t.status) && <div className="mt-3 rounded border border-border p-3 text-xs" data-testid="order-recovery-readiness"><p className="font-medium">订单检查点恢复核对</p><p className="mt-1">{orderRecovery?.message ?? "尚未取得检查点核对结果，请重新读取任务；暂不能申请恢复。"}</p>{orderRecovery?.checkpoint && <><p className="mt-1">原窗口：{stamp(orderRecovery.checkpoint.window.from)} — {stamp(orderRecovery.checkpoint.window.to)}</p><p className="mt-1">已提交 {orderRecovery.checkpoint.pagesCompleted} 页 · 已补齐 {orderRecovery.checkpoint.detailsCompleted} 笔 · 当前窗口待处理 {orderRecovery.checkpoint.pendingDetails} 笔 · 已存原件 {orderRecovery.checkpoint.archivedResponses} 份</p><p className="mt-1">下一步：{({ getOrder: "继续采集订单详情", searchOrders: "继续订单列表分页", COMPLETE_WINDOW: "核对并完成当前窗口" } as Record<string, string>)[orderRecovery.checkpoint.nextOperation] ?? "待核对"}；保留已提交数据及检查点。</p></>}<p className="mt-1 text-muted">仅为只读核对；申请、批准并应用后才可执行，届时再次校验权限及检查点。当前窗口完成不代表全历史完整。</p></div>}<div className="mt-4 flex flex-wrap gap-2"><Button size="sm" variant="secondary" disabled={["orders", "finance", "returns", "fulfillment", "pricing", "brand_analytics", "buy_box_history", "listing_details", "catalog_items"].includes(t.resource) || t.status !== "SUCCEEDED" || t.stage === "PURGED"} onClick={() => setShowSnapshot(v => !v)}>{showSnapshot ? "收起快照" : "查看本次快照"}</Button>{["fulfillment", "pricing", "brand_analytics", "buy_box_history", "listing_details", "catalog_items"].includes(t.resource) && <a className="text-xs text-brand" href={`/operations?view=${t.resource}`}>查看该域已发布观察版本</a>}{active && t.status !== "PAUSED" && <Button size="sm" variant="secondary" disabled={!access.canEdit || busy || !!t.control} onClick={() => control("pause")}>暂停任务</Button>}{t.status === "PAUSED" && <Button size="sm" disabled={!access.canEdit || !access.canCreate || busy || recoveryBlocked} onClick={() => control("resume")}>从检查点恢复</Button>}{t.resource === "catalog_items" && t.status === "PARTIAL_SUCCESS" && t.stage === "OBJECTS_UNAVAILABLE" && access.canEdit && access.canCreate && <Button size="sm" variant="secondary" disabled={busy} onClick={() => control("publish-available")}>申请部分发布（保留404缺口）</Button>}{(["FAILED", "BLOCKED", "PARTIAL_SUCCESS"].includes(t.status) || cancelledProduct) && <Button size="sm" disabled={!access.canEdit || !access.canCreate || busy || recoveryBlocked} onClick={() => control("retry")}>{cancelledProduct ? "申请恢复已取消任务（保留进度）" : ["orders", "finance", "returns", "settlements", "reimbursements", "inventory_age", "inventory_events"].includes(t.resource) ? "从增量游标重试" : ["fulfillment", "pricing", "brand_analytics", "buy_box_history", "listing_details", "catalog_items"].includes(t.resource) ? "从观察检查点重试" : "重试完整快照"}</Button>}{active && <Button size="sm" variant="secondary" disabled={!access.canEdit || busy || t.control === "CANCEL"} onClick={() => control("cancel")}>取消任务</Button>}</div></Panel>{showSnapshot && (t.resource === "sales_traffic" ? <Panel title="本次报告"><SalesTrafficWorkbench sources={source ? [source] : []} canSync={false} canExport={access.canExport ?? false} taskId={t.id} /></Panel> : <SnapshotBrowser key={t.id} taskId={t.id} />)}<Panel title="结构日志"><p className="mb-3 text-xs text-muted">只记录阶段、错误码和非敏感请求 ID；不返回 token、分页内容或 Amazon 原始响应。</p><StandardDataTable ariaLabel="结构日志" rows={logs} getRowKey={l => l.id} columns={logColumns} empty="尚无执行日志。" /></Panel></>;
 }
 
 function PlanEditor({ plan, defaultResource = "inventory", sources, busy, canEnable, save, onClose }: { defaultResource?: string; plan: SyncPlanView | null; sources: SyncSourceView[]; busy: boolean; canEnable: boolean; save: (body: Record<string, unknown>) => Promise<void>; onClose: () => void }) {
@@ -471,7 +564,7 @@ function PlanEditor({ plan, defaultResource = "inventory", sources, busy, canEna
   const [selected, setSelected] = useState(plan?.targets.map(t => t.sourceId) ?? []);
   const options = sources.filter(s => s.resource === resource && s.enabled);
   const submit = (e: React.FormEvent<HTMLFormElement>) => { e.preventDefault(); const f = new FormData(e.currentTarget); void save({ ...(plan?.id ? { id: plan.id, revision: plan.revision } : {}), name: f.get("name"), resource, mode: "snapshot", enabled: f.get("enabled") === "yes", intervalMinutes: Number(frequency), priority: Number(f.get("priority")), maxAttempts: Number(f.get("attempts")), retentionDays: Number(f.get("retention")), sourceIds: selected }); };
-  return <Panel title={plan?.id ? "编辑同步计划" : "新建同步计划"}><form onSubmit={submit} className="space-y-4"><div className="grid gap-3 sm:grid-cols-2"><Field name="计划名称"><input className={inputClass} name="name" required maxLength={100} defaultValue={plan?.name ?? ""} /></Field><Field name="是否启用"><select className={inputClass} name="enabled" defaultValue={plan?.enabled ? "yes" : "no"}><option value="no">停用</option><option value="yes" disabled={!canEnable}>启用</option></select></Field><Field name="数据域"><select className={inputClass} value={resource} onChange={e => { setResource(e.target.value); setFrequency(String(syncDomains.find(d => d.id === e.target.value)?.frequency ?? 60)); setSelected([]); }}><option value="inventory">FBA 库存</option><option value="catalog">在线商品</option></select></Field><Field name="同步模式"><select className={inputClass} disabled><option>完整快照（全部分页成功后校准）</option></select></Field><Field name="同步频率"><select className={inputClass} value={[15, 30, 60, 360, 1440].includes(Number(frequency)) ? frequency : "custom"} onChange={e => setFrequency(e.target.value === "custom" ? "120" : e.target.value)}>{[[15, "每 15 分钟"], [30, "每 30 分钟"], [60, "每小时"], [360, "每 6 小时"], [1440, "每天"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}<option value="custom">自定义周期</option></select></Field><Field name="周期分钟（15–10080）"><input className={inputClass} type="number" min={15} max={10080} step={1} required value={frequency} onChange={e => setFrequency(e.target.value)} /></Field><Field name="优先级"><select name="priority" className={inputClass} defaultValue={plan?.priority ?? 1}>{[1, 2, 3, 4].map(v => <option key={v} value={v}>P{v - 1}</option>)}</select></Field><Field name="最大尝试次数"><input className={inputClass} name="attempts" type="number" required min={1} max={10} defaultValue={plan?.maxAttempts ?? 3} /></Field><Field name="快照保留天数"><input className={inputClass} name="retention" type="number" required min={1} max={3650} defaultValue={plan?.retentionDays ?? 30} /></Field></div><fieldset className="rounded border border-border p-3"><legend className="px-1 text-xs text-muted">适用店铺／站点（独立执行）</legend>{options.map(s => <label key={s.id} className="flex items-center gap-2 py-2 text-sm"><input type="checkbox" checked={selected.includes(s.id)} onChange={e => setSelected(v => e.target.checked ? [...v, s.id] : v.filter(id => id !== s.id))} />{s.seller.displayName || s.seller.accountKey} / {s.marketplaceId}</label>)}{!options.length && <p className="text-sm text-muted">该域尚无可用数据源，请先配置店铺与授权。</p>}</fieldset><p className="text-xs text-muted">快照不支持可靠增量；覆盖当前完整数据，不配置历史日期。报表日期、回查窗口和补偿策略将在对应报告适配器接入时提供。</p><div className="flex gap-2"><Button size="sm" type="submit" disabled={busy || !selected.length}>保存计划</Button><Button size="sm" variant="secondary" disabled={busy} onClick={onClose}>关闭</Button></div></form></Panel>;
+  return <Panel title={plan?.id ? "编辑同步计划" : "新建同步计划"}><form onSubmit={submit} className="space-y-4"><div className="grid gap-3 sm:grid-cols-2"><Field name="计划名称"><input className={inputClass} name="name" required maxLength={100} defaultValue={plan?.name ?? ""} /></Field><Field name="是否启用"><select className={inputClass} name="enabled" defaultValue={plan?.enabled ? "yes" : "no"}><option value="no">停用</option><option value="yes" disabled={!canEnable}>启用</option></select></Field><Field name="数据域"><select className={inputClass} value={resource} onChange={e => { setResource(e.target.value); setFrequency(String(syncDomains.find(d => d.id === e.target.value)?.frequency ?? 60)); setSelected([]); }}><option value="inventory">FBA 库存</option><option value="catalog">在线商品</option></select></Field><Field name="同步模式"><select className={inputClass} disabled><option>完整快照（全部分页成功后校准）</option></select></Field><Field name="同步频率"><select className={inputClass} value={[15, 30, 60, 360, 1440].includes(Number(frequency)) ? frequency : "custom"} onChange={e => setFrequency(e.target.value === "custom" ? "120" : e.target.value)}>{[[15, "每 15 分钟"], [30, "每 30 分钟"], [60, "每小时"], [360, "每 6 小时"], [1440, "每天"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}<option value="custom">自定义周期</option></select></Field><Field name="周期分钟（15–10080）"><input className={inputClass} type="number" min={15} max={10080} step={1} required value={frequency} onChange={e => setFrequency(e.target.value)} /></Field><Field name="优先级"><select name="priority" className={inputClass} defaultValue={plan?.priority ?? 1}>{[1, 2, 3, 4].map(v => <option key={v} value={v}>P{v - 1}</option>)}</select></Field><Field name="最大尝试次数"><input className={inputClass} name="attempts" type="number" required min={1} max={10} defaultValue={plan?.maxAttempts ?? 3} /></Field><Field name="快照保留天数"><input className={inputClass} name="retention" type="number" required min={1} max={3650} defaultValue={plan?.retentionDays ?? 30} /></Field></div><fieldset className="rounded border border-border p-3"><legend className="px-1 text-xs text-muted">适用店铺／站点（独立执行）</legend>{options.map(s => <label key={s.id} className="flex items-center gap-2 py-2 text-sm"><input type="checkbox" checked={selected.includes(s.id)} onChange={e => setSelected(v => e.target.checked ? [...v, s.id] : v.filter(id => id !== s.id))} />{formatSiteStore(s.marketplaceId, s.seller.displayName || s.seller.accountKey)}</label>)}{!options.length && <p className="text-sm text-muted">该域尚无可用数据源，请先配置店铺与授权。</p>}</fieldset><p className="text-xs text-muted">快照不支持可靠增量；覆盖当前完整数据，不配置历史日期。报表日期、回查窗口和补偿策略将在对应报告适配器接入时提供。</p><div className="flex gap-2"><Button size="sm" type="submit" disabled={busy || !selected.length}>保存计划</Button><Button size="sm" variant="secondary" disabled={busy} onClick={onClose}>关闭</Button></div></form></Panel>;
 }
 function AuthorizationEditor({ value, busy, error, close, save }: { value: SyncAuthorizationView | null; busy: boolean; error: string; close: () => void; save: (body: Record<string, unknown>) => Promise<void> }) {
   const [region, setRegion] = useState(value?.awsRegion ?? "us-east-1");

@@ -32,3 +32,23 @@ export function sellfoxSiteLabel(marketplace: unknown): string {
   if (!id) return "";
   return sellfoxMarketplaceSites[id]?.label ?? id;
 }
+
+/** Marketplace ID → 国家/站点代码（US/CA/DE…），未收录时回退为原始 ID，不猜测。 */
+export function siteCodeOf(marketplace: unknown): string {
+  const id = typeof marketplace === "string" ? marketplace.trim() : "";
+  if (!id) return "";
+  return sellfoxMarketplaceSites[id]?.code ?? id;
+}
+
+/**
+ * 全站统一的「站点-店铺」展示标识，如 `US-aoocy`。
+ * 站点部分由 Marketplace ID 映射为国家代码；店铺部分用 ERP 店铺名（displayName）。
+ * 仅用于展示：筛选、同步、对账仍使用原始 sellerAccountId / marketplaceId。
+ */
+export function formatSiteStore(marketplace: unknown, storeName: unknown): string {
+  const code = siteCodeOf(marketplace);
+  const name = typeof storeName === "string" ? storeName.trim() : "";
+  if (!code) return name || "—";
+  if (!name) return code;
+  return `${code}-${name}`;
+}

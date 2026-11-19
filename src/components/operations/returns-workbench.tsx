@@ -1,4 +1,5 @@
 "use client";
+import { formatSiteStore } from "@/lib/sellfox/marketplace-site";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { StandardDataTable } from "@/components/ui/table-variants";
@@ -39,7 +40,7 @@ export function ReturnsWorkbench({ sellerAccountId = "", marketplaceId = "", get
   return <div className="space-y-3" data-testid="amazon-returns-workbench">
     <p className="text-xs leading-relaxed text-muted">FBA 仓收退货 · Reports 2021-06-30。仅覆盖仓库已收到的退货，按单份已发布报告查询；不同报告可能重叠，不能跨报告累加。同报告完全相同行已折叠，件数以 quantity 为准。此报告不表示退款或售后全量。</p>
     <div className="flex flex-wrap items-end gap-2">
-      <label className="grid gap-1 text-xs">退货数据源<select className={input} value={sourceId || result?.selectedSourceId || ""} onChange={e => { setSourceId(e.target.value); setReportId(""); setPage(1); }}><option value="">首个可访问数据源</option>{result?.sources.map(s => <option value={s.id} key={s.id}>{s.seller.displayName} / {s.marketplaceId}</option>)}</select></label>
+      <label className="grid gap-1 text-xs">退货数据源<select className={input} value={sourceId || result?.selectedSourceId || ""} onChange={e => { setSourceId(e.target.value); setReportId(""); setPage(1); }}><option value="">首个可访问数据源</option>{result?.sources.map(s => <option value={s.id} key={s.id}>{formatSiteStore(s.marketplaceId, s.seller.displayName)}</option>)}</select></label>
       <label className="grid gap-1 text-xs">报告 ID（空为最新）<input className={input} value={reportId} maxLength={200} onChange={e => { setReportId(e.target.value); setPage(1); }} /></label>
       <label className="grid gap-1 text-xs">关联订单<input className={input} value={orderId} maxLength={200} onChange={e => { setOrderId(e.target.value); setPage(1); }} /></label>
       <label className="grid gap-1 text-xs">ASIN<input className={input} value={asin} maxLength={200} onChange={e => { setAsin(e.target.value); setPage(1); }} /></label>

@@ -152,7 +152,7 @@ export function ImprovementTable({
               <ImprovementInput value={improvement.scenario} placeholder="填空格" onChange={(value) => onChange("scenario", value)} />
             </ImprovementCell>
             <ImprovementCell colSpan={2} className="font-bold">
-              <ImprovementInput value={improvement.targetSales} onChange={(value) => onChange("targetSales", value)} />
+              <ImprovementInput numeric value={improvement.targetSales} onChange={(value) => onChange("targetSales", value)} />
             </ImprovementCell>
             <ImprovementCell colSpan={2}>
               <ImprovementInput value={improvement.peakSales} onChange={(value) => onChange("peakSales", value)} />
@@ -163,7 +163,7 @@ export function ImprovementTable({
           </tr>
           <tr>
             <td colSpan={12} className="border-b border-r border-border bg-surface px-1 py-1 first:border-l">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch">
                 <div className="shrink-0">
                   <PeakSeasonWeightMatrix
                     value={improvement.peakSeasonWeights}
@@ -174,7 +174,6 @@ export function ImprovementTable({
                 <PeakSeasonInsights
                   weights={improvement.peakSeasonWeights}
                   monthlyTargetSales={improvement.targetSales}
-                  onApplyWeights={onPeakSeasonWeightsChange}
                 />
               </div>
             </td>
@@ -312,6 +311,14 @@ export function ImprovementCell({
   return <td colSpan={colSpan} style={style} className={`h-9 border-b border-r border-border bg-surface px-2 py-1 align-top text-foreground first:border-l ${className}`}>{children}</td>;
 }
 
+/** 仅保留数字与单个小数点，用于"目标销量"等纯数值输入。 */
+function sanitizeNumericInput(raw: string): string {
+  const cleaned = raw.replace(/[^\d.]/g, "");
+  const dot = cleaned.indexOf(".");
+  if (dot < 0) return cleaned;
+  return cleaned.slice(0, dot + 1) + cleaned.slice(dot + 1).replace(/\./g, "");
+}
+
 export function ImprovementInput({
   value,
   onChange,
@@ -319,6 +326,7 @@ export function ImprovementInput({
   className = "w-full",
   multiline = false,
   width,
+  numeric = false,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -326,6 +334,7 @@ export function ImprovementInput({
   className?: string;
   multiline?: boolean;
   width?: number;
+  numeric?: boolean;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -354,10 +363,11 @@ export function ImprovementInput({
 
   return (
     <input
+      inputMode={numeric ? "decimal" : undefined}
       className={`h-8 rounded-md border border-border bg-surface px-2 text-xs font-semibold text-foreground outline-none placeholder:text-muted focus:border-brand ${className}`}
       value={value}
       placeholder={placeholder}
-      onChange={(event) => onChange(event.target.value)}
+      onChange={(event) => onChange(numeric ? sanitizeNumericInput(event.target.value) : event.target.value)}
     />
   );
 }
