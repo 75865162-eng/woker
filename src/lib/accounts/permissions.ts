@@ -24,7 +24,10 @@ export const permissionModules = [
   { id: "searchMerge", name: "赛狐搜词合并 /saihu-search-merge、/history", paths: ["/saihu-search-merge", "/history"] },
   { id: "listingAi", name: "Listing AI /listing-ai", paths: ["/listing-ai"] },
   { id: "agents", name: "Amazon AI Agent Platform /agents、Lili /lili、Skill /skills", paths: ["/agents", "/lili", "/skills"] },
-  { id: "operations", name: "经营中台 /operations", paths: ["/operations"] },
+  // /amazon/<slug> 是经营中台 workbench 的页面后缀命名空间（rewrite 到 /operations），
+  // 与赛狐 /sellfox/* 后缀并存；必须映射到 operations 模块，否则 AppShell 权限检查
+  // 用 getModuleIdForPath('/amazon/xxx') 得到 null 会把合法访问误判为 forbidden。
+  { id: "operations", name: "经营中台 /operations、/amazon", paths: ["/operations", "/amazon"] },
   { id: "imageUpscale", name: "图片放大 /image-upscale", paths: ["/image-upscale"] },
   { id: "wms", name: "公司仓库 /logistics/warehouse", paths: ["/logistics/warehouse"] },
   { id: "logistics", name: "物流处理 /logistics", paths: ["/logistics"] },

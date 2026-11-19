@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { navigationGroups, accountMenuItems, navigationItemIndex } from "@/components/app-shell/business-navigation";
 import { amazonSlugRoutes, amazonSlugView, amazonSlugRewrites } from "@/lib/amazon/amazon-slug-routes";
+import { getModuleIdForPath } from "@/lib/accounts/permissions";
 
 test("一级重组为 7 大板块，顺序与命名稳定", () => {
   assert.deepEqual(navigationGroups.map(g => g.id), [
@@ -103,6 +104,14 @@ test("pathname 解析：view 类后缀返回 view，独立路由类返回 null",
   assert.equal(amazonSlugView("reviews"), null);
   assert.equal(amazonSlugView("not-exist"), null);
   assert.ok(Object.keys(amazonSlugRoutes).length > 30, "后缀映射应覆盖全部 Amazon 页面");
+});
+
+test("Amazon 后缀路径映射到 operations 模块，避免被误判 forbidden", () => {
+  assert.equal(getModuleIdForPath("/amazon/orders"), "operations");
+  assert.equal(getModuleIdForPath("/amazon/returns"), "operations");
+  assert.equal(getModuleIdForPath("/amazon/brand-analytics"), "operations");
+  // /amazon-ads 仍归 workspace，不能被 /amazon 前缀误吞
+  assert.equal(getModuleIdForPath("/amazon-ads/campaigns"), "workspace");
 });
 
 test("一级跳转的落地命名空间路径都有对应实现", () => {
