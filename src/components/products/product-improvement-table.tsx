@@ -9,6 +9,7 @@ import type { ProductImageAsset } from "@/lib/products/types";
 import { createDefaultPeakSeasonWeights, improvementColumns, peakSeasonMonths, peakSeasonWeightLevels, type TrialImprovement, type TrialImprovementCellKey, type TrialImprovementRow, type TrialProductDraft } from "./product-workbench-model";
 import { ProductImageUploadProgressCard, type ProductImageUploadProgress } from "./product-editor-image-panel";
 import { parseNegativePointValue } from "./product-negative-point-editor";
+import { PeakSeasonInsights } from "./peak-season-insights";
 export function createEmptyImprovementRow(): TrialImprovementRow {
   return {
     material: "",
@@ -162,11 +163,20 @@ export function ImprovementTable({
           </tr>
           <tr>
             <td colSpan={12} className="border-b border-r border-border bg-surface px-1 py-1 first:border-l">
-              <PeakSeasonWeightMatrix
-                value={improvement.peakSeasonWeights}
-                onChange={onPeakSeasonWeightsChange}
-                onReset={() => onPeakSeasonWeightsChange(createDefaultPeakSeasonWeights())}
-              />
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+                <div className="shrink-0">
+                  <PeakSeasonWeightMatrix
+                    value={improvement.peakSeasonWeights}
+                    onChange={onPeakSeasonWeightsChange}
+                    onReset={() => onPeakSeasonWeightsChange(createDefaultPeakSeasonWeights())}
+                  />
+                </div>
+                <PeakSeasonInsights
+                  weights={improvement.peakSeasonWeights}
+                  monthlyTargetSales={improvement.targetSales}
+                  onApplyWeights={onPeakSeasonWeightsChange}
+                />
+              </div>
             </td>
           </tr>
           <tr>

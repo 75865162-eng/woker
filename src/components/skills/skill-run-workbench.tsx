@@ -26,6 +26,7 @@ export function SkillRunWorkbench({ skill }: Props) {
   const [report, setReport] = useState("");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
+  const [errorHistoryId, setErrorHistoryId] = useState<string | null>(null);
   const [download, setDownload] = useState<DownloadInfo | null>(null);
   const reportEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -57,6 +58,7 @@ export function SkillRunWorkbench({ skill }: Props) {
     }
     setRunning(true);
     setError("");
+    setErrorHistoryId(null);
     setSteps([]);
     setReport("");
     setDownload(null);
@@ -94,6 +96,7 @@ export function SkillRunWorkbench({ skill }: Props) {
           setDownload({ downloadId: event.downloadId, fileName: event.exportFileName, exportFormat: event.exportFormat, historyId: event.historyId });
         } else if (event.type === "error") {
           setError(`${event.code}: ${event.message}`);
+          if (event.historyId) setErrorHistoryId(event.historyId);
         }
       };
 
@@ -158,7 +161,16 @@ export function SkillRunWorkbench({ skill }: Props) {
             导出格式：{skill.exportFormatLabel}（系统按 Skill 分类派生）
           </span>
         </div>
-        {error ? <div className="mt-3"><Alert tone="danger" title="运行未完成" description={error} /></div> : null}
+        {error ? (
+          <div className="mt-3 space-y-2">
+            <Alert tone="danger" title="运行未完成" description={error} />
+            {errorHistoryId ? (
+              <Link className="text-sm text-brand underline" href={`/lili/v2/start?run=${encodeURIComponent(errorHistoryId)}`}>
+                失败详情已保存到运行历史，点此回看
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
       </section>
 
       {steps.length > 0 ? (

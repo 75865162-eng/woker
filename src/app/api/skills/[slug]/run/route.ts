@@ -87,6 +87,8 @@ export async function POST(
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         const push = (event: SkillRunEvent) => controller.enqueue(encoder.encode(sse(event)));
+        let persistedSuccess = false;
+        let firstError: { code: string; message: string } | null = null;
         try {
           const generator = runSkill(
             {
@@ -127,18 +129,46 @@ export async function POST(
                 } catch {
                   historyId = null;
                 }
+                persistedSuccess = true;
                 return { downloadId, historyId };
               },
             },
           );
-          for await (const event of generator) push(event);
+          for await (const event of generator) {
+            push(event);
+            // runSkill 以 error 事件（非抛错）表达失败；记录首个错误码用于失败落库，不打断流。
+            if (event.type === "error" && !firstError) firstError = { code: event.code, message: event.message };
+          }
         } catch (error) {
-          push({
-            type: "error",
+          firstError = {
             code: "RUN_FAILED",
             message: error instanceof Error ? error.message : "运行失败，请稍后重试。",
-          });
+          };
+          push({ type: "error", code: firstError.code, message: firstError.message });
         } finally {
+          // 失败运行同样落库到历史，便于 /lili/v2/start 回看。成功路径不落失败记录。
+          if (!persistedSuccess && firstError && process.env.DATABASE_URL) {
+            let historyId: string | null = null;
+            try {
+              const { saveFailedSkillRun } = await import("@/lib/skill-engine/run-history");
+              historyId = await saveFailedSkillRun({
+                scope: { organizationId: user.organizationId, workspaceId: scope.workspaceId, ownerId: user.id },
+                slug: loaded.view.slug,
+                skillName: loaded.view.name,
+                inputs,
+                exportFormat: loaded.view.exportFormat,
+                model: aiSettings.model,
+                provider: aiSettings.provider,
+                marketplace: String(inputs.marketplace ?? "").toUpperCase(),
+                errorCode: firstError.code,
+                errorMessage: firstError.message,
+              });
+            } catch {
+              historyId = null;
+            }
+            // 补发带 historyId 的同一错误事件，前端可显示"到历史回看"入口；不伪造 id。
+            push({ type: "error", code: firstError.code, message: firstError.message, historyId });
+          }
           controller.close();
         }
       },
