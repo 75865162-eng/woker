@@ -45,7 +45,7 @@ CREATE TABLE "SellfoxOrderDetail" (
     CONSTRAINT "SellfoxOrderDetail_pkey" PRIMARY KEY ("id")
 );
 
-CREATE INDEX "SellfoxOrderDetail_store_seller_idx"
+CREATE UNIQUE INDEX "SellfoxOrderDetail_storeId_sellerOrderId_key"
   ON "SellfoxOrderDetail" ("storeId","sellerOrderId");
 CREATE INDEX "SellfoxOrderDetail_org_ws_seller_idx"
   ON "SellfoxOrderDetail" ("organizationId","workspaceId","sellerOrderId");
