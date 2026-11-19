@@ -212,6 +212,40 @@ export const adsNavLinks = [
 
 export { adminLabelByView };
 
+/** 供右上角「业务菜单」抽屉使用：把原同步中心 A-G 顶部导航的入口摊平为链接清单。 */
+export type SyncDrawerLink = { id: string; href: string; label: string; sectionLabel: string };
+
+export function syncCenterDrawerLinks(): SyncDrawerLink[] {
+  const adminLabel = (view: string) => adminLabelByView.get(view) ?? operationsAdminNav.find(n => n[0] === view)?.[1] ?? view;
+  const viewHref = (view: string) => `/operations?view=${view}`;
+  const links: SyncDrawerLink[] = [];
+  for (const group of syncNavGroups) {
+    if (group.kind === "admin") {
+      for (const view of group.viewKeys ?? []) {
+        links.push({ id: `sync.${view}`, href: viewHref(view), label: adminLabel(view), sectionLabel: `${group.id} ${group.label}` });
+      }
+    } else if (group.kind === "business") {
+      for (const sectionId of group.sectionIds ?? []) {
+        for (const entry of operationsSections.find(s => s.id === sectionId)?.entries ?? []) {
+          if (entry.pending) continue;
+          links.push({ id: `sync.${entry.view}`, href: entry.href ?? viewHref(entry.view), label: entry.label, sectionLabel: `${group.id} ${group.label}` });
+        }
+      }
+    } else if (group.kind === "ads") {
+      for (const link of adsNavLinks) {
+        links.push({ id: `sync.ads.${link.href}`, href: link.href, label: link.label, sectionLabel: `${group.id} ${group.label}` });
+      }
+    } else if (group.kind === "local") {
+      for (const sub of localBusinessSubgroups) {
+        for (const entry of sub.entries) {
+          links.push({ id: `sync.local.${entry.view}`, href: entry.href ?? viewHref(entry.view), label: entry.label, sectionLabel: `${group.id} ${group.label}` });
+        }
+      }
+    }
+  }
+  return links;
+}
+
 export function OperationsSectionCards({ navigate }: { navigate: (view: string) => void }) {
   return <section aria-label="经营中台业务板块" className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4">
     {operationsSections.map((section, index) => <article key={section.id} className="min-w-0 rounded-lg border border-border bg-surface p-3">

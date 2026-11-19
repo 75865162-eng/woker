@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { BriefcaseBusiness } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { emitWorkspaceScopeChanged } from "@/lib/workspace/workspace-scope-events";
 import { fetchWorkspacesCached } from "@/lib/workspace/workspace-api-cache";
 import { readWorkspaceScope, workspaceScopeStorageKey as storageKey } from "@/lib/workspace/workspace-scope-store";
@@ -84,14 +83,10 @@ function patchFetchWithWorkspaceScope() {
   window.__amazonBulkAdScopedFetchPatched = true;
 }
 
-function scopeLabel(scope: WorkspaceScope) {
-  return [scope.name || scope.id, scope.marketplace, scope.accountId].filter(Boolean).join(" / ");
-}
-
 export function WorkspaceScopeSelector() {
-  const [workspaces, setWorkspaces] = useState<WorkspaceScope[]>([]);
+  const [, setWorkspaces] = useState<WorkspaceScope[]>([]);
   const [selected, setSelected] = useState(() => readSelectedScope());
-  const [storageError, setStorageError] = useState(false);
+  const [, setStorageError] = useState(false);
   const selectedRef = useRef(selected);
 
   useEffect(() => {
@@ -175,48 +170,7 @@ export function WorkspaceScopeSelector() {
     };
   }, []);
 
-  const selectedValue = useMemo(() => selected.workspaceId || "default", [selected.workspaceId]);
-
-  function handleChange(value: string) {
-    const workspace = workspaces.find((item) => item.id === value);
-    const nextSelected = {
-      workspaceId: value || "default",
-      accountId: workspace?.accountId ?? "",
-      marketplace: workspace?.marketplace ?? "",
-    };
-
-    if (isSameScope(selectedRef.current, nextSelected)) {
-      return;
-    }
-
-    if (!writeSelectedScope(nextSelected)) {
-      setStorageError(true);
-      return;
-    }
-    selectedRef.current = nextSelected;
-    setStorageError(false);
-    setSelected(nextSelected);
-    emitWorkspaceScopeChanged({ ...nextSelected, source: "manual" });
-  }
-
-  if (!workspaces.length) return null;
-
-  return (
-    <label className="hidden items-center gap-2 rounded-md border border-border bg-surface px-2 py-1 text-xs font-semibold text-muted shadow-sm xl:flex">
-      <BriefcaseBusiness className="h-4 w-4 text-brand" />
-      <select
-        value={selectedValue}
-        onChange={(event) => handleChange(event.target.value)}
-        className="max-w-[220px] bg-transparent text-xs font-semibold text-foreground outline-none"
-        title="选择工作区"
-      >
-        {workspaces.map((workspace) => (
-          <option key={workspace.id} value={workspace.id}>
-            {scopeLabel(workspace)}
-          </option>
-        ))}
-      </select>
-      {storageError && <span role="alert" className="text-danger">无法保存工作区，未切换。请检查浏览器存储权限。</span>}
-    </label>
-  );
+  // UI 已移除：本组件仅保留工作区作用域的初始化/注入副作用（fetch 头、cookie、默认工作区自动选中）。
+  // 工作区切换入口改由其它界面提供；此处不再渲染任何可见控件。
+  return null;
 }

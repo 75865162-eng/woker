@@ -44,6 +44,6 @@ test("存储失败不提交工作区切换，成功时同步持久化 cookie", (
   assert.equal(write(scope), true);
   assert.equal(saved.length, 1);
   assert.match(document.cookie, /scope=.*Path=\//);
-  // 两条提交路径都必须在 setSelected / emit 前检查持久化结果。
-  assert.equal((source.match(/if \(!writeSelectedScope\(nextSelected\)\)/g) ?? []).length, 2);
+  // UI 已隐藏，手动切换路径移除；保留的自动选中路径仍须在 setSelected / emit 前检查持久化结果。
+  assert.equal((source.match(/if \(!writeSelectedScope\(nextSelected\)\)/g) ?? []).length, 1);
 });

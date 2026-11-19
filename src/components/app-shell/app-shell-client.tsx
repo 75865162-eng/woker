@@ -5,8 +5,9 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { CircleHelp, LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { CircleHelp, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw } from "lucide-react";
 import { accountMenuItems, navigationGroups } from "./business-navigation";
+import { syncCenterDrawerLinks } from "@/components/operations/operations-sections";
 import { PinnedNavProvider } from "./pinned-nav";
 import { NavigationSidebar } from "./navigation-sidebar";
 import { Button } from "@/components/ui/button";
@@ -80,6 +81,13 @@ export function AppShellClient({
     ...group,
     items: group.items.filter((item) => roleCanAccessModule(userRole, item.moduleId ?? getModuleIdForPath(item.href.split("?")[0]), rolePermissions)),
   })).filter((group) => group.items.length > 0);
+  // 原同步中心顶部 A-G 导航已移除，入口改在「业务菜单」抽屉按原分组展示。
+  const syncLinksBySection = syncCenterDrawerLinks().reduce<Record<string, typeof visibleNavigationGroups[number]["items"]>>((acc, link) => {
+    (acc[link.sectionLabel] ??= []).push({ id: link.id, href: link.href, label: link.label, icon: RefreshCw, moduleId: null });
+    return acc;
+  }, {});
+  const syncDrawerGroups = Object.entries(syncLinksBySection).map(([sectionLabel, items]) => ({ label: sectionLabel, items }));
+  const drawerGroups = [...visibleNavigationGroups, ...syncDrawerGroups];
 
   function isNavigationActive(href: string) {
     const [itemPath, itemQuery] = href.split("?");
@@ -178,7 +186,7 @@ export function AppShellClient({
           </Link>
         </div>
         <NavigationSidebar groups={visibleNavigationGroups} navCollapsed={navCollapsed} isActive={isNavigationActive} />
-        <div className={cn("shrink-0 border-t border-border bg-surface p-2", navCollapsed && "flex justify-center")}>
+        <div className={cn("flex shrink-0 items-center gap-2 border-t border-border bg-surface p-2", navCollapsed && "justify-center")}>
           <button
             type="button"
             onClick={toggleNav}
@@ -187,12 +195,13 @@ export function AppShellClient({
             title={navCollapsed ? "展开侧边导航" : "收起侧边导航"}
             className={cn(
               "flex h-8 items-center gap-2 rounded-md text-meta text-muted transition-colors hover:bg-surface-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
-              navCollapsed ? "w-8 justify-center" : "w-full px-2",
+              navCollapsed ? "w-8 justify-center" : "min-w-0 px-2",
             )}
           >
             {navCollapsed ? <PanelLeftOpen aria-hidden className="h-4 w-4" /> : <PanelLeftClose aria-hidden className="h-4 w-4" />}
             {navCollapsed ? null : <span>收起导航</span>}
           </button>
+          {navCollapsed ? null : <span title={appVersionLabel} className="min-w-0 truncate text-label text-muted">{appVersionLabel}</span>}
         </div>
       </aside>
       <main className={cn("transition-[padding] duration-200 ease-out", navCollapsed ? "lg:pl-[var(--shell-nav-collapsed)]" : "lg:pl-[var(--shell-nav)]")}>
@@ -203,7 +212,7 @@ export function AppShellClient({
             {subtitle ? <p className="truncate text-meta text-muted">{subtitle}</p> : null}
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <BusinessNavigationDrawer groups={visibleNavigationGroups} isActive={isNavigationActive} />
+            <BusinessNavigationDrawer groups={drawerGroups} isActive={isNavigationActive} />
             {actions}
             <WorkspaceScopeSelector />
             <Link
@@ -216,9 +225,6 @@ export function AppShellClient({
               <CircleHelp className="h-4 w-4" />
             </Link>
             {enableShellEnhancements ? <UserNotificationCenter /> : <div className="h-9 w-9 rounded-md border border-border bg-surface" aria-hidden="true" />}
-            <div className="hidden items-center gap-2 lg:flex">
-              <span className="max-w-[180px] truncate text-xs font-semibold text-muted">{appVersionLabel}</span>
-            </div>
             <div className="group relative">
               <button
                 type="button"
