@@ -53,7 +53,7 @@ export async function PUT(request: Request) {
     if (Object.keys(body).some(key => !["clientId", "clientSecret", "revision"].includes(key))) throw new SellfoxCredentialError("提交内容包含不支持的字段。");
     const result = await saveSellfoxCredentials(scope, actor, { clientId: body.clientId, clientSecret: body.clientSecret }, body.revision as number);
     // 保存已提交后才尝试自动激活；激活失败不回滚凭据，连通性结果随响应返回供前端明确展示。
-    let activation: { activated: boolean; connected: boolean; storesStarted: boolean; message: string } | null = null;
+    let activation: { activated: boolean; connected: boolean; storesStarted: boolean; fullSyncCreated: number; fullSyncError: string | null; message: string } | null = null;
     let activationError: string | null = null;
     try {
       activation = await activateSellfoxSyncAfterSave(scope, actor, result.revision);

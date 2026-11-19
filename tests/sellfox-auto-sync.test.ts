@@ -102,6 +102,17 @@ test("连续覆盖游标在乱序、嵌套、相邻窗口及失败洞下不跳�
   assert.equal(sellfoxNextUncoveredDate("2026-11-01", [{ startDate: "bad", endDate: null }, { startDate: "2026-11-03", endDate: "2026-11-01" }]), "2026-11-01");
 });
 
+test("配置即全量：默认计划覆盖全部内置域并透传配置触发器", () => {
+  const trigger = "credential_bootstrap_full";
+  const plan = buildSellfoxFullSyncPlan({ from: "2026-10-17", to: "2026-11-14", today: "2026-11-15", trigger });
+  const resources = new Set(plan.map((item) => item.resource));
+  // 所有内置资源（含 stores 与订单详情）都必须进入配置后的全量计划，
+  // 才有「一配置好 API 就全量拉取并永久落库」的完整数据域覆盖。
+  for (const resource of sellfoxSyncResources) assert.ok(resources.has(resource), `全量计划缺少内置域 ${resource}`);
+  assert.ok(plan.every((item) => item.trigger === trigger), "配置触发器必须透传到每个任务，供审计区分来源");
+  assert.equal(plan[0].resource, "stores", "店铺主数据仍排在全量计划最前，保证依赖顺序");
+});
+
 test("已完成分块窗口覆盖失败的大窗口时不重复拆分", () => {
   const chunks = sellfoxDateChunks("2026-08-17", "2026-11-14", 14);
   assert.equal(sellfoxWindowsCover("2026-08-17", "2026-11-14", chunks), true);
