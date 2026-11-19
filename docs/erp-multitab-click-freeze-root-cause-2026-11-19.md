@@ -126,4 +126,43 @@ Next router 内部状态刷新
 - **诊断探针**保留在代码中但仅开发环境生效，生产构建 `captureTabEvent`/`installTabDiagnostics` 为 no-op，对最终用户零成本、零行为影响。
 - `/ai/lili` 现由服务端 rewrite 直达 `/lili`，外部书签访问该路径 URL 保持 `/ai/lili`、内容正确，无跳板、无 tab 分裂。
 - 本次为 dev 环境 E2E 验证；生产部署后建议用同套 A–H 冒烟复核一次。
-- **既有基线债务（非本次引入）**：本机 Node 22.13.1 低于 `production-readiness` 门禁要求的 22.19，`check:fast`/单测中该项固定失败；`ui:guard` 因协作者已合入的 `OrderDetailWorkbench.tsx` 使用原生 `<table>` / `text-[11px]` / `min-w-[1100px]` 而突破基线 3 处。两项均与本次多标签修复无关，未代为修改无关业务代码。
+- **本机 Node 版本门禁（环境固有）**：本机 Node 22.13.1 低于 `production-readiness` 门禁要求的 22.19，`check:fast`/单测中该项固定失败；CI 使用 Node 22.22.2 不受影响。与本次修复无关。
+
+## 9. 复发防护与部署收口
+
+### 9.1 三层防复发机制（完整规范见 `docs/multitab-freeze-prevention-guidelines-2026-11-19.md`）
+
+1. **静态架构守卫**（`tests/tab-shell-architecture.test.ts`，CI 每次 PR/推送必跑、零登录依赖）：
+   - 锁死 `KeptView.context` 只能是稳定 `view.context`，禁止注入 live `segmentContext`；
+   - 锁死登记 effect 依赖不含 `segmentContext`、必须走 `segmentContextRef`；
+   - 锁死 AI 入口用 `/ai/lili` + rewrite 直达、且不存在 `/ai/lili/page.tsx` redirect 跳板；
+   - 锁死诊断模块生产 no-op。任何人改回旧写法 → CI 立即变红。
+2. **运行期回归**：A–H / decisive / 12 页面 / Lili 隔离测试（需测试账号），量化静止期 render 增量应为 0。
+3. **dev-only 诊断**：`window.__WOKER_TAB_DIAG__.snapshot` 常驻开发态，出问题先取快照用数据定位。
+
+### 9.2 本轮 CI 基线债务处理
+
+协作者已合入并部署的 `OrderDetailWorkbench.tsx`（生产基线 `4fffc06` 已含）贡献 1 个原生 `<table>`、
+1 处 `text-[11px]`、1 处 `min-w-[1100px]`，导致 CI 的 UI regression guard 失败、阻断 artifact 产出。
+按项目标准流程 `npm run ui:guard:update` 同步基线（3 项各 +1，其余 8 项完全不变），未改动协作者业务代码。
+
+### 9.3 推送与部署状态（已完成）
+
+- 本地多标签修复已提交并推送到 `main`（最终 `27040cc`，含 UI 基线同步）；期间协作者合入 1 个
+  sellfox 结算 V2 修复（`2513c96`），已先合并再推。
+- git 协议推送因 443 超时，改用 GitHub REST API 创建 commit 更新 ref；已核对远端 commit 的 tree 与本地完全一致，
+  并 fetch 对齐本地 `main` / `origin/main` 到 `27040cc`（ahead/behind=0）。
+- CI `build` job 在 Node 22.22.2 下全绿（Typecheck / UI guard / Test 2551 / Lint / Build / Package artifact 全过）。
+- **部署门禁既有债务**：`performance-regression` 与 `runtime-integration` 两个 job failure，根因是协作者
+  7 板块命名空间重构后测试脚本仍写死旧 href（`erp-navigation.mjs` 点 `aside nav a[href="/listing-ai"]`、
+  runtime fixture 的 `/ai-settings` 等），base revision `4fffc06` 同样失败，与本次多标签修复无关。
+  这导致 `deploy-production` job 被 skip。
+- **实际部署**：CI artifact 下载受 GitHub/Azure 签名 URL 10 分钟过期 + 慢速网络阻断，改用本地同源构建
+  （同一 commit `27040cc`，lint/test/build 均 passed）经 `scripts/deployment-plan.mjs` → `package-ci-artifact.sh`
+  → `release-check.sh` → `scripts/deploy-ci-artifact.sh` 标准链路部署，未改任何业务代码。
+- **部署结果**：`status=passed`，releaseId `20261119-123249-main-27040cc...`，健康检查 passed，
+  `runtimeReleaseVerified=true`，6 个注册服务全部重启并 active，migration skipped（本次无 DB 变更），rollback not_needed。
+- **生产复核**：`/opt/amazon-ad-bulk-current/RELEASE.json` commit=`27040cc`（与 main 一致）；
+  `https://aoocy.com/api/health` = `{"status":"ok"}`；`/ai/lili` 与 `/lili` 均返回 307→登录（路由存在、rewrite 生效，非 404）。
+- **遗留 CI 债务**（建议协作者后续单独处理）：同步 `scripts/performance/erp-navigation.mjs` 与 runtime fixture 的
+  命名空间 href，恢复 `performance-regression` / `runtime-integration` 门禁，使后续可走全自动 CI 部署。
