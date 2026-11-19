@@ -43,6 +43,8 @@ export type SkillRunDetail = SkillRunSummary & {
   model: string;
   provider: string;
   inputs: Record<string, string>;
+  errorCode?: string;
+  errorMessage?: string;
 };
 
 function json(value: unknown): Prisma.InputJsonValue {
@@ -152,6 +154,43 @@ export async function saveSkillRun(input: SaveSkillRunInput): Promise<string> {
   return id;
 }
 
+export type SaveFailedSkillRunInput = {
+  scope: SkillRunScope;
+  slug: string;
+  skillName: string;
+  inputs: Record<string, string>;
+  exportFormat: ExportFormat;
+  model: string;
+  provider: string;
+  marketplace: string;
+  errorCode: string;
+  errorMessage: string;
+};
+
+/**
+ * 保存一次失败运行：不生成文档，仅落 AgentExecution（status=FAILED）。
+ * context 不带 fileId，下载入口会安全拒绝；错误码与消息如实记录，不补造报告内容。
+ * 隔离与成功记录一致（组织/工作区/发起人）；失败时返回 null，不影响对用户的错误呈现。
+ */
+export async function saveFailedSkillRun(input: SaveFailedSkillRunInput): Promise<string> {
+  const id = randomUUID();
+  const definitionId = await ensureDefinition(input.scope.organizationId);
+  await prisma.agentExecution.create({ data: {
+    id,
+    organizationId: input.scope.organizationId,
+    workspaceId: input.scope.workspaceId,
+    requestedByUserId: input.scope.ownerId,
+    agentDefinitionId: definitionId,
+    marketplace: input.marketplace,
+    status: "FAILED",
+    input: json({ slug: input.slug, skillName: input.skillName, inputs: input.inputs, exportFormat: input.exportFormat }),
+    context: json({ namespace: SKILL_RUN_NAMESPACE, model: input.model, provider: input.provider }),
+    output: json({ errorCode: input.errorCode, errorMessage: input.errorMessage }),
+    finishedAt: new Date(),
+  } });
+  return id;
+}
+
 function summarize(row: {
   id: string;
   status: string;
@@ -238,6 +277,8 @@ export async function getSkillRun(id: string, scope: SkillRunScope): Promise<Ski
     model: String(context.model ?? ""),
     provider: String(context.provider ?? ""),
     inputs: (input.inputs ?? {}) as Record<string, string>,
+    errorCode: String(output.errorCode ?? ""),
+    errorMessage: String(output.errorMessage ?? ""),
   };
 }
 
