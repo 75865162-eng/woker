@@ -25,6 +25,8 @@ const navCode = stripComments(navSource);
 
 test("P0: 激活视图只使用登记时的稳定 context 快照，禁止注入 live segmentContext", () => {
   // KeptView 的 context prop 必须是 view.context（稳定快照），不得按当前 href 分支注入 segmentContext。
+  // 这是防假死的核心不变式：live context 每帧换新引用，一旦作为 prop 传给 memo 的 KeptView
+  // 就会击穿 memo，让整棵保活子树（重表单/表格）空转重渲染，主线程占满后表现为点击假死。
   const contextProp = code.match(/context=\{([^\n}]+)\}/);
   assert.ok(contextProp, "应能定位 KeptView 的 context prop");
   assert.ok(!/segmentContext/.test(contextProp![1]),
@@ -32,16 +34,21 @@ test("P0: 激活视图只使用登记时的稳定 context 快照，禁止注入 
   assert.match(contextProp![1], /view\.context/, "KeptView 的 context 必须是稳定的 view.context 快照");
 });
 
-test("P0: 登记 view 的 effect 不得依赖 live segmentContext 引用", () => {
-  // effect 依赖 [children, currentHref, segmentContext] 会让 Next router 每次刷新都触发一次无效调度。
-  const effectDeps = code.match(/useEffect\(\(\) => \{[\s\S]*?\}, \[([^\]]*)\]\)/g) ?? [];
-  for (const effect of effectDeps) {
-    assert.ok(!/\bsegmentContext\b/.test(effect),
-      `登记 view 的 effect 依赖不得包含 segmentContext，当前: ${effect.slice(-120)}`);
-  }
-  // segmentContext 只应通过 ref 读取最新值，不得直接进依赖数组。
-  assert.match(code, /segmentContextRef/,
-    "应通过 segmentContextRef 读取最新路由上下文，而非把 live context 放进 effect 依赖");
+test("P0: 视图登记 effect 必须在 context 变化时自愈,且以引用比较 bail 稳定页", () => {
+  // 背景（2026-11-20）：children 在所有视图间共享同一引用（App Router 的 children 只是
+  // 「当前分段」占位节点，靠 LayoutRouterContext 现场解析），旧版 effect 用
+  // current.element === children 做 bail 恒为真 → context 快照一旦在过渡态登记就永不校正，
+  // 表现为「切页后内容错位/空白、取数落在错误路由，F5 重建外壳才恢复」。
+  // 修复：effect 依赖 segmentContext（Next 用新 tree 刷新它时校正快照），体内先用引用比较
+  // bail。这不违反防假死不变式——live context 绝不作为 prop 传给 KeptView（见上一条守卫），
+  // effect 依赖本身不会击穿 memo；稳定页 segmentContext 不变化，effect 不会 setViews。
+  const selfHealEffect = code.match(/useEffect\(\(\) => \{[\s\S]*?current\.context === segmentContext[\s\S]*?\}, \[[^\]]*segmentContext[^\]]*\]\)/);
+  assert.ok(selfHealEffect,
+    "必须存在以 current.context === segmentContext 做 bail、且依赖含 segmentContext 的自愈 effect");
+  // 禁止退回旧的恒真 bail：不得再用 element === children 作为唯一的跳过条件。
+  const legacyBail = /if \(!current \|\| current\.element === children\) \{[\s\S]*?return;/;
+  assert.ok(!legacyBail.test(code),
+    "不得用 current.element === children 作为唯一 bail（children 共享引用使判断恒真，context 永不自愈）");
 });
 
 test("P1: AI 入口用 /ai/lili 命名空间 + 服务端 rewrite 直达，无 redirect 跳板页", () => {

@@ -166,3 +166,44 @@ Next router 内部状态刷新
   `https://aoocy.com/api/health` = `{"status":"ok"}`；`/ai/lili` 与 `/lili` 均返回 307→登录（路由存在、rewrite 生效，非 404）。
 - **遗留 CI 债务**（建议协作者后续单独处理）：同步 `scripts/performance/erp-navigation.mjs` 与 runtime fixture 的
   命名空间 href，恢复 `performance-regression` / `runtime-integration` 门禁，使后续可走全自动 CI 部署。
+
+---
+
+## 10. 后续问题：切页后内容空白/错位、F5 才恢复（2026-11-20）
+
+### 10.1 现象
+假死修复上线后，用户反馈赛狐多页面（`/sellfox/inventory`、`/sellfox/ads` 等）在标签间切换后，
+内容展示区全空、长时间不出数据，**F5 刷新才恢复**。截图是决定性证据：地址栏已是 `/sellfox/inventory`，
+但顶栏标题/副标题却是「销量统计 / 读取本地 SellfoxSalesDailySnapshot」——即「标签身份」与
+「实际渲染的页面快照」错位。
+
+### 10.2 根因：context 快照不自愈（假死修复暴露的沉睡缺陷）
+- App Router 传给 `(erp)/layout` 的 `children` 在所有视图之间是**同一个 React 引用**（dev 诊断
+  `childrenChanges:0`、所有视图 `elementId=1`）；它本身不携带「我是哪个页面」，靠视图登记时快照的
+  `LayoutRouterContext`（`context.tree`）现场解析成具体页面。
+- 视图登记 effect 的跳过条件 `current.element === children` 因上述共享引用而**恒为真**，导致
+  `setViews` 的 context 校正分支**从不执行**（诊断 `effectSetViews=0`，只有渲染期的 `renderSetViews`）。
+- 假死修复前，激活视图用的是 **live `segmentContext`**（`context={view.href === currentHref ? segmentContext : view.context}`），
+  即使快照 stale 也能靠 live context 渲染正确页面，掩盖了这个缺陷。
+- 假死修复把激活视图改成固定快照 `view.context` 后，快照一旦在路由过渡态登记错误
+  （`currentHref` 先更新、`segmentContext.tree` 后更新），就**永久渲染成别的页面、取数落在错误路由**，
+  切走切回不自愈，只有 F5 重建整个外壳才重新对齐——这正是用户症状。
+
+### 10.3 修复（最小变更）
+- `src/components/app-shell/persistent-app-shell.tsx`：登记 effect 的跳过条件由恒真的
+  `current.element === children` 改为 `current.context === segmentContext`，并把 `segmentContext`
+  放回依赖。导航落定 / RSC 重新校验后 Next 用新 tree 刷新 context，effect 随即校正当前视图快照，
+  与真实路由重新对齐。
+- **不会重新引入假死**：假死主因是把 live context 直接传给 `memo(KeptView)` 击穿 memo；本次改动中
+  传给 KeptView 的仍是稳定快照 `view.context`，effect 体内先用引用比较 bail（稳定页不 setViews）。
+  dev 诊断实测：lili 静置 4 秒 `segmentContextChanges` 不增长、renders 增量为 0；赛狐 8 标签快速切换
+  后静止 3 秒 renders 不增长——均无渲染风暴。
+
+### 10.4 验证与防护
+- 架构守卫新增不变式：KeptView 的 context 必须仍是稳定快照（禁止 live）；登记 effect 必须用
+  `current.context === segmentContext` 做 bail 且依赖含 `segmentContext`，禁止退回恒真的 element bail。
+- `npm run typecheck` 通过；单元测试 2563 项中 2562 通过（唯一失败为 Node 22.13.1 < 22.19 的环境门禁）；
+  防假死 E2E（decisive / many-pages / lili-isolation）全部通过。
+- **诚实说明**：本地无目标租户的真实业务数据，且难以复现生产环境的 RSC 竞态时序，未能稳定复现
+  用户截图中的错位现象；修复依据是确定性的代码缺陷（恒真 bail）+ 截图证据 + 修复后自愈逻辑生效
+  （诊断 `effectSetViews` 从 0 变为 1）。建议部署后在生产复核该症状是否消失。
