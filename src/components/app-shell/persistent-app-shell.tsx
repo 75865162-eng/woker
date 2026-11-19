@@ -101,10 +101,11 @@ export function WorkspaceShell({ children, configuration }: {
   const segmentContext = useContext(LayoutRouterContext);
   const [views, setViews] = useState<CachedView[]>(() => [{ href: currentHref, element: children, context: segmentContext, seq: 1 }]);
   const [restored, setRestored] = useState(false);
-  // 乐观切换：保活视图已经在了，点标签就没必要等 Next 把 RSC 拉回来再提交。
-  // 先把它亮出来，路由在后台跟上；地址栏晚几十毫秒，页面本身是立刻可见的。
-  const [pendingHref, setPendingHref] = useState<string | null>(null);
-  const shownHref = pendingHref ?? currentHref;
+  // 当前展示的视图严格跟随真实路由。此前这里叠加了一层"乐观切换"（pendingHref）：
+  // 点击已保活链接时先手动切换视图、再后台 router.push。连续快速切换时，Next 会把
+  // 过渡中的 push 合并/丢弃，currentHref 停在旧值，而乐观视图已经切走，两者脱节后
+  // 页面会永久卡住（刷新才恢复）。导航交给 Next 的 <Link> 原生处理后不再需要这一层。
+  const shownHref = currentHref;
 
   const currentHrefRef = useRef(currentHref);
   const tabsRef = useRef(tabs);
@@ -117,9 +118,6 @@ export function WorkspaceShell({ children, configuration }: {
   currentHrefRef.current = currentHref;
   tabsRef.current = tabs;
   shownHrefRef.current = shownHref;
-
-  // 路由跟上（或被重定向）后，乐观状态就失效，回到以地址为准。
-  useEffect(() => { setPendingHref(null); }, [currentHref]);
 
   useLayoutEffect(() => {
     setWorkspaceApiCacheScope(`${configuration.organizationId ?? ""}:${configuration.userId ?? ""}:${configuration.userRole ?? ""}:${configuration.authorizationRevision ?? ""}`);
@@ -283,28 +281,6 @@ export function WorkspaceShell({ children, configuration }: {
 
   const refreshCurrent = useCallback(() => { router.refresh(); }, [router]);
 
-  // 站内链接如果指向「已经保活」的页面，就没必要等 Next 把 RSC 重新拉回来才提交。
-  // 捕获阶段接管点击、立刻把那页亮出来，路由在后台跟上；其余链接照旧交给 <Link>。
-  // Next 的 Link 会检查 defaultPrevented，这里 preventDefault 之后它不会再推一次。
-  useEffect(() => {
-    function handleClick(event: MouseEvent) {
-      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      const anchor = (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
-      if (!anchor) return;
-      const href = internalHrefFromAnchor(anchor);
-      if (!href || href === shownHrefRef.current) return;
-      if (!viewsRef.current.some((view) => view.href === href)) return;
-      event.preventDefault();
-      // 切走之前先把当前页的滚动位置落下来，别等布局收缩把 scrollY 归 0。
-      scrollRef.current.set(shownHrefRef.current, window.scrollY);
-      setPendingHref(href);
-      // 滚动位置由本组件按标签恢复，别再让路由导航把页面滚回顶部。
-      router.push(href, { scroll: false });
-    }
-    document.addEventListener("click", handleClick, true);
-    return () => document.removeEventListener("click", handleClick, true);
-  }, [router]);
-
   // 悬停预取：指针在链接上停一下，就把目标路由的 RSC 和首屏查询都提前拉回来。
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -384,8 +360,8 @@ export function WorkspaceShell({ children, configuration }: {
               const target = tabsRef.current.find((tab) => tab.id === id);
               if (!target || target.href === shownHrefRef.current) return;
               scrollRef.current.set(shownHrefRef.current, window.scrollY);
-              // 已经在保活视图里的标签：立刻切过去，路由在后台跟上。
-              if (viewsRef.current.some((view) => view.href === target.href)) setPendingHref(target.href);
+              // 导航交给 Next 的路由，视图由 currentHref 驱动；不再乐观切换，
+              // 避免连续切标签时 shownHref 与 currentHref 脱节导致页面卡住。
               router.push(target.href, { scroll: false });
             }}
             onClose={closeTab}
