@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import path from "node:path";
+import { amazonSlugRewrites } from "./src/lib/amazon/amazon-slug-routes";
 
 const distDir = process.env.NEXT_DIST_DIR || ".next";
 
@@ -19,6 +20,11 @@ const nextConfig: NextConfig = {
   outputFileTracingExcludes: {
     "next-server": localOnlyTraceExcludes,
     "/**/*": localOnlyTraceExcludes,
+  },
+  async rewrites() {
+    // Amazon 页面后缀命名空间：/amazon/<slug> 与赛狐 /sellfox/* 并存，
+    // 复用经营中台已实现的 workbench（/operations?view=xxx 或独立子路由）。
+    return amazonSlugRewrites();
   },
   async headers() {
     const headers = [
