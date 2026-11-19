@@ -61,7 +61,7 @@ export const syncFirstRunOrder: { resource: SellfoxSyncResource | null; label: s
   { resource: null, label: "SKU / SPU 主数据", reason: "成本与款名的唯一来源" },
   { resource: "listings", label: "在线产品", reason: "商品维度与标题、图片" },
   { resource: "orders", label: "订单", reason: "订单号是明细与退货的父键" },
-  { resource: null, label: "订单明细 / 退货", reason: "行级费用与退款，用于利润复算" },
+  { resource: "order_detail", label: "订单详情", reason: "订单号驱动，行级费用与退款，用于利润复算" },
   { resource: "inventory", label: "FBA 库存", reason: "库存与补货建议的底座" },
   { resource: null, label: "仓库 / 本地库存 / 流水 / 库龄", reason: "本地仓链路" },
   { resource: "fba_shipments", label: "货件", reason: "在途与签收" },
@@ -77,7 +77,7 @@ export const syncFirstRunOrder: { resource: SellfoxSyncResource | null; label: s
 export function syncShardScopeKey(resource: SellfoxSyncResource, input: { storeExternalId?: string; period?: string }) {
   const store = input.storeExternalId ? `store:${input.storeExternalId}` : "all";
   if (["inventory", "listings", "stores"].includes(resource)) return store;
-  if (["sales", "performance", "hourly", "orders", "fba_shipments"].includes(resource)) return input.period ? `${store}|${input.period}` : store;
+  if (["sales", "performance", "hourly", "orders", "order_detail", "fba_shipments"].includes(resource)) return input.period ? `${store}|${input.period}` : store;
   return input.period ? `${store}|${input.period}` : store;
 }
 

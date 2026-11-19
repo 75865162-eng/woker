@@ -1,0 +1,126 @@
+import { createHash } from "node:crypto";
+import { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/db/prisma";
+import { sellfoxPost } from "./client";
+import { sellfoxOrderDetailRow, sellfoxOrderDetailRows } from "./order-detail-contract";
+import { SellfoxSyncInputError } from "./sync-contract";
+import { sellfoxStoreFailure, SellfoxStoreSyncError } from "./sync-errors";
+
+/**
+ * 订单详情批量同步器。
+ * 接口 /api/order/detailByOrderIds.json 按「店铺 + 卖家订单ID（最多200个）」查详情，
+ * 没有日期分页，因此以已同步的订单快照（SellfoxOrderSnapshot）为驱动源：
+ * 按店铺取 distinct sellerOrderId，排序后每 200 个一批回填详情到 SellfoxOrderDetail。
+ * 断点按店铺记录已处理的订单游标（processed），进程回收后可续跑；upsert 幂等。
+ */
+export type OrderDetailCheckpoint = Record<string, { processed: number; done: boolean; count: number; error?: string }>;
+
+const BATCH_SIZE = 200;
+
+function detailId(storeId: string, sellerOrderId: string) {
+  return createHash("sha256").update(JSON.stringify(["sellfox-order-detail", storeId, sellerOrderId])).digest("hex");
+}
+
+export async function syncSellfoxOrderDetail(input: {
+  organizationId: string;
+  workspaceId: string;
+  shopExternalIds: string[];
+  capturedAt: string;
+  checkpoint?: OrderDetailCheckpoint;
+  onProgress: (checkpoint: OrderDetailCheckpoint, tx?: Prisma.TransactionClient) => Promise<void>;
+}, dependencies = { db: prisma, post: sellfoxPost }) {
+  const stores = await dependencies.db.sellfoxStore.findMany({
+    where: { organizationId: input.organizationId, workspaceId: input.workspaceId, externalId: { in: input.shopExternalIds } },
+    orderBy: { externalId: "asc" },
+  });
+  if (!stores.length || stores.length !== new Set(input.shopExternalIds).size) throw new SellfoxSyncInputError("订单详情店铺范围无效。");
+  const capturedAt = new Date(input.capturedAt);
+  if (!Number.isFinite(capturedAt.getTime())) throw new SellfoxSyncInputError("订单详情采集时间无效。");
+  const checkpoint: OrderDetailCheckpoint = { ...input.checkpoint };
+  const failures: boolean[] = [];
+
+  for (const store of stores) {
+    if (checkpoint[store.externalId]?.done) continue;
+    let processed = checkpoint[store.externalId]?.processed ?? 0;
+    let written = checkpoint[store.externalId]?.count ?? 0;
+    try {
+      if (!Number.isSafeInteger(processed) || processed < 0) throw new SellfoxSyncInputError("订单详情断点无效。");
+      // 驱动源：订单快照里该店铺的 distinct sellerOrderId（行级快照需去重）。
+      const orderRows = await dependencies.db.sellfoxOrderSnapshot.findMany({
+        where: { organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: store.id, sellerOrderId: { not: null } },
+        select: { sellerOrderId: true },
+        distinct: ["sellerOrderId"],
+        orderBy: { sellerOrderId: "asc" },
+      });
+      const ids = Array.from(new Set(orderRows.map((row) => row.sellerOrderId as string).filter(Boolean))).sort();
+      if (processed > ids.length) throw new SellfoxSyncInputError("订单详情断点超过订单总数。");
+      while (processed < ids.length) {
+        const batch = ids.slice(processed, processed + BATCH_SIZE);
+        const payload = await dependencies.post<unknown>("/api/order/detailByOrderIds.json", {
+          shopId: store.externalId,
+          sellerOrderId: batch.join(","),
+        });
+        const details = sellfoxOrderDetailRows(payload);
+        await dependencies.db.$transaction(async (tx) => {
+          for (const value of details) {
+            const row = sellfoxOrderDetailRow(value, store.externalId);
+            const data = {
+              shopExternalId: store.externalId,
+              sellerOrderId: row.sellerOrderId,
+              amazonOrderId: row.amazonOrderId,
+              orderStatus: row.orderStatus,
+              orderTotalCurrency: row.orderTotalCurrency,
+              orderTotalAmount: row.orderTotalAmount,
+              marketplaceId: row.marketplaceId,
+              orderType: row.orderType,
+              purchaseDate: row.purchaseDate,
+              paymentsDate: row.paymentsDate,
+              refundDate: row.refundDate,
+              fulfillmentChannel: row.fulfillmentChannel,
+              settlementStatus: row.settlementStatus,
+              refundStatus: row.refundStatus,
+              productAmount: row.productAmount,
+              refundPrice: row.refundPrice,
+              fbaPerUnitFulfillmentFee: row.fbaPerUnitFulfillmentFee,
+              commission: row.commission,
+              otherAmount: row.otherAmount,
+              purchaseCost: row.purchaseCost,
+              headTripCost: row.headTripCost,
+              fbmShipCost: row.fbmShipCost,
+              orderProfit: row.orderProfit,
+              totalCost: row.totalCost,
+              totalRevenue: row.totalRevenue,
+              shippingCharge: row.shippingCharge,
+              promotionDiscount: row.promotionDiscount,
+              taxAmount: row.taxAmount,
+              isBusinessOrder: row.isBusinessOrder,
+              isReturnOrder: row.isReturnOrder,
+              payload: row.payload,
+              latestCapturedAt: capturedAt,
+              updatedAt: new Date(),
+            };
+            await tx.sellfoxOrderDetail.upsert({
+              where: { storeId_sellerOrderId: { storeId: store.id, sellerOrderId: row.sellerOrderId } },
+              create: { id: detailId(store.id, row.sellerOrderId), organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: store.id, ...data },
+              update: data,
+            });
+          }
+          processed += batch.length;
+          written += details.length;
+          const state: OrderDetailCheckpoint = { ...checkpoint, [store.externalId]: { processed, done: processed >= ids.length, count: written } };
+          await input.onProgress(state, tx);
+          Object.assign(checkpoint, state);
+        });
+      }
+      checkpoint[store.externalId] = { processed, done: true, count: written };
+      await input.onProgress(checkpoint);
+    } catch (error) {
+      const failure = sellfoxStoreFailure(error);
+      failures.push(failure.retryable);
+      checkpoint[store.externalId] = { processed, done: false, count: written, error: failure.error };
+      await input.onProgress(checkpoint);
+    }
+  }
+  if (failures.length) throw new SellfoxStoreSyncError(`${failures.length} 个店铺订单详情采集失败，其余店铺已继续。`, failures.some(Boolean));
+  return { count: Object.values(checkpoint).reduce((total, row) => total + row.count, 0), storeCount: stores.length };
+}

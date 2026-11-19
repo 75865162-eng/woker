@@ -47,7 +47,8 @@ test("候选路径全部是已核对的真实 /api/ 只读接口，不含写接�
 
 test("已核对的重点待接入数据集都在候选里", () => {
   const codes = new Set(sellfoxEndpointCandidates().map(candidate => candidate.code));
-  for (const expected of ["profit-report", "ads-manage", "aba", "returns", "settlement", "fba-fee"]) {
+  // settlement / order-detail 已接入并转 live，不再是待接入候选。
+  for (const expected of ["profit-report", "ads-manage", "aba", "returns", "fba-fee"]) {
     assert.ok(codes.has(expected), `${expected} 有真实只读路径却未成为候选`);
   }
 });

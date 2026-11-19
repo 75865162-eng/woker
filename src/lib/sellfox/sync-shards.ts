@@ -205,6 +205,7 @@ export const sellfoxCoverageSources: Record<string, { table: string; dateColumn:
   inventory: { table: "SellfoxFbaInventorySnapshot", dateColumn: "reportDate" },
   performance: { table: "SellfoxProductDailySnapshot", dateColumn: "reportDate" },
   orders: { table: "SellfoxOrderSnapshot", dateColumn: "purchaseDate" },
+  order_detail: { table: "SellfoxOrderDetail", dateColumn: "purchaseDate" },
   listings: { table: "SellfoxListingSnapshot", dateColumn: null },
   fba_shipments: { table: "SellfoxFbaShipmentSnapshot", dateColumn: null },
   hourly: { table: "SellfoxHourlyMetric", dateColumn: "reportDate" },

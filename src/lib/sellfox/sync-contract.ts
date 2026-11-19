@@ -1,6 +1,6 @@
 import { getSellfoxWindowConfig } from "./window-config";
 
-export const sellfoxSyncResources = ["stores", "inventory", "sales", "performance", "hourly", "listings", "orders", "fba_shipments", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const;
+export const sellfoxSyncResources = ["stores", "inventory", "sales", "performance", "hourly", "listings", "orders", "order_detail", "fba_shipments", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const;
 export type SellfoxSyncResource = (typeof sellfoxSyncResources)[number];
 
 /** 后台配置的自定义 API 端点：resource = endpoint:<code>，与内置域共用 run/队列/租约链路。 */
@@ -82,6 +82,8 @@ export function normalizeSellfoxDates(resource: SellfoxSyncResource, input: Reco
     return { reportDate: today };
   }
   if (resource === "stores") return {};
+  // 订单详情以已同步订单快照为驱动源，不接受日期；按店铺批次回填。
+  if (resource === "order_detail") return {};
   if (resource === "fba_shipments" && startDate === undefined && endDate === undefined && reportDate === undefined) return {};
   if (resource === "orders" && startDate === undefined && endDate === undefined && reportDate === undefined) {
     startDate = sellfoxDateAt(now, -6);
