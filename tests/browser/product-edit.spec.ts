@@ -112,7 +112,7 @@ test("利润试算即时计算材积重与旺季配送费，切换单位及手�
   await page.getByRole("button", { name: "保存", exact: true }).click();
   await expect.poll(() => state.saves).toBe(1);
   const saved = (state.product as Product & { workbookDetail: TrialProductDraft }).workbookDetail.pricingRows[0];
-  expect(saved).toMatchObject({ lengthCm: 4, widthCm: 2, heightCm: 0.4, actualWeightKg: 1, suggestedPrice: 22, fbaFee: 0 });
+  expect(saved).toMatchObject({ lengthCm: 4, widthCm: 2, heightCm: 0.4, actualWeightKg: 1, suggestedPrice: 22, fbaFee: null });
 });
 
 test("reopening a product image preview reuses its signed URL without another signing request", async ({ page }) => {
