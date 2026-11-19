@@ -155,6 +155,10 @@ export const navigationGroups: NavigationGroup[] = [
     { id: "finance.tax", href: "/fin/tax", label: "税务与发票", icon: Landmark, moduleId: "operations" },
   ] },
 
+  // AI 板块入口使用本板块命名空间 /ai/lili，由 next.config rewrites 服务端直达 /lili
+  // （见 src/lib/navigation/namespace-routes.ts）。不要退回 page.tsx 的客户端 redirect：
+  // redirect 跳板会让 tab 身份分裂成「/ai/lili 幽灵 tab + /lili 实际 tab」，且延迟落地
+  // 会覆盖用户紧随其后的导航（表现为点了别的菜单却停在 /lili），侧栏高亮也会失效。
   { id: "ai", label: "AI 与工具", icon: Bot, href: "/ai/lili", items: [
     { id: "ai.lili", href: "/ai/lili", label: "粒粒 Lili 技能中心", icon: Sparkles, moduleId: "agents" },
     { id: "ai.agent", href: "/ai/agent", label: "Amazon AI Agent", icon: Bot, moduleId: "agents" },

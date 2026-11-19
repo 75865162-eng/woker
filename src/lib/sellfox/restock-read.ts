@@ -96,7 +96,8 @@ export async function readSellfoxRestock(query: SellfoxBrowseQuery, scope: Scope
   if (query.site) filters.push(Prisma.sql`st.marketplace=${query.site}`);
   if (query.fulfillment) filters.push(Prisma.sql`l.fulfillment=${query.fulfillment}`);
   const listings = await prisma.$queryRaw<RestockListing[]>(Prisma.sql`
-    SELECT l.id, l."storeId", l.asin, l.msku, l.sku, l."parentAsin", l.title, l."mainImage", l.fulfillable, l."reservedQty", l.unsellable, l.warehousing, l.fulfillment,
+    SELECT l.id, l."storeId", l.asin, l.msku, l.sku, l."parentAsin", l.title, l."mainImage", l.fulfillable,
+      l."reservedQty"::float8 AS "reservedQty", l.unsellable::float8 AS unsellable, l.warehousing::float8 AS warehousing, l.fulfillment,
       st."externalId" AS "shopExternalId", st.name, st.marketplace
     FROM sellfox_listing_current l
     JOIN "SellfoxStore" st ON st.id=l."storeId"

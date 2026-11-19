@@ -1,4 +1,5 @@
 import type { Condition, ConditionGroup, LifecycleGroupId, OverallAdDataRow, RuleAction } from "@/lib/types";
+import { parseWorkbookInWorker } from "@/lib/excel/workbook-parse-client";
 
 const lifecycleGroupOptions: LifecycleGroupId[] = ["launch", "mature", "decline", "clearance"];
 type PageItem = number | "...";
@@ -52,25 +53,20 @@ export async function readOverallImportFile(file: File): Promise<OverallImportFi
     return { fileName: file.name, text: await file.text() };
   }
 
-  const XLSX = await import("xlsx");
-  const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
-  const rows = workbook.SheetNames.flatMap((sheetName) => {
-    const worksheet = workbook.Sheets[sheetName];
-
-    if (!worksheet) {
-      return [];
-    }
-
-    return XLSX.utils.sheet_to_json<OverallImportRow>(worksheet, { defval: "", raw: true });
+  const parsed = await parseWorkbookInWorker<OverallImportRow[]>(file, {
+    shape: "objects",
+    allSheets: true,
+    defval: "",
+    raw: true,
   });
 
-  if (workbook.SheetNames.length === 0) {
+  if (parsed.sheetNames.length === 0) {
     throw new Error(`${file.name} 没有可读取的工作表。`);
   }
 
   return {
     fileName: file.name,
-    rows,
+    rows: parsed.rows,
   };
 }
 
@@ -247,20 +243,16 @@ export async function readGroupingStatusFile(file: File) {
     return file.text();
   }
 
-  const XLSX = await import("xlsx");
-  const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
-  const firstSheetName = workbook.SheetNames[0];
-
-  if (!firstSheetName) {
-    return "";
-  }
-
-  const rows = XLSX.utils.sheet_to_json<Array<string | number | undefined>>(workbook.Sheets[firstSheetName], {
-    header: 1,
+  const parsed = await parseWorkbookInWorker<Array<Array<string | number | undefined>>>(file, {
+    shape: "matrix",
     defval: "",
     raw: true,
   });
 
-  return rowsToCsv(rows);
+  if (parsed.sheetNames.length === 0 || parsed.rows.length === 0) {
+    return "";
+  }
+
+  return rowsToCsv(parsed.rows);
 }
 

@@ -343,7 +343,7 @@ export function OrchestratorAgentWorkbench() {
                 </div>
               </div>
             ) : (
-              <div className="rounded-md border border-dashed border-border bg-surface-muted px-3 py-8 text-center text-sm font-semibold text-muted">
+              <div className="rounded-md border border-dashed border-border bg-surface-muted px-3 py-6 text-center text-sm font-semibold text-muted">
                 暂无编排计划。
               </div>
             )}

@@ -147,8 +147,8 @@ export function ImageUpscaleWorkbench() {
     if (inputRef.current) inputRef.current.value = "";
   };
 
-  return <div className="space-y-6">
-    <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+  return <div className="space-y-5">
+    <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
       <Card><CardHeader><CardTitle>批量处理参数</CardTitle></CardHeader><CardContent className="space-y-5">
         <div onDragOver={(event) => { event.preventDefault(); setIsDragging(true); }} onDragLeave={() => setIsDragging(false)} onDrop={handleDrop} className={cn("flex min-h-[180px] flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface-muted px-5 py-6 text-center", isDragging && "border-brand bg-surface")}>
           <ImagePlus className="h-9 w-9 text-brand" /><p className="mt-3 text-sm font-bold text-foreground">拖入多张图片或选择文件</p><p className="mt-1 text-xs leading-5 text-muted">支持 JPG / PNG / WebP，单批最多 20 张。</p>

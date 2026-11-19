@@ -1,4 +1,5 @@
 import type { Product, ProductImageAsset, ProductListItem } from "@/lib/products/types";
+import { parseWorkbookInWorker } from "@/lib/excel/workbook-parse-client";
 import { normalizeOperationsProgress } from "@/lib/products/operations-progress";
 import { buildWorkflowEvent, createWorkflowDueAt, getProductWorkflowStage, normalizeAssigneeList } from "@/lib/products/workflow";
 import { getProductListImage, safeProductImageUrl } from "@/lib/products/image-assets";
@@ -22,18 +23,23 @@ type ProductListPreview = Pick<ProductListItem, "id" | "sku" | "chineseName" | "
 
 export async function parseProductWorkbookFile(file: File, products: Array<Pick<Product, "sku">>, preferredSku?: string): Promise<Product> {
   const buffer = await file.arrayBuffer();
-  const [XLSXModule, JSZipModule] = await Promise.all([import("xlsx"), import("jszip")]);
-  const XLSX = XLSXModule;
-  const JSZip = JSZipModule.default;
-  const workbook = XLSX.read(buffer, { cellDates: true });
-  const sheetName = workbook.SheetNames[0];
-  const sheet = workbook.Sheets[sheetName];
+  // Excel 解析统一投递到 Worker，避免大文件在 UI 主线程同步解析造成卡顿。
+  // 传入 ArrayBuffer（而非 File）以保留 buffer 供下方 JSZip 提取内嵌图片使用。
+  const parsed = await parseWorkbookInWorker<string[][]>(buffer, {
+    shape: "matrix",
+    cellDates: true,
+    raw: false,
+    defval: "",
+    blankrows: false,
+  });
+  const rows = parsed.rows;
 
-  if (!sheet) {
+  if (!rows.length) {
     throw new Error("Excel 文件没有可读取的工作表。");
   }
 
-  const rows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: "", raw: false, blankrows: false });
+  const JSZipModule = await import("jszip");
+  const JSZip = JSZipModule.default;
   const detail = createTrialProductDraft();
   const pricingHeaderIndex = 0;
   const competitorHeaderIndex = findRowIndex(rows, "ASIN");

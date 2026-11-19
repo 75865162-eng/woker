@@ -59,7 +59,10 @@ export const namespaceEntries: NamespaceEntry[] = [
   { href: "/ai/skills", moduleId: "agents", destination: "/skills" },
   { href: "/ai/listing", moduleId: "listingAi", destination: "/listing-ai" },
   { href: "/ai/listing-studio", moduleId: "listingAi", destination: "/listing-ai/studio" },
-  // /ai/lili 由真实 page.tsx（redirect /lili）提供
+  // /ai/lili 用服务端 rewrite 直达 /lili，而非 page.tsx 的客户端 redirect：
+  // redirect 跳板会让 tab 身份分裂（/ai/lili 幽灵 tab + /lili 实际 tab），且延迟落地会
+  // 覆盖用户紧随其后的导航（表现为「点击假死」）。rewrite 保持 URL/tab 身份稳定为 /ai/lili。
+  { href: "/ai/lili", moduleId: "agents", destination: "/lili" },
 
   // ── 赛狐数据 /sellfox（搜词合并为历史独立路由，纳入赛狐命名空间）──
   { href: "/sellfox/search-merge", moduleId: "searchMerge", destination: "/saihu-search-merge" },

@@ -621,7 +621,7 @@ export function PpcAgentWorkbench() {
                 </div>
               </>
             ) : (
-              <div className="rounded-md border border-dashed border-border px-3 py-8 text-center text-sm font-semibold text-muted">
+              <div className="rounded-md border border-dashed border-border px-3 py-6 text-center text-sm font-semibold text-muted">
                 生成报告后，可提交 Bulk 或 Amazon API 审批。
               </div>
             )}
@@ -809,7 +809,7 @@ function TracePanel({ title, items }: { title: string; items: string[] }) {
             ))}
           </div>
         ) : (
-          <div className="rounded-md border border-dashed border-border px-3 py-8 text-center text-sm font-semibold text-muted">
+          <div className="rounded-md border border-dashed border-border px-3 py-6 text-center text-sm font-semibold text-muted">
             暂无数据。
           </div>
         )}

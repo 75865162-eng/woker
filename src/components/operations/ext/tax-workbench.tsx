@@ -39,7 +39,7 @@ export function TaxWorkbench() {
 
   const summary = invoices.data?.summary;
   const taxValue = (value: number | null | undefined) => value === null || value === undefined ? "无数据" : money(value);
-  return <WorkbenchPageTemplate context={<Notice error={error || invoices.error || periods.error || ""} notice={notice} />} main={<div className="space-y-6">
+  return <WorkbenchPageTemplate context={<Notice error={error || invoices.error || periods.error || ""} notice={notice} />} main={<div className="space-y-5">
     <Tabs value={tab} onChange={value => setTab(value as "INVOICE" | "PERIOD")} tabs={[{ id: "INVOICE", label: "发票台账", count: invoices.data?.items.length }, { id: "PERIOD", label: "申报期", count: periods.data?.items.length }]} />
 
     {tab === "INVOICE" && <>

@@ -31,8 +31,13 @@ test("赛狐金额字段均为 DECIMAL(20,4)，比率/件数保留 Float", () =>
   for (const field of ["netRevenue", "saleRevenue", "grossProfit", "adCost", "promotionDiscount", "refundPrice", "avgPurchaseCost"]) {
     assert.match(daily, new RegExp(`${field}\\s+Decimal\\??\\s+@db\\.Decimal\\(20, 4\\)`), `${field} 应为 Decimal(20,4)`);
   }
-  for (const field of ["grossProfitRate", "refundRate", "refundNum", "evaluationSaleNum", "channelSaleNum"]) {
+  // 比率保留 Float；数量字段（退款量/测评销量/多渠道销量）已按精度整改改为 Decimal(20,4)。
+  for (const field of ["grossProfitRate", "refundRate"]) {
     assert.match(daily, new RegExp(`${field}\\s+Float\\??\\s*\\n`), `${field} 应保留 Float`);
+  }
+  for (const field of ["refundNum", "evaluationSaleNum", "channelSaleNum"]) {
+    assert.match(daily, new RegExp(`${field}\\s+Decimal\\??\\s+@db\\.Decimal\\(20, 4\\)`), `${field} 应为 Decimal(20,4)`);
+    assert.doesNotMatch(daily, new RegExp(`${field}\\s+Float`));
   }
 });
 

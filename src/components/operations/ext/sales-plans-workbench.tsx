@@ -131,7 +131,7 @@ export function SalesPlansWorkbench() {
       { label: "在行 SKU", value: String((plans.data?.items ?? []).reduce((sum, row) => sum + row.lineCount, 0)) },
       { label: "目标销量合计", value: String((plans.data?.items ?? []).reduce((sum, row) => sum + row.targetQty, 0)) },
       { label: "预测销量合计", value: !plans.data?.items.length || plans.data.items.some(row => row.forecastQty === null) ? "待补数据" : String(plans.data.items.reduce((sum, row) => sum + row.forecastQty!, 0)) },
-    ]} />} main={<div className="space-y-6">
+    ]} />} main={<div className="space-y-5">
 
     <Section title={editing ? "编辑销售计划" : "新建销售计划"} description="预测取历史日均销量 × 计划天数 × 季节系数；实际销量取订单事实，两者都不允许手填覆盖。">
       <fieldset disabled={busy || loadState === "loading" || loadState === "blocked"} className="min-w-0 space-y-3">

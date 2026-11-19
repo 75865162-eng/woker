@@ -49,7 +49,7 @@ export function ReviewsWorkbench() {
   const current = reviews.data?.items.find(row => row.id === editId);
   const summary = reviews.data?.summary;
 
-  return <WorkbenchPageTemplate context={<Notice error={error || reviews.error || performance.error || ""} notice={notice} />} main={<div className="space-y-6">
+  return <WorkbenchPageTemplate context={<Notice error={error || reviews.error || performance.error || ""} notice={notice} />} main={<div className="space-y-5">
     <Tabs value={tab} onChange={value => setTab(value as "REVIEW" | "PERF")} tabs={[{ id: "REVIEW", label: "评论与差评", count: summary?.total }, { id: "PERF", label: "店铺绩效", count: performance.data?.items.length }]} />
 
     {tab === "REVIEW" && <>

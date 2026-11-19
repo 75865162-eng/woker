@@ -216,7 +216,7 @@ export function AgentCenterWorkbench() {
       </Card>
     } charts={<section className="rounded-md border border-border bg-surface">
             {loading ? (
-              <div className="px-4 py-10 text-center text-sm font-semibold text-muted">加载中...</div>
+              <div className="px-4 py-6 text-center text-sm font-semibold text-muted">加载中...</div>
             ) : workflowAgents.length ? (
               <div className="divide-y divide-border">
                 {workflowAgents.map((agent) => (
@@ -240,7 +240,7 @@ export function AgentCenterWorkbench() {
                 ))}
               </div>
             ) : (
-              <div className="px-4 py-10 text-center text-sm font-semibold text-muted">暂无已注册的工作流 Agent。</div>
+              <div className="px-4 py-6 text-center text-sm font-semibold text-muted">暂无已注册的工作流 Agent。</div>
             )}
           </section>
     } exceptions={<section className="rounded-md border border-border bg-surface">
@@ -267,7 +267,7 @@ export function AgentCenterWorkbench() {
                   </PrefetchLink>
                 ))
               ) : (
-                <div className="px-4 py-8 text-sm font-semibold text-muted">当前没有运行中或待审批任务。</div>
+                <div className="px-4 py-6 text-sm font-semibold text-muted">当前没有运行中或待审批任务。</div>
               )}
             </div>
           </section>}
