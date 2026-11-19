@@ -20,7 +20,7 @@ test("结算明细 V2 种子路径与真实文档一致", () => {
   assert.equal(seed.dateMode, "range");
   assert.equal(seed.scopeMode, "store");
   assert.equal(seed.dateFormat, "yyyy-MM-dd");
-  assert.equal(seed.rowsPath, "data.detailPageVoList");
+  assert.equal(seed.rowsPath, "detailPageVoList", "sellfoxPost 已解包 payload.data，行键在顶层");
   assert.equal(seed.idFields, "id");
   assert.equal(seed.deprecated, undefined, "V2 接口未标注下线，不应带 deprecated");
 });
@@ -40,7 +40,7 @@ test("结算汇总 V2 种子路径与真实文档一致", () => {
   assert.equal(seed.dateMode, "range");
   assert.equal(seed.scopeMode, "store");
   assert.equal(seed.dateFormat, "yyyy-MM-dd");
-  assert.equal(seed.rowsPath, "data.groupVoList");
+  assert.equal(seed.rowsPath, "groupVoList", "sellfoxPost 已解包 payload.data，行键在顶层");
   assert.equal(seed.idFields, "groupId");
 });
 

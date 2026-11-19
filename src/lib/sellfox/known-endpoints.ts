@@ -133,7 +133,7 @@ export function sellfoxKnownEndpoints(): SellfoxKnownEndpointSeed[] {
     scopeMode: "store",
     chunkDays: 90, // 文档 startTime/endTime 为 yyyy-MM-dd；结算按月出数，90 天块安全
     pageSize: 200,
-    rowsPath: "data.detailPageVoList",
+    rowsPath: "detailPageVoList", // sellfoxPost 已解包 payload.data，行键在顶层（文档 schema: OpenResult.data.detailPageVoList）
     idFields: "id", // 文档：FinancialSettlementDetailPageOpenVo.id = 唯一键 id
     params: JSON.stringify({
       pageNo: "${pageNo}",
@@ -156,7 +156,7 @@ export function sellfoxKnownEndpoints(): SellfoxKnownEndpointSeed[] {
     scopeMode: "store",
     chunkDays: 90,
     pageSize: 200,
-    rowsPath: "data.groupVoList", // 文档：FinSettlementSummaryGroupOpenPage.groupVoList
+    rowsPath: "groupVoList", // sellfoxPost 已解包 payload.data，行键在顶层（文档 schema: OpenResult.data.groupVoList）
     idFields: "groupId", // 文档：FinGroupOpenVo.groupId = 事件组ID，缺失时回退内容哈希
     params: JSON.stringify({
       pageNo: "${pageNo}",

@@ -72,6 +72,9 @@ test("参数模板按店铺/日期/分页替换，未知变量原样保留不猜
 test("响应行解析、行身份与分页页数", () => {
   const rows = [{ id: "1", amount: "12.30", currency: "USD" }];
   assert.deepEqual(sellfoxEndpointRows({ data: { rows } }, "data.rows"), rows);
+  // sellfoxPost 已解包 payload.data；结算 V2 的种子 rowsPath 指向顶层行键，不再带 data. 前缀。
+  assert.deepEqual(sellfoxEndpointRows({ detailPageVoList: rows, totalSize: 1 }, "detailPageVoList"), rows);
+  assert.deepEqual(sellfoxEndpointRows({ groupVoList: rows, totalSize: 1 }, "groupVoList"), rows);
   assert.deepEqual(sellfoxEndpointRows({ rows }, ""), rows);
   assert.deepEqual(sellfoxEndpointRows({ list: rows }, ""), rows);
   assert.throws(() => sellfoxEndpointRows({ data: {} }, "missing.path"), /rowsPath/);
