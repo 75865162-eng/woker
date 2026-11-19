@@ -54,6 +54,37 @@ const boundedPlanGuidance: Record<string, string> = {
   buy_box_history: '当前不自动建立 Buy Box 历史计划；需审批单个已闭合业务日及 ASIN 范围。',
   brand_analytics: '已有完整周期采集计划会自动执行缺失窗口；单个报告失败不阻止其余窗口。尚未配置的品牌报告类型不代表已发现或同步。',
 };
+/**
+ * 已落库、已具备只读 API、但此前只在同步矩阵可见的 report 域。
+ * 统一复用 DomainReportsWorkbench（按 resource 参数化），不新建页面或数据源。
+ * 全部读取 AmazonSyncReportRow / /api/operations/sync-center，与赛狐数据源无关。
+ */
+const reportLandingViews = [
+  "fba_customer_sales", "mfn_returns", "fba_shipments", "fba_inventory_by_country",
+  "fba_fulfilled_inventory", "fba_inventory_report", "reserved_inventory", "stranded_inventory",
+  "recommended_removals", "storage_fees", "long_term_storage_fees", "fba_overage_fees",
+  "fee_preview", "removal_order_report", "removal_shipment_report",
+] as const;
+/** 承接页描述：仅补新增 view，避免改动 pageDescriptions 的超长字面量。 */
+const landingDescriptions: Record<string, string> = {
+  fba_customer_sales: "按已发布报告查看 FBA 客户发货销售原始行，保留 Amazon 金额与数量原值",
+  mfn_returns: "按已发布报告查看自配送退货明细；请求窗口不等于退货业务周期",
+  fba_shipments: "按已发布报告查看 FBA 发货明细，保留原值与币种",
+  fba_inventory_by_country: "按已发布报告查看 FBA 多国库存快照；仅当前快照，不推断历史",
+  fba_fulfilled_inventory: "按已发布报告查看 FBA Fulfilled 库存当前快照",
+  fba_inventory_report: "按已发布报告查看 FBA 库存当前快照，不回补历史",
+  reserved_inventory: "按已发布报告查看预留库存当前快照",
+  stranded_inventory: "按已发布报告查看滞留库存当前快照",
+  recommended_removals: "按已发布报告查看推荐移除建议；建议不等于已执行移除",
+  storage_fees: "按报告提供的月份与币种查看 FBA 仓储费估算，不推断可回补月份",
+  long_term_storage_fees: "按完整月窗口查看长期仓储费原始收费字段",
+  fba_overage_fees: "查看 FBA 库存超额费用估算快照，不代表实际扣费",
+  fee_preview: "查看 FBA 费用预览快照，不代表实际扣款或历史数据",
+  removal_order_report: "按已闭合日期查看移除订单明细，不推断官方历史窗口",
+  removal_shipment_report: "按日查看移除货件明细，不宣称历史完整",
+  promotions: "按卖家与站点查看促销摘要／详情／选品／商品观察；读能力需显式 Seller＋Marketplace",
+  notifications: "只读卖家级订阅发现；不代表事件已接收或投递已验收",
+};
 const domainModeName: Record<string, string> = { snapshot: "完整快照", incremental: "有界增量", report: "异步报告", external: "独立接口" };
 const authorizationName: Record<string, string> = { verified: "已具备适配器核验", pending: "待官方角色／站点核验", separate: "需独立授权" };
 const healthNames: Record<string, string> = { FRESH: "正常", STALE: "过期", NOT_SYNCED: "待首次同步", SYNCING: "同步中", DISABLED: "已停用", BLOCKED: "已阻断", FAILED: "失败" };
@@ -373,7 +404,7 @@ export function SyncCenterWorkbench() {
     })() : null}
     </>
     } main={
-    <main className="min-w-0 space-y-[var(--gap-section)] p-[var(--pad-card)]" data-testid="sync-center-main"><div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-display text-foreground">{allNav.find(n => n[0] === page)?.[1]}</h1><p className="mt-1.5 text-meta text-muted">{pageDescriptions[page] ?? "查看能力范围、字段来源与接入条件"}</p></div>{!businessPage && !pendingPage && !procurementPage && <Button variant="secondary" size="sm" onClick={() => void load()} disabled={loading || busy}><RefreshCw className="h-3.5 w-3.5" />刷新</Button>}</div>
+    <main className="min-w-0 space-y-[var(--gap-section)] p-[var(--pad-card)]" data-testid="sync-center-main"><div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-display text-foreground">{allNav.find(n => n[0] === page)?.[1]}</h1><p className="mt-1.5 text-meta text-muted">{pageDescriptions[page] ?? landingDescriptions[page] ?? "查看能力范围、字段来源与接入条件"}</p></div>{!businessPage && !pendingPage && !procurementPage && <Button variant="secondary" size="sm" onClick={() => void load()} disabled={loading || busy}><RefreshCw className="h-3.5 w-3.5" />刷新</Button>}</div>
     {!businessPage && !pendingPage && !procurementPage && !focusedFbaPlan && <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-surface px-3.5 py-3"><Field name="店铺" inline><select className={`${inputClass} min-w-[104px] bg-surface`} value={store} onChange={e => { setStore(e.target.value); setTaskPage(1); }}><option value="">全部店铺</option>{stores.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></Field><Field name="站点" inline><select className={`${inputClass} min-w-[104px] bg-surface`} value={site} onChange={e => { setSite(e.target.value); setTaskPage(1); }}><option value="">全部站点</option>{sites.map(id => <option key={id}>{id}</option>)}</select></Field><span className="ml-auto text-label text-muted">时间按本机显示 · 日期筛选按 UTC</span></div>}
     {!pendingPage && <OperationsSectionGuide view={page} />}
     {pendingPage && <UnconnectedBusinessWorkbench key={page} view={page} />}
@@ -393,8 +424,8 @@ export function SyncCenterWorkbench() {
     {page === "finance" && <Panel title="Amazon 财务交易"><FinanceWorkbench key={`${store}:${site}`} sellerAccountId={store} marketplaceId={site} getHeaders={headers} onTask={openTask} /></Panel>}
     {page === "orders" && <Panel title="Amazon 订单列表"><OrdersWorkbench key={`${store}:${site}`} sellerAccountId={store} marketplaceId={site} getHeaders={headers} onTask={openTask} canConfigure={access.canConfigure} busy={busy} requestApproval={act} openApprovals={() => navigate("approvals")} /></Panel>}
     {page === "order-items" && <Panel title="Amazon 订单商品"><OrderItemsWorkbench key={`${store}:${site}`} sellerAccountId={store} marketplaceId={site} getHeaders={headers} onTask={openTask} /></Panel>}
-    {["settlements", "reimbursements", "inventory_age", "inventory_events"].includes(page) && <Panel title={`Amazon ${domainName(page)}`}><DomainReportsWorkbench key={`${page}:${store}:${site}`} resource={page} sellerAccountId={store} marketplaceId={site} getHeaders={headers} onTask={openTask} onRun={page === "inventory_events" ? (sourceId, range) => { void act({ action: "run", sourceIds: [sourceId], dateFrom: range.dateFrom, dateTo: range.dateTo, eventType: range.eventType, idempotencyKey: crypto.randomUUID() }); } : undefined} /></Panel>}
-    {["fulfillment", "listing_details", "catalog_items", "pricing", "buy_box_history"].includes(page) && <Panel title={domainName(page)}><ObservationsWorkbench key={`${page}:${store}:${site}`} resource={page} sellerAccountId={store} marketplaceId={site} getHeaders={headers} onTask={openTask} onSync={access.canCreate && !busy ? id => runSources([id]) : undefined} /></Panel>}
+    {["settlements", "reimbursements", "inventory_age", "inventory_events", ...reportLandingViews].includes(page) && <Panel title={`Amazon ${domainName(page)}`}><DomainReportsWorkbench key={`${page}:${store}:${site}`} resource={page} sellerAccountId={store} marketplaceId={site} getHeaders={headers} onTask={openTask} onRun={page === "inventory_events" ? (sourceId, range) => { void act({ action: "run", sourceIds: [sourceId], dateFrom: range.dateFrom, dateTo: range.dateTo, eventType: range.eventType, idempotencyKey: crypto.randomUUID() }); } : undefined} /></Panel>}
+    {["fulfillment", "listing_details", "catalog_items", "pricing", "buy_box_history", "promotions", "notifications"].includes(page) && <Panel title={domainName(page)}><ObservationsWorkbench key={`${page}:${store}:${site}`} resource={page} sellerAccountId={store} marketplaceId={site} getHeaders={headers} onTask={openTask} onSync={access.canCreate && !busy ? id => runSources([id]) : undefined} /></Panel>}
     {["brand_analytics", "repeat-purchase"].includes(page) && <Panel title="Amazon 品牌分析"><BrandAnalyticsWorkbench key={`${page}:${store}:${site}`} initialView={page === "repeat-purchase" ? "repeat_purchase" : "overview"} sellerAccountId={store} marketplaceId={site} getHeaders={headers} onTask={openTask} onCommand={act} canConfigure={access.canConfigure ?? false} canCreate={access.canCreate} busy={busy} /></Panel>}
     {page === "sales-traffic" && <Panel title="Amazon 销售与流量日报"><SalesTrafficWorkbench sources={sources} canSync={access.canCreate} canExport={access.canExport ?? false} onTask={openTask} /></Panel>}
     {page === "overview" && <>

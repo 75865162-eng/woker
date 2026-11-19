@@ -65,3 +65,23 @@ test("分组引用的 view 均可在运维导航或业务条目中解析（无�
     for (const s of group.sectionIds ?? []) assert.ok(operationsSections.some(sec => sec.id === s), `板块 ${s} 应存在`);
   }
 });
+
+test("已落库的 report / observation 域均有可导航的承接页 view（无孤儿数据域）", () => {
+  // 15 个 report 域 + promotions/notifications 已落库、有只读 API；必须能在运营页导航到。
+  const views = new Set(operationsEntries.map(e => e.view));
+  const landingViews = [
+    "fba_customer_sales", "mfn_returns", "fba_shipments", "fba_inventory_by_country",
+    "fba_fulfilled_inventory", "fba_inventory_report", "reserved_inventory", "stranded_inventory",
+    "recommended_removals", "storage_fees", "long_term_storage_fees", "fba_overage_fees",
+    "fee_preview", "removal_order_report", "removal_shipment_report", "promotions", "notifications",
+  ];
+  for (const view of landingViews) assert.ok(views.has(view), `承接页 view=${view} 未注册到运营导航`);
+  // 报告中心板块必须挂到 E 组，否则左侧浮层不显示。
+  const e = syncNavGroups.find(g => g.id === "E");
+  assert.ok(e?.sectionIds?.includes("reports"), "报告中心板块应挂在 Amazon 业务数据（E）组");
+  // 承接页均为真实内部视图，不带 pending 占位。
+  for (const view of landingViews) {
+    const entry = operationsEntries.find(e => e.view === view)!;
+    assert.equal(entry.pending, undefined, `${view} 应为已接入视图，不是待接入占位`);
+  }
+});
