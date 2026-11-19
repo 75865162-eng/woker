@@ -93,6 +93,41 @@ test("隐藏 Amazon 功能页全部纳入亚马逊数据板块", () => {
   }
 });
 
+// 上一轮补齐的 15 个 report 域 + promotions/notifications 承接页，必须既有一级导航入口，
+// 也有 /amazon/<slug> 直达别名（rewrite 到 /operations?view=），杜绝「有数据无页面」与「页面不连通」。
+const reportAndObservationSlugs = [
+  "fba-customer-sales", "mfn-returns", "fba-shipments", "fba-inventory-by-country",
+  "fba-fulfilled-inventory", "fba-inventory-report", "reserved-inventory", "stranded-inventory",
+  "recommended-removals", "storage-fees", "long-term-storage-fees", "fba-overage-fees",
+  "fee-preview", "removal-order-report", "removal-shipment-report", "promotions", "notifications",
+];
+
+test("报告与观察承接页全部纳入亚马逊数据一级板块", () => {
+  const amazon = navigationGroups.find(g => g.id === "amazon")!;
+  const hrefs = new Set(amazon.items.map(i => i.href));
+  for (const slug of reportAndObservationSlugs) {
+    assert.ok(hrefs.has(`/amazon/${slug}`), `承接页 /amazon/${slug} 应纳入亚马逊数据一级导航`);
+  }
+});
+
+test("报告与观察承接页均有 /amazon/<slug> rewrite 到对应 view", () => {
+  const bySource = new Map(amazonSlugRewrites().map(r => [r.source, r.destination]));
+  const expectedView: Record<string, string> = {
+    "fba-customer-sales": "fba_customer_sales", "mfn-returns": "mfn_returns", "fba-shipments": "fba_shipments",
+    "fba-inventory-by-country": "fba_inventory_by_country", "fba-fulfilled-inventory": "fba_fulfilled_inventory",
+    "fba-inventory-report": "fba_inventory_report", "reserved-inventory": "reserved_inventory",
+    "stranded-inventory": "stranded_inventory", "recommended-removals": "recommended_removals",
+    "storage-fees": "storage_fees", "long-term-storage-fees": "long_term_storage_fees",
+    "fba-overage-fees": "fba_overage_fees", "fee-preview": "fee_preview",
+    "removal-order-report": "removal_order_report", "removal-shipment-report": "removal_shipment_report",
+    promotions: "promotions", notifications: "notifications",
+  };
+  for (const slug of reportAndObservationSlugs) {
+    assert.equal(bySource.get(`/amazon/${slug}`), `/operations?view=${expectedView[slug]}`, `/amazon/${slug} 应 rewrite 到承接页 view`);
+    assert.equal(amazonSlugView(slug), expectedView[slug], `amazonSlugView(${slug}) 应解析到承接页 view`);
+  }
+});
+
 test("系统设置业务项归入亚马逊数据，全局项留在右上角账号菜单", () => {
   const amazon = navigationGroups.find(g => g.id === "amazon")!;
   const amazonHrefs = amazon.items.map(i => i.href);

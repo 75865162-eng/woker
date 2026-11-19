@@ -56,17 +56,32 @@ const spLanding: Record<string, { surface: LandingSurface; view: string; note: s
   buy_box_history: { surface: "workbench", view: "buy_box_history", note: "Buy Box 历史：单日报告版本" },
   brand_analytics: { surface: "workbench", view: "brand_analytics", note: "品牌分析：五类报告与覆盖" },
   order_items: { surface: "workbench", view: "order-items", note: "订单商品：复用订单详情，非独立数据源" },
-  // promotions / notifications 有读能力、自动计划和 MCP/API 读取器，但运营页尚无专用 workbench 分发，
-  // 故诚实归到同步矩阵（任务/快照入口），不伪造一个打不开的 view 路由。详见 acceptance 说明。
+  // 以下 15 个 report 域 + promotions/notifications 已落库、有只读 API 与自动计划，
+  // 承接页复用 DomainReportsWorkbench / ObservationsWorkbench（见 operations-sections.tsx 与
+  // sync-center-workbench.tsx 的分发），view 与 resource id 一致。全部读取 Amazon 数据源，与赛狐隔离。
+  fba_customer_sales: { surface: "workbench", view: "fba_customer_sales", note: "FBA 客户发货销售：按已发布报告查看原始行" },
+  mfn_returns: { surface: "workbench", view: "mfn_returns", note: "自配送退货明细：按已发布报告查看" },
+  fba_shipments: { surface: "workbench", view: "fba_shipments", note: "FBA 发货报告：保留原值与币种" },
+  fba_inventory_by_country: { surface: "workbench", view: "fba_inventory_by_country", note: "FBA 多国库存：当前快照" },
+  fba_fulfilled_inventory: { surface: "workbench", view: "fba_fulfilled_inventory", note: "FBA Fulfilled 库存：当前快照" },
+  fba_inventory_report: { surface: "workbench", view: "fba_inventory_report", note: "FBA 库存报告：当前快照，不回补历史" },
+  reserved_inventory: { surface: "workbench", view: "reserved_inventory", note: "预留库存：当前快照" },
+  stranded_inventory: { surface: "workbench", view: "stranded_inventory", note: "滞留库存：当前快照" },
+  recommended_removals: { surface: "workbench", view: "recommended_removals", note: "推荐移除：建议不等于已执行" },
+  storage_fees: { surface: "workbench", view: "storage_fees", note: "FBA 仓储费：按报告月份查看估算" },
+  long_term_storage_fees: { surface: "workbench", view: "long_term_storage_fees", note: "长期仓储费：按完整月窗口查看" },
+  fba_overage_fees: { surface: "workbench", view: "fba_overage_fees", note: "FBA 超额费用：估算快照，不代表实际扣费" },
+  fee_preview: { surface: "workbench", view: "fee_preview", note: "FBA 费用预览：估算快照" },
+  removal_order_report: { surface: "workbench", view: "removal_order_report", note: "移除订单明细：按已闭合日期查看" },
+  removal_shipment_report: { surface: "workbench", view: "removal_shipment_report", note: "移除货件明细：按日查看" },
+  promotions: { surface: "workbench", view: "promotions", note: "促销：摘要/详情/选品/商品观察，需显式 seller+site" },
+  notifications: { surface: "workbench", view: "notifications", note: "通知订阅发现：只读元数据，不代表事件已接收" },
 };
 
 const spMatrixOnlyNote = "同步矩阵中查看数据源、任务与本次快照；报告族行通过 domain-reports 读取器查询已发布行。";
 
-/** 有能力与计划、但尚无专用运营页 workbench 的域：仍可从同步矩阵与只读读取器查看，不伪造路由。 */
-const spReaderOnlyNote: Record<string, string> = {
-  promotions: "同步矩阵查看任务/快照；已发布促销观察经 observations 读取器（需显式 seller+site）与 MCP 查询，暂无专用运营页视图。",
-  notifications: "同步矩阵查看任务/快照；只读订阅发现经 observations 读取器与 MCP 查询，暂无专用运营页视图。",
-};
+/** 保留兜底：暂无专用视图的已实现域（当前为空）仍可从同步矩阵与只读读取器查看，不伪造路由。 */
+const spReaderOnlyNote: Record<string, string> = {};
 
 const spSchedulerByMode: Record<string, string> = {
   report: "worker:amazon-sync · domain-report",

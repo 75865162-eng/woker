@@ -32,6 +32,10 @@ test("落地 workbench 路由与 operations 视图约定一致（连字符/下�
     "catalog", "inventory", "orders", "finance", "returns", "order-items", "sales-traffic",
     "settlements", "reimbursements", "inventory_age", "inventory_events", "fulfillment",
     "listing_details", "catalog_items", "pricing", "buy_box_history", "brand_analytics",
+    "fba_customer_sales", "mfn_returns", "fba_shipments", "fba_inventory_by_country",
+    "fba_fulfilled_inventory", "fba_inventory_report", "reserved_inventory", "stranded_inventory",
+    "recommended_removals", "storage_fees", "long_term_storage_fees", "fba_overage_fees",
+    "fee_preview", "removal_order_report", "removal_shipment_report", "promotions", "notifications",
   ]);
   const spWorkbenches = getDomainArchitecture().filter(r => r.provider === "amazon_sp_api" && r.landing.surface === "workbench");
   assert.ok(spWorkbenches.length > 0);
@@ -74,7 +78,13 @@ test("架构自检全通过且不伪造真实数据验收结论", () => {
   assert.equal(audit.counts.adsImplemented, 15);
   const ledger = getDomainArchitecture();
   assert.ok(ledger.every(r => r.acceptance.trim().length >= 6), "每行都应保留真实验收前置说明（非伪造接通结论）");
-  // promotions / notifications 诚实归到读取器落地，不冒充有专用 workbench。
-  assert.equal(getDomainArchitecture().find(r => r.id === "promotions")!.landing.surface, "sync-matrix");
-  assert.equal(getDomainArchitecture().find(r => r.id === "notifications")!.landing.surface, "sync-matrix");
+  // 15 个 report 域 + promotions / notifications 已补齐 workbench 承接页，全部走 Amazon 数据源。
+  assert.equal(getDomainArchitecture().find(r => r.id === "promotions")!.landing.surface, "workbench");
+  assert.equal(getDomainArchitecture().find(r => r.id === "notifications")!.landing.surface, "workbench");
+  const reportIds = ["fba_customer_sales", "mfn_returns", "fba_shipments", "fba_inventory_by_country", "fba_fulfilled_inventory", "fba_inventory_report", "reserved_inventory", "stranded_inventory", "recommended_removals", "storage_fees", "long_term_storage_fees", "fba_overage_fees", "fee_preview", "removal_order_report", "removal_shipment_report"];
+  for (const id of reportIds) {
+    const row = getDomainArchitecture().find(r => r.id === id)!;
+    assert.equal(row.landing.surface, "workbench", `${id} 应有 workbench 承接页`);
+    assert.equal(row.landing.route, `/operations?view=${id}`, `${id} 承接页路由应与 view 一致`);
+  }
 });
