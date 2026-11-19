@@ -2,14 +2,15 @@
 // 用法：sellfox-aggregate-reconcile --organization-id=ID --workspace-id=ID [--from=YYYY-MM-DD] [--to=YYYY-MM-DD]
 import { prisma } from "@/lib/db/prisma";
 import {
-  reconcileSalesAggDaily, assertReconciled,
+  reconcileSalesAggDaily, reconcileProfitAggDaily, reconcileAdsAggDaily,
+  reconcileOverviewAgg, assertReconciled, type ReconcileReport,
 } from "@/lib/sellfox/aggregate-reconcile";
 import { sellfoxDateAt } from "@/lib/sellfox/sync-contract";
 
 async function main() {
   const args = process.argv.slice(2);
   if (args.includes("--help")) {
-    console.log("sellfox-aggregate-reconcile --organization-id=ID --workspace-id=ID [--from=YYYY-MM-DD] [--to=YYYY-MM-DD]\n对同一 org/ws/日期窗比对源表权威口径与预聚合表，逐字段输出差异。0 差异才允许切读路径。");
+    console.log("sellfox-aggregate-reconcile --organization-id=ID --workspace-id=ID [--from=YYYY-MM-DD] [--to=YYYY-MM-DD] [--all]\n对同一 org/ws/日期窗比对源表权威口径与预聚合表，逐字段输出差异。0 差异才允许切读路径。\n默认只核对 sales（兼容既有调用）；--all 同时核对 sales/profit/ads/overview 四张预聚合表。");
     return;
   }
   const allowed = new Set(["organization-id", "workspace-id", "from", "to"]);
@@ -30,10 +31,26 @@ async function main() {
     return { rows };
   };
 
-  const report = await reconcileSalesAggDaily(query, { organizationId, workspaceId, from, to });
-  console.log(JSON.stringify(report, null, 2));
-  assertReconciled(report);
-  console.log("RECONCILE_OK: 0 差异，可在预发按变更清单切换读路径。");
+  const scope = { organizationId, workspaceId, from, to };
+  // 默认只跑 sales（保持既有调用方行为不变）；--all 覆盖全部四张预聚合表。
+  const all = args.includes("--all");
+  const reports: Array<{ name: string; report: ReconcileReport }> = [
+    { name: "sales", report: await reconcileSalesAggDaily(query, scope) },
+  ];
+  if (all) {
+    reports.push(
+      { name: "profit", report: await reconcileProfitAggDaily(query, scope) },
+      { name: "ads", report: await reconcileAdsAggDaily(query, scope) },
+      { name: "overview", report: await reconcileOverviewAgg(query, scope) },
+    );
+  }
+  for (const { name, report } of reports) {
+    console.log(JSON.stringify({ domain: name, ...report }, null, 2));
+  }
+  for (const { name, report } of reports) {
+    assertReconciled(report);
+  }
+  console.log(`RECONCILE_OK: ${reports.map((r) => r.name).join(",")} 0 差异，可在预发按变更清单切换读路径。`);
 }
 
 main().catch((error) => {

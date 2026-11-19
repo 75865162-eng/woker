@@ -43,6 +43,8 @@ copy_without_macos_metadata prisma "$PACKAGE_DIR/"
 copy_without_macos_metadata public "$PACKAGE_DIR/"
 copy_without_macos_metadata scripts "$PACKAGE_DIR/"
 copy_without_macos_metadata src "$PACKAGE_DIR/"
+# 项目说明文档（验收报告/规划/根因分析等）随制品发布，便于服务器端查阅。
+copy_without_macos_metadata docs "$PACKAGE_DIR/"
 copy_without_macos_metadata dist/deployment-plan.json "$PACKAGE_DIR/"
 
 copy_without_macos_metadata .next-build/standalone "$PACKAGE_DIR/.next-build/"
