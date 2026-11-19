@@ -23,6 +23,11 @@ import { sellfoxStoresReady } from "@/lib/sellfox/sync-dependency";
 
 const workerName = process.env.SELLFOX_SYNC_WORKER_NAME?.trim() || `${sellfoxSyncQueueName}-${process.pid}`;
 const workerId = process.env.SELLFOX_SYNC_WORKER_ID?.trim() || `${workerName}-${process.pid}`;
+// P2-3: 同步跑批并发可配置，默认 1（保守，避免与前台查询争抢 DB）；上限 4 防止误配打爆连接池。
+const configuredConcurrency = Number(process.env.SELLFOX_SYNC_WORKER_CONCURRENCY ?? 1);
+const sellfoxSyncConcurrency = Number.isFinite(configuredConcurrency)
+  ? Math.min(4, Math.max(1, Math.floor(configuredConcurrency)))
+  : 1;
 const worker = new Worker<{ runId: string }>(sellfoxSyncQueueName, async (job) => {
   try { await processSellfoxSyncRun(job.data.runId); }
   catch (error) {
@@ -34,7 +39,7 @@ const worker = new Worker<{ runId: string }>(sellfoxSyncQueueName, async (job) =
     await prisma.sellfoxSyncRun.updateMany({ where: { id: job.data.runId, status: "failed", executionToken: null, executionAttempts: { lt: sellfoxMaxRunAttempts } }, data: { status: "queued", error: "同步暂时失败，系统将按退避策略重试。", finishedAt: null } });
     throw new Error(sellfoxStoreFailure(error).error);
   }
-}, { connection: createRedisConnectionOptions(), concurrency: 1 });
+}, { connection: createRedisConnectionOptions(), concurrency: sellfoxSyncConcurrency });
 
 let recovering = false;
 async function recoverAndSchedule() {
@@ -116,8 +121,8 @@ async function persistHeartbeat(status: "online" | "stopping") {
   if (!process.env.DATABASE_URL) return;
   await prisma.workerHeartbeat.upsert({
     where: { id: workerId },
-    create: { id: workerId, workerName, queueName: sellfoxSyncQueueName, status, concurrency: 1, lastSeenAt: new Date(), metadata: { ...runtimeHeartbeatMetadata(), pid: process.pid, hostname: process.env.HOSTNAME } satisfies Prisma.InputJsonValue },
-    update: { status, concurrency: 1, lastSeenAt: new Date(), metadata: { ...runtimeHeartbeatMetadata(), pid: process.pid, hostname: process.env.HOSTNAME } satisfies Prisma.InputJsonValue },
+    create: { id: workerId, workerName, queueName: sellfoxSyncQueueName, status, concurrency: sellfoxSyncConcurrency, lastSeenAt: new Date(), metadata: { ...runtimeHeartbeatMetadata(), pid: process.pid, hostname: process.env.HOSTNAME } satisfies Prisma.InputJsonValue },
+    update: { status, concurrency: sellfoxSyncConcurrency, lastSeenAt: new Date(), metadata: { ...runtimeHeartbeatMetadata(), pid: process.pid, hostname: process.env.HOSTNAME } satisfies Prisma.InputJsonValue },
   });
 }
 

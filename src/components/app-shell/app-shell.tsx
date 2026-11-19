@@ -3,7 +3,7 @@ import { AppShellPage } from "@/components/app-shell/persistent-app-shell";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getAccessiblePathOrFallback } from "@/lib/accounts/permissions";
-import { getCurrentUserFromSignedCookie } from "@/lib/auth/session";
+import { getCurrentUser } from "@/lib/auth/session";
 import { getOrganizationRolePermissionsSnapshot } from "@/lib/accounts/role-permissions-server";
 import { getCurrentAppVersionLabel } from "@/lib/app-version-server";
 
@@ -18,7 +18,7 @@ export async function AppShell({
   subtitle: string;
   actions?: ReactNode;
 }) {
-  const [user, headerStore] = await Promise.all([getCurrentUserFromSignedCookie(), headers()]);
+  const [user, headerStore] = await Promise.all([getCurrentUser(), headers()]);
   const rolePermissionsSnapshot =
     user?.organizationId
         ? await getOrganizationRolePermissionsSnapshot(user.organizationId)

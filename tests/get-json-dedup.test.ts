@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getJson, readGetDedupStats, resetGetDedupStats } from "@/lib/workspace/get-json";
+import { getJson, readGetDedupStats, resetGetDedupStats, clearGetJsonResultCache } from "@/lib/workspace/get-json";
 
 function mockFetch(handler: (url: string, init?: RequestInit) => Promise<Response>) {
   const original = globalThis.fetch;
@@ -94,4 +94,54 @@ test("只发 GET，不改变请求方法", async () => {
     assert.equal(mock.calls.length, 1);
     assert.equal(mock.calls[0].method, "GET");
   } finally { mock.restore(); }
+});
+
+// ---- P3-1: opt-in short-TTL result cache ----
+
+test("P3-1 默认不缓存结果（未声明 TTL 时每次重新取数）", async () => {
+  resetGetDedupStats();
+  clearGetJsonResultCache();
+  let round = 0;
+  const mock = mockFetch(async () => Response.json({ round: ++round }));
+  try {
+    await getJson("/api/dict", { headers: { "x-workspace-id": "w1" } });
+    await getJson("/api/dict", { headers: { "x-workspace-id": "w1" } });
+    assert.equal(mock.calls.length, 2, "default must keep results uncached");
+  } finally { mock.restore(); }
+});
+
+test("P3-1 声明 TTL 后短期命中缓存，不再重复请求", async () => {
+  resetGetDedupStats();
+  clearGetJsonResultCache();
+  let round = 0;
+  const mock = mockFetch(async () => Response.json({ round: ++round }));
+  try {
+    const a = await getJson<{ round: number }>("/api/dict", { headers: { "x-workspace-id": "w1" } }, 5000);
+    const b = await getJson<{ round: number }>("/api/dict", { headers: { "x-workspace-id": "w1" } }, 5000);
+    assert.equal(mock.calls.length, 1);
+    assert.equal(a.data.round, 1);
+    assert.equal(b.data.round, 1);
+  } finally { mock.restore(); clearGetJsonResultCache(); }
+});
+
+test("P3-1 缓存按工作区隔离", async () => {
+  resetGetDedupStats();
+  clearGetJsonResultCache();
+  const mock = mockFetch(async () => Response.json({ ok: true }));
+  try {
+    await getJson("/api/dict", { headers: { "x-workspace-id": "w1" } }, 5000);
+    await getJson("/api/dict", { headers: { "x-workspace-id": "w2" } }, 5000);
+    assert.equal(mock.calls.length, 2, "different workspaces must not share cached results");
+  } finally { mock.restore(); clearGetJsonResultCache(); }
+});
+
+test("P3-1 错误响应不缓存", async () => {
+  resetGetDedupStats();
+  clearGetJsonResultCache();
+  const mock = mockFetch(async () => Response.json({ error: "no" }, { status: 403 }));
+  try {
+    await getJson("/api/dict", { headers: { "x-workspace-id": "w1" } }, 5000);
+    await getJson("/api/dict", { headers: { "x-workspace-id": "w1" } }, 5000);
+    assert.equal(mock.calls.length, 2, "error responses must never be cached");
+  } finally { mock.restore(); clearGetJsonResultCache(); }
 });

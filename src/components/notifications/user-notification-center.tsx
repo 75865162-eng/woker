@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Bell, CheckCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/overlays";
@@ -32,6 +33,7 @@ function formatNotificationTime(value: string) {
 }
 
 export function UserNotificationCenter() {
+  const router = useRouter();
   const [notifications, setNotifications] = useState<UserNotification[]>([]);
   const [pendingWorkflow, setPendingWorkflow] = useState<UserNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -174,7 +176,8 @@ export function UserNotificationCenter() {
       document.cookie = `amazon_bulk_ad_workspace_scope=${encodeURIComponent(JSON.stringify(scope))}; Path=/; Max-Age=31536000; SameSite=Lax`;
     } catch { /* Navigation still carries explicit workspace scope. */ }
     emitWorkspaceScopeChanged({ ...scope, source: "manual" });
-    window.location.assign(link.href);
+    // P2-1: 站内跳转走客户端导航（cookie 与 href 已带 workspace scope），避免整页刷新。
+    router.push(link.href);
   }
 
   useEffect(() => {

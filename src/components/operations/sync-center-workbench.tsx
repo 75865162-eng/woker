@@ -6,7 +6,7 @@ import { BrandAnalyticsWorkbench } from "./brand-analytics-workbench";
 import { SyncCoverageWorkbench } from "./sync-coverage-workbench";
 import { ObservationsWorkbench } from "./observations-workbench";
 import { cloneElement, useCallback, useEffect, useId, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { getJson } from "@/lib/workspace/get-json";
 import { ExternalLink, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -94,6 +94,7 @@ export function OperationsSyncEntry() {
 }
 
 export function SyncCenterWorkbench() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const locationSearch = searchParams.toString();
   const shellUser = useAppShellUser();
@@ -195,7 +196,7 @@ export function SyncCenterWorkbench() {
     }
     finally { if (n === mutation.current) setBusy(false); }
   };
-  const navigate = (next: string) => { const href = operationsEntries.find(entry => entry.view === next)?.href; if (href) { window.location.assign(href); return; } setAuthorizationAction(null); if (next === page) { setNotice(""); return; } ++sequence.current; setLoading(true); setData({}); const url = new URL(window.location.href); url.searchParams.delete("legacy"); url.searchParams.delete("tab"); url.searchParams.delete("brandReport"); url.searchParams.set("view", next); window.history.pushState(null, "", url); setNotice(""); setPage(next); setTaskId(""); setEditor(undefined); setAuthEditor(undefined); setScheduleFilter(""); setLogAfter(0); };
+  const navigate = (next: string) => { const href = operationsEntries.find(entry => entry.view === next)?.href; if (href) { router.push(href); return; } setAuthorizationAction(null); if (next === page) { setNotice(""); return; } ++sequence.current; setLoading(true); setData({}); const url = new URL(window.location.href); url.searchParams.delete("legacy"); url.searchParams.delete("tab"); url.searchParams.delete("brandReport"); url.searchParams.set("view", next); window.history.pushState(null, "", url); setNotice(""); setPage(next); setTaskId(""); setEditor(undefined); setAuthEditor(undefined); setScheduleFilter(""); setLogAfter(0); };
   const openTask = (id: string) => { navigate("tasks"); setTaskId(id); setLogAfter(0); };
   const runSources = (ids: string[], planId?: string) => { if (sources.some(s => ids.includes(s.id) && s.resource === "sales_traffic")) { navigate("sales-traffic"); return; } void act({ action: "run", sourceIds: ids, planId, idempotencyKey: crypto.randomUUID() }); };
   const visibleSources = (data.sources ?? sources).filter(s => (!store || s.sellerAccountId === store) && (!site || s.marketplaceId === site));
@@ -251,7 +252,7 @@ export function SyncCenterWorkbench() {
     {businessPage && <p className="rounded-lg border border-border bg-surface px-3.5 py-3 text-xs text-muted">当前工作区业务数据 · 使用下方业务面板内的筛选；Amazon 与 PPC／赛狐数据保留各自来源和统计口径。</p>}
     {page === "connections" && <>
       <Panel title="Amazon SP-API 配置" action={<Button size="sm" disabled={loading || !!error || !access.canConfigure || busy} onClick={() => setAuthEditor(null)}>新增授权</Button>}><AmazonConfigurationHelp />{!loading && !data.access && <p className="mt-3 text-xs text-warning-ink">配置数据及权限尚未读取成功，暂不能新增或提交凭证。请先恢复服务，再刷新页面。</p>}</Panel>
-      {access.canConfigure && <Panel title="Amazon Ads API 授权与同步" action={<Button size="sm" variant="secondary" onClick={() => window.location.assign("/amazon-ads/accounts")}><ExternalLink className="h-3.5 w-3.5" />打开授权与同步面板</Button>}><p className="text-sm text-muted">使用当前 ERP 账号授权。系统自动发现可访问的 Ads Profiles，并展示账户连接、同步计划和任务状态。</p></Panel>}
+      {access.canConfigure && <Panel title="Amazon Ads API 授权与同步" action={<Button size="sm" variant="secondary" onClick={() => router.push("/amazon-ads/accounts")}><ExternalLink className="h-3.5 w-3.5" />打开授权与同步面板</Button>}><p className="text-sm text-muted">使用当前 ERP 账号授权。系统自动发现可访问的 Ads Profiles，并展示账户连接、同步计划和任务状态。</p></Panel>}
     </>}
     {scopeEmpty && !error && <p role="status" className="rounded-lg border border-border bg-surface p-3.5 text-sm text-muted">当前账号未分配 Amazon 卖家账号，Amazon 同步状态与数据暂不可见。需要查看时请联系管理员为该账号分配 Seller 数据授权，然后点击刷新。</p>}
     {error && !authorizationFeedbackVisible && !(page === "connections" && authEditor !== undefined && data.access) && <p role="alert" className="rounded border border-danger/30 bg-danger-soft p-3 text-sm text-danger-ink">{error}</p>}{notice && !authorizationFeedbackVisible && <p ref={authorizationResultRef} tabIndex={-1} role="status" className="text-sm text-brand">{notice}</p>}

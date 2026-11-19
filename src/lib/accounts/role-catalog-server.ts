@@ -5,6 +5,7 @@ import { buildDefaultRoleCatalog, type RoleCatalogItem } from "@/lib/accounts/ro
 import { prisma } from "@/lib/db/prisma";
 import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
 import { normalizeRolePermissions } from "@/lib/accounts/role-permissions-utils";
+import { readThroughRolePerms } from "@/lib/accounts/role-permissions-cache";
 
 export type RoleCatalogSnapshot = {
   roles: RoleCatalogItem[];
@@ -27,7 +28,7 @@ function minimalRoleCatalog(): RoleCatalogItem[] {
   return defaultRoleCatalog.map(role => ({ ...role, permissions: {} }));
 }
 
-function buildRevision(rows: Pick<RoleRow, "id" | "updatedAt">[]) {
+export function buildRevision(rows: Pick<RoleRow, "id" | "updatedAt">[]) {
   const latestUpdatedAt = rows.reduce((latest, row) => Math.max(latest, row.updatedAt.getTime()), 0);
 
   return `${rows.length}:${latestUpdatedAt}:${rows.map((row) => row.id).sort().join(",")}`;
@@ -67,7 +68,40 @@ async function seedOrganizationRoles(client: typeof prisma | Prisma.TransactionC
   });
 }
 
-export const getOrganizationRoleCatalogSnapshot = cache(async (organizationId: string): Promise<RoleCatalogSnapshot> => {
+/** Light version query: id + updatedAt only (no permissions JSON). Shares buildRevision with the full loader so revisions match. */
+async function loadCatalogRevision(organizationId: string): Promise<string> {
+  const rows = await prisma.organizationRosterRole.findMany({
+    where: { organizationId },
+    select: { id: true, updatedAt: true },
+  });
+  return buildRevision(rows);
+}
+
+async function loadCatalogSnapshotFromDb(organizationId: string): Promise<RoleCatalogSnapshot> {
+  let roles = (await measureServerOperation("auth.roles", () => prisma.organizationRosterRole.findMany({
+    where: { organizationId },
+    orderBy: [{ sortOrder: "asc" }, { updatedAt: "asc" }, { id: "asc" }],
+  }))) as RoleRow[];
+
+  // Role catalog is the authorization source of truth; seed definitions for new or
+  // partially initialized organizations so the operational permission editor stays consistent.
+  if (roles.length === 0) {
+    await prisma.$transaction(async (tx) => {
+      await seedOrganizationRoles(tx, organizationId);
+    });
+    roles = (await prisma.organizationRosterRole.findMany({
+      where: { organizationId },
+      orderBy: [{ sortOrder: "asc" }, { updatedAt: "asc" }, { id: "asc" }],
+    })) as RoleRow[];
+  }
+
+  return {
+    roles: roles.map(normalizeRoleRow),
+    revision: buildRevision(roles),
+  };
+}
+
+const getOrganizationRoleCatalogSnapshotInner = cache(async (organizationId: string): Promise<RoleCatalogSnapshot> => {
   if (!process.env.DATABASE_URL) {
     // 本地开发保留默认权限；生产缺少 DATABASE_URL 属于配置错误，按最小权限 fail-closed。
     if (process.env.NODE_ENV === "production") {
@@ -81,28 +115,15 @@ export const getOrganizationRoleCatalogSnapshot = cache(async (organizationId: s
   }
 
   try {
-    let roles = (await measureServerOperation("auth.roles", () => prisma.organizationRosterRole.findMany({
-      where: { organizationId },
-      orderBy: [{ sortOrder: "asc" }, { updatedAt: "asc" }, { id: "asc" }],
-    }))) as RoleRow[];
-
-    // Role catalog is the authorization source of truth; seed definitions for new or
-    // partially initialized organizations so the operational permission editor stays consistent.
-    if (roles.length === 0) {
-      await prisma.$transaction(async (tx) => {
-        await seedOrganizationRoles(tx, organizationId);
-      });
-      roles = (await prisma.organizationRosterRole.findMany({
-        where: { organizationId },
-        orderBy: [{ sortOrder: "asc" }, { updatedAt: "asc" }, { id: "asc" }],
-      })) as RoleRow[];
-    }
-
-    const snapshot: RoleCatalogSnapshot = {
-      roles: roles.map(normalizeRoleRow),
-      revision: buildRevision(roles),
-    };
-    return snapshot;
+    const { body } = await readThroughRolePerms(
+      organizationId,
+      () => loadCatalogRevision(organizationId),
+      async () => {
+        const snapshot = await loadCatalogSnapshotFromDb(organizationId);
+        return { body: snapshot, revision: snapshot.revision };
+      },
+    );
+    return body;
   } catch (error) {
     if (isDatabaseUnavailableError(error)) {
       console.warn(`[role-catalog] 数据库不可用，按最小权限处理 ${organizationId}:`, error);
@@ -115,6 +136,8 @@ export const getOrganizationRoleCatalogSnapshot = cache(async (organizationId: s
     throw error;
   }
 });
+
+export const getOrganizationRoleCatalogSnapshot = getOrganizationRoleCatalogSnapshotInner;
 
 export async function readOrganizationRolePermissions(client: Prisma.TransactionClient, organizationId: string) {
   const roles = await client.organizationRosterRole.findMany({ where: { organizationId } });

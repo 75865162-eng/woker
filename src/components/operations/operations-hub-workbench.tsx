@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowUpRight, ChevronLeft, ChevronRight, CloudCog, LockKeyhole, PackageSearch, RefreshCw, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -113,6 +114,7 @@ function money(value: number | null, currency: string) {
 export type OperationsBusinessTab = "inventory" | "catalog" | "replenishment" | "ads";
 
 export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true, sellerAccountId, marketplaceId }: { embeddedTab?: OperationsBusinessTab; onSync?: (resource: AmazonReadDomain) => void; canSync?: boolean; sellerAccountId?: string; marketplaceId?: string } = {}) {
+  const router = useRouter();
   const [activeTab, setTab] = useState("overview");
   const tab = embeddedTab ?? activeTab;
   const needsReadiness = !embeddedTab || embeddedTab === "inventory";
@@ -259,7 +261,7 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true, se
       const response = await fetch("/operations?view=approvals");
       void response;
       if (scope !== requests.current.scope) return;
-      window.location.assign(`/operations?view=${resource === "inventory" || resource === "catalog" ? "connections" : "approvals"}`);
+      router.push(`/operations?view=${resource === "inventory" || resource === "catalog" ? "connections" : "approvals"}`);
     } catch (error) {
       if (scope === requests.current.scope) setNotice(error instanceof Error ? error.message : "同步请求创建失败。");
     } finally {
@@ -273,7 +275,7 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true, se
     setNotice("");
     try {
       if (scope !== requests.current.scope) return;
-      window.location.assign("/operations?view=connections");
+      router.push("/operations?view=connections");
     } catch (error) {
       if (scope === requests.current.scope) setNotice(error instanceof Error ? error.message : "Amazon 连接校验失败。");
     } finally {
@@ -344,7 +346,7 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true, se
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {!readiness?.connection.runtimeConfiguration.configured ? (
-              <Button size="sm" onClick={() => window.location.assign("/operations?view=connections")}><CloudCog className="h-4 w-4" />去配置 Amazon 连接</Button>
+              <Button size="sm" onClick={() => router.push("/operations?view=connections")}><CloudCog className="h-4 w-4" />去配置 Amazon 连接</Button>
             ) : readiness.connection.status !== "CONFIGURED" ? (
               <Button size="sm" onClick={() => void validateConnection()} disabled={validating}><ShieldCheck className="h-4 w-4" />{validating ? "校验中..." : "验证 Amazon 连接"}</Button>
             ) : null}

@@ -2,7 +2,7 @@ import { getProductsResponse } from "@/app/api/products/handler";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { ProductWorkbench } from "@/components/app-shell/lazy-workbenches";
 import { getOrganizationRolePermissionsSnapshot } from "@/lib/accounts/role-permissions-server";
-import { getCurrentUserFromSignedCookie } from "@/lib/auth/session";
+import { getCurrentUser } from "@/lib/auth/session";
 import type { RolePermissionMap } from "@/lib/accounts/permissions";
 import type { ProductListItem, ProductListSummary } from "@/lib/products/types";
 import { cookies, headers } from "next/headers";
@@ -35,7 +35,7 @@ function readWorkspaceId(value: string | undefined) {
 }
 
 async function getDashboardInitialData(
-  user: Awaited<ReturnType<typeof getCurrentUserFromSignedCookie>>,
+  user: Awaited<ReturnType<typeof getCurrentUser>>,
   permissions: Promise<RolePermissionMap>,
 ): Promise<DashboardInitialData | null> {
   if (!user) return null;
@@ -79,7 +79,7 @@ async function getDashboardInitialData(
 }
 
 export default async function DashboardPage() {
-  const user = await getCurrentUserFromSignedCookie();
+  const user = await getCurrentUser();
   const rolePermissionsSnapshotPromise = user
     ? getOrganizationRolePermissionsSnapshot(user.organizationId)
     : null;

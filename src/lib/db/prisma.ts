@@ -1,6 +1,7 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 import { createHash } from "node:crypto";
+import { Pool } from "pg";
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
@@ -23,7 +24,15 @@ function getPrismaClient() {
     throw new Error("DATABASE_URL is required to initialize Prisma.");
   }
 
-  const adapter = new PrismaPg({ connectionString });
+  // P1-3: 显式连接池。adapter 模式下 datasource 不接受 url/连接参数，池配置只能在应用层。
+  // 默认值贴近 pg 默认(max=10)，50 人规模下可由 PRISMA_POOL_MAX 上调；超时防止并发排队时无限等待。
+  const pool = new Pool({
+    connectionString,
+    max: readPositiveIntegerEnv("PRISMA_POOL_MAX", 10),
+    idleTimeoutMillis: readPositiveIntegerEnv("PRISMA_POOL_IDLE_TIMEOUT_MS", 30_000),
+    connectionTimeoutMillis: readPositiveIntegerEnv("PRISMA_POOL_CONNECT_TIMEOUT_MS", 10_000),
+  });
+  const adapter = new PrismaPg(pool);
   const prismaClient = new PrismaClient({
     adapter,
     log: process.env.ERP_PERFORMANCE_TRACE === "1" ? [{ emit: "event", level: "query" }] : [],

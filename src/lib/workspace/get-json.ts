@@ -17,6 +17,18 @@ export type GetJsonResult<T> = { ok: boolean; status: number; data: T };
 const inflight = new Map<string, Promise<GetJsonResult<unknown>>>();
 const stats = { requests: 0, shared: 0 };
 
+// P3-1: opt-in short-TTL RESULT cache. Default OFF — ERP business data is
+// freshness-sensitive, so only callers that explicitly declare a dictionary /
+// slow-changing resource should pass `resultTtlMs`. Never caches errors or
+// non-ok responses. Keyed by workspace + url to preserve tenant isolation.
+type CachedResult = { expiresAt: number; result: GetJsonResult<unknown> };
+const resultCache = new Map<string, CachedResult>();
+
+/** Test/maintenance hook: clear all opt-in cached GET results. */
+export function clearGetJsonResultCache() {
+  resultCache.clear();
+}
+
 function workspaceOf(headers: Headers) {
   return headers.get("x-workspace-id") ?? "default";
 }
@@ -31,9 +43,22 @@ export function resetGetDedupStats() {
   stats.shared = 0;
 }
 
-export function getJson<T = unknown>(url: string, init?: { headers?: HeadersInit }): Promise<GetJsonResult<T>> {
+export function getJson<T = unknown>(
+  url: string,
+  init?: { headers?: HeadersInit },
+  resultTtlMs?: number,
+): Promise<GetJsonResult<T>> {
   const headers = new Headers(init?.headers ?? extHeaders());
   const key = `${workspaceOf(headers)} ${url}`;
+
+  // Opt-in result cache hit (only for callers that declared a freshness-tolerant resource).
+  if (resultTtlMs && resultTtlMs > 0) {
+    const cached = resultCache.get(key);
+    if (cached && cached.expiresAt > Date.now()) {
+      return Promise.resolve(cached.result as GetJsonResult<T>);
+    }
+    if (cached) resultCache.delete(key);
+  }
 
   const existing = inflight.get(key);
   if (existing) {
@@ -45,7 +70,12 @@ export function getJson<T = unknown>(url: string, init?: { headers?: HeadersInit
     stats.requests++;
     const response = await fetch(url, { headers, cache: "no-store" });
     const data = (await response.json()) as T;
-    return { ok: response.ok, status: response.status, data };
+    const result: GetJsonResult<T> = { ok: response.ok, status: response.status, data };
+    // Only cache successful responses with a positive TTL. Errors stay uncached.
+    if (resultTtlMs && resultTtlMs > 0 && response.ok) {
+      resultCache.set(key, { expiresAt: Date.now() + resultTtlMs, result: result as GetJsonResult<unknown> });
+    }
+    return result;
   })();
 
   inflight.set(key, task as Promise<GetJsonResult<unknown>>);
