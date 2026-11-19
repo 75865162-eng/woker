@@ -42,7 +42,8 @@ export function SettingsTabs({
   useEffect(() => {
     const syncTab = () => {
       const value = new URLSearchParams(window.location.search).get("tab");
-      const requested = value === "integrations" || window.location.hash === "#amazon-sp-api" ? "integrations" : value;
+      const hash = window.location.hash;
+      const requested = value === "integrations" || hash === "#amazon-sp-api" || hash === "#amazon-approvals" ? "integrations" : value;
       setActiveTab(tabs.some((tab) => tab.id === requested) ? (requested as TabId) : "models");
     };
     syncTab();
@@ -52,7 +53,7 @@ export function SettingsTabs({
 
   useEffect(() => {
     const target = window.location.hash.slice(1);
-    if (activeTab === "integrations" && ["amazon-sp-api", "sellfox-credentials"].includes(target)) {
+    if (activeTab === "integrations" && ["amazon-sp-api", "amazon-approvals", "sellfox-credentials"].includes(target)) {
       requestAnimationFrame(() => document.getElementById(target)?.scrollIntoView({ block: "start" }));
     }
   }, [activeTab]);

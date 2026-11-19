@@ -261,3 +261,30 @@ process.env.AMAZON_API_EXECUTION_ROLE === "cloud"
 
 - **恢复已停用授权**：店铺与授权 → 对已停用授权点"重新启用授权" → 变更审批中批准并应用 → 该授权回到待验证 → 点"验证参与站点" → 批准并应用 → 自动重建来源与计划。
 - **新增一条授权**：店铺与授权 → 新增授权 → 填名称/区域/LWA Client ID/Client Secret/Refresh Token → 保存（生成审批请求）→ 变更审批批准并应用 → 验证参与站点 → 批准并应用。
+
+---
+
+## 14. 补充说明（2026-11-20）：变更审批入口与批准/应用内嵌到系统设置「集成」
+
+### 14.1 背景与根因
+
+- 用户反馈"审批页面／批准应用不见了"。核查确认：审批后端（`GET /api/operations/sync-center?section=approvals`、`POST .../approvals`）、运营中心的审批页渲染（`page === "approvals"`）、以及一级导航「变更审批」项**均完整存在，未删除**。
+- 真实缺口是可用性：系统设置页「集成」页签里只有"打开数据处理中心"和赛狐凭据两个卡片，没有直达变更审批的入口。用户在设置页配置／停用／重新启用 Amazon 授权后生成审批请求，却在该页找不到批准／应用的地方，感觉"审批页面没有了"。
+
+### 14.2 改动（最小，复用既有审批接口）
+
+- 新增 `src/components/settings/amazon-approvals-panel.tsx`：在设置页「集成」页签内嵌完整变更审批面板，读取 `section=approvals`，支持批准／拒绝／撤销／应用四个动作，权限判断（`canApprove` / `canConfigure|canEdit|canCreate`）与运营中心审批页逐字一致，脱敏摘要、状态徽章、SHA-256 摘要展示口径相同。仅内嵌 UI，不新增后端、不改状态机、不改表。
+- `settings/page.tsx`：「集成」页签内容由 `<AmazonSpApiSettingsPanel /><SellfoxCredentialsPanel />` 变为 `<AmazonSpApiSettingsPanel /><AmazonApprovalsPanel /><SellfoxCredentialsPanel />`。
+- `amazon-sp-api-settings-panel.tsx`：新增"变更审批"按钮，指向 `/settings?tab=integrations#amazon-approvals`（页内锚点）；"打开数据处理中心"保持 `/operations?view=connections`。
+- `settings-tabs.tsx`：`?tab=integrations` 识别 `#amazon-approvals` 锚点并滚动定位。
+- 数据真实性/隔离：审批读写的租户／工作区 scope、操作权限、乐观锁与审计全部沿用现有接口；本轮未写真实凭据、未改业务数据、未触碰赛狐数据源，隔离边界不变。
+
+### 14.3 验证
+
+| 项 | 结果 |
+|---|---|
+| typecheck | 通过 |
+| `amazon-sp-api-settings.spec.ts`（浏览器） | 2/2：①入口链接指向页内锚点且无多余 API 调用；②内嵌面板"读取→批准→应用"经现有接口，`decisions=["APPROVED","APPLY"]` |
+| 审批后端 | 未改动，沿用 13.3 已验证的 10/10 单测 |
+
+> 运营中心「变更审批」页保持不变，两个入口共用同一审批流；本次只是让设置页「集成」也能就地完成批准／应用。

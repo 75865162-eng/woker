@@ -7,6 +7,7 @@ import { WorkerHealthPanel } from "@/components/settings/worker-health-panel";
 import { WorkspaceScopePanel } from "@/components/settings/workspace-scope-panel";
 import { WeComNotificationSettingsPanel } from "@/components/settings/wecom-notification-settings";
 import { AmazonSpApiSettingsPanel } from "@/components/settings/amazon-sp-api-settings-panel";
+import { AmazonApprovalsPanel } from "@/components/settings/amazon-approvals-panel";
 import { SellfoxCredentialsPanel } from "@/components/settings/sellfox-credentials-panel";
 import { SkillErpSettingsPanel } from "@/components/settings/skill-erp-settings-panel";
 import Link from "next/link";
@@ -33,7 +34,7 @@ export default function SettingsPage() {
         workspaceContent={<WorkspaceScopePanel />}
         notificationContent={<WeComNotificationSettingsPanel />}
         pointsContent={<RelocatedPanel title="积分额度与定价已迁移" description="成员积分、额度策略、审批与定价已整合进统一管理中心，请在账号管理中心的「积分额度与定价」页签继续使用。" href="/accounts?tab=points" />}
-        integrationsContent={<div className="space-y-[var(--gap-section)]"><AmazonSpApiSettingsPanel /><SellfoxCredentialsPanel /></div>}
+        integrationsContent={<div className="space-y-[var(--gap-section)]"><AmazonSpApiSettingsPanel /><AmazonApprovalsPanel /><SellfoxCredentialsPanel /></div>}
         mcpContent={<RelocatedPanel title="MCP 与设备凭证已迁移" description="MCP 凭证、隔离检查与 Lili 设备配对已整合进统一管理中心，请在账号管理中心的「MCP 与设备凭证」页签继续使用。" href="/accounts?tab=mcp" />}
         skillErpContent={<SkillErpSettingsPanel />}
         operationsContent={
