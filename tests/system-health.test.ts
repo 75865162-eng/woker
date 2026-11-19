@@ -394,7 +394,8 @@ test("商品自动FBA费用复用旺季参考档位并仅加一次燃油", () =>
   assert.equal(auto.automaticFbaFee, 7.08);
   assert.equal(auto.fuelFee, 7.08 * 0.035);
   assert.equal(auto.profit, calculateExcelPricing({ ...row, fbaFee: 7.08 }).profit);
-  assert.equal(calculateExcelPricing({ ...row, fbaFee: 0 }).fuelFee, 0);
+  // 表格把 0 视为“未填”，自动回落到参考档位，燃油仍只按最终 FBA 费用加一次。
+  assert.equal(calculateExcelPricing({ ...row, fbaFee: 0 }).fuelFee, 7.08 * 0.035);
   assert.equal(calculateExcelPricing({ ...row, purchaseCost: null }).automaticFbaFee, 7.08);
   assert.equal(calculateExcelPricing({ ...row, purchaseCost: null }).profit, null);
   assert.equal(calculatePeakStandardNonApparelFbaFee({ ...row, lengthCm: 100 }), null);
