@@ -6,7 +6,6 @@ import { BrandAnalyticsWorkbench } from "./brand-analytics-workbench";
 import { SyncCoverageWorkbench } from "./sync-coverage-workbench";
 import { ObservationsWorkbench } from "./observations-workbench";
 import { cloneElement, useCallback, useEffect, useId, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { getJson } from "@/lib/workspace/get-json";
 import { amazonSlugView } from "@/lib/amazon/amazon-slug-routes";
@@ -29,14 +28,11 @@ import { OrderItemsWorkbench } from "./order-items-workbench";
 import { DomainReportsWorkbench } from "./domain-reports-workbench";
 import { OperationsHubWorkbench, type OperationsBusinessTab } from "./operations-hub-workbench";
 import { UnconnectedBusinessWorkbench } from "./unconnected-business-workbench";
-import { useAppShellUser } from "@/components/app-shell/app-shell-context";
-import { roleCanPerformAction } from "@/lib/accounts/permissions";
 import { formatSiteStore } from "@/lib/sellfox/marketplace-site";
 import { FbaLocalPlansWorkbench } from "./fba-local-plans-workbench";
 import { ProcurementWorkbench } from "./procurement-workbench";
 
-import { operationsSections, operationsEntries, operationsAdminNav, OperationsSectionCards, OperationsSectionGuide, syncNavGroups, adminLabelByView, businessViewEntries, pendingEntries, localBusinessSubgroups, adsNavLinks, groupLabelForView } from "./operations-sections";
-import type { SyncNavGroup } from "./operations-sections";
+import { operationsEntries, operationsAdminNav, OperationsSectionCards, OperationsSectionGuide } from "./operations-sections";
 
 const base = "/api/operations/sync-center";
 function headers() {
@@ -165,33 +161,6 @@ export function OperationsSyncEntry() {
 export function SyncCenterWorkbench() {
   const searchParams = useSearchParams();
   const locationSearch = searchParams.toString();
-  const shellUser = useAppShellUser();
-  const canViewWms = roleCanPerformAction(shellUser?.userRole, "wms", "view", shellUser?.rolePermissions);
-
-  // 左侧一级导航 + hover 二级浮层（与主导航交互一致）：aside 只显示 7 个一级组，
-  // 二级项渲染到 body 的 fixed 浮层，鼠标移入/聚焦/点击打开，移出延迟关闭。
-  const [openNavGroup, setOpenNavGroup] = useState<string | null>(null);
-  const [navAnchor, setNavAnchor] = useState<{ left: number; top: number } | null>(null);
-  const [navMounted, setNavMounted] = useState(false);
-  const navCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => { setNavMounted(true); }, []);
-  useEffect(() => () => { if (navCloseTimer.current) clearTimeout(navCloseTimer.current); }, []);
-  const cancelNavClose = useCallback(() => {
-    if (navCloseTimer.current) { clearTimeout(navCloseTimer.current); navCloseTimer.current = null; }
-  }, []);
-  const scheduleNavClose = useCallback(() => {
-    cancelNavClose();
-    navCloseTimer.current = setTimeout(() => setOpenNavGroup(null), 180);
-  }, [cancelNavClose]);
-  const openNavGroupAt = useCallback((groupId: string, button: HTMLElement) => {
-    cancelNavClose();
-    const rect = button.getBoundingClientRect();
-    const aside = button.closest("aside");
-    const left = aside ? aside.getBoundingClientRect().right + 4 : rect.right + 6;
-    setNavAnchor({ left, top: Math.min(Math.max(8, rect.top), Math.max(8, (typeof window !== "undefined" ? window.innerHeight : 800) - 460)) });
-    setOpenNavGroup(groupId);
-  }, [cancelNavClose]);
-  const closeNavNow = useCallback(() => { cancelNavClose(); setOpenNavGroup(null); }, [cancelNavClose]);
 
   const [page, setPage] = useState("overview"), [data, setData] = useState<Payload>({}), [sources, setSources] = useState<SyncSourceView[]>([]);
   const [store, setStore] = useState(""), [site, setSite] = useState(""), [resource, setResource] = useState(""), [status, setStatus] = useState(""), [trigger, setTrigger] = useState(""), [from, setFrom] = useState(""), [to, setTo] = useState(""), [taskPage, setTaskPage] = useState(1);
@@ -354,56 +323,7 @@ export function SyncCenterWorkbench() {
     <div className="mt-4 flex flex-wrap items-center justify-end gap-3 text-xs text-muted"><span>{data.pagination?.total ?? 0} 条 · 第 {taskPage} / {Math.max(1, data.pagination?.pageCount ?? 0)} 页</span><Button size="sm" variant="secondary" disabled={taskPage <= 1} onClick={() => setTaskPage(v => v - 1)}>上一页</Button><Button size="sm" variant="secondary" disabled={taskPage >= (data.pagination?.pageCount ?? 0)} onClick={() => setTaskPage(v => v + 1)}>下一页</Button></div>
   </>; };
   return <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-background text-sm text-foreground" data-testid="sync-center-frame">
-    <header className="flex min-h-11 flex-wrap items-center justify-between gap-2 border-b border-border bg-surface px-4 py-3 text-xs"><div><a href="/operations" className="font-semibold">经营中台</a><span className="mx-1.5 text-muted">/</span><span className="text-muted">Amazon 数据同步中心</span>{groupLabelForView(page) && <><span className="mx-1.5 text-muted">/</span><span className="text-muted">{groupLabelForView(page)}</span></>}</div><span className="text-label text-muted">Amazon SP-API · 后台持续执行</span></header>
-    <WorkbenchPageTemplate className="min-w-0 gap-0" context={
-    <>
-    <aside
-      className="flex min-h-0 flex-col gap-0.5 overflow-y-auto border-b border-border bg-surface p-2"
-      data-testid="sync-center-sidebar"
-      onScroll={closeNavNow}
-      onMouseLeave={scheduleNavClose}
-    >
-      {syncNavGroups.map(group => {
-        const isOpen = openNavGroup === group.id;
-        const groupActive = group.kind === "admin"
-          ? Boolean(group.viewKeys?.includes(page))
-          : group.kind === "business"
-            ? group.sectionIds?.some(id => operationsSections.find(s => s.id === id)?.entries.some(e => e.view === page && !e.href && !e.pending))
-            : false;
-        return <button
-          key={group.id}
-          type="button"
-          aria-expanded={isOpen}
-          aria-label={`同步中心-${group.label} 二级菜单`}
-          onMouseEnter={event => openNavGroupAt(group.id, event.currentTarget)}
-          onFocus={event => openNavGroupAt(group.id, event.currentTarget)}
-          onClick={event => openNavGroupAt(group.id, event.currentTarget)}
-          className={`flex min-h-10 items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand ${isOpen || groupActive ? "bg-brand/10 font-semibold text-brand-dark" : "text-foreground/80 hover:bg-surface-muted hover:text-foreground"}`}
-        >
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-surface-muted text-label font-semibold text-muted">{group.id}</span>
-          <span className="truncate">{group.label}</span>
-        </button>;
-      })}
-    </aside>
-    {navMounted && openNavGroup && navAnchor ? (() => {
-      const group = syncNavGroups.find(g => g.id === openNavGroup);
-      if (!group) return null;
-      return createPortal(
-        <SyncGroupFlyout
-          group={group}
-          page={page}
-          canViewWms={canViewWms}
-          anchor={navAnchor}
-          navigate={navigate}
-          onMouseEnter={cancelNavClose}
-          onMouseLeave={scheduleNavClose}
-          onNavigate={closeNavNow}
-        />,
-        document.body,
-      );
-    })() : null}
-    </>
-    } main={
+    <WorkbenchPageTemplate className="min-w-0 gap-0" main={
     <main className="min-w-0 space-y-[var(--gap-section)] p-[var(--pad-card)]" data-testid="sync-center-main"><div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-display text-foreground">{allNav.find(n => n[0] === page)?.[1]}</h1><p className="mt-1.5 text-meta text-muted">{pageDescriptions[page] ?? landingDescriptions[page] ?? "查看能力范围、字段来源与接入条件"}</p></div>{!businessPage && !pendingPage && !procurementPage && <Button variant="secondary" size="sm" onClick={() => void load()} disabled={loading || busy}><RefreshCw className="h-3.5 w-3.5" />刷新</Button>}</div>
     {!businessPage && !pendingPage && !procurementPage && !focusedFbaPlan && <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-surface px-3.5 py-3"><Field name="店铺" inline><select className={`${inputClass} min-w-[104px] bg-surface`} value={store} onChange={e => { setStore(e.target.value); setTaskPage(1); }}><option value="">全部店铺</option>{stores.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></Field><Field name="站点" inline><select className={`${inputClass} min-w-[104px] bg-surface`} value={site} onChange={e => { setSite(e.target.value); setTaskPage(1); }}><option value="">全部站点</option>{sites.map(id => <option key={id}>{id}</option>)}</select></Field><span className="ml-auto text-label text-muted">时间按本机显示 · 日期筛选按 UTC</span></div>}
     {!pendingPage && <OperationsSectionGuide view={page} />}
@@ -467,69 +387,6 @@ export function SyncCenterWorkbench() {
     </main>
     } />
     <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3 text-label text-muted"><span>PostgreSQL 事实数据 · Worker 后台执行 · 页面只读状态</span><span>当前代码接入：FBA 库存 / 在线商品 / 销售流量报告 / 订单列表 P1 · 真实验收以受控同步结果为准</span></footer>
-  </div>;
-}
-
-/** 同步中心一级导航的二级浮层：与主导航一致，fixed 定位到 body，避免被容器裁切。 */
-function SyncGroupFlyout({
-  group, page, canViewWms, anchor, navigate, onMouseEnter, onMouseLeave, onNavigate,
-}: {
-  group: SyncNavGroup;
-  page: string;
-  canViewWms: boolean;
-  anchor: { left: number; top: number };
-  navigate: (next: string, tab?: "plans" | "tasks") => void;
-  onMouseEnter: () => void;
-  onMouseLeave: () => void;
-  onNavigate: () => void;
-}) {
-  const itemClass = (active: boolean) => `min-h-9 rounded px-2 py-2 text-left text-xs ${active ? "bg-brand/10 font-semibold text-brand-dark" : "text-foreground hover:bg-surface-muted"}`;
-  const navButton = (view: string, label: string, pendingLabel?: string) => <button
-    key={view}
-    type="button"
-    aria-current={page === view ? "page" : undefined}
-    onClick={() => { onNavigate(); navigate(view); }}
-    className={itemClass(page === view)}
-  >{label}{pendingLabel && <span className="ml-1 text-label">{pendingLabel}</span>}</button>;
-
-  return <div
-    onMouseEnter={onMouseEnter}
-    onMouseLeave={onMouseLeave}
-    style={{ left: anchor.left, top: anchor.top }}
-    className="fixed z-dropdown max-h-[76vh] w-80 overflow-y-auto rounded-xl border border-border bg-surface p-3 shadow-lg"
-    data-testid={`sync-nav-flyout-${group.id}`}
-  >
-    <div className="mb-2 flex items-center gap-2 border-b border-border px-1 pb-2">
-      <span className="flex h-5 w-5 items-center justify-center rounded bg-brand/10 text-label font-semibold text-brand-dark">{group.id}</span>
-      <h3 className="text-section text-foreground">{group.label}</h3>
-    </div>
-    {group.kind === "admin" && <div className="flex flex-col gap-0.5">{(group.viewKeys ?? []).map(view => navButton(view, adminLabelByView.get(view) ?? view))}</div>}
-    {group.kind === "business" && <div className="space-y-2">{(group.sectionIds ?? []).map(sectionId => {
-      const section = operationsSections.find(item => item.id === sectionId);
-      if (!section) return null;
-      const live = businessViewEntries(sectionId);
-      const pending = pendingEntries(sectionId);
-      if (!live.length && !pending.length) return null;
-      return <section key={sectionId} aria-label={section.label}>
-        <h4 className="mb-0.5 px-2 text-label font-medium text-muted">{section.label}</h4>
-        <div className="grid gap-0.5">
-          {live.map(entry => navButton(entry.view, entry.label))}
-          {pending.length > 0 && <details className="px-2" data-testid={`pending-group-${sectionId}`}>
-            <summary className="min-h-8 cursor-pointer py-1.5 text-label text-muted hover:text-foreground">待接入（{pending.length}）</summary>
-            <div className="grid gap-0.5">{pending.map(entry => navButton(entry.view, entry.label, "· 待接入"))}</div>
-          </details>}
-        </div>
-      </section>;
-    })}</div>}
-    {group.kind === "ads" && <div className="grid gap-0.5">{adsNavLinks.map(link => <a key={link.href} href={link.href} className="flex min-h-9 items-center justify-between gap-2 rounded px-2 py-2 text-xs text-foreground hover:bg-surface-muted"><span>{link.label}</span><span className={`shrink-0 text-label ${link.real ? "text-brand-dark" : "text-muted"}`}>{link.real ? "已同步 · 真实" : "原型 · Mock"}</span></a>)}</div>}
-    {group.kind === "local" && <div className="space-y-2">{localBusinessSubgroups.map(sub => {
-      const visible = sub.entries.filter(entry => !entry.href || entry.href.startsWith("/operations/") || canViewWms);
-      if (!visible.length) return null;
-      return <section key={sub.id} aria-label={sub.label}>
-        <h4 className="mb-0.5 px-2 text-label font-medium text-muted">{sub.label}</h4>
-        <div className="grid gap-0.5">{visible.map(entry => <a key={entry.view} href={entry.href} className="min-h-9 rounded px-2 py-2 text-left text-xs text-foreground hover:bg-surface-muted">{entry.label}</a>)}</div>
-      </section>;
-    })}</div>}
   </div>;
 }
 

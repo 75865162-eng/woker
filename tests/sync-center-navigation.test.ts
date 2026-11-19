@@ -12,6 +12,7 @@ import {
   localBusinessSubgroups,
   adsNavLinks,
   groupLabelForView,
+  syncCenterDrawerLinks,
 } from "@/components/operations/operations-sections";
 
 test("A-G 七组齐全且顺序稳定", () => {
@@ -84,4 +85,27 @@ test("已落库的 report / observation 域均有可导航的承接页 view（�
     const entry = operationsEntries.find(e => e.view === view)!;
     assert.equal(entry.pending, undefined, `${view} 应为已接入视图，不是待接入占位`);
   }
+});
+
+test("业务菜单抽屉入口覆盖 A-G 全部可访问 view，且不丢项", () => {
+  const links = syncCenterDrawerLinks();
+  const hrefs = new Set(links.map(l => l.href));
+  const sections = new Set(links.map(l => l.sectionLabel));
+  // A-D 运维 view
+  for (const group of syncNavGroups.filter(g => g.kind === "admin")) {
+    for (const v of group.viewKeys ?? []) assert.ok(hrefs.has(`/operations?view=${v}`), `运维视图 ${v} 应在抽屉入口中`);
+  }
+  // E 业务板块已接入 view（排除 pending）
+  for (const group of syncNavGroups.filter(g => g.kind === "business")) {
+    assert.ok(sections.has(`${group.id} ${group.label}`), "业务分组标签应出现在抽屉");
+    for (const id of group.sectionIds ?? []) {
+      for (const entry of businessViewEntries(id)) {
+        assert.ok(hrefs.has(entry.href ?? `/operations?view=${entry.view}`), `业务视图 ${entry.view} 应在抽屉入口中`);
+      }
+    }
+  }
+  // F 广告 + G 本地外链
+  for (const link of adsNavLinks) assert.ok(hrefs.has(link.href), `广告入口 ${link.href} 应在抽屉`);
+  for (const entry of localBusinessEntries) assert.ok(hrefs.has(entry.href ?? `/operations?view=${entry.view}`), `本地入口 ${entry.view} 应在抽屉`);
+  assert.equal(sections.size, syncNavGroups.length, "A-G 七个分组标签应齐全");
 });
