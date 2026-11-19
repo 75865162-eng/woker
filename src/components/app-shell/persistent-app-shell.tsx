@@ -281,7 +281,10 @@ export function WorkspaceShell({ children, configuration }: {
 
   const refreshCurrent = useCallback(() => { router.refresh(); }, [router]);
 
-  // 悬停预取：指针在链接上停一下，就把目标路由的 RSC 和首屏查询都提前拉回来。
+  // 悬停只预热首屏「数据」（进页面后 useExt 直接命中缓存），不再调用 router.prefetch。
+  // 原因：router.prefetch 有约 60ms 延迟，用户快速点击时它会在 click 之后才对同一个 href
+  // 发起 RSC 预取，把导航刚发出的 RSC 请求 abort 掉，导致页面卡在原地、刷新才恢复。
+  // RSC 预取交给 <Link> 的默认行为，它与自身导航不会互相取消。
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let pendingHref: string | null = null;
@@ -294,7 +297,6 @@ export function WorkspaceShell({ children, configuration }: {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
         timer = null;
-        router.prefetch(href);
         prefetchRouteData(href);
       }, PREFETCH_DELAY_MS);
     }
@@ -303,18 +305,15 @@ export function WorkspaceShell({ children, configuration }: {
       if (timer) clearTimeout(timer);
       document.removeEventListener("pointerover", handleOver);
     };
-  }, [router]);
+  }, []);
 
-  // 空闲预热同组路由：只靠悬停预热有个前提——用户会先把指针停在链接上。实际用起来
-  // 常常是一路点下去，第三、第四个标签根本没经过悬停，于是每次都要现等一次 RSC。
-  // 页面稳定一会儿后，把当前业务分组里的兄弟页面提前取回来，按「离当前页最近」排序，
-  // 因为下一个多半就是隔壁那个。生产取 8 个，开发只取 1 个：dev 下每次预取都会触发
-  // 一次 Turbopack 编译，取太多反而抢当前页的 CPU。
+  // 空闲预热同组页面的「首屏数据」（不是 RSC）。RSC 预取交给 <Link> 默认行为即可；
+  // 手动 router.prefetch 会在用户连续点击时与目标导航的 RSC 请求并发、互相 abort，
+  // 导致页面卡死。这里只保留数据级预热，安全且与导航互不干扰。
   useEffect(() => {
     if (!restored) return;
     let cancelled = false;
     const timers: number[] = [];
-    const limit = process.env.NODE_ENV === "production" ? 8 : 1;
     const kickoff = window.setTimeout(() => {
       if (cancelled || document.visibilityState !== "visible") return;
       const section = Array.from(document.querySelectorAll("aside section"))
@@ -327,12 +326,11 @@ export function WorkspaceShell({ children, configuration }: {
         .filter((item): item is { href: string; index: number } => Boolean(item.href) && item.href !== currentHrefRef.current)
         .filter((item) => !viewsRef.current.some((view) => view.href === item.href))
         .sort((a, b) => Math.abs(a.index - activeIndex) - Math.abs(b.index - activeIndex))
-        .slice(0, limit)
+        .slice(0, 8)
         .map((item) => item.href);
       targets.forEach((href, index) => {
         timers.push(window.setTimeout(() => {
           if (cancelled) return;
-          router.prefetch(href);
           prefetchRouteData(href);
         }, index * 250));
       });
@@ -342,7 +340,7 @@ export function WorkspaceShell({ children, configuration }: {
       window.clearTimeout(kickoff);
       for (const timer of timers) window.clearTimeout(timer);
     };
-  }, [currentHref, restored, router]);
+  }, [currentHref, restored]);
 
   const activeTab = tabs.find((tab) => tab.href === shownHref) ?? tabs.find((tab) => tab.id === shownHref);
 
