@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { restockSnapshotId } from "../src/lib/sellfox/restock-materialize";
+import { restockSnapshotId, sanitizeRestockRows } from "../src/lib/sellfox/restock-materialize";
 import { filterRestockRows } from "../src/lib/sellfox/restock-read";
 import type { SellfoxBrowseQuery } from "../src/lib/sellfox/browse-query";
 
@@ -13,6 +13,17 @@ const rows = [
   { id: "s1|asin2", storeId: "s1", asin: "B002", msku: "M2", sku: "S2", title: "Gadget", parentAsin: "P1", suggest: 0 },
   { id: "s2|asin1", storeId: "s2", asin: "B001", msku: "M1", sku: "S1", title: "Widget", parentAsin: "P1", suggest: 5 },
 ];
+
+test("sanitizeRestockRows replaces U+0000 with U+0001 for JSONB storage, recursively and deterministically", () => {
+  const input = [{ id: "s1\u0000asin1", nested: { key: "a\u0000b" }, suggest: 5 }];
+  const out = sanitizeRestockRows(input);
+  assert.equal(out[0].id, "s1\u0001asin1");
+  assert.equal(out[0].nested.key, "a\u0001b");
+  assert.equal(out[0].suggest, 5);
+  assert.equal(JSON.stringify(out).includes("\\u0000"), false);
+  // idempotent
+  assert.deepEqual(sanitizeRestockRows(out), out);
+});
 
 test("restockSnapshotId is deterministic and encodes the full scope", () => {
   const id = restockSnapshotId("org1", "ws1", "asin", "2026-11-20");

@@ -37,6 +37,24 @@ async function latestInventoryVersion(organizationId: string, workspaceId: strin
   return value ? new Date(value).toISOString() : null;
 }
 
+/**
+ * buildRestockRows uses U+0000 as the in-memory group-key separator. PostgreSQL
+ * JSONB rejects U+0000 (error 22P05), so normalize it to U+0001 before persisting.
+ * Applied identically on the live side during reconciliation so keys still match.
+ */
+export function sanitizeRestockRows<T>(rows: T): T {
+  if (typeof rows === "string") return rows.replace(/\u0000/g, "\u0001") as T;
+  if (Array.isArray(rows)) return rows.map(sanitizeRestockRows) as T;
+  if (rows && typeof rows === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(rows)) {
+      out[key.replace(/\u0000/g, "\u0001")] = sanitizeRestockRows(value);
+    }
+    return out as T;
+  }
+  return rows;
+}
+
 /** Base browse query for a full (unpaginated, unfiltered) materialization of one dimension. */
 function baseQuery(dimension: "asin" | "msku"): SellfoxBrowseQuery {
   return {
@@ -58,7 +76,7 @@ export async function materializeSellfoxRestock(input: MaterializeRestockInput) 
 
   for (const dimension of dimensions) {
     const computed = await readSellfoxRestock(baseQuery(dimension), scope, input.storeIds, today, true);
-    const rows = computed.rows;
+    const rows = sanitizeRestockRows(computed.rows);
     const suggestTotal = rows.length > 0 && rows.every((row) => row.suggest != null)
       ? rows.reduce((sum, row) => sum + Number(row.suggest), 0)
       : null;
@@ -126,7 +144,9 @@ export async function reconcileSellfoxRestockSnapshot(input: {
     },
   });
   const materialized = (snapshot?.rows ?? []) as unknown as Array<Record<string, unknown>>;
-  const live = (await readSellfoxRestock(baseQuery(input.dimension), scope, input.storeIds, today, true)).rows as unknown as Array<Record<string, unknown>>;
+  const live = sanitizeRestockRows(
+    (await readSellfoxRestock(baseQuery(input.dimension), scope, input.storeIds, today, true)).rows,
+  ) as unknown as Array<Record<string, unknown>>;
 
   const matMap = new Map(materialized.map((row) => [String(row.id), row]));
   const liveMap = new Map(live.map((row) => [String(row.id), row]));
