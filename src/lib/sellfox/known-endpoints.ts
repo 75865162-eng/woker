@@ -123,6 +123,55 @@ export function sellfoxKnownEndpoints(): SellfoxKnownEndpointSeed[] {
     note: "文档标注「即将下线」，下游应迁移至 V2 monthProfit/shopSummary；启用前须知。",
   });
 
+  // 结算中心 V2：财务结算口径，与日利润快照不同口径，独立落 SellfoxApiRecord。
+  // 契约来源：docs/sellfox-api-docs/API.md 的 api-399397941 / api-399397942（2026-11-19 核对）。
+  seeds.push({
+    code: "fin_settlement_detail_v2",
+    label: "财务·结算明细 V2（分页）",
+    path: "/api/financial/v2/settlementSummary/detailPage.json",
+    dateMode: "range",
+    scopeMode: "store",
+    chunkDays: 90, // 文档 startTime/endTime 为 yyyy-MM-dd；结算按月出数，90 天块安全
+    pageSize: 200,
+    rowsPath: "data.detailPageVoList",
+    idFields: "id", // 文档：FinancialSettlementDetailPageOpenVo.id = 唯一键 id
+    params: JSON.stringify({
+      pageNo: "${pageNo}",
+      pageSize: "${pageSize}",
+      startTime: "${startDate}",
+      endTime: "${endDate}",
+      shopIds: ["${shopIdNumeric}"], // 文档：shopIds 为 int32 数字店铺 ID
+    }),
+    dateFormat: "yyyy-MM-dd",
+    maxRows: 50_000,
+    historyFrom: null,
+    note: "结算中心 V2 明细分页，按结算行 id 幂等；结算口径不与日利润快照相加。契约见 docs/sellfox-api-docs/API.md#api-399397941。",
+  });
+
+  seeds.push({
+    code: "fin_settlement_summary_v2",
+    label: "财务·结算汇总 V2（分页）",
+    path: "/api/financial/v2/settlementSummary/groupPage.json",
+    dateMode: "range",
+    scopeMode: "store",
+    chunkDays: 90,
+    pageSize: 200,
+    rowsPath: "data.groupVoList", // 文档：FinSettlementSummaryGroupOpenPage.groupVoList
+    idFields: "groupId", // 文档：FinGroupOpenVo.groupId = 事件组ID，缺失时回退内容哈希
+    params: JSON.stringify({
+      pageNo: "${pageNo}",
+      pageSize: "${pageSize}",
+      timeType: "settlementStartTime", // 文档必填：结算开始时间口径
+      startTime: "${startDate}",
+      endTime: "${endDate}",
+      shopIds: ["${shopIdNumeric}"],
+    }),
+    dateFormat: "yyyy-MM-dd",
+    maxRows: 50_000,
+    historyFrom: null,
+    note: "结算中心 V2 汇总分页；timeType 必填，取结算开始时间口径。契约见 docs/sellfox-api-docs/API.md#api-399397942。",
+  });
+
   seeds.push({
     code: "fbm_orders",
     label: "订单·FBM 订单列表",

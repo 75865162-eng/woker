@@ -47,6 +47,7 @@ export const builtinSyncRules: SyncRule[] = [
   { id: "listings", label: "在线产品", cadence: "master", dateMode: "current", chunkDays: 0, intervalMinutes: 1440, schedulable: true, maxRows: null, dependsOn: ["stores"], order: 20, builtin: true },
   { id: "inventory", label: "FBA 库存", cadence: "daily", dateMode: "current", chunkDays: 0, intervalMinutes: 180, schedulable: true, maxRows: null, dependsOn: ["stores"], order: 30, builtin: true },
   { id: "orders", label: "订单", cadence: "document", dateMode: "range", chunkDays: 90, intervalMinutes: 720, schedulable: true, maxRows: null, dependsOn: ["stores"], order: 40, builtin: true },
+  { id: "order_detail", label: "订单详情", cadence: "document", dateMode: "none", chunkDays: 0, intervalMinutes: 720, schedulable: true, maxRows: null, dependsOn: ["stores"], order: 45, builtin: true },
   { id: "sales", label: "销量快照", cadence: "daily", dateMode: "range", chunkDays: 90, intervalMinutes: 1440, schedulable: true, maxRows: null, dependsOn: ["stores"], order: 50, builtin: true },
   { id: "performance", label: "产品日利润", cadence: "daily", dateMode: "range", chunkDays: 90, intervalMinutes: 1440, schedulable: true, maxRows: null, dependsOn: ["stores"], order: 60, builtin: true },
   { id: "fba_shipments", label: "货件", cadence: "document", dateMode: "range", chunkDays: 90, intervalMinutes: 720, schedulable: true, maxRows: null, dependsOn: ["stores"], order: 70, builtin: true },

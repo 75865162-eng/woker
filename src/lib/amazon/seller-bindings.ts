@@ -70,9 +70,17 @@ export async function getSellerBindings(organizationId: string, workspaceId: str
       authorizedResources: row.authorizedResources.filter((value): value is "inventory" | "catalog" => value === "inventory" || value === "catalog"),
     }));
   const { bindings: effectiveRows } = resolveSellerBindingSource({ databaseRows: normalizedDatabaseRows, environmentValue: process.env.AMAZON_SP_API_SELLER_BINDINGS, organizationId, workspaceId });
-  for (const binding of effectiveRows) {
-    const store = await prisma.sellerAccount.findFirst({ where: { id: binding.sellerAccountId, organizationId, workspaceId, status: "active" } });
-    if (!store) throw new Error("Amazon 绑定店铺不存在、停用或不属于当前工作区。");
+  // P2-4: 一次批量查询替代逐条 findFirst；保留「任一绑定店铺无效即报错」的语义与租户隔离。
+  if (effectiveRows.length) {
+    const sellerAccountIds = [...new Set(effectiveRows.map((binding) => binding.sellerAccountId))];
+    const activeStores = await prisma.sellerAccount.findMany({
+      where: { id: { in: sellerAccountIds }, organizationId, workspaceId, status: "active" },
+      select: { id: true },
+    });
+    const activeIds = new Set(activeStores.map((store) => store.id));
+    for (const binding of effectiveRows) {
+      if (!activeIds.has(binding.sellerAccountId)) throw new Error("Amazon 绑定店铺不存在、停用或不属于当前工作区。");
+    }
   }
   return effectiveRows.filter((row) => row.authorizedResources.includes(resource));
 }

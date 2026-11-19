@@ -251,7 +251,7 @@ function Flyout({
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       style={{ left: anchor.left, top }}
-      className="fixed z-dropdown w-72 rounded-xl border border-border bg-surface p-2 shadow-lg"
+      className="fixed z-[var(--z-nav-flyout)] w-72 rounded-xl border border-border bg-surface p-2 shadow-lg"
     >
       <div className="mb-1.5 flex items-center justify-between border-b border-border px-2 pb-2 pt-1">
         <div className="flex items-center gap-2">

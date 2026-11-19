@@ -83,7 +83,7 @@ export const sellfoxPlanGroups: SellfoxPlanGroup[] = [
     hint: "订单主链，驱动利润与售后",
     items: [
       { id: "orders", label: "订单列表与明细", api: ["/api/order/pageList.json"], table: "SellfoxOrderSnapshot", resource: "orders", status: "live", priority: "P0", href: "/sellfox/orders" },
-      { id: "order-detail", label: "订单详情（批量）", api: ["文档：订单详情 批量接口"], status: "planned", priority: "P0", note: "明细行与费用项" },
+      { id: "order-detail", label: "订单详情（批量）", api: ["/api/order/detailByOrderIds.json"], table: "SellfoxOrderDetail", resource: "order_detail", status: "live", priority: "P0", href: "/sellfox/order-detail", note: "一单一行，原始响应保真；由订单快照的 sellerOrderId 分批驱动，明细行与费用项见 payload。契约见 docs/sellfox-api-docs/API.md#api-476895394" },
       { id: "fbm-order", label: "FBM 订单列表／详情", api: ["/api/packageShip/getPackagePage.json", "文档：FBM订单列表", "文档：FBM订单详情"], status: "planned", priority: "P2", note: "已登记通用端点种子（默认停用，fbm_orders）；purchaseDateStart/End 用 yyyy-MM-dd，shopIdList 传字符串店铺 ID" },
       { id: "order-process", label: "订单处理列表／详情", api: ["文档：查询订单处理列表", "文档：查询订单处理详情"], status: "live", priority: "P2", note: "订单处理列表（purchaseDateStart/End），global/range 通用采集器。" },
       { id: "returns", label: "FBA / FBM 退货报告", api: ["/api/order/api/report/fbaReturn/pageList.json", "/api/order/api/report/fbm/return/order/pageList.json"], status: "live", priority: "P1", note: "FBA/FBM 退货报告（returnStartDate/End），global/range 通用采集器，FBA 实测 1967 行。" },
@@ -155,7 +155,7 @@ export const sellfoxPlanGroups: SellfoxPlanGroup[] = [
     label: "财务",
     hint: "结算、应收、发票与资金单据",
     items: [
-      { id: "settlement", label: "结算汇总 / 明细", api: ["/api/financial/selectGroupPage.json", "文档：查询结算明细-分页查询"], status: "planned", priority: "P0", note: "结算总览已登记通用端点种子（默认停用，fin_settlement_overview，文档标注即将下线）；结算明细分页文档未抓取，未登记" },
+      { id: "settlement", label: "结算汇总 / 明细", api: ["/api/financial/v2/settlementSummary/detailPage.json", "/api/financial/v2/settlementSummary/groupPage.json"], status: "live", priority: "P0", href: "/sellfox/endpoint-data?code=fin_settlement_detail_v2", note: "结算中心 V2，已登记通用端点种子 fin_settlement_detail_v2 / fin_settlement_summary_v2（原始行落 SellfoxApiRecord，不猜字段）；结算口径不与日利润快照相加。契约见 docs/sellfox-api-docs/API.md#api-399397941" },
       { id: "receivable", label: "应收报表", api: ["文档：获取应收报表数据"], status: "live", priority: "P1", note: "应收报表（bizDate=yyyyMM，含 rate），global/range 通用采集器，实测 39 行；文档标注即将下线。" },
       { id: "invoice", label: "发票与广告发票", api: ["文档：查询发票详情", "文档：查询广告发票列表-V2"], status: "planned", priority: "P2" },
       { id: "payment", label: "付款单 / 收款单 / 请款池", api: ["文档：查询付款单列表", "文档：查询收款单列表", "文档：查询请款单列表"], status: "planned", priority: "P2" },

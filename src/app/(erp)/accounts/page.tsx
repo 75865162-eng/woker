@@ -1,11 +1,11 @@
 import { AppShell } from "@/components/app-shell/app-shell";
 import { AccountWorkbench } from "@/components/accounts/account-workbench";
 import { getOrganizationRoleCatalogSnapshot } from "@/lib/accounts/role-catalog-server";
-import { getCurrentUserFromSignedCookie } from "@/lib/auth/session";
+import { getCurrentUser } from "@/lib/auth/session";
 import { getTeamRosterSnapshot } from "@/lib/accounts/team-roster-server";
 
 export default async function AccountsPage() {
-  const user = await getCurrentUserFromSignedCookie();
+  const user = await getCurrentUser();
 
   if (!user) {
     return (

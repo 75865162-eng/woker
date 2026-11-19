@@ -49,13 +49,14 @@ test("已核对的重点待接入数据集：未落地的在候选，已落地�
   const codes = new Set(sellfoxEndpointCandidates().map(candidate => candidate.code));
   const seededPaths = new Set(sellfoxKnownEndpoints().map(seed => seed.path));
   // 仍未落地的域必须留在候选，等待参数契约联调。
-  for (const expected of ["profit-report", "ads-manage", "aba", "settlement"]) {
+  for (const expected of ["profit-report", "ads-manage", "aba"]) {
     assert.ok(codes.has(expected), `${expected} 有真实只读路径却未成为候选`);
   }
   // 已用通用采集器落地的域应从候选毕业到种子，杜绝重复注册。
   const landed = {
     returns: "/api/order/api/report/fbaReturn/pageList.json",
     "fba-fee": "/api/finance/fbaStockDetail/pageList.json",
+    settlement: "/api/financial/v2/settlementSummary/detailPage.json",
   };
   for (const [code, path] of Object.entries(landed)) {
     assert.ok(!codes.has(code), `${code} 已落地，不应重复留在候选`);

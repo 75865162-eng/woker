@@ -14,7 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DashboardPageTemplate } from "@/components/templates/page-templates";
 import { getModuleIdForPath, roleCanAccessModule } from "@/lib/accounts/permissions";
 import { getOrganizationRolePermissionsSnapshot } from "@/lib/accounts/role-permissions-server";
-import { getCurrentUserFromSignedCookie } from "@/lib/auth/session";
+import { getCurrentUser } from "@/lib/auth/session";
 
 const modules = [
   { href: "/workspace", title: "PPC 优化工作台", description: "Bulk 导入、Overall 匹配、规则草稿与导出", icon: UploadCloud },
@@ -26,7 +26,7 @@ const modules = [
 ];
 
 export default async function Home() {
-  const user = await getCurrentUserFromSignedCookie();
+  const user = await getCurrentUser();
   const rolePermissionsSnapshot = user?.organizationId ? await getOrganizationRolePermissionsSnapshot(user.organizationId) : null;
   const visibleModules = modules.filter((module) =>
     roleCanAccessModule(user?.role, getModuleIdForPath(module.href), rolePermissionsSnapshot?.permissions),

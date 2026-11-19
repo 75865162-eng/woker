@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { type RoleCatalogItem } from "@/lib/accounts/role-catalog";
 import { getOrganizationRoleCatalogSnapshot, saveOrganizationRoleCatalog } from "@/lib/accounts/role-catalog-server";
+import { invalidateRolePerms } from "@/lib/accounts/role-permissions-cache";
 import { prisma } from "@/lib/db/prisma";
 
 export const runtime = "nodejs";
@@ -68,6 +69,10 @@ export async function PUT(request: Request) {
   const nextRoles = Array.isArray(body.roles) ? (body.roles as RoleCatalogItem[]) : [];
   const before = await getOrganizationRoleCatalogSnapshot(user.organizationId);
   const saved = await saveOrganizationRoleCatalog(user.organizationId, nextRoles);
+  // P1-4: 角色目录变更后主动失效跨请求缓存；失败只记日志。
+  try { await invalidateRolePerms(user.organizationId); } catch (error) {
+    console.error(JSON.stringify({ scope: "roleperms.invalidate", message: error instanceof Error ? error.message : "unknown" }));
+  }
   const changes = diffRoles(before.roles, saved.roles);
 
   if (changes.length) {

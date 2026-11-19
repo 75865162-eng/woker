@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { rolePermissionsCookieName } from "@/lib/accounts/permissions";
 import { getOrganizationRolePermissionsSnapshot, saveOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
+import { invalidateRolePerms } from "@/lib/accounts/role-permissions-cache";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 
@@ -53,6 +54,10 @@ export async function PUT(request: Request) {
   const body = (await request.json()) as { permissions?: unknown };
   const before = await getOrganizationRolePermissionsSnapshot(user.organizationId);
   const snapshot = await saveOrganizationRolePermissions(user.organizationId, body.permissions);
+  // P1-4: 权限变更后主动失效跨请求缓存；revision 校验是第二道保险。失败只记日志。
+  try { await invalidateRolePerms(user.organizationId); } catch (error) {
+    console.error(JSON.stringify({ scope: "roleperms.invalidate", message: error instanceof Error ? error.message : "unknown" }));
+  }
   const changes = diffPermissions(before.permissions, snapshot.permissions);
 
   if (changes.length) {

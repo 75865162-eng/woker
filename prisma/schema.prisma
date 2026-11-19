@@ -1497,6 +1497,7 @@ model SellfoxStore {
   SellfoxFbaInventorySnapshot SellfoxFbaInventorySnapshot[]
   SellfoxSalesDailySnapshot   SellfoxSalesDailySnapshot[]
   SellfoxOrderSnapshot        SellfoxOrderSnapshot[]
+  SellfoxOrderDetail           SellfoxOrderDetail[]
   SellfoxFbaShipmentSnapshot  SellfoxFbaShipmentSnapshot[]
   SellfoxSnapshotHead         SellfoxSnapshotHead[]
   SellfoxListingSnapshot      SellfoxListingSnapshot[]
@@ -1880,6 +1881,57 @@ model SellfoxOrderSnapshot {
   @@index([organizationId, workspaceId, asin])
   @@index([organizationId, workspaceId, msku])
   @@index([organizationId, workspaceId, orderId])
+}
+
+/// 赛狐订单详情（批量接口 /api/order/detailByOrderIds.json 的原始行，字段契约见 docs/sellfox-api-docs/API.md#api-476895394）。
+/// 一行一个订单：核心展示字段按文档抽取，完整响应（含商品行/包裹/费用明细）原样存 payload，缺失字段保留 null 不补零。
+/// 金额与订单快照一致用 Decimal(20,4)；结算口径与日利润快照不同，不与之相加。
+model SellfoxOrderDetail {
+  id                    String       @id
+  organizationId        String
+  workspaceId           String       @default("default")
+  storeId               String
+  shopExternalId        String
+  sellerOrderId         String
+  amazonOrderId         String?
+  orderStatus           String?
+  orderTotalCurrency    String?
+  orderTotalAmount      Decimal?     @db.Decimal(20, 4)
+  marketplaceId         String?
+  orderType             String?
+  purchaseDate          String?
+  paymentsDate          String?
+  refundDate            String?
+  fulfillmentChannel    String?
+  settlementStatus      String?
+  refundStatus          String?
+  productAmount         Decimal?     @db.Decimal(20, 4)
+  refundPrice           Decimal?     @db.Decimal(20, 4)
+  fbaPerUnitFulfillmentFee Decimal?  @db.Decimal(20, 4)
+  commission            Decimal?     @db.Decimal(20, 4)
+  otherAmount           Decimal?     @db.Decimal(20, 4)
+  purchaseCost          Decimal?     @db.Decimal(20, 4)
+  headTripCost          Decimal?     @db.Decimal(20, 4)
+  fbmShipCost           Decimal?     @db.Decimal(20, 4)
+  orderProfit           Decimal?     @db.Decimal(20, 4)
+  totalCost             Decimal?     @db.Decimal(20, 4)
+  totalRevenue          Decimal?     @db.Decimal(20, 4)
+  shippingCharge        Decimal?     @db.Decimal(20, 4)
+  promotionDiscount     Decimal?     @db.Decimal(20, 4)
+  taxAmount             Decimal?     @db.Decimal(20, 4)
+  isBusinessOrder       String?
+  isReturnOrder         String?
+  payload               Json
+  latestCapturedAt      DateTime
+  syncedAt              DateTime     @default(now())
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime
+  SellfoxStore          SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@unique([storeId, sellerOrderId])
+  @@index([organizationId, workspaceId, sellerOrderId])
+  @@index([organizationId, workspaceId, amazonOrderId])
+  @@index([organizationId, workspaceId, purchaseDate])
 }
 
 // One row per shipment line. A finished store capture replaces lines from older captures.
