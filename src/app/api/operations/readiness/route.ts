@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { requireAmazonReadSession } from "@/lib/auth/amazon-read-session";
 import { AmazonReadError } from "@/lib/amazon-sync/read-account";
 import { getOperationsReadiness } from "@/lib/operations/readiness";
-import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
+import { WorkspaceScopeError, workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
 
@@ -21,6 +21,8 @@ export async function GET(request: Request) {
       params: new URL(request.url).searchParams,
     }), { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
+    // 参数/作用域/业务输入错误按各自 status 返回，不污染 5xx 错误率与告警。
+    if (error instanceof WorkspaceScopeError) return NextResponse.json({ error: error.message }, { status: error.status, headers: { "Cache-Control": "no-store" } });
     return NextResponse.json({ error: error instanceof SyncInputError ? error.message : "经营中台状态读取失败。", ...(error instanceof AmazonReadError ? { code: error.businessCode } : {}) }, { status: error instanceof SyncInputError ? error.status : 500, headers: { "Cache-Control": "no-store" } });
   }
 }
