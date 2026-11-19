@@ -102,9 +102,13 @@ export function AmazonConnections() {
       {spGroups.length ? <div className="grid gap-3 lg:grid-cols-2">{spGroups.map(g => <ConnectionCard key={g.auth.id} kind="Amazon SP-API" name={g.auth.name} status={g.auth.status}
         summary={<><p>已发现 Marketplace：{g.marketCount} 个</p><p>权限就绪资源：{g.readyCount} · 失败资源：<span className={g.failedCount ? "text-danger-ink" : undefined}>{g.failedCount}</span></p><p>Seller ID：{g.auth.amazonSellerId} · {g.auth.awsRegion}</p><p>最近验证：{stamp(g.auth.lastValidatedAt)}</p></>}
         actions={[
-          { label: "编辑凭据", variant: "secondary", disabled: !spAccess.canConfigure || busy, title: "在店铺与授权中编辑", onClick: () => window.location.assign("/operations?view=connections") },
-          { label: "验证参与站点", disabled: !spAccess.canConfigure || busy || g.auth.status === "DISABLED", onClick: () => setConfirm({ title: "验证参与站点", description: "将创建授权验证申请，尚未请求 Amazon；请在变更审批中批准并应用后执行验证。是否继续？", run: () => void post(spBase, { action: "validate-authorization", id: g.auth.id }, "验证") }) },
-          { label: "停用连接", variant: "ghost", disabled: !spAccess.canConfigure || busy || g.auth.status === "DISABLED", onClick: () => setConfirm({ title: `停用 ${g.auth.name}`, description: "停用后该授权不再生成同步任务；已落库业务数据保留。将创建停用申请，需审批并应用后生效。是否继续？", run: () => void post(spBase, { action: "disable-authorization", id: g.auth.id, revision: g.auth.revision }, "停用") }) },
+          { label: "编辑凭据", variant: "secondary", disabled: !spAccess.canConfigure || busy || g.auth.status === "DISABLED", title: "在店铺与授权中编辑", onClick: () => window.location.assign("/operations?view=connections") },
+          ...(g.auth.status === "DISABLED" ? [
+            { label: "重新启用连接", variant: "secondary" as const, disabled: !spAccess.canConfigure || busy, onClick: () => setConfirm({ title: `重新启用 ${g.auth.name}`, description: "将创建重新启用申请；批准并应用后授权恢复为待验证状态，需再次验证参与站点才会恢复同步。是否继续？", run: () => void post(spBase, { action: "enable-authorization", id: g.auth.id, revision: g.auth.revision }, "重新启用") }) },
+          ] : [
+            { label: "验证参与站点", disabled: !spAccess.canConfigure || busy, onClick: () => setConfirm({ title: "验证参与站点", description: "将创建授权验证申请，尚未请求 Amazon；请在变更审批中批准并应用后执行验证。是否继续？", run: () => void post(spBase, { action: "validate-authorization", id: g.auth.id }, "验证") }) },
+            { label: "停用连接", variant: "ghost" as const, disabled: !spAccess.canConfigure || busy, onClick: () => setConfirm({ title: `停用 ${g.auth.name}`, description: "停用后该授权不再生成同步任务；已落库业务数据保留。将创建停用申请，需审批并应用后生效。是否继续？", run: () => void post(spBase, { action: "disable-authorization", id: g.auth.id, revision: g.auth.revision }, "停用") }) },
+          ]),
           { label: "查看同步矩阵", variant: "ghost", onClick: () => window.location.assign("/operations?view=amazon-sync") },
         ]} />)}</div> : <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted">尚无 SP-API 连接。请在「店铺与授权」→「新增授权」中配置。</p>}
     </section>

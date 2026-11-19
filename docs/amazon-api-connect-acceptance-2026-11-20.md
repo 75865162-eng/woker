@@ -228,3 +228,36 @@ process.env.AMAZON_API_EXECUTION_ROLE === "cloud"
 
 - 真实 SP-API / Ads 凭据仍由你在系统 UI 内自行填入授权（轨道 A），本轮未写入任何凭据。
 - 若日后改用公共应用 OAuth 自动化换取 refresh token（轨道 B），需在服务端补配 LWA 三件套 env（clientId/clientSecret/redirectUri）及可选 application_id。
+
+---
+
+## 13. 补充说明（2026-11-20）：重新启用已停用的 SP-API 授权
+
+### 13.1 背景与根因
+
+- 生产只读核查发现：唯一的 SP-API 授权记录状态为 `DISABLED`，且审批链中 `disable-authorization` 已应用。原先"验证参与站点""停用授权""更新凭据"按钮在 DISABLED 态被置灰，页面上没有"重新启用"入口，用户因此无法恢复该授权——这是**可用性缺口**，不是数据丢失或回归。
+- 该状态是按既有审批流合法产生的，未发现越权或异常写入。
+
+### 13.2 改动（对称 disable，最小）
+
+- 新增 `enable-authorization` 操作，贯穿 operation 注册、字段白名单、审批预览/权限校验、apply 分发全链路；复用现有审批流（202 → 批准 → 应用）。
+- service 层 `enableAuthorization`：`DISABLED → NOT_CONFIGURED` + revision+1 + 清空站点参与/验证时效 + 审计日志；带 scopeLock、`assertAmazonScopeAdmin`、`revision` 乐观锁与租户/工作区隔离，且 `where` 限定 `status: "DISABLED"` 防止重复/越态启用。
+- 设计决策：恢复到"待验证"而非直接 CONFIGURED——停用时数据源/任务/站点参与信息已被停用或清空，必须重新验证授权才能按既有流程重建，不绕过 Amazon 站点核验。
+- 前端两处（同步中心授权卡片、连接管理页）在 DISABLED 态显示"重新启用授权／连接"按钮，验证/停用/更新按钮不再渲染；非停用态保持原样。
+- 数据真实性/隔离：只改授权状态机与按钮，未写真实凭据、未改表、未触碰赛狐数据。
+
+### 13.3 验证
+
+| 项 | 结果 |
+|---|---|
+| 授权审批单测 | 10/10（含"重新启用不可绕过审批"守卫 + requestChange 接受 enable）|
+| typecheck / ESLint | 通过 / 无错误 |
+| 生产构建 | 编译成功 + 235 静态页 |
+| 生产真实状态 | 授权 1 条 DISABLED、审批 `disable-authorization` 已应用（只读核查，未改库）|
+
+> 诚实说明：`tests/browser/sync-center.spec.ts` 的用例基于旧导航结构（查找"店铺与授权"按钮），而当前应用已重组为 7 大板块（"接入与授权"二级菜单），且该 spec 的 `next/navigation` fixture 缺少 `useRouter` 导出。该 E2E 套件在本环境属既有不可运行状态，与本次改动无关；本轮不以其作为验证门禁，核心状态机由可运行单测覆盖。
+
+### 13.4 用户操作路径
+
+- **恢复已停用授权**：店铺与授权 → 对已停用授权点"重新启用授权" → 变更审批中批准并应用 → 该授权回到待验证 → 点"验证参与站点" → 批准并应用 → 自动重建来源与计划。
+- **新增一条授权**：店铺与授权 → 新增授权 → 填名称/区域/LWA Client ID/Client Secret/Refresh Token → 保存（生成审批请求）→ 变更审批批准并应用 → 验证参与站点 → 批准并应用。
