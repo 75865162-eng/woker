@@ -11,8 +11,13 @@
  *                  rejected before any database lookup, and audited.
  *  3. catalog    - tool names and dataset/table names are closed allow-lists;
  *                  every tool is namespaced with its provider.
- *  4. storage    - each provider reads through its own read-only Postgres role
- *                  (amazon_mcp_ro / sellfox_mcp_ro) and its own table prefix.
+ *  4. storage    - table prefixes are disjoint (Amazon* / Sellfox*) and every
+ *                  read goes through a closed allow-list plus tenant/store
+ *                  fences. Sellfox reads only via MCP_PG_READONLY_URL; Amazon
+ *                  local-raw reads only via AMAZON_MCP_PG_READONLY_URL, while
+ *                  other Amazon tools use the application's authorized service
+ *                  layer under the same tenant/account fence. Physical DB-role
+ *                  separation is a deployment control (see dbRole/dbRoleEnv).
  *
  * This module is pure: no database, no environment, safe to import from the UI.
  */
@@ -106,6 +111,28 @@ export function bearerToken(authorization: string | null | undefined): string | 
 export function providerOfToken(token: string | null): McpProvider | null {
   if (!token) return null;
   for (const provider of mcpProviders) if (token.startsWith(mcpProviderPolicies[provider].tokenPrefix)) return provider;
+  return null;
+}
+
+/**
+ * Detect a tool name that unambiguously belongs to the *other* provider.
+ * Only explicit provider markers are considered (tool namespace, token prefix
+ * and table prefix), so ordinary tool names keep their existing path and this
+ * stays a pure, fail-open signal for auditing — never the sole authorization
+ * check. Both runtimes call this to turn a cross-source call into an explicit,
+ * attributable isolation denial instead of a generic "unknown tool".
+ */
+export function foreignToolProvider(tool: string, current: McpProvider): McpProvider | null {
+  const name = tool.toLowerCase();
+  for (const candidate of mcpProviders) {
+    if (candidate === current) continue;
+    const policy = mcpProviderPolicies[candidate];
+    if (
+      (policy.toolNamespace && name.startsWith(policy.toolNamespace.toLowerCase()))
+      || (policy.tokenPrefix && name.startsWith(policy.tokenPrefix.toLowerCase()))
+      || (policy.tablePrefix && name.startsWith(policy.tablePrefix.toLowerCase()))
+    ) return candidate;
+  }
   return null;
 }
 

@@ -42,6 +42,30 @@ export type AuthCookie = {
 export { isSecureRequest } from "@/lib/auth/request-security";
 
 /**
+ * 会话有效期：超级管理员（owner / database_admin）默认 5 天且不低于 5 天，
+ * 其余角色沿用 sessionMaxAgeSeconds（默认 12 小时）。
+ * 两者均可通过环境变量覆盖，便于运维在不改代码的情况下调整：
+ *   AUTH_PRIVILEGED_SESSION_MAX_AGE_SECONDS 超管会话秒数（下限 5 天）
+ *   AUTH_SESSION_MAX_AGE_SECONDS            普通用户会话秒数
+ * 放在本文件内部计算而非 constants，是为兼容按模块 mock 的单元测试
+ * （测试仅注入 sessionMaxAgeSeconds，不注入新增导出）。
+ */
+const FIVE_DAYS_SECONDS = 60 * 60 * 24 * 5;
+const PRIVILEGED_ROLES = new Set(["owner", "database_admin"]);
+
+export function resolveSessionMaxAgeSeconds(role?: string | null): number {
+  const privileged = Boolean(role && PRIVILEGED_ROLES.has(role));
+  const envValue = privileged
+    ? process.env.AUTH_PRIVILEGED_SESSION_MAX_AGE_SECONDS
+    : process.env.AUTH_SESSION_MAX_AGE_SECONDS;
+  const parsed = envValue ? Number(envValue) : Number.NaN;
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return privileged ? Math.max(parsed, FIVE_DAYS_SECONDS) : parsed;
+  }
+  return privileged ? FIVE_DAYS_SECONDS : sessionMaxAgeSeconds;
+}
+
+/**
  * Client-readable role-permission snapshot used for UI gating only. It is
  * intentionally NOT HttpOnly (the app shell reads it in the browser), but it
  * carries no authority: every server-side authorization re-reads the DB
@@ -163,7 +187,8 @@ export async function createSession(
   rolePermissionsSnapshot?: RolePermissionsSnapshot | Promise<RolePermissionsSnapshot>,
 ) {
   const token = randomBytes(32).toString("base64url");
-  const expiresAt = new Date(Date.now() + sessionMaxAgeSeconds * 1000);
+  const maxAgeSeconds = resolveSessionMaxAgeSeconds(sessionUser?.role);
+  const expiresAt = new Date(Date.now() + maxAgeSeconds * 1000);
   const session = await prisma.userSession.create({
     data: {
       userId,
@@ -185,7 +210,7 @@ export async function createSession(
     httpOnly: true,
     sameSite: "lax",
     secure: secureCookie,
-    maxAge: sessionMaxAgeSeconds,
+    maxAge: maxAgeSeconds,
     path: "/",
   };
   const sessionCookie: AuthCookie = {
@@ -218,7 +243,8 @@ export async function createSession(
 
 export async function createLocalSession(user: CurrentUser, secureCookie = process.env.NODE_ENV === "production") {
   const token = randomBytes(32).toString("base64url");
-  const expiresAt = new Date(Date.now() + sessionMaxAgeSeconds * 1000);
+  const maxAgeSeconds = resolveSessionMaxAgeSeconds(user.role);
+  const expiresAt = new Date(Date.now() + maxAgeSeconds * 1000);
   const payload = base64UrlJson({
     driver: "local",
     sessionId: `local-${Date.now()}`,
@@ -232,7 +258,7 @@ export async function createLocalSession(user: CurrentUser, secureCookie = proce
     httpOnly: true,
     sameSite: "lax",
     secure: secureCookie,
-    maxAge: sessionMaxAgeSeconds,
+    maxAge: maxAgeSeconds,
     path: "/",
   };
   return {

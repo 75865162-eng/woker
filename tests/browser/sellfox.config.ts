@@ -1,5 +1,5 @@
 import { defineConfig } from "@playwright/test";
 export default defineConfig({
-  outputDir: "/tmp/sellfox-browser-results", testDir: ".", testMatch: ["sellfox.spec.ts", "sellfox-listing-identity.spec.ts"], timeout: 30_000,
+  outputDir: "/tmp/sellfox-browser-results", testDir: ".", testMatch: ["sellfox.spec.ts", "sellfox-listing-identity.spec.ts", "sellfox-hub.spec.ts"], timeout: 30_000,
   fullyParallel: false, reporter: "list", use: { headless: true },
 });

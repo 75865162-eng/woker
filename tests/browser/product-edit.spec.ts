@@ -13,9 +13,9 @@ const childDialog = (page: Page) => page.locator("dialog[aria-labelledby]");
 let bundle: string;
 let productionBundle: string;
 test.beforeAll(async () => {
-  const result = await build({ entryPoints: ["tests/browser/product-edit-harness.tsx"], bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env.NODE_ENV": '"development"' }, alias: { exceljs: "exceljs/dist/exceljs.min.js" } });
+  const result = await build({ entryPoints: ["tests/browser/product-edit-harness.tsx"], bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env.NODE_ENV": '"development"', "process.env": '{"NODE_ENV":"development"}' }, alias: { exceljs: "exceljs/dist/exceljs.min.js" } });
   bundle = result.outputFiles[0].text;
-  const production = await build({ entryPoints: ["tests/browser/product-edit-harness.tsx"], bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env.NODE_ENV": '"production"' }, alias: { exceljs: "exceljs/dist/exceljs.min.js" } });
+  const production = await build({ entryPoints: ["tests/browser/product-edit-harness.tsx"], bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env.NODE_ENV": '"production"', "process.env": '{"NODE_ENV":"production"}' }, alias: { exceljs: "exceljs/dist/exceljs.min.js" } });
   productionBundle = production.outputFiles[0].text;
 });
 
@@ -84,6 +84,35 @@ test("商品表格复制 SKU 有成功与失败反馈", async ({ page }) => {
   await expect(page.getByRole("alert")).toHaveText("SKU SKU-1 复制失败，请检查浏览器剪贴板权限。");
   await page.getByRole("button", { name: "打开商品详情 SKU-1", exact: true }).click();
   expect(await page.evaluate(() => (window as Window & { openedSku?: string }).openedSku)).toBe("SKU-1");
+});
+
+test("利润试算即时计算材积重与旺季配送费，切换单位及手动覆盖", async ({ page }) => {
+  const state = await setup(page);
+  const section = page.getByRole("heading", { name: "区域 1：利润试算", exact: true }).locator("../..");
+  const row = section.locator("tbody tr").first();
+  const field = (column: number) => row.locator("td").nth(column).locator("input");
+  await field(1).fill("4");
+  await field(2).fill("2");
+  await field(3).fill("0.4");
+  await expect(row.locator("td").nth(5)).toHaveText("0.0005333");
+  await field(4).fill("1");
+  await field(6).fill("2");
+  await expect(field(8)).toHaveAttribute("placeholder", "5.47");
+  await field(8).fill("4");
+  await field(6).fill("22");
+  await expect(field(8)).toHaveValue("4");
+  await field(8).fill("");
+  await expect(field(8)).toHaveAttribute("placeholder", "6.29");
+  await section.getByRole("button", { name: "长 in", exact: true }).click();
+  await expect(field(1)).toHaveValue("1.5748");
+  await expect(section.getByRole("button", { name: "宽 in", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await section.getByRole("button", { name: "实际重 lb", exact: true }).click();
+  await expect(field(4)).toHaveValue("2.2046");
+  await expect(row.locator("td").nth(5)).toHaveText("0.001176");
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await expect.poll(() => state.saves).toBe(1);
+  const saved = (state.product as Product & { workbookDetail: TrialProductDraft }).workbookDetail.pricingRows[0];
+  expect(saved).toMatchObject({ lengthCm: 4, widthCm: 2, heightCm: 0.4, actualWeightKg: 1, suggestedPrice: 22, fbaFee: null });
 });
 
 test("reopening a product image preview reuses its signed URL without another signing request", async ({ page }) => {
@@ -457,4 +486,38 @@ test('商品原编辑器保存并回读外箱、组合品和授权刊登标识',
   await expect(page.getByLabel('长 cm', { exact: true })).toHaveValue('32.123456');
   await expect(page.getByLabel('组成用量', { exact: true })).toHaveValue('3');
   await expect(page.getByLabel('FNSKU', { exact: true })).toHaveValue('X001FIXTURE');
+});
+
+test("利润试算切换单位不改变保存值，自动配送费允许手动覆盖", async ({ page }) => {
+  const state = await setup(page);
+  const section = page.getByRole("heading", { name: "区域 1：利润试算", exact: true }).locator("../..");
+  const row = section.locator("tbody tr").first();
+  const field = (column: number) => row.locator("td").nth(column).locator("input");
+  await field(1).fill("25.4");
+  await field(2).fill("10");
+  await field(3).fill("6");
+  await field(4).fill("0.45359237");
+  await field(6).fill("20");
+  await field(7).fill("7");
+  await section.getByRole("button", { name: "长 in", exact: true }).click();
+  await expect(field(1)).toHaveValue("10");
+  await section.getByRole("button", { name: "实际重 lb", exact: true }).click();
+  await expect(field(4)).toHaveValue("1");
+  await section.getByRole("button", { name: "长 cm", exact: true }).click();
+  await expect(field(1)).toHaveValue("25.4");
+  await section.getByRole("button", { name: "实际重 kg", exact: true }).click();
+  // Display rounds to four decimals; switching units does not write that rounding back.
+  await expect(field(4)).toHaveValue("0.4536");
+  await field(8).fill("");
+  await field(7).click();
+  await expect(field(8)).toHaveAttribute("placeholder", /\d/);
+  await field(8).fill("4");
+  await field(7).click();
+  await expect(field(8)).toHaveValue("4");
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await expect.poll(() => state.saves).toBe(1);
+  const saved = (state.product as Product & { workbookDetail: TrialProductDraft }).workbookDetail.pricingRows[0];
+  expect(saved.lengthCm).toBe(25.4);
+  expect(saved.actualWeightKg).toBe(0.45359237);
+  expect(saved.fbaFee).toBe(4);
 });

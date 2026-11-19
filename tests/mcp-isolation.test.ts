@@ -4,9 +4,10 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
   assertCredentialStores, assertCredentialTool, assertEndpointProvider, assertProviderDataset,
-  assertProviderTable, bearerToken, McpIsolationError, mcpIsolationMatrix, mcpProviderPolicies, providerOfToken,
+  assertProviderTable, bearerToken, foreignToolProvider, McpIsolationError, mcpIsolationMatrix, mcpProviderPolicies, providerOfToken,
 } from "../src/lib/mcp/isolation";
 import { amazonMcpToolDefinitions } from "../src/lib/amazon-sync/mcp-tool-registry";
+import { mcpDatasets } from "../src/lib/amazon-sync/mcp-datasets";
 import {
   normalizeSellfoxToolGrants, sellfoxDataset, sellfoxDatasetKeys, sellfoxDatasets,
   sellfoxDiscoverableTools, sellfoxLegacyToolAliases, sellfoxMcpToolDefinitions, sellfoxMcpToolNames, sellfoxTableAllowList,
@@ -125,4 +126,52 @@ test("isolation matrix exposes separate endpoints, roles and audit prefixes", ()
   assert.notEqual(amazon.auditPrefix, sellfox.auditPrefix);
   assert.equal(sellfox.dbRoleConfigured, true);
   assert.equal(amazon.dbRoleConfigured, false);
+});
+
+test("cross-source tool names are detected by namespace, token prefix and table prefix", () => {
+  // sellfox tooling seen at the amazon runtime, and vice versa
+  for (const tool of ["sellfox.query_data", "sellfox.stores.list", "sfmcp_abc", "SellfoxStore", "SELLFOX.query_data"]) {
+    assert.equal(foreignToolProvider(tool, "amazon"), "sellfox", tool);
+  }
+  for (const tool of ["amazon.stores.list", "amazon.data.local.read", "amcp_abc", "AmazonOrderRecord", "AMAZON.stores.list"]) {
+    assert.equal(foreignToolProvider(tool, "sellfox"), "amazon", tool);
+  }
+  // own-provider and neutral names never trip the cross-source signal
+  for (const tool of ["amazon.stores.list", "data_query", "orders_search", "get_listings"]) {
+    assert.equal(foreignToolProvider(tool, "amazon"), null, tool);
+  }
+  for (const tool of ["sellfox.query_data", "query_data", "dataset_overview"]) {
+    assert.equal(foreignToolProvider(tool, "sellfox"), null, tool);
+  }
+});
+
+test("the two MCP catalogs never expose each other's tools", () => {
+  const amazon = new Set<string>(amazonMcpToolDefinitions.map(tool => tool.name));
+  const sellfox = new Set<string>(sellfoxMcpToolNames);
+  for (const name of sellfox) assert.equal(amazon.has(name), false, `sellfox tool leaked into amazon catalog: ${name}`);
+  for (const name of amazon) assert.equal(sellfox.has(name), false, `amazon tool leaked into sellfox catalog: ${name}`);
+  // Any namespaced Amazon tool is recognized as cross-source by the sellfox runtime guard.
+  for (const name of amazon) {
+    if (name.startsWith("amazon.")) assert.equal(foreignToolProvider(name, "sellfox"), "amazon", name);
+  }
+  for (const alias of Object.keys(sellfoxLegacyToolAliases)) {
+    assert.equal(amazon.has(alias), false, `sellfox alias collides with amazon tool: ${alias}`);
+  }
+});
+
+test("each MCP reads only its own physical data source prefix", () => {
+  // Amazon datasets resolve exclusively to Amazon* physical tables.
+  assert.ok(mcpDatasets.length > 0);
+  for (const dataset of mcpDatasets) {
+    assert.ok(dataset.source.startsWith("Amazon"), `${dataset.name} -> ${dataset.source} is not an Amazon table`);
+    assert.equal(foreignToolProvider(dataset.source, "sellfox"), "amazon", dataset.source);
+  }
+  // Sellfox datasets resolve exclusively to Sellfox* physical tables.
+  for (const dataset of Object.values(sellfoxDatasets)) {
+    assert.ok(dataset.table.startsWith("Sellfox"), `${dataset.key} -> ${dataset.table} is not a Sellfox table`);
+    assert.equal(foreignToolProvider(dataset.table, "amazon"), "sellfox", dataset.table);
+  }
+  // No physical table appears in both sources.
+  const amazonTables = new Set(mcpDatasets.map(dataset => dataset.source));
+  for (const dataset of Object.values(sellfoxDatasets)) assert.equal(amazonTables.has(dataset.table), false, dataset.table);
 });

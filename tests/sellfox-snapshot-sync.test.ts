@@ -57,6 +57,12 @@ function fixture() {
           for (const [id, row] of pending) {
             if (row.storeId === where.storeId && row.reportDate === where.reportDate && (row.syncedAt as Date).getTime() !== where.syncedAt.not.getTime()) pending.delete(id);
           }
+        },
+        // P1 3.3: materialized `complete` flag is set on the finishing batch.
+        updateMany: async ({ where, data }: { where: { storeId: string; reportDate: string; syncedAt: Date }; data: { complete: boolean } }) => {
+          for (const [id, row] of pending) {
+            if (row.storeId === where.storeId && row.reportDate === where.reportDate && (row.syncedAt as Date).getTime() === where.syncedAt.getTime()) pending.set(id, { ...row, ...data });
+          }
         } };
       await fn({ sellfoxFbaInventorySnapshot: table, sellfoxSalesDailySnapshot: table, sellfoxSnapshotHead: { upsert: async () => undefined }, sellfoxSalesDayCoverage: { upsert: async (args: Args) => { const id = key(args.where); pendingCoverage.set(id, { ...(pendingCoverage.get(id) ?? args.create), ...args.update }); } } });
       if (failCommit) { failCommit = false; throw new Error("private database error"); }

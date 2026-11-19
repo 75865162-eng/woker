@@ -3,13 +3,13 @@ import { getCurrentUserFromRequest } from "@/lib/auth/session";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { SellfoxCredentialError } from "@/lib/sellfox/credential-crypto";
 import { runSellfoxConnectionTest } from "@/lib/sellfox/connection-test";
+import { isSellfoxSameOrigin } from "@/lib/sellfox/request-origin";
 
 export const runtime = "nodejs";
 const headers = { "Cache-Control": "no-store" };
 export async function POST(request: Request) {
   try {
-    const origin = request.headers.get("origin");
-    if ((origin && origin !== new URL(request.url).origin) || request.headers.get("sec-fetch-site") === "cross-site") throw new SellfoxCredentialError("不接受跨站连接测试请求。", 403);
+    if (!isSellfoxSameOrigin(request)) throw new SellfoxCredentialError("不接受跨站连接测试请求。", 403);
     const user = await getCurrentUserFromRequest(request);
     if (!user) throw new SellfoxCredentialError("请先登录。", 401);
     if (!process.env.DATABASE_URL) throw new SellfoxCredentialError("服务端数据库尚未配置。", 503);

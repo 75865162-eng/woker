@@ -114,6 +114,79 @@ export const operationsSections: OperationsSection[] = [
 export const operationsEntries = operationsSections.flatMap(section => section.entries);
 export const operationsAdminNav = [["overview", "数据总览"], ["approvals", "变更审批"], ["plans", "同步计划"], ["tasks", "同步任务"], ["domains", "数据域管理"], ["quality", "数据质量"], ["connections", "店铺与授权"], ["settings", "同步设置"]] as const;
 
+// ---------------------------------------------------------------------------
+// P0 菜单分级（文档《Amazon 落地页菜单分级与整改计划》§3）。
+// 这里只做展示层归组：所有 view / href / moduleId / 权限保持原值，不改业务入口，
+// 也不改 business-navigation.ts 顶层主导航。同步中心 aside 由下列分组驱动渲染。
+// ---------------------------------------------------------------------------
+export type SyncNavGroup = {
+  id: string;
+  label: string;
+  /** admin: 直接列运维 view；business: 引用业务板块；ads/local: 外链与独立分组 */
+  kind: "admin" | "business" | "ads" | "local";
+  viewKeys?: readonly string[];
+  sectionIds?: readonly string[];
+};
+
+export const syncNavGroups: SyncNavGroup[] = [
+  { id: "A", label: "同步总览", kind: "admin", viewKeys: ["overview", "quality"] },
+  { id: "B", label: "接入与授权", kind: "admin", viewKeys: ["connections", "approvals", "settings"] },
+  { id: "C", label: "同步编排", kind: "admin", viewKeys: ["sync"] },
+  { id: "D", label: "数据域目录", kind: "admin", viewKeys: ["domains"] },
+  { id: "E", label: "Amazon 业务数据", kind: "business", sectionIds: ["products", "sales", "stock", "procurement", "logistics", "prices", "accounts", "insights", "service"] },
+  { id: "F", label: "广告", kind: "ads" },
+  { id: "G", label: "本地业务", kind: "local" },
+];
+
+const adminLabelByView = new Map<string, string>([...operationsAdminNav.map(([key, label]): [string, string] => [key, label]), ["sync", "同步编排"] as [string, string]]);
+
+/** 某个运维 view 属于哪个一级组（用于面包屑），非运维 view 返回 undefined。 */
+export function adminGroupForView(view: string): SyncNavGroup | undefined {
+  return syncNavGroups.find(group => group.kind === "admin" && group.viewKeys?.includes(view));
+}
+
+/** 一级组显示名：运维 view 走分组表，业务/本地 view 走板块表。 */
+export function groupLabelForView(view: string): string | undefined {
+  const adminGroup = adminGroupForView(view);
+  if (adminGroup) return adminGroup.label;
+  const section = operationsSections.find(item => item.entries.some(entry => entry.view === view));
+  return section?.label;
+}
+
+/** E 组内某板块的真实 Amazon 视图（排除本地 href 与 pending 占位）。 */
+export function businessViewEntries(sectionId: string): OperationsEntry[] {
+  const section = operationsSections.find(item => item.id === sectionId);
+  return section ? section.entries.filter(entry => !entry.href && !entry.pending) : [];
+}
+
+/** E 组内某板块的待接入占位（折叠展示，不默认展开）。 */
+export function pendingEntries(sectionId: string): OperationsEntry[] {
+  const section = operationsSections.find(item => item.id === sectionId);
+  return section ? section.entries.filter(entry => entry.pending) : [];
+}
+
+/** 全部本地业务跳转（仓库台账/财务台账/经营工具），从 Amazon 板块抽出归 G 组。 */
+export const localBusinessEntries = operationsEntries.filter(entry => Boolean(entry.href));
+
+/** G 组三个子分组：仓储台账 / 财务台账 / 经营工具。 */
+export const localBusinessSubgroups: Array<{ id: string; label: string; entries: OperationsEntry[] }> = [
+  { id: "warehouse", label: "仓储台账", entries: localBusinessEntries.filter(entry => entry.view.startsWith("warehouse")) },
+  { id: "finance", label: "财务台账", entries: localBusinessEntries.filter(entry => ["finance-ledger", "settlement-allocations", "expense-management"].includes(entry.view)) },
+  { id: "tools", label: "经营工具", entries: localBusinessEntries.filter(entry => entry.view.startsWith("ext-")) },
+];
+
+/** 广告组外链：真实接口与演示原型分区，状态标识见 workbench 渲染。 */
+export const adsNavLinks = [
+  { href: "/amazon-ads/accounts", label: "广告账户与授权", real: true },
+  { href: "/amazon-ads", label: "已同步广告数据", real: true },
+  { href: "/amazon-ads/campaigns", label: "广告活动管理", real: false },
+  { href: "/amazon-ads/keywords", label: "关键词 / 投放 / 否定 / 搜索词", real: false },
+  { href: "/amazon-ads/reports", label: "广告报告", real: false },
+  { href: "/workspace", label: "PPC 优化工作台", real: false },
+] as const;
+
+export { adminLabelByView };
+
 export function OperationsSectionCards({ navigate }: { navigate: (view: string) => void }) {
   return <section aria-label="经营中台业务板块" className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
     {operationsSections.map((section, index) => <article key={section.id} className="min-w-0 rounded-lg border border-border bg-surface p-4">

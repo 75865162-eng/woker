@@ -89,7 +89,10 @@ export function NavigationSidebar({
                 title={navCollapsed ? group.label : undefined}
                 onMouseEnter={(event) => openGroup(group.id, event.currentTarget)}
                 onFocus={(event) => openGroup(group.id, event.currentTarget)}
-                onClick={(event) => (isOpen ? closeNow() : openGroup(group.id, event.currentTarget))}
+                // 点击必须幂等地「打开」：鼠标移入已先触发 onMouseEnter 打开浮层，
+                // 若此处再按 isOpen 切换为关闭，用户点击时浮层会瞬间消失，表现为「点击没反应」。
+                // 关闭只交由 onMouseLeave(含延迟) 与滚动处理，触屏无 hover 时点击也能打开。
+                onClick={(event) => openGroup(group.id, event.currentTarget)}
                 className={cn(
                   "flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md text-body leading-5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand",
                   navCollapsed ? "justify-center px-0" : "px-2.5",

@@ -7,6 +7,9 @@ import { prisma } from "@/lib/db/prisma";
 import { SellfoxBrowseError, sellfoxExportLimit, type SellfoxBrowseQuery } from "./browse-query";
 import { sellfoxDateAt } from "./sync-contract";
 import { resolveEffectiveReportDate } from "./browse-report-date";
+import {
+  normalizeSellfoxCacheQuery, readThroughSellfox, SELLFOX_VERSION_SOURCE, sellfoxCacheKey,
+} from "./result-cache";
 
 type Scope = { organizationId: string; workspaceId: string };
 type Row = Record<string, unknown>;
@@ -17,6 +20,12 @@ export type SalesSummary = {
   daily: Record<string, { value: number | null; entities: number }>;
 };
 export type WorkbenchDomain = "sales" | "performance" | "listings" | "ads_report" | "ads_targeting" | "ads_search_term" | "ads_campaign" | "ads_ad_group" | "ads_placement";
+// P1 3.2: the listing source used by the sales LATERAL/facets path. Same columns as the
+// view, so switching to the materialized profile is a pure name swap. Gated + reconciled.
+// Function form so the switch is read at query time (consistent with listings-read.ts).
+function workbenchListingSource() {
+  return process.env.SELLFOX_LISTING_PROFILE_READ_ENABLED === "true" ? '"SellfoxListingProfile"' : "sellfox_listing_current";
+}
 const sources = { sales: "sellfox_sales_daily", performance: '"SellfoxProductDailySnapshot"', listings: "sellfox_listing_current", ads_report: "sellfox_ads_product_daily", ads_targeting: "sellfox_ads_targeting_daily", ads_search_term: "sellfox_ads_search_term_daily", ads_campaign: "sellfox_ads_campaign_daily", ads_ad_group: "sellfox_ads_ad_group_daily", ads_placement: "sellfox_ads_placement_daily" };
 function scoped(alias: string, scope: Scope) {
   const a = Prisma.raw(alias);
@@ -45,6 +54,7 @@ export function workbenchDateRange(query: SellfoxBrowseQuery) {
 // never historical parent identity, price or inventory at the sale date.
 export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQuery, scope: Scope, exporting = false) {
   if (domain === "listings") return listingsReadSql(query, scope, exporting);
+  const listingSource = Prisma.raw(workbenchListingSource());
   const dimension = domain === "performance" && query.dimension === "spu" ? "asin" : query.dimension;
   const sortKey = sellfoxSortKey(domain, query);
   const sortDay = sortKey ? sellfoxDaySortDate(domain, sortKey) : null;
@@ -169,7 +179,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
       ${needTagFilter ? Prisma.sql`l."productTagNames" @> ARRAY[${query.productTag}]::text[] AS "matchesProductTag",` : Prisma.empty}
       COALESCE(l.developer,'未分配开发员') AS developer,
       COALESCE(l.spu,'未分配SPU') AS spu
-    FROM sellfox_listing_current l
+    FROM ${listingSource} l
     WHERE ${scoped("l", scope)}
   )`;
   const base = Prisma.sql`base AS (SELECT ${fields},st.name AS "storeName",st.marketplace AS "storeSite",
@@ -286,11 +296,11 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   if (query.storeId) facetFilters.push(Prisma.sql`l."storeId"=${query.storeId}`);
   if (query.site) facetFilters.push(Prisma.sql`st.marketplace=${query.site}`);
   const facets = needTagFacets ? Prisma.sql`,jsonb_build_object('productTags',
-    ARRAY(SELECT DISTINCT tag."labelName" FROM sellfox_listing_current l
+    ARRAY(SELECT DISTINCT tag."labelName" FROM ${listingSource} l
       JOIN "SellfoxStore" st ON st.id=l."storeId" AND ${scoped("st", scope)}
       CROSS JOIN LATERAL unnest(l."productTagNames") tag("labelName")
       WHERE ${Prisma.join(facetFilters, " AND ")} ORDER BY tag."labelName")
-    ,'brands', ARRAY(SELECT DISTINCT l.brand FROM sellfox_listing_current l
+    ,'brands', ARRAY(SELECT DISTINCT l.brand FROM ${listingSource} l
       JOIN "SellfoxStore" st ON st.id=l."storeId" AND ${scoped("st", scope)}
       WHERE ${Prisma.join(facetFilters, " AND ")} AND l.brand IS NOT NULL ORDER BY 1)
     ${domain === "performance" ? Prisma.sql`,'salespersons',ARRAY(
@@ -302,8 +312,48 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
     SELECT (SELECT count(*)::int FROM filtered) AS total,${totals} AS totals${salesSummary},
       COALESCE((SELECT jsonb_agg(p) FROM (SELECT * FROM filtered ORDER BY ${order} LIMIT ${exporting ? sellfoxExportLimit + 1 : query.pageSize} OFFSET ${exporting ? 0 : (query.page - 1) * query.pageSize}) p),'[]'::jsonb) AS rows${facets}`;
 }
-export async function readSellfoxWorkbench(domain: WorkbenchDomain, query: SellfoxBrowseQuery, scope: Scope, exporting = false) {
-  if (domain === "sales" || domain === "performance") query = await resolveEffectiveReportDate(domain, query, scope);
+/** Current snapshot version for a domain; drives stale-body rejection. */
+async function workbenchVersion(domain: WorkbenchDomain, scope: Scope): Promise<string> {
+  const source = SELLFOX_VERSION_SOURCE[domain];
+  if (!source) return "";
+  const model = Prisma.raw(`"${source.model}"`);
+  const column = Prisma.raw(`"${source.column}"`);
+  const rows = await prisma.$queryRaw<Array<{ v: Date | string | null }>>(Prisma.sql`
+    SELECT max(${column}) AS v FROM ${model} WHERE "organizationId"=${scope.organizationId} AND "workspaceId"=${scope.workspaceId}`);
+  // 空域也用稳定哨兵版本，让空结果可被短 TTL 缓存；一旦同步写入，版本变化即失效。
+  return rows[0]?.v ? new Date(rows[0]!.v).toISOString() : "__empty__";
+}
+
+export type WorkbenchResult = Awaited<ReturnType<typeof loadWorkbench>> & {
+  cache?: { status: "hit" | "miss" | "bypass"; cachedAt: string | null };
+};
+
+/**
+ * Read-through wrapper. Auth/scope resolution stays in the route; the cache key
+ * embeds org + workspace + every normalized query field. Exports bypass cache.
+ */
+export async function readSellfoxWorkbench(domain: WorkbenchDomain, query: SellfoxBrowseQuery, scope: Scope, exporting = false): Promise<WorkbenchResult> {
+  if (exporting) {
+    const parsed = (domain === "sales" || domain === "performance") ? await resolveEffectiveReportDate(domain, query, scope) : query;
+    return { ...(await loadWorkbench(domain, parsed, scope, true)), cache: { status: "bypass", cachedAt: null } };
+  }
+  // reportDate resolution is deterministic per scope+query; run it before keying
+  // so the cache key reflects the effective date window actually queried.
+  const effective = (domain === "sales" || domain === "performance")
+    ? await resolveEffectiveReportDate(domain, query, scope)
+    : query;
+  const key = sellfoxCacheKey(scope.organizationId, scope.workspaceId, domain, normalizeSellfoxCacheQuery({ ...effective, domain }));
+  const result = await readThroughSellfox(
+    key,
+    domain,
+    () => workbenchVersion(domain, scope),
+    () => loadWorkbench(domain, effective, scope, false),
+    { isEmpty: body => Array.isArray(body.rows) && body.rows.length === 0 },
+  );
+  return { ...result.body, cache: { status: result.cache, cachedAt: result.cachedAt } };
+}
+
+async function loadWorkbench(domain: WorkbenchDomain, query: SellfoxBrowseQuery, scope: Scope, exporting = false) {
   const ads = ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(domain);
   const result = await prisma.$queryRaw<{ total: number; rows: Row[]; totals: Row[]; summary?: SalesSummary; facets?: { productTags: string[]; brands?: string[]; dxmPublishStates?: string[]; bsrCategories?: string[]; salespersons?: string[] } }[]>(workbenchReadSql(domain, query, scope, exporting));
   const { rows, total, totals, summary, facets } = result[0];

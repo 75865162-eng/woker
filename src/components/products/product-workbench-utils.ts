@@ -1,3 +1,4 @@
+import { quoteReferenceFba } from "@/lib/ext/fba-reference";
 import type { Product } from "@/lib/products/types";
 import { overdueThresholdDays, type TrialPriceRow } from "./product-workbench-model";
 
@@ -70,28 +71,31 @@ function hasCompletePricing(row: TrialPriceRow): row is { [K in keyof TrialPrice
 }
 
 export function calculateExcelPricing(row: TrialPriceRow) {
-  if (!hasCompletePricing(row)) {
-    return { volumeWeightKg: null, lengthIn: null, widthIn: null, heightIn: null, actualWeightLb: null, volumeWeightLbFromCm: null, volumeWeightLb: null, fbaBillableWeightLb: null, oceanFreight: null, commission: null, fuelFee: null, monthlyStorageFee: null, breakEvenPrice: null, profit: null, profitRate: null };
+  const automaticFbaFee = calculatePeakStandardNonApparelFbaFee(row);
+  const completeRow = { ...row, fbaFee: row.fbaFee === 0 ? automaticFbaFee : row.fbaFee ?? automaticFbaFee };
+  if (!hasCompletePricing(completeRow)) {
+    return { automaticFbaFee, volumeWeightKg: null, lengthIn: null, widthIn: null, heightIn: null, actualWeightLb: null, volumeWeightLbFromCm: null, volumeWeightLb: null, fbaBillableWeightLb: null, oceanFreight: null, commission: null, fuelFee: null, monthlyStorageFee: null, breakEvenPrice: null, profit: null, profitRate: null };
   }
-  const volumeWeightKg = (row.lengthCm * row.widthCm * row.heightCm) / 6000;
-  const lengthIn = row.lengthCm / 2.54;
-  const widthIn = row.widthCm / 2.54;
-  const heightIn = row.heightCm / 2.54;
-  const actualWeightLb = row.actualWeightKg * 2.2;
+  const volumeWeightKg = (completeRow.lengthCm * completeRow.widthCm * completeRow.heightCm) / 6000;
+  const lengthIn = completeRow.lengthCm / 2.54;
+  const widthIn = completeRow.widthCm / 2.54;
+  const heightIn = completeRow.heightCm / 2.54;
+  const actualWeightLb = completeRow.actualWeightKg * 2.2;
   const volumeWeightLbFromCm = volumeWeightKg * 2.2;
   const volumeWeightLb = (lengthIn * widthIn * heightIn) / 139;
   const fbaBillableWeightLb = Math.max(actualWeightLb, volumeWeightLb);
-  const oceanFreight = (Math.max(actualWeightLb, volumeWeightLbFromCm) / 2.2) * (row.oceanFreightUnitPrice || 0);
-  const commission = row.suggestedPrice * 0.15;
-  const fuelFee = row.fbaFee * 0.035;
+  const oceanFreight = (Math.max(actualWeightLb, volumeWeightLbFromCm) / 2.2) * (completeRow.oceanFreightUnitPrice || 0);
+  const commission = completeRow.suggestedPrice * 0.15;
+  const fuelFee = completeRow.fbaFee * 0.035;
   const monthlyStorageFee = lengthIn * widthIn * heightIn * 0.000578 * 0.87;
-  const breakEvenPrice = row.exchangeRate
-    ? (row.purchaseCost + oceanFreight) / row.exchangeRate + commission + row.fbaFee + fuelFee + monthlyStorageFee
+  const breakEvenPrice = completeRow.exchangeRate
+    ? (completeRow.purchaseCost + oceanFreight) / completeRow.exchangeRate + commission + completeRow.fbaFee + fuelFee + monthlyStorageFee
     : 0;
-  const profit = row.suggestedPrice - breakEvenPrice;
-  const profitRate = row.suggestedPrice ? profit / row.suggestedPrice : 0;
+  const profit = completeRow.suggestedPrice - breakEvenPrice;
+  const profitRate = completeRow.suggestedPrice ? profit / completeRow.suggestedPrice : 0;
 
   return {
+    automaticFbaFee,
     volumeWeightKg,
     lengthIn,
     widthIn,
@@ -108,6 +112,27 @@ export function calculateExcelPricing(row: TrialPriceRow) {
     profit,
     profitRate,
   };
+}
+
+export function calculatePeakStandardNonApparelFbaFee(row: Pick<TrialPriceRow, "lengthCm" | "widthCm" | "heightCm" | "actualWeightKg" | "suggestedPrice">): number | null {
+  const { lengthCm, widthCm, heightCm, actualWeightKg, suggestedPrice } = row;
+  if (typeof lengthCm !== "number" || typeof widthCm !== "number" || typeof heightCm !== "number" || typeof actualWeightKg !== "number" || typeof suggestedPrice !== "number"
+    || ![lengthCm, widthCm, heightCm, actualWeightKg, suggestedPrice].every((value) => Number.isFinite(value) && value > 0)) return null;
+
+  const quote = quoteReferenceFba({
+    lengthIn: lengthCm / 2.54,
+    widthIn: widthCm / 2.54,
+    heightIn: heightCm / 2.54,
+    weightLb: actualWeightKg * 2.2046226218,
+    price: suggestedPrice,
+    category: "家居及厨房用品",
+    date: "2026-11-18",
+  }, "peak");
+  // 这个自动档位只覆盖标准尺寸；大件/超大件费率需走计算器或人工填写。
+  if (!quote.sizeTier.includes("标准尺寸")) return null;
+  // Fuel remains a separate metric in the pricing table.
+  const shipping = quote.fees.find((fee) => fee.id === "shipping")?.amount;
+  return shipping == null ? null : Number(shipping);
 }
 
 export function calculateTrialPricing(row: TrialPriceRow) {

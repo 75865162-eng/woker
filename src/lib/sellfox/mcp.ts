@@ -18,7 +18,7 @@ import { prisma } from "@/lib/db/prisma";
 import { resolveSellfoxVisibleStoreIds } from "@/lib/sellfox/store-access";
 import {
   assertCredentialStores, assertCredentialTool, assertEndpointProvider, bearerToken,
-  McpIsolationError, mcpAuditAction, providerOfToken,
+  foreignToolProvider, McpIsolationError, mcpAuditAction, providerOfToken,
 } from "@/lib/mcp/isolation";
 import {
   normalizeSellfoxToolGrants, sellfoxDataset, sellfoxDatasetKeys, sellfoxDatasets,
@@ -436,6 +436,16 @@ export async function invokeSellfoxMcp(identity: SellfoxMcpIdentity, tool: strin
   const startedAt = Date.now();
   let definition: SellfoxMcpToolDefinition | null = null;
   try {
+    // Explicit cross-source guard: an Amazon-named tool can never be a Sellfox tool.
+    // Keep a separate audit trail so attempts are attributable, not just "unknown".
+    const foreign = foreignToolProvider(tool, "sellfox");
+    if (foreign === "amazon") {
+      await audit(identity, "isolation.denied", {
+        credentialId: identity.id, requestId, tool: tool.slice(0, 120),
+        attemptedProvider: foreign, reason: "CROSS_SOURCE_TOOL",
+      });
+      throw new McpIsolationError("该工具属于 Amazon MCP，禁止跨源调用。", "TOOL_NOT_ALLOWED", 403, "sellfox");
+    }
     definition = sellfoxMcpDefinition(tool);
     assertCredentialTool("sellfox", normalizeSellfoxToolGrants(identity.tools), definition.name);
     const args = validateArgs(definition, rawArgs, identity.storeScope);

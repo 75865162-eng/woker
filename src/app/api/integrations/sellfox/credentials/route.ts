@@ -3,8 +3,9 @@ import { getCurrentUserFromRequest } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { SellfoxCredentialError } from "@/lib/sellfox/credential-crypto";
-import { getSellfoxCredentialStatus, saveSellfoxCredentials, sellfoxCredentialAccess } from "@/lib/sellfox/credential-store";
+import { disableSellfoxAuthorization, getSellfoxCredentialStatus, saveSellfoxCredentials, sellfoxCredentialAccess } from "@/lib/sellfox/credential-store";
 import { activateSellfoxSyncAfterSave } from "@/lib/sellfox/sync-activation";
+import { isSellfoxSameOrigin } from "@/lib/sellfox/request-origin";
 
 export const runtime = "nodejs";
 const headers = { "Cache-Control": "no-store" };
@@ -26,8 +27,7 @@ export async function GET(request: Request) {
 }
 export async function PUT(request: Request) {
   try {
-    const origin = request.headers.get("origin");
-    if ((origin && origin !== new URL(request.url).origin) || request.headers.get("sec-fetch-site") === "cross-site") throw new SellfoxCredentialError("不接受跨站凭据保存请求。", 403);
+    if (!isSellfoxSameOrigin(request)) throw new SellfoxCredentialError("不接受跨站凭据保存请求。", 403);
     const { actor, scope } = await context(request);
     if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) throw new SellfoxCredentialError("请使用 JSON 提交凭据。", 415);
     if (Number(request.headers.get("content-length")) > 100_000) throw new SellfoxCredentialError("凭据请求过大。", 413);
@@ -61,5 +61,15 @@ export async function PUT(request: Request) {
       activationError = activationFailure instanceof Error ? activationFailure.message : "凭据已保存，但自动校验与启动未完成，请稍后手动测试连接。";
     }
     return NextResponse.json({ ...result, configured: true, source: "database", activation, activationError }, { headers });
+  } catch (error) { return failure(error); }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    if (!isSellfoxSameOrigin(request)) throw new SellfoxCredentialError("不接受跨站停用请求。", 403);
+    const { actor, scope } = await context(request);
+    const revision = Number(request.headers.get("x-credential-revision"));
+    const result = await disableSellfoxAuthorization(scope, actor, revision);
+    return NextResponse.json({ ...result, configured: false }, { headers });
   } catch (error) { return failure(error); }
 }

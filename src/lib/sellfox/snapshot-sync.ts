@@ -75,6 +75,10 @@ export async function syncSellfoxSnapshotStores(input: {
         const capturedAt = new Date(input.capturedAt);
         const rowWrites = metrics.reduce((n, metric) => n + (checkpoint.stores[store.externalId]?.[metric]?.writes ?? 0), 0);
         await tx.sellfoxSalesDailySnapshot.deleteMany({ where: { storeId: store.id, reportDate: input.reportDate, syncedAt: { not: capturedAt } } });
+        // P1 3.3: mark the current batch's rows complete in the same transaction as the
+        // coverage upsert. Scope strictly to this capturedAt so a stale/partial batch
+        // can never flip complete on rows it does not own.
+        await tx.sellfoxSalesDailySnapshot.updateMany({ where: { storeId: store.id, reportDate: input.reportDate, syncedAt: capturedAt }, data: { complete: true } });
         await tx.sellfoxSalesDayCoverage.upsert({ where: { storeId_reportDate: { storeId: store.id, reportDate: input.reportDate } }, create: { storeId: store.id, reportDate: input.reportDate, capturedAt, rowWrites }, update: { capturedAt, rowWrites } });
         await input.onProgress({ checkpoint, count: count(checkpoint) }, tx);
       });

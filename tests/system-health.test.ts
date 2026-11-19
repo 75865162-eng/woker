@@ -21,7 +21,7 @@ import { nextAppVersionLabel, normalizeAppVersionLabel } from "@/lib/app-version
 import { getProductListImage } from "@/lib/products/image-assets";
 import { productToDraft, parseProductWorkbookFile } from "@/components/products/product-workbench-data";
 import { createProductShellFromListItem } from "@/components/products/product-workbench-data";
-import { buildAmazonLink, buildAmazonSearchLink, calculateExcelPricing, calculateTrialPricing, parseOptionalProductNumber, nextSku } from "@/components/products/product-workbench-utils";
+import { buildAmazonLink, buildAmazonSearchLink, calculateExcelPricing, calculatePeakStandardNonApparelFbaFee, calculateTrialPricing, parseOptionalProductNumber, nextSku } from "@/components/products/product-workbench-utils";
 import type { TrialPriceRow } from "@/components/products/product-workbench-model";
 import { runRuleEngine } from "@/lib/rule-engine/engine";
 import { normalizeWorkspaceScope, workspaceScopeFromRequest } from "@/lib/workspace/scope";
@@ -373,11 +373,37 @@ test("商品真实试算函数区分缺失零和正常输入", () => {
     assert.ok(normalProfit !== null && zeroCostProfit !== null && zeroCostProfit > normalProfit);
     assert.equal(calculate({ ...row, lengthCm: 0 }).volumeWeightKg, 0);
     for (const key of ["lengthCm", "widthCm", "heightCm", "actualWeightKg", "suggestedPrice", "purchaseCost", "oceanFreightUnitPrice", "fbaFee", "exchangeRate"] as const) {
-      assert.ok(Object.values(calculate({ ...row, [key]: null })).every((value) => value === null), key);
+      const result = calculate({ ...row, [key]: null });
+      if (calculate === calculateExcelPricing && key === "fbaFee") {
+        assert.ok(Number.isFinite(result.profit));
+      } else {
+        assert.ok(Object.entries(result).filter(([metric]) => metric !== "automaticFbaFee").every(([, value]) => value === null), key);
+      }
     }
     assert.equal(calculate({ ...row, exchangeRate: 0 }).profit, null);
     assert.equal(calculate({ ...row, purchaseCost: Number.NaN }).profit, null);
   }
+});
+
+test("商品自动FBA费用复用旺季参考档位并仅加一次燃油", () => {
+  const row: TrialPriceRow = { name: "费率边界", lengthCm: 10, widthCm: 10, heightCm: 6, actualWeightKg: 2.9 / 2.2046226218, suggestedPrice: 20, purchaseCost: 7, oceanFreightUnitPrice: 12, fbaFee: null, exchangeRate: 7 };
+  assert.equal(calculatePeakStandardNonApparelFbaFee(row), 7.08);
+  assert.equal(calculatePeakStandardNonApparelFbaFee({ ...row, suggestedPrice: 9 }), 6.26);
+  assert.equal(calculatePeakStandardNonApparelFbaFee({ ...row, suggestedPrice: 51 }), 7.34);
+  const auto = calculateExcelPricing(row);
+  assert.equal(auto.automaticFbaFee, 7.08);
+  assert.equal(auto.fuelFee, 7.08 * 0.035);
+  assert.equal(auto.profit, calculateExcelPricing({ ...row, fbaFee: 7.08 }).profit);
+  // 表格把 0 视为“未填”，自动回落到参考档位，燃油仍只按最终 FBA 费用加一次。
+  assert.equal(calculateExcelPricing({ ...row, fbaFee: 0 }).fuelFee, 7.08 * 0.035);
+  assert.equal(calculateExcelPricing({ ...row, purchaseCost: null }).automaticFbaFee, 7.08);
+  assert.equal(calculateExcelPricing({ ...row, purchaseCost: null }).profit, null);
+  assert.equal(calculatePeakStandardNonApparelFbaFee({ ...row, lengthCm: 100 }), null);
+  for (const value of [null, 0, -1, Number.NaN, Infinity]) {
+    assert.equal(calculatePeakStandardNonApparelFbaFee({ ...row, heightCm: value }), null);
+  }
+  // Small standard uses actual weight, without dimensional-weight escalation.
+  assert.equal(calculatePeakStandardNonApparelFbaFee({ ...row, lengthCm: 15 * 2.54, widthCm: 12 * 2.54, heightCm: 0.75 * 2.54, actualWeightKg: 0.1 / 2.2046226218 }), 3.51);
 });
 
 test("product list shells preserve lightweight thumbnails for the table view", () => {

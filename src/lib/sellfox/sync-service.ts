@@ -19,6 +19,8 @@ import { buildSellfoxReconciliation } from "@/lib/sellfox/reconciliation";
 import { invalidateHubOverview } from "@/lib/sellfox/hub-overview-cache";
 import { markRunWaitingDependency, sellfoxStoresReady } from "@/lib/sellfox/sync-dependency";
 import { wakeWaitingDependents } from "@/lib/sellfox/sync-orchestrator";
+import { invalidateSellfoxSyncResource } from "@/lib/sellfox/result-cache";
+import { runPostSyncProjections } from "@/lib/sellfox/post-sync-projections";
 
 function endpointConfig(row: {
   code: string; label: string; path: string; dateMode: string; scopeMode: string;
@@ -310,7 +312,25 @@ export async function processSellfoxSyncRun(runId: string) {
       const reconciliation = buildSellfoxReconciliation(result, asRecord(current?.summary)?.progress);
       await finishSellfoxRun(lease, { status: "done", summary: { ...asRecord(current?.summary), result, reconciliation } as Prisma.InputJsonValue }, tx);
     });
+    // 保留 hub overview 缓存失效（另一套缓存），并新增按域失效读缓存；失效失败只记录，不把已完成的同步改判为失败。
     invalidateHubOverview(input.organizationId, input.workspaceId);
+    try {
+      await invalidateSellfoxSyncResource(input.organizationId, input.workspaceId, input.resource);
+    } catch (cacheError) {
+      console.error(JSON.stringify({ scope: "sellfox.sync.cache-invalidate", resource: input.resource, runId, message: cacheError instanceof Error ? cacheError.message : "unknown" }));
+    }
+    // P1 画像窄表 + P2 预聚合：成功后的派生投影，全部由开关控制且失败只记日志，
+    // 永不把已完成的同步改判为失败。投影口径来自源表/视图，不产生新的业务事实。
+    try {
+      await runPostSyncProjections({
+        organizationId: input.organizationId, workspaceId: input.workspaceId,
+        resource: input.resource, shopExternalIds: request.shopExternalIds ?? [],
+        reportDate: request.reportDate, startDate: request.startDate, endDate: request.endDate,
+        runId,
+      });
+    } catch (projectionError) {
+      console.error(JSON.stringify({ scope: "sellfox.sync.projections", resource: input.resource, runId, message: projectionError instanceof Error ? projectionError.message : "unknown" }));
+    }
     // 分片与覆盖度是记账，不是业务数据：失败只打日志，不把成功的同步改判为失败。
     try {
       const shards = buildRunShards(input.resource, { reportDate: request.reportDate, startDate: request.startDate, endDate: request.endDate }, result, request.progress);
