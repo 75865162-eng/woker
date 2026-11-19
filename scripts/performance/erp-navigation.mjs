@@ -67,7 +67,18 @@ try {
   cpSync(path.join(sourceDir, "middleware.ts"), path.join(app, "middleware.ts"));
   mkdirSync(path.join(app, "public"));
   cpSync(path.join(sourceDir, "public/brand-logo.png"), path.join(app, "public/brand-logo.png"));
-  symlinkSync(path.join(root, "node_modules"), path.join(app, "node_modules"), "dir");
+  // Generate the archived schema into fixture-owned modules, never the running
+  // workspace client (which may be in use by unit tests or the dev server).
+  const fixtureModules = path.join(app, "node_modules");
+  mkdirSync(path.join(fixtureModules, "@prisma"), { recursive: true });
+  for (const entry of readdirSync(path.join(root, "node_modules"))) {
+    if (["@prisma", ".prisma"].includes(entry)) continue;
+    symlinkSync(path.join(root, "node_modules", entry), path.join(fixtureModules, entry));
+  }
+  for (const entry of readdirSync(path.join(root, "node_modules/@prisma"))) {
+    if (entry === "client") cpSync(path.join(root, "node_modules/@prisma", entry), path.join(fixtureModules, "@prisma", entry), { recursive: true });
+    else symlinkSync(path.join(root, "node_modules/@prisma", entry), path.join(fixtureModules, "@prisma", entry));
+  }
   for (const file of ["postcss.config.mjs", "tsconfig.json"]) cpSync(path.join(sourceDir, file), path.join(app, file));
   writeFileSync(path.join(app, "package.json"), JSON.stringify({ private: true }));
   writeFileSync(path.join(app, ".gitignore"), "node_modules/\n.next-performance/\n");
@@ -104,7 +115,8 @@ try {
   const config = path.join(directory, "prisma.config.ts");
   writeFileSync(config, `import {defineConfig} from ${JSON.stringify(path.join(root, "node_modules/prisma/config.js"))};export default defineConfig({schema:${JSON.stringify(path.join(sourceDir, "prisma/schema.prisma"))},datasource:{url:${JSON.stringify(databaseUrl)}}});`);
   const generatorSchema = path.join(directory, "schema.prisma");
-  writeFileSync(generatorSchema, readFileSync(path.join(sourceDir, "prisma/schema.prisma"), "utf8"));
+  writeFileSync(generatorSchema, readFileSync(path.join(sourceDir, "prisma/schema.prisma"), "utf8")
+    .replace(/generator client \{/, `generator client {\n  output = ${JSON.stringify(path.join(app, "node_modules/.prisma/client"))}`));
   await run([path.join(root, "node_modules/prisma/build/index.js"), "generate", "--schema", generatorSchema], env);
   await run([path.join(root, "node_modules/prisma/build/index.js"), "db", "push", "--config", config], env);
   // Historical baselines predate explicit workspace grants. Only the archived
@@ -182,6 +194,18 @@ try {
     await page.getByRole("heading", { name: item.heading, exact: true }).waitFor();
     await page.waitForURL(base + item.path);
     warm.push(performance.now() - at);
+    // Check that the real Listing AI input keeps its view identity and value
+    // across cached navigation; a remount-only workaround must not pass.
+    if (item.path === "/listing-ai" && await page.locator('[data-workspace-view="/listing-ai"] input').count()) {
+      const input = page.locator('[data-workspace-view="/listing-ai"] input').first();
+      if (i === 0) {
+        await input.fill("Fixture retained input");
+        await page.locator('[data-workspace-view="/listing-ai"]').evaluate(node => { window.__perfListingView = node; });
+      } else {
+        assert.ok(await page.locator('[data-workspace-view="/listing-ai"]').evaluate(node => window.__perfListingView === node), "Cached page view remounted");
+        assert.equal(await input.inputValue(), "Fixture retained input", "Cached page input state was lost");
+      }
+    }
     serverResponses.push(...await page.evaluate(() => performance.getEntriesByType("resource").filter(e => e.name.includes("_rsc=")).map(e => ({ ms: e.duration, ttfb: e.responseStart - e.requestStart }))));
     await page.evaluate(() => performance.clearResourceTimings());
   }
@@ -235,6 +259,15 @@ try {
     assert.ok(navigationRequests.filter(p => p === "/api/notifications/wecom/settings").length === 0, "Navigation restarted notification runner");
   }
 } catch (error) {
+  if (browser) {
+    for (const context of browser.contexts()) for (const page of context.pages()) {
+      console.error("Fixture page state", await page.evaluate(() => ({
+        url: location.href,
+        headings: Array.from(document.querySelectorAll("h1,h2")).map(node => ({ text: node.textContent, visible: node.checkVisibility() })),
+        views: Array.from(document.querySelectorAll("[data-workspace-view]")).map(node => ({ href: node.getAttribute("data-workspace-view"), hidden: node.hidden, hasContent: Boolean(node.textContent) })),
+      })).catch(() => "Page unavailable"));
+    }
+  }
   console.error(error); mkdirSync(path.dirname(output), { recursive: true }); writeFileSync(output + ".log", logs); process.exitCode = 1;
 } finally {
   await browser?.close();

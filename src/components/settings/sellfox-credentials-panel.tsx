@@ -85,6 +85,18 @@ export function SellfoxCredentialsPanel() {
       if (!controller.signal.aborted && generation === epoch.current) setTesting(false);
     }
   }
+  async function stopAuthorization() {
+    if (!status?.canEdit || !status.configured || saving || testing) return;
+    if (!window.confirm("停止赛狐授权后，当前工作区的所有同步计划将停用，正在排队或运行的同步任务将取消。已同步数据保留；恢复同步需重新保存凭据。继续？")) return;
+    setSaving(true); setError("");
+    try {
+      const response = await fetch("/api/integrations/sellfox/credentials", { method: "DELETE", headers: { "x-workspace-id": status.scope.workspaceId, "x-credential-revision": String(status.revision) }, cache: "no-store" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "停止赛狐授权失败。");
+      setRefresh(value => value + 1);
+    } catch (error) { setError(error instanceof Error ? error.message : "停止赛狐授权失败。"); }
+    finally { setSaving(false); }
+  }
   return <section id="sellfox-credentials" className="scroll-mt-4 space-y-3 rounded-lg border border-border bg-surface p-5">
     {status ? <>
       <fieldset disabled={testing} className="min-w-0">
@@ -92,6 +104,7 @@ export function SellfoxCredentialsPanel() {
       </fieldset>
       <div className="space-y-2">
         <Button type="button" variant="secondary" size="sm" disabled={!status.canEdit || !status.configured || saving || testing} onClick={() => void testConnection()}>{testing ? "正在测试连接…" : "测试连接"}</Button>
+        <Button type="button" variant="secondary" size="sm" disabled={!status.canEdit || !status.configured || saving || testing} onClick={() => void stopAuthorization()}>停止授权</Button>
         <p className="text-xs text-muted">测试已保存的凭据；修改输入框后请先保存。点击后仅请求赛狐 Token，不读取业务数据或启动同步，每分钟限一次。</p>
         {testResult && <p role={testResult.passed ? "status" : "alert"} className={testResult.passed ? "text-sm text-success-ink" : "text-sm text-danger-ink"}>{testResult.message}</p>}
       </div>
