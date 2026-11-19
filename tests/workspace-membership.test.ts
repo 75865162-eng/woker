@@ -23,6 +23,11 @@ function fixture() {
       deleteMany: async ({ where }: { where: object }) => { grants.delete(JSON.stringify(where)); },
     },
     amazonDataAccessGrant: { findMany: async () => [{ sellerAccountId: 'seller' }] },
+    // 并集口径（6913819）：view/export 会合并角色授权与 active 店铺过滤；
+    // 本用例验证账号授权 alone 的语义，故角色/店铺/MCP 资源授权均为空。
+    amazonRoleDataAccessGrant: { findMany: async () => [] },
+    sellerAccount: { findMany: async () => [] },
+    resourceGrant: { findMany: async () => [] },
     auditLog: { create: async (value: unknown) => { audit.push(value); } },
   };
   return { db: db as never, users, audit, grants };

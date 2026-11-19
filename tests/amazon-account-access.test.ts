@@ -21,7 +21,11 @@ function fixture() {
       assert.equal(where.mcpEnabled, undefined); assert.equal(where.actions, undefined);
       return state.assigned.map(sellerAccountId => ({ sellerAccountId, marketplaceIds: ["old-site"], actions: [], mcpEnabled: false }));
     } },
-    amazonRoleDataAccessGrant: { findMany: async () => { throw new Error("Read must not use role grants"); } },
+    // 并集口径（6913819）：view/export 会合并角色授权，账号授权仍独立成立。
+    // 本 fixture 刻意让角色/资源授权为空，验证"仅账号授权即可读取"的安全语义不变。
+    amazonRoleDataAccessGrant: { findMany: async () => [] },
+    sellerAccount: { findMany: async () => [] },
+    resourceGrant: { findMany: async () => [] },
     organizationRosterRole: { findMany: async () => { throw new Error("Read must not use module permissions"); } },
     amazonMcpCredential: { findFirst: async () => state.credential ? { id: "credential", name: "fixture", tools: [], scopes: [] } : null },
     amazonSyncDataSource: {

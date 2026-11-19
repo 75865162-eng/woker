@@ -25,6 +25,11 @@ test("plan persistence keeps exact inventory provenance, newer results and new-p
   let delayNextInventoryRead = false;
   const database = {
     amazonDataAccessGrant: { findMany: async () => [{ sellerAccountId: "store" }] },
+    // 并集口径（6913819）：view 读取会合并角色授权与 active 店铺；本用例账号授权已足够，
+    // 角色/店铺/MCP 资源授权留空，保持"仅账号分配即可读取"的既有语义。
+    amazonRoleDataAccessGrant: { findMany: async () => [] },
+    sellerAccount: { findMany: async () => [] },
+    resourceGrant: { findMany: async () => [] },
     organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) },
     organizationRosterRole: { findMany: async () => [] },
     workspaceScope: { findUnique: async () => ({ id: "ws" }) },
@@ -99,6 +104,12 @@ test("Sellfox plans use complete daily MSKU sales and current inventory, never p
   const database = {
     organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) },
     organizationRosterRole: { findMany: async () => [] },
+    // 并集口径（6913819）：view 读取合并账号/角色授权与 active 店铺过滤。
+    // 本用例账号授权锁定 seller，角色/店铺/MCP 资源授权留空。
+    amazonDataAccessGrant: { findMany: async () => [{ sellerAccountId: "seller" }] },
+    amazonRoleDataAccessGrant: { findMany: async () => [] },
+    sellerAccount: { findMany: async () => [] },
+    resourceGrant: { findMany: async () => [] },
     amazonSyncDataSource: { findFirst: async () => ({ id: "source" }) },
     workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: TemplateStringsArray, ...values: unknown[]) => {
