@@ -7,3 +7,9 @@
 CREATE INDEX IF NOT EXISTS "SellfoxFbaInventory_orgws_store_date_captured_idx"
   ON "SellfoxFbaInventorySnapshot" ("organizationId", "workspaceId", "storeId", "reportDate", "capturedAt" DESC)
   INCLUDE (msku, quantity);
+
+-- 读缓存数据版本查询对所有 workbench/restock 域执行 max(versionColumn) WHERE org+ws。
+-- 库存表 94 万行若无此索引会走 Parallel Seq Scan（实测 6461ms），拖慢每一次缓存命中。
+-- 该索引让 max(capturedAt) 走 Index Only Scan（实测 0.147ms），缓存命中稳定在个位数毫秒。
+CREATE INDEX IF NOT EXISTS "SellfoxFbaInventory_orgws_captured_idx"
+  ON "SellfoxFbaInventorySnapshot" ("organizationId", "workspaceId", "capturedAt" DESC);
