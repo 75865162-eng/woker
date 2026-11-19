@@ -126,11 +126,6 @@ export function WorkspaceShell({ children, configuration }: {
   const restoringRef = useRef(false);
   const shownHrefRef = useRef(shownHref);
   const seqRef = useRef(0);
-  // 只在登记/更新视图的那一刻读取最新 segmentContext；不把它作为 effect 依赖。
-  // Next 会在 router 内部状态变化时反复新建这个 context 对象（实测静止页面 3 秒变化数百次），
-  // 若进入依赖，effect 会被无意义地调度同样多次（守卫虽拦住 setViews，但调度本身是浪费）。
-  const segmentContextRef = useRef(segmentContext);
-  segmentContextRef.current = segmentContext;
   currentHrefRef.current = currentHref;
   tabsRef.current = tabs;
   shownHrefRef.current = shownHref;
@@ -219,18 +214,29 @@ export function WorkspaceShell({ children, configuration }: {
   const viewsRef = useRef(views);
   viewsRef.current = views;
 
+  // 视图 context 的「自愈」：App Router 的 children 在所有视图之间共享同一个引用（它只是
+  // 「当前分段」的占位节点，靠 LayoutRouterContext 现场解析成具体页面），所以旧版用
+  // current.element === children 做 bail 对任何已登记视图都恒为真，这里的校正从不执行。
+  // 后果：needsRegister 在渲染期登记时若 segmentContext 还停在过渡态（上一个路由），视图
+  // 就永久渲染成别的页面、取数也落在错误路由上，切走切回不恢复，只有 F5 重建外壳才正确
+  // ——正是「切页后内容空白/错位、刷新才有数据」的根因。
+  //
+  // 这里把 segmentContext 放回依赖：导航落定 / RSC 缓存重新校验后 Next 会用新的 tree 刷新
+  // 它，effect 随即用最新 context 校正当前视图，快照与真实路由重新对齐。依赖它「不会」
+  // 重新引入假死——假死主因是把 live context 直接传给 memo 的 KeptView（击穿 memo、整棵
+  // 子树空转重渲染），而这里传给 KeptView 的始终是稳定快照 view.context（见下方渲染处）；
+  // effect 体内先用引用比较 bail，稳定页即使被调度也不会 setViews。
   useEffect(() => {
     const current = viewsRef.current.find((view) => view.href === currentHref);
-    if (!current || current.element === children) {
+    if (!current || current.context === segmentContext) {
       if (process.env.NODE_ENV !== "production") bumpShellCause("effectBail");
       return;
     }
     if (process.env.NODE_ENV !== "production") bumpShellCause("effectSetViews");
-    const latestContext = segmentContextRef.current;
     startTransition(() => {
-      setViews((prev) => upsertView(prev, currentHref, children, latestContext));
+      setViews((prev) => upsertView(prev, currentHref, children, segmentContext));
     });
-  }, [children, currentHref]);
+  }, [children, currentHref, segmentContext]);
 
   // 只渲染仍在标签栏里的视图；被关掉或被标签上限挤掉的视图顺带释放。
   const renderedViews = syncedViews.filter(
