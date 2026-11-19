@@ -8,9 +8,10 @@ import { sellfoxStoreFailure, SellfoxStoreSyncError } from "./sync-errors";
 
 /**
  * 订单详情批量同步器。
- * 接口 /api/order/detailByOrderIds.json 按「店铺 + 卖家订单ID（最多200个）」查详情，
- * 没有日期分页，因此以已同步的订单快照（SellfoxOrderSnapshot）为驱动源：
- * 按店铺取 distinct sellerOrderId，排序后每 200 个一批回填详情到 SellfoxOrderDetail。
+ * 接口 /api/order/detailByOrderIds.json 支持按「店铺 + amazonOrderId 或 sellerOrderId（最多200个）」查详情，
+ * 二者都填时按 amazonOrderId 搜索。订单列表接口只回带 amazonOrderId（快照的 orderId 列），
+ * 快照的 sellerOrderId 列在真实数据里为 null，因此以 orderId（即 amazonOrderId）为驱动源：
+ * 按店铺取 distinct orderId，排序后每 200 个一批，用 amazonOrderId 参数回填详情到 SellfoxOrderDetail。
  * 断点按店铺记录已处理的订单游标（processed），进程回收后可续跑；upsert 幂等。
  */
 export type OrderDetailCheckpoint = Record<string, { processed: number; done: boolean; count: number; error?: string }>;
@@ -45,20 +46,22 @@ export async function syncSellfoxOrderDetail(input: {
     let written = checkpoint[store.externalId]?.count ?? 0;
     try {
       if (!Number.isSafeInteger(processed) || processed < 0) throw new SellfoxSyncInputError("订单详情断点无效。");
-      // 驱动源：订单快照里该店铺的 distinct sellerOrderId（行级快照需去重）。
+      // 驱动源：订单快照里该店铺的 distinct orderId（= amazonOrderId，行级快照需去重）。
+      // 不使用 sellerOrderId 列：订单列表接口不回带该字段，真实数据里恒为 null。
       const orderRows = await dependencies.db.sellfoxOrderSnapshot.findMany({
-        where: { organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: store.id, sellerOrderId: { not: null } },
-        select: { sellerOrderId: true },
-        distinct: ["sellerOrderId"],
-        orderBy: { sellerOrderId: "asc" },
+        where: { organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: store.id },
+        select: { orderId: true },
+        distinct: ["orderId"],
+        orderBy: { orderId: "asc" },
       });
-      const ids = Array.from(new Set(orderRows.map((row) => row.sellerOrderId as string).filter(Boolean))).sort();
+      const ids = Array.from(new Set(orderRows.map((row) => row.orderId as string).filter(Boolean))).sort();
       if (processed > ids.length) throw new SellfoxSyncInputError("订单详情断点超过订单总数。");
       while (processed < ids.length) {
         const batch = ids.slice(processed, processed + BATCH_SIZE);
+        // 文档：amazonOrderId 与 sellerOrderId 二选一，都填按 amazonOrderId 搜索。
         const payload = await dependencies.post<unknown>("/api/order/detailByOrderIds.json", {
           shopId: store.externalId,
-          sellerOrderId: batch.join(","),
+          amazonOrderId: batch.join(","),
         });
         const details = sellfoxOrderDetailRows(payload);
         await dependencies.db.$transaction(async (tx) => {

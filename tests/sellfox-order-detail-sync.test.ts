@@ -50,10 +50,15 @@ function makeDeps(orderIds: string[], opts: { failPost?: boolean } = {}) {
   const rows = new Map<string, Record<string, unknown>>();
   const calls: string[][] = [];
   let postCalls = 0;
+  let lastSnapshotSelect = "";
   const db = {
     sellfoxStore: { findMany: async () => [{ id: "store-1", externalId: "shop-1" }] },
     sellfoxOrderSnapshot: {
-      findMany: async () => orderIds.map((sellerOrderId) => ({ sellerOrderId })),
+      // 真实快照只有 orderId(=amazonOrderId) 有值，sellerOrderId 恒为 null。
+      findMany: async (args: { select: Record<string, unknown> }) => {
+        lastSnapshotSelect = Object.keys(args.select ?? {}).join(",");
+        return orderIds.map((orderId) => ({ orderId }));
+      },
     },
     $transaction: async (fn: (tx: unknown) => Promise<void>) => {
       const pending = new Map(rows);
@@ -69,14 +74,17 @@ function makeDeps(orderIds: string[], opts: { failPost?: boolean } = {}) {
       for (const [k, v] of pending) rows.set(k, v);
     },
   };
-  const post = async (_path: string, body: { sellerOrderId: string }) => {
+  const post = async (_path: string, body: { amazonOrderId: string; sellerOrderId?: string }) => {
     postCalls += 1;
     if (opts.failPost) throw new Error("private transport error");
-    const ids = body.sellerOrderId.split(",");
+    // 守护真实契约：必须用 amazonOrderId 参数，且不能误用 sellerOrderId。
+    assert.equal(body.sellerOrderId, undefined, "不得使用 sellerOrderId 参数（订单列表接口不回带该字段）");
+    assert.ok(body.amazonOrderId, "必须使用 amazonOrderId 参数驱动详情接口");
+    const ids = body.amazonOrderId.split(",");
     calls.push(ids);
-    return ids.map((id) => ({ ...baseRow, sellerOrderId: id, amazonOrderId: `AMZ-${id}`, shopId: "shop-1" }));
+    return ids.map((id) => ({ ...baseRow, sellerOrderId: id, amazonOrderId: id, shopId: "shop-1" }));
   };
-  return { db, post, rows, calls, getPostCalls: () => postCalls };
+  return { db, post, rows, calls, getPostCalls: () => postCalls, getSnapshotSelect: () => lastSnapshotSelect };
 }
 
 test("订单详情同步按 200 分批、幂等写入、进度可续跑", async () => {
@@ -92,6 +100,7 @@ test("订单详情同步按 200 分批、幂等写入、进度可续跑", async 
   assert.equal(deps.rows.size, 450, "全部订单详情应落库");
   assert.equal(result.count, 450);
   assert.equal(checkpoint?.["shop-1"].done, true);
+  assert.equal(deps.getSnapshotSelect(), "orderId", "驱动查询必须读 orderId（=amazonOrderId），不能读恒空的 sellerOrderId");
 
   // 续跑：已完成店铺直接跳过
   const deps2 = makeDeps(ids);
