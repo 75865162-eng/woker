@@ -132,7 +132,12 @@ export function adsAggDailyStatement(input: AggRefreshInput) {
       AND src."reportDate" >= ${from} AND src."reportDate" <= ${to}
       AND (${input.shopExternalIds.length === 0} OR st."externalId" = ANY(${input.shopExternalIds}::text[]))
     GROUP BY src."organizationId",src."workspaceId",src."storeId",src."reportDate",src."adType",src."campaignId",src."adGroupId",src."targetingId",src."entityType"
-    ON CONFLICT ("organizationId","workspaceId","storeId","reportDate","adType","campaignId","adGroupId","targetingId","entityType") DO UPDATE SET
+    -- ON CONFLICT targets the deterministic surrogate id, NOT the natural key:
+    -- the natural key contains nullable columns (adGroupId/targetingId), and in
+    -- PostgreSQL NULL != NULL, so a re-run would insert duplicate id rows and hit
+    -- the primary key. The id already encodes every key dimension (NULL as '~'),
+    -- so conflicting on id makes the refresh truly idempotent against prior runs.
+    ON CONFLICT (id) DO UPDATE SET
       "impressions"=EXCLUDED."impressions", "clicks"=EXCLUDED."clicks", "cost"=EXCLUDED."cost",
       "adOrders"=EXCLUDED."adOrders", "adSales"=EXCLUDED."adSales", "currency"=EXCLUDED."currency",
       "sourceCapturedAt"=EXCLUDED."sourceCapturedAt", "refreshedAt"=now()

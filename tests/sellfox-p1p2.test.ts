@@ -63,6 +63,14 @@ test("agg statements are tenant-scoped and never write Amazon tables", () => {
   }
 });
 
+test("ads aggregate conflict target is the surrogate id (nullable natural key would not be idempotent)", () => {
+  const text = String(adsAggDailyStatement(base)!.text);
+  assert.match(text, /ON CONFLICT \(id\) DO UPDATE/);
+  assert.match(text, /coalesce\(src\."adGroupId",'~'\)/);
+  // The natural key contains nullable columns; conflict on it would duplicate NULL rows.
+  assert.doesNotMatch(text, /ON CONFLICT \("organizationId","workspaceId","storeId","reportDate","adType","campaignId","adGroupId","targetingId","entityType"\)/);
+});
+
 test("inventory aggregate statement uses the current-state view and NULL-preserving SUM", () => {
   const text = String(inventoryAggStatement(base)!.text);
   assert.match(text, /sellfox_inventory_current/);
