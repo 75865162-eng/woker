@@ -48,16 +48,29 @@ export function buildRestockRows(input: {
     const key = `${listing.storeId}\u0000${identity}`;
     groups.set(key, [...(groups.get(key) ?? []), listing]);
   }
+  // 性能：原实现对每个组都在全量 sales(1.2万) / shipments(2.7万) 上 filter，
+  // 组数约 9 千 → O(组×明细) 约 3.8 亿次迭代，实测计算 24 秒。
+  // 先按 storeId 预分桶，组只需在自己店铺的明细里匹配，语义完全等价（belongs 不变）。
+  const salesByStore = new Map<string, RestockSale[]>();
+  for (const sale of input.sales) {
+    const list = salesByStore.get(sale.storeId);
+    if (list) list.push(sale); else salesByStore.set(sale.storeId, [sale]);
+  }
+  const shipmentsByStore = new Map<string, RestockShipmentLine[]>();
+  for (const line of input.shipments) {
+    const list = shipmentsByStore.get(line.storeId);
+    if (list) list.push(line); else shipmentsByStore.set(line.storeId, [line]);
+  }
   return [...groups.entries()].map(([key, listings]) => {
     const [storeId, identity] = key.split("\u0000");
     const members = new Set(listings.flatMap((listing) => [listing.msku, listing.asin].filter((value): value is string => Boolean(value))));
     const belongs = (line: { storeId: string; msku: string; asin: string }) => line.storeId === storeId && (input.groupBy === "msku" ? line.msku === identity : members.has(line.msku) || members.has(line.asin));
-    const sales = mergeRestockDays(input.sales.filter(belongs).map((sale): RestockDay => {
+    const sales = mergeRestockDays((salesByStore.get(storeId) ?? []).filter(belongs).map((sale): RestockDay => {
       const quantity = inventory.get(JSON.stringify([sale.storeId, sale.msku, sale.reportDate]));
       return { date: sale.reportDate, quantity: sale.quantity, stockout: quantity == null ? undefined : quantity === 0 };
     }));
     const rates = restockDailyRates(sales, input.today);
-    const shipmentLines = input.shipments.filter(belongs);
+    const shipmentLines = (shipmentsByStore.get(storeId) ?? []).filter(belongs);
     const fulfillable = sumKnown(listings.map((listing) => listing.fulfillable));
     const inTransit = capturedStores.has(storeId) ? inboundUnits(shipmentLines) : null;
     const suggest = suggestRestockQuantity({ fulfillable, inTransit, daily: rates.weighted, prepDays: input.prepDays, safetyDays: input.safetyDays });
