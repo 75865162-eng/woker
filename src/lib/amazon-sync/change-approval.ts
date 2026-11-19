@@ -36,7 +36,7 @@ import { assertWorkspaceAccess } from "@/lib/workspace/access";
 import { SyncInputError, requiredText, optionalAmazonSellerId, parseSyncPlan, officialEndpoint, implementedDomain, type SyncScope } from "./policy";
 import { operation, operationTypes, normalizeCommand, summary, safeState, digest, seal, unseal, targetEnvironment, assertDecision, assertApplicable, type ChangeOperation } from "./approval-policy";
 import { withApprovedChange } from "./approved-context";
-import { scopeLock, saveAuthorization, saveSource, savePlan, requestTasks, controlTask, disableAuthorization, performAuthorizationValidation } from "./service";
+import { scopeLock, saveAuthorization, saveSource, savePlan, requestTasks, controlTask, disableAuthorization, enableAuthorization, performAuthorizationValidation } from "./service";
 import { inspectFinanceSiteRecovery } from "./finance-site-recovery";
 import { inspectProductRecovery } from "./product-recovery";
 import { ensureAmazonSyncInitialized } from "./scheduler";
@@ -52,7 +52,7 @@ export function changeView(row: AmazonDataCenterChangeRequest) {
 export async function assertChangePermission(scope: SyncScope, actor: string, action: ChangeOperation | "approve" | "view" | "export", tx: Prisma.TransactionClient) {
   if (!await assertWorkspaceAccess(scope.organizationId, scope.workspaceId, actor, tx)) throw new SyncInputError("工作区不可访问。", 403);
   const member = await tx.organizationMember.findUnique({ where: { organizationId_userId: { organizationId: scope.organizationId, userId: actor } }, include: { user: { select: { status: true } } } });
-  const config = ["save-authorization", "disable-authorization", "save-source", "validate-authorization", "save-access-grant", "adopt-identity", "recover-finance-window", "recover-report"].includes(action);
+  const config = ["save-authorization", "disable-authorization", "enable-authorization", "save-source", "validate-authorization", "save-access-grant", "adopt-identity", "recover-finance-window", "recover-report"].includes(action);
   const moduleId = config ? "settings" : "operations";
   const permission = action === "approve" ? "approve" : action === "view" ? "view" : action === "export" ? "export" : config || action === "save-plan" || action === "control-task" ? "edit" : "create";
   const permissions: RolePermissionMap = { ...defaultRolePermissionMap };
@@ -133,7 +133,7 @@ async function inspect(tx: Prisma.TransactionClient, scope: SyncScope, command: 
     sourceIds = report.manifest.sources.map(source => source.id);
     baseRevision = report.manifest.authorization.revision;
     authId = id;
-  } else if (["save-authorization", "disable-authorization", "validate-authorization"].includes(action)) {
+  } else if (["save-authorization", "disable-authorization", "enable-authorization", "validate-authorization"].includes(action)) {
     const auth = id ? await tx.amazonSpApiAuthorization.findFirst({ where: { ...scope, id }, select: authSelect }) : null;
     if (id && !auth) throw new SyncInputError("授权不存在。", 404);
     if (action !== "save-authorization" && !auth) throw new SyncInputError("请选择授权。");
@@ -356,7 +356,7 @@ export async function decideChange(scope: SyncScope, actor: string, id: string, 
     await scopeLock(tx, scope); const approver = await assertChangePermission(scope, actor, "approve", tx);
     const row = await tx.amazonDataCenterChangeRequest.findFirst({ where: { ...scope, id } });
     if (!row) throw new SyncInputError("审批不存在。", 404);
-    if (["save-access-grant", "save-authorization", "disable-authorization", "save-source", "validate-authorization", "adopt-identity", "recover-finance-window", "recover-report"].includes(row.operation)) await assertAmazonScopeAdmin(scope, actor, tx);
+    if (["save-access-grant", "save-authorization", "disable-authorization", "enable-authorization", "save-source", "validate-authorization", "adopt-identity", "recover-finance-window", "recover-report"].includes(row.operation)) await assertAmazonScopeAdmin(scope, actor, tx);
     if (decision === "APPROVED" && row.status === "REQUESTED" && row.expiresAt <= new Date()) {
       await tx.amazonDataCenterChangeRequest.updateMany({ where: { ...scope, id, status: "REQUESTED" }, data: { status: "EXPIRED", decidedAt: new Date(), decisionReason: "审批请求已过期。" } });
       await tx.amazonDataCenterSealedCommand.deleteMany({ where: { ...scope, id } });
@@ -414,6 +414,7 @@ async function dispatch(scope: SyncScope, actor: string, command: Record<string,
     case "save-access-grant": return saveAccessGrant(scope, actor, command);
     case "save-authorization": return saveAuthorization(scope, actor, command);
     case "disable-authorization": return disableAuthorization(scope, actor, requiredText(command.id, "授权 ID"), command.revision);
+    case "enable-authorization": return enableAuthorization(scope, actor, requiredText(command.id, "授权 ID"), command.revision);
     case "save-source": return saveSource(scope, actor, command);
     case "save-plan": return savePlan(scope, actor, command);
     case "run": return requestTasks(scope, actor, command);
@@ -507,7 +508,7 @@ export async function applyChange(scope: SyncScope, actor: string, id: string) {
       const action = operation(row.operation);
       await assertChangePermission(scope, actor, action, tx);
       await assertChangePermission(scope, row.approvedByUserId ?? "", "approve", tx);
-      if (["save-access-grant", "save-authorization", "disable-authorization", "save-source", "validate-authorization", "recover-finance-window", "recover-report"].includes(action)) await assertAmazonScopeAdmin(scope, row.approvedByUserId ?? "", tx);
+      if (["save-access-grant", "save-authorization", "disable-authorization", "enable-authorization", "save-source", "validate-authorization", "recover-finance-window", "recover-report"].includes(action)) await assertAmazonScopeAdmin(scope, row.approvedByUserId ?? "", tx);
       const allowInactiveAutomaticPlan = ["recover-finance-window", "recover-report"].includes(action) || action === "save-plan" && await isAutomaticPlan(tx, scope, row.targetId) || action === "control-task" && await isScheduledFinanceControl(tx, scope, row.targetId);
       await checkTargetAccess(tx, scope, actor, row.sourceIds, allowInactiveAutomaticPlan);
       await checkTargetAccess(tx, scope, row.approvedByUserId ?? "", row.sourceIds, allowInactiveAutomaticPlan);

@@ -8,7 +8,7 @@ import { parseFinancePolicy } from "./finance";
 import { parseOrderSyncPolicy } from "./orders";
 export const operationTypes = {
   "save-access-grant": "ScopeBindingChange",
-  "save-authorization": "CredentialChange", "disable-authorization": "CredentialChange",
+  "save-authorization": "CredentialChange", "disable-authorization": "CredentialChange", "enable-authorization": "CredentialChange",
   "save-source": "ScopeBindingChange", "save-plan": "SyncPolicyChange",
   "run": "SyncExecutionRequest", "control-task": "SyncExecutionRequest",
   "validate-authorization": "SyncExecutionRequest",
@@ -38,7 +38,7 @@ export function operation(value: unknown): ChangeOperation {
 const allowed: Record<ChangeOperation, string[]> = {
   "save-access-grant": ["id", "proposedId", "revision", "userId", "roleId", "sellerAccountId", "enabled", "marketplaceIds", "actions", "mcpEnabled"],
   "save-authorization": ["id", "proposedId", "revision", "name", "amazonSellerId", "region", "endpoint", "lwaClientId", "lwaClientSecret", "refreshToken", "awsAccessKeyId", "awsSecretAccessKey", "awsSessionToken", "approvedRoles"],
-  "disable-authorization": ["id", "revision"], "validate-authorization": ["id", "revision"],
+  "disable-authorization": ["id", "revision"], "enable-authorization": ["id", "revision"], "validate-authorization": ["id", "revision"],
   "adopt-identity": ["id", "revision", "amazonSellerId", "reviewedAt", "manifestDigest"],
   "recover-finance-window": ["id", "revision", "reviewedAt", "recoveryDigest", "sameWindowReplay"],
   "recover-report": ["id", "revision", "recoveryDigest", "reportWindow", "settlementPolicy", "attributionOnly", "currencyOnly", "reportDocumentIds", "fieldScanOnly", "listingAttributesOnly", "orderFulfillmentOnly", "inboundItemsOnly", "archiveOnly", "productAccessOnly", "reportDocumentId", "taskId", "rawPages"],

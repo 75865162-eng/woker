@@ -155,7 +155,7 @@ export async function POST(request: Request) {
     try { const value: unknown = await request.clone().json(); if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(); body = value as Record<string, unknown>; }
     catch { return json({ error: "请求须为 JSON 对象。" }, 400); }
     const action = body.action;
-    const config = ["save-authorization", "validate-authorization", "disable-authorization", "save-source", "save-access-grant", "adopt-identity", "recover-finance-window", "recover-report"].includes(String(action));
+    const config = ["save-authorization", "validate-authorization", "disable-authorization", "enable-authorization", "save-source", "save-access-grant", "adopt-identity", "recover-finance-window", "recover-report"].includes(String(action));
     const operationAction = action === "save-plan" || action === "control-task" ? "edit" : "create";
     if (!process.env.DATABASE_URL) return json({ error: "数据库未配置。" }, 503);
     const writePermission = await requireApiPermission(config ? "settings" : "operations", config ? "edit" : operationAction, request);
