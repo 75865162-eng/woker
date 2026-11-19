@@ -158,12 +158,59 @@ export function overviewAggStatement(input: AggRefreshInput) {
   `;
 }
 
+/**
+ * Build the inventory-current aggregate refresh statement (pure, testable SQL).
+ * Source is the `sellfox_inventory_current` view, which already de-duplicates to the
+ * latest complete capture per store via SellfoxSnapshotHead. We roll it up to
+ * (org, ws, storeId, msku); NULL-preserving SUM keeps missing components as NULL.
+ * `warehouseCount` = number of warehouse/source rows folded into the SKU.
+ */
+export function inventoryAggStatement(input: AggRefreshInput) {
+  return Prisma.sql`
+    INSERT INTO "SellfoxInventoryAgg"
+      ("id","organizationId","workspaceId","storeId","msku","asin",
+       "quantity","totalInventory","inTransit","inboundWorking","inboundShipped","inboundReceiving",
+       "reservedTransfer","reservedProcessing","reservedCustomerorders","unfulfillable",
+       "avgInventoryCost","avgTransportCost","currency","warehouseCount","sourceCapturedAt","refreshedAt")
+    SELECT
+      concat('invagg|', i."storeId", '|', i."msku")::text,
+      i."organizationId", i."workspaceId", i."storeId", i."msku", max(i.asin),
+      CASE WHEN count(i."quantity")=count(*) THEN SUM(i."quantity")::int END,
+      CASE WHEN count(i."totalInventory")=count(*) THEN SUM(i."totalInventory")::int END,
+      CASE WHEN count(i."inTransit")=count(*) THEN SUM(i."inTransit")::int END,
+      CASE WHEN count(i."inboundWorking")=count(*) THEN SUM(i."inboundWorking")::int END,
+      CASE WHEN count(i."inboundShipped")=count(*) THEN SUM(i."inboundShipped")::int END,
+      CASE WHEN count(i."inboundReceiving")=count(*) THEN SUM(i."inboundReceiving")::int END,
+      CASE WHEN count(i."reservedTransfer")=count(*) THEN SUM(i."reservedTransfer")::int END,
+      CASE WHEN count(i."reservedProcessing")=count(*) THEN SUM(i."reservedProcessing")::int END,
+      CASE WHEN count(i."reservedCustomerorders")=count(*) THEN SUM(i."reservedCustomerorders")::int END,
+      CASE WHEN count(i.unfulfillable)=count(*) THEN SUM(i.unfulfillable)::int END,
+      max(i."avgInventoryCost"), max(i."avgTransportCost"),
+      max(i.currency), count(*)::int, max(i."capturedAt"), now()
+    FROM sellfox_inventory_current i
+    WHERE i."organizationId"=${input.organizationId} AND i."workspaceId"=${input.workspaceId}
+      AND (${input.shopExternalIds.length === 0} OR i."shopExternalId" = ANY(${input.shopExternalIds}::text[]))
+    GROUP BY i."organizationId", i."workspaceId", i."storeId", i."msku"
+    ON CONFLICT ("organizationId","workspaceId","storeId","msku") DO UPDATE SET
+      "asin"=EXCLUDED."asin", "quantity"=EXCLUDED."quantity", "totalInventory"=EXCLUDED."totalInventory",
+      "inTransit"=EXCLUDED."inTransit", "inboundWorking"=EXCLUDED."inboundWorking",
+      "inboundShipped"=EXCLUDED."inboundShipped", "inboundReceiving"=EXCLUDED."inboundReceiving",
+      "reservedTransfer"=EXCLUDED."reservedTransfer", "reservedProcessing"=EXCLUDED."reservedProcessing",
+      "reservedCustomerorders"=EXCLUDED."reservedCustomerorders", "unfulfillable"=EXCLUDED."unfulfillable",
+      "avgInventoryCost"=EXCLUDED."avgInventoryCost", "avgTransportCost"=EXCLUDED."avgTransportCost",
+      "currency"=EXCLUDED."currency", "warehouseCount"=EXCLUDED."warehouseCount",
+      "sourceCapturedAt"=EXCLUDED."sourceCapturedAt", "refreshedAt"=now()
+  `;
+}
+
 /** Which aggregate statements apply to a given synced resource. */
 export function aggregateStatementsFor(input: AggRefreshInput) {
   const list: Array<{ name: string; sql: Prisma.Sql | null }> = [];
   if (input.resource === "sales") list.push({ name: "sales_daily", sql: salesAggDailyStatement(input) });
   if (input.resource === "performance") list.push({ name: "profit_daily", sql: profitAggDailyStatement(input) });
   if (ADS_RESOURCES.has(input.resource)) list.push({ name: "ads_daily", sql: adsAggDailyStatement(input) });
+  // inventory-current aggregate: refresh after any inventory sync.
+  if (input.resource === "inventory") list.push({ name: "inventory_current", sql: inventoryAggStatement(input) });
   // Overview is a cheap whole-workspace rollup; refresh it after any fact-domain sync.
   if (["sales", "performance", "inventory", "stores", ...ADS_RESOURCES].includes(input.resource)) {
     list.push({ name: "overview", sql: overviewAggStatement(input) });

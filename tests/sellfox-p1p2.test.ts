@@ -2,10 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   aggregateStatementsFor, aggId, salesAggDailyStatement, profitAggDailyStatement,
-  adsAggDailyStatement, overviewAggStatement, refreshSellfoxAggregates,
+  adsAggDailyStatement, overviewAggStatement, inventoryAggStatement, refreshSellfoxAggregates,
 } from "../src/lib/sellfox/agg-refresh";
 import {
-  compareAggregateRows, reconcileSalesAggDaily, assertReconciled, SALES_AGG_FIELDS,
+  compareAggregateRows, reconcileSalesAggDaily, assertReconciled, SALES_AGG_FIELDS, INVENTORY_AGG_FIELDS,
 } from "../src/lib/sellfox/aggregate-reconcile";
 import { listingProfileColumnList, listingProfileRefreshStatements } from "../src/lib/sellfox/listing-profile-refresh";
 
@@ -30,6 +30,10 @@ test("aggregate statement dispatch follows resource and keeps NULL-preserving SU
   const ads = aggregateStatementsFor({ ...base, resource: "ads_report" });
   assert.deepEqual(ads.map((s) => s.name), ["ads_daily", "overview"]);
 
+  // inventory sync refreshes both the current-state aggregate and the overview rollup.
+  const inventory = aggregateStatementsFor({ ...base, resource: "inventory" });
+  assert.deepEqual(inventory.map((s) => s.name), ["inventory_current", "overview"]);
+
   // A non-fact resource only refreshes the cheap overview rollup.
   const orders = aggregateStatementsFor({ ...base, resource: "orders" });
   assert.deepEqual(orders.map((s) => s.name), []);
@@ -46,15 +50,27 @@ test("statements require a date window and return null otherwise", () => {
   assert.equal(profitAggDailyStatement({ ...base, reportDate: undefined }), null);
   assert.equal(adsAggDailyStatement({ ...base, reportDate: undefined }), null);
   assert.ok(overviewAggStatement(base));
+  // inventory is a current-state rollup — it does not need a date window.
+  assert.ok(inventoryAggStatement(base));
 });
 
 test("agg statements are tenant-scoped and never write Amazon tables", () => {
-  const all = [salesAggDailyStatement(base), profitAggDailyStatement({ ...base, resource: "performance" }), adsAggDailyStatement({ ...base, resource: "ads_report" }), overviewAggStatement(base)];
+  const all = [salesAggDailyStatement(base), profitAggDailyStatement({ ...base, resource: "performance" }), adsAggDailyStatement({ ...base, resource: "ads_report" }), inventoryAggStatement(base), overviewAggStatement(base)];
   for (const stmt of all) {
     const text = String(stmt!.text).toLowerCase();
     assert.ok(text.includes("organizationid") && text.includes("workspaceid"), "must carry tenant scope");
     assert.ok(!text.includes("amazon"), "must not touch Amazon data");
   }
+});
+
+test("inventory aggregate statement uses the current-state view and NULL-preserving SUM", () => {
+  const text = String(inventoryAggStatement(base)!.text);
+  assert.match(text, /sellfox_inventory_current/);
+  assert.match(text, /CASE WHEN count\(i\."quantity"\)=count\(\*\) THEN SUM\(i\."quantity"\)::int END/);
+  assert.match(text, /count\(\*\)::int, max\(i\."capturedAt"\)/);
+  assert.match(text, /ON CONFLICT \("organizationId","workspaceId","storeId","msku"\)/);
+  assert.match(text, /SellfoxInventoryAgg/);
+  assert.deepEqual(INVENTORY_AGG_FIELDS.includes("warehouseCount"), true);
 });
 
 test("refreshSellfoxAggregates executes exactly the dispatched statements via injected writer", async () => {

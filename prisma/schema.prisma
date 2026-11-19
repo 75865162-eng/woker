@@ -1727,6 +1727,58 @@ model SellfoxOverviewAgg {
   @@id([organizationId, workspaceId])
 }
 
+/// 库存当前态聚合：(org,ws,store,msku) 粒度，来自 sellfox_inventory_current 视图。
+/// 把「最近一次完整采集」视图的逐 SKU 明细预聚合为可复用的读模型；页面 totals
+/// （quantity/totalInventory/unfulfillable）与 coverage 可直接从本表读取。
+/// 度量沿用 NULL-preserving 口径：任一行缺值整列 null，绝不补零。
+model SellfoxInventoryAgg {
+  id                       String    @id
+  organizationId           String
+  workspaceId              String    @default("default")
+  storeId                  String
+  msku                     String
+  asin                     String?
+  quantity                 Int?
+  totalInventory           Int?
+  inTransit                Int?
+  inboundWorking           Int?
+  inboundShipped           Int?
+  inboundReceiving         Int?
+  reservedTransfer         Int?
+  reservedProcessing       Int?
+  reservedCustomerorders   Int?
+  unfulfillable            Int?
+  avgInventoryCost         Decimal?  @db.Decimal(20, 4)
+  avgTransportCost         Decimal?  @db.Decimal(20, 4)
+  currency                 String?
+  warehouseCount           Int?
+  sourceCapturedAt         DateTime?
+  refreshedAt              DateTime  @default(now())
+
+  @@unique([organizationId, workspaceId, storeId, msku], map: "sellfox_inventory_agg_identity")
+  @@index([organizationId, workspaceId], map: "sellfox_inventory_agg_scope")
+}
+
+/// 补货建议物化结果（派生读模型，以赛狐 buildRestockRows 算法为权威）。
+/// 按 (org,ws,dimension,inputDate) 存一份全量建议快照：rows 为 buildRestockRows 的逐行输出，
+/// 供冷启动免全量重算；是否切读由对账（物化 vs 实时逐行 0 差异）与 source 开关决定。
+/// 与 operations.AmazonReplenishmentPlan 是两套独立算法，不共用、不互相覆盖。
+model SellfoxRestockSnapshot {
+  id             String   @id
+  organizationId String
+  workspaceId    String   @default("default")
+  dimension      String
+  inputDate      String
+  rowCount       Int
+  suggestTotal   Decimal? @db.Decimal(20, 4)
+  rows           Json
+  inputVersion   String?
+  generatedAt    DateTime @default(now())
+
+  @@unique([organizationId, workspaceId, dimension, inputDate], map: "sellfox_restock_snapshot_identity")
+  @@index([organizationId, workspaceId, dimension], map: "sellfox_restock_snapshot_lookup")
+}
+
 /// 后台配置的赛狐 API 端点。新增接口只需填一条配置，编排器自动生成全量计划、定时与回填。
 model SellfoxApiEndpoint {
   id             String    @id

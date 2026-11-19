@@ -54,6 +54,11 @@ export const SALES_AGG_FIELDS = ["quantity", "orders", "revenueOriginal", "curre
 export const PROFIT_AGG_FIELDS = ["saleQuantity", "saleRevenue", "grossProfit", "netRevenue", "adCost", "currency"];
 export const ADS_AGG_FIELDS = ["impressions", "clicks", "cost", "adOrders", "adSales", "currency"];
 export const OVERVIEW_AGG_FIELDS = ["storeCount", "inventoryCount", "latestSalesDate", "latestProfitDate"];
+export const INVENTORY_AGG_FIELDS = [
+  "quantity", "totalInventory", "inTransit", "inboundWorking", "inboundShipped", "inboundReceiving",
+  "reservedTransfer", "reservedProcessing", "reservedCustomerorders", "unfulfillable",
+  "avgInventoryCost", "avgTransportCost", "currency", "warehouseCount",
+];
 
 type Query = (sql: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
 
@@ -215,6 +220,57 @@ export async function reconcileOverviewAgg(
 
   const keyOf = () => "overview";
   const diffs = compareAggregateRows(sourceRows, aggregateRows, OVERVIEW_AGG_FIELDS, keyOf);
+  return {
+    scope,
+    sourceRows: sourceRows.length,
+    aggregateRows: aggregateRows.length,
+    diffs,
+    ok: diffs.length === 0 && sourceRows.length === aggregateRows.length,
+  };
+}
+
+/**
+ * Reconcile SellfoxInventoryAgg against the `sellfox_inventory_current` view,
+ * mirroring inventoryAggStatement's grouping and NULL-preserving口径 exactly.
+ * Inventory is a current-state rollup (no date window); from/to are informational.
+ */
+export async function reconcileInventoryAgg(
+  query: Query,
+  scope: { organizationId: string; workspaceId: string; from: string; to: string },
+): Promise<ReconcileReport> {
+  const sourceRows = (await query(
+    `SELECT i."storeId", i."msku",
+       CASE WHEN count(i."quantity")=count(*) THEN SUM(i."quantity")::int END AS "quantity",
+       CASE WHEN count(i."totalInventory")=count(*) THEN SUM(i."totalInventory")::int END AS "totalInventory",
+       CASE WHEN count(i."inTransit")=count(*) THEN SUM(i."inTransit")::int END AS "inTransit",
+       CASE WHEN count(i."inboundWorking")=count(*) THEN SUM(i."inboundWorking")::int END AS "inboundWorking",
+       CASE WHEN count(i."inboundShipped")=count(*) THEN SUM(i."inboundShipped")::int END AS "inboundShipped",
+       CASE WHEN count(i."inboundReceiving")=count(*) THEN SUM(i."inboundReceiving")::int END AS "inboundReceiving",
+       CASE WHEN count(i."reservedTransfer")=count(*) THEN SUM(i."reservedTransfer")::int END AS "reservedTransfer",
+       CASE WHEN count(i."reservedProcessing")=count(*) THEN SUM(i."reservedProcessing")::int END AS "reservedProcessing",
+       CASE WHEN count(i."reservedCustomerorders")=count(*) THEN SUM(i."reservedCustomerorders")::int END AS "reservedCustomerorders",
+       CASE WHEN count(i.unfulfillable)=count(*) THEN SUM(i.unfulfillable)::int END AS "unfulfillable",
+       max(i."avgInventoryCost")::text AS "avgInventoryCost", max(i."avgTransportCost")::text AS "avgTransportCost",
+       max(i.currency) AS "currency", count(*)::int AS "warehouseCount"
+     FROM sellfox_inventory_current i
+     WHERE i."organizationId"=$1 AND i."workspaceId"=$2
+     GROUP BY i."storeId", i."msku"`,
+    [scope.organizationId, scope.workspaceId],
+  )).rows;
+
+  const aggregateRows = (await query(
+    `SELECT "storeId", "msku", "quantity", "totalInventory", "inTransit", "inboundWorking",
+       "inboundShipped", "inboundReceiving", "reservedTransfer", "reservedProcessing",
+       "reservedCustomerorders", "unfulfillable",
+       "avgInventoryCost"::text AS "avgInventoryCost", "avgTransportCost"::text AS "avgTransportCost",
+       "currency", "warehouseCount"
+     FROM "SellfoxInventoryAgg"
+     WHERE "organizationId"=$1 AND "workspaceId"=$2`,
+    [scope.organizationId, scope.workspaceId],
+  )).rows;
+
+  const keyOf = (row: Record<string, unknown>) => `${row.storeId}|${row.msku}`;
+  const diffs = compareAggregateRows(sourceRows, aggregateRows, INVENTORY_AGG_FIELDS, keyOf);
   return {
     scope,
     sourceRows: sourceRows.length,
