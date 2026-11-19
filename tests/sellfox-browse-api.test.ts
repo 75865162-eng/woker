@@ -796,7 +796,7 @@ test("legacy browse shells apply validated server ordering with filters and pagi
 });
 
 
-test("salesperson reaches performance browse and CSV/XLSX/Agent exports; sales ignores it", async () => {
+test("salesperson reaches performance and sales browse/exports via typed facts or EXISTS association", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
@@ -819,7 +819,8 @@ test("salesperson reaches performance browse and CSV/XLSX/Agent exports; sales i
         const response = await browseHandler(request(extra)); assert.equal(response.status, 200);
         if (domain === "performance") assert.deepEqual((await response.json()).facets, facets);
         assert.ok(calls.length > 0);
-        for (const sql of calls) assert.equal(sql.values.includes("温见清"), domain === "performance");
+        for (const sql of calls) if (domain === "performance") assert.ok(sql.values.includes("温见清"));
+        if (domain === "sales") assert.ok(calls.some(sql => sql.values.includes("温见清")));
       }
       const handlers = [
         ...(domain === "performance" ? ["&format=csv", "&format=xlsx", "&layout=workbench&format=csv", "&layout=workbench&format=xlsx", "&agent=1", "&layout=workbench&agent=1"] : ["&layout=workbench&format=csv", "&layout=workbench&format=xlsx", "&agent=1"]).map(extra => () => csv(request(extra), context)),
@@ -830,8 +831,8 @@ test("salesperson reaches performance browse and CSV/XLSX/Agent exports; sales i
         for (const sql of calls) {
           assert.doesNotMatch(sql.text, /payload/);
           if (domain === "performance") assert.match(sql.text, /s\."userNameList" @> ARRAY\[\$\d+\]::text\[\]/);
-          else assert.doesNotMatch(sql.text, /userNameList/);
-          assert.equal(sql.values.includes("温见清"), domain === "performance");
+          else { assert.match(sql.text, /pd\."userNameList" @> ARRAY\[\$\d+\]::text\[\]/); assert.match(sql.text, /EXISTS \(/); }
+          assert.ok(sql.values.includes("温见清"));
         }
       }
     }

@@ -93,6 +93,15 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   // Facets follow fact scope/date/currency/settlement, ignoring member selections/search.
   const salespersonFacetFilters = [...filters];
   if (domain === "performance" && query.salesperson) filters.push(Prisma.sql`s."userNameList" @> ARRAY[${query.salesperson}]::text[]`);
+  // 销量统计无业务员列，但可按 storeId+msku 关联到销售利润日快照的真实 userNameList
+  // （生产核验：85.4% sales 行可关联，业务员是商品级属性与日期无关）。用 EXISTS 半连接，
+  // 绝不展开数组，避免一行多业务员导致事实行膨胀；关联不到则排除，不伪造开发员为业务员。
+  if (domain === "sales" && query.salesperson) filters.push(Prisma.sql`EXISTS (
+    SELECT 1 FROM "SellfoxProductDailySnapshot" pd
+    WHERE pd."organizationId"=${scope.organizationId} AND pd."workspaceId"=${scope.workspaceId}
+      AND pd."storeId"=s."storeId" AND pd.msku=s.msku
+      AND pd."userNameList" @> ARRAY[${query.salesperson}]::text[]
+  )`);
   // Current Listing metadata: filter member rows before any entity/day/KPI rollup.
   // Blank/unknown values remain in all, never in the AFN/MFN subsets.
   if (query.fulfillment && (ads || ["sales", "performance", "listings"].includes(domain))) filters.push(Prisma.sql`l.fulfillment=${query.fulfillment}`);
@@ -297,6 +306,25 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   if (query.shopExternalIds.length) facetFilters.push(Prisma.sql`st."externalId" IN (${Prisma.join(query.shopExternalIds)})`);
   if (query.storeId) facetFilters.push(Prisma.sql`l."storeId"=${query.storeId}`);
   if (query.site) facetFilters.push(Prisma.sql`st.marketplace=${query.site}`);
+  // 销量统计的业务员下拉独立于日期筛选：业务员是商品级属性，按 store/shop/site 取真实
+  // ProductDaily.userNameList 候选值，不套 sales 日期过滤，避免翻日期时选项跳动。
+  const salesSalespersonFacetFilters = [Prisma.sql`p."organizationId"=${scope.organizationId} AND p."workspaceId"=${scope.workspaceId}`];
+  if (query.shopExternalIds.length) salesSalespersonFacetFilters.push(Prisma.sql`st."externalId" IN (${Prisma.join(query.shopExternalIds)})`);
+  if (query.storeId) salesSalespersonFacetFilters.push(Prisma.sql`p."storeId"=${query.storeId}`);
+  if (query.site) salesSalespersonFacetFilters.push(Prisma.sql`st.marketplace=${query.site}`);
+  const salespersonsFacet = domain === "performance"
+    ? Prisma.sql`,'salespersons',ARRAY(
+      SELECT DISTINCT person.name FROM "SellfoxProductDailySnapshot" s
+      JOIN "SellfoxStore" st ON st.id=s."storeId" AND ${scoped("st", scope)}
+      CROSS JOIN LATERAL unnest(s."userNameList") person(name)
+      WHERE ${Prisma.join(salespersonFacetFilters, " AND ")} ORDER BY person.name)`
+    : domain === "sales"
+    ? Prisma.sql`,'salespersons',ARRAY(
+      SELECT DISTINCT person.name FROM "SellfoxProductDailySnapshot" p
+      JOIN "SellfoxStore" st ON st.id=p."storeId" AND ${scoped("st", scope)}
+      CROSS JOIN LATERAL unnest(p."userNameList") person(name)
+      WHERE ${Prisma.join(salesSalespersonFacetFilters, " AND ")} ORDER BY person.name)`
+    : Prisma.empty;
   const facets = needTagFacets ? Prisma.sql`,jsonb_build_object('productTags',
     ARRAY(SELECT DISTINCT tag."labelName" FROM ${listingSource} l
       JOIN "SellfoxStore" st ON st.id=l."storeId" AND ${scoped("st", scope)}
@@ -305,11 +333,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
     ,'brands', ARRAY(SELECT DISTINCT l.brand FROM ${listingSource} l
       JOIN "SellfoxStore" st ON st.id=l."storeId" AND ${scoped("st", scope)}
       WHERE ${Prisma.join(facetFilters, " AND ")} AND l.brand IS NOT NULL ORDER BY 1)
-    ${domain === "performance" ? Prisma.sql`,'salespersons',ARRAY(
-      SELECT DISTINCT person.name FROM "SellfoxProductDailySnapshot" s
-      JOIN "SellfoxStore" st ON st.id=s."storeId" AND ${scoped("st", scope)}
-      CROSS JOIN LATERAL unnest(s."userNameList") person(name)
-      WHERE ${Prisma.join(salespersonFacetFilters, " AND ")} ORDER BY person.name)` : Prisma.empty}) AS facets` : Prisma.empty;
+    ${salespersonsFacet}) AS facets` : Prisma.empty;
   return Prisma.sql`WITH ${listing},${base},${groups}${names}, filtered AS (SELECT * FROM ${domain === "performance" ? Prisma.sql`enriched` : Prisma.sql`grouped`} WHERE ${Prisma.join(finalFilters, " AND ")})
     SELECT (SELECT count(*)::int FROM filtered) AS total,${totals} AS totals${salesSummary},
       COALESCE((SELECT jsonb_agg(p) FROM (SELECT * FROM filtered ORDER BY ${order} LIMIT ${exporting ? sellfoxExportLimit + 1 : query.pageSize} OFFSET ${exporting ? 0 : (query.page - 1) * query.pageSize}) p),'[]'::jsonb) AS rows${facets}`;

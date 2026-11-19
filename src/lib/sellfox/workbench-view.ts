@@ -150,7 +150,7 @@ export function sellfoxViewParams(view: SellfoxView, forRequest = false) {
   if (dxmPublishState && (!forRequest || view.domain === "listings")) params.set("dxmPublishState", dxmPublishState);
   const bsrCategory = sellfoxBsrCategory(view.bsrCategory);
   if (bsrCategory && (!forRequest || view.domain === "listings")) params.set("bsrCategory", bsrCategory);
-  if (view.salesperson && (!forRequest || view.domain === "performance")) params.set("salesperson", sellfoxSalesperson(view.salesperson));
+  if (view.salesperson && (!forRequest || ["performance", "sales"].includes(view.domain))) params.set("salesperson", sellfoxSalesperson(view.salesperson));
   if (view.status && (!forRequest || view.domain === "listings")) params.set("status", view.status);
   if (forRequest && ["sales", "performance", "listings", "ads"].includes(view.domain)) params.set("layout", "workbench");
   for (const key of ["dimension", "metric", "currency", "adType", "quickFilter"] as const) {

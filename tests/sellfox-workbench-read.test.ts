@@ -12,7 +12,7 @@ function assertListingProjection(sql: string) {
   assert.doesNotMatch(sql, /payload|jsonb_array_elements|JOIN "SellfoxListingSnapshot"|LEFT JOIN/);
   assert.match(sql, /filtered AS NOT MATERIALIZED/);
   assert.match(sql, /FROM sellfox_listing_current s WHERE s\."organizationId"=/);
-  for (const key of ["brand", "rating", "productTags", "bsrRank", "listingQuantity", "buyBoxWinner"]) assert.ok(sql.includes(`s."${key}"`));
+  for (const key of ["brand", "rating", "productTags", "bsrRank", "listingQuantity", "buyBoxWinner", "promoPrice"]) assert.ok(sql.includes(`s."${key}"`));
 }
 
 test("performance footer includes visible numeric fees and quantities without summing rates or unavailable columns", () => {
@@ -535,7 +535,7 @@ test("listings expose brand and rating from the scoped current Listing snapshot"
   assert.equal(brand.defaultVisible, true);
   assert.equal(rating.defaultVisible, true);
   const defaults = defaultVisibleColumnKeys("listings");
-  assert.deepEqual(defaults, ["status", "dxmPublishState", "fulfillment", "image", "asin", "title", "brand", "amazonBrand", "rating", "ratingCount", "productTags", "openDate", "firstSaleDate", "bsrRank", "bsrCategory", "purchaseCost", "fbaFees", "referralFee", "totalFee", "headTripCost", "buyBoxWinner", "reservedQty", "shippingPrice", "profitPrice", "profitRate", "parentAsin", "parentSku", "fnsku", "sku", "name", "price", "sales7", "sales14", "sales30", "revenue7", "revenue14", "revenue30", "adSpend7", "adSpend14", "adSpend30", "fulfillable", "totalInventory", "inventoryCapturedAt", "listingQuantity", "unsellable", "warehousing", "sourceUpdatedAt"]);
+  assert.deepEqual(defaults, ["status", "dxmPublishState", "fulfillment", "image", "asin", "title", "brand", "amazonBrand", "rating", "ratingCount", "productTags", "openDate", "firstSaleDate", "bsrRank", "bsrCategory", "purchaseCost", "fbaFees", "referralFee", "totalFee", "headTripCost", "buyBoxWinner", "reservedQty", "shippingPrice", "profitPrice", "profitRate", "parentAsin", "parentSku", "fnsku", "sku", "name", "price", "promoPrice", "sales7", "sales14", "sales30", "revenue7", "revenue14", "revenue30", "adSpend7", "adSpend14", "adSpend30", "fulfillable", "totalInventory", "inventoryCapturedAt", "listingQuantity", "unsellable", "warehousing", "sourceUpdatedAt"]);
   assert.deepEqual(visibleColumns("listings").map(c => c.key), defaults);
   assert.ok(defaults.includes("dxmPublishState"));
   for (const key of ["salesperson"]) assert.ok(!defaults.includes(key));
@@ -563,6 +563,23 @@ test("listings expose brand and rating from the scoped current Listing snapshot"
   assert.equal(sellfoxColumnValue(brand, { brand: "Acme" }), "Acme");
   assert.equal(sellfoxColumnValue(rating, { rating: "4.4" }), "4.4");
   assert.equal(visibleColumnCsv([brand, rating], [{ brand: "Acme", rating: "4.4" }]).trim(), '"品牌","星级"\r\n"Acme","4.4"');
+});
+
+test("listings promoPrice maps only the official listingPricing (优惠价); guessed 划线价/B2B/ListPrice keys are never projected", () => {
+  // 官方 API 定义 listingPricing=优惠价；salePrices/划线价/B2B/List Price 在真实 payload
+  // 与官方 API 均无对应语义键，故不建列、不映射、不猜字段。
+  const promo = columns.listings.find(c => c.key === "promoPrice")!;
+  assert.ok(promo, "优惠价列必须存在");
+  assert.equal(promo.labelZh, "优惠价");
+  assert.equal(promo.numeric, true);
+  assert.equal(promo.defaultVisible, true);
+  assert.equal(promo.unavailable, undefined);
+  for (const guessed of ["listPrice", "b2bPrice", "amazonListPrice", "listPriceType", "salePrices"]) {
+    assert.ok(!columns.listings.some(c => c.key === guessed), `未核验的猜测字段 ${guessed} 不得进入列定义`);
+  }
+  const query = sellfoxBrowseQuery(new URL("http://localhost/?status=active"));
+  const sql = workbenchReadSql("listings", query, { organizationId: "org", workspaceId: "ws" });
+  assert.ok(sql.text.includes('s."promoPrice"'), "读 SQL 必须投影 promoPrice");
 });
 
 test("listings default CSV/XLSX include fulfillment, brand, amazonBrand, rating, ratingCount, productTags, openDate, firstSaleDate, BSR, BSR类目, fee cluster, Buy Box, profit/shipping, totalInventory, inventory extras, parentSku and fnsku while explicit selections stay authoritative", async () => {
@@ -1613,7 +1630,7 @@ test("unsupported profit SPU dimension still sorts by its fallback ASIN identity
 });
 
 
-test("performance salesperson filters typed facts before aggregation and facets remain scoped; sales ignore it", () => {
+test("performance salesperson filters typed facts before aggregation; sales uses EXISTS association without exploding fact rows", () => {
   const query = sellfoxBrowseQuery(new URL("http://localhost/?from=2026-10-24&to=2026-10-25&salesperson=" + encodeURIComponent("温见清")));
   const scope = { organizationId: "org", workspaceId: "ws" };
   for (const exporting of [false, true]) {
@@ -1625,7 +1642,14 @@ test("performance salesperson filters typed facts before aggregation and facets 
     if (!exporting) { assert.match(sql.text, /'salespersons',ARRAY/); assert.match(sql.text, /unnest\(s\."userNameList"\)/); }
     else assert.doesNotMatch(sql.text, /AS facets/);
     const sales = workbenchReadSql("sales", query, scope, exporting);
-    assert.doesNotMatch(sales.text, /userNameList|salesperson/); assert.ok(!sales.values.includes("温见清"));
+    // 销量统计无业务员列，按 storeId+msku 用 EXISTS 半连接关联真实 userNameList；
+    // 不展开数组、不开维度，事实行不膨胀，故无 salesperson_names/final 行投影。
+    assert.match(sales.text, /EXISTS \(\s*SELECT 1 FROM "SellfoxProductDailySnapshot"/);
+    assert.match(sales.text, /pd\.msku=s\.msku/);
+    assert.match(sales.text, /pd\."userNameList" @> ARRAY\[\$\d+\]::text\[\]/);
+    assert.ok(sales.values.includes("温见清"));
+    assert.doesNotMatch(sales.text, /salesperson_names AS/);
+    assert.ok(!exporting ? /'salespersons',ARRAY/.test(sales.text) : !/AS facets/.test(sales.text));
   }
 });
 

@@ -302,7 +302,7 @@ test("inventory current sorts in SQL before pagination and rejects unavailable n
 });
 
 
-test("agent salesperson containment uses only typed performance column including export and count", async () => {
+test("agent salesperson uses typed performance column or sales EXISTS association including export and count", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   const calls: Prisma.Sql[] = [];
   globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => { calls.push(sql); return sql.text.startsWith("SELECT count") ? [{ total: 0 }] : []; } } as unknown as PrismaClient;
@@ -314,6 +314,7 @@ test("agent salesperson containment uses only typed performance column including
       await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" }, true);
       for (const sql of calls) {
         if (domain === "performance") { assert.match(sql.text, /s\."userNameList" @> ARRAY\[\$\d+\]::text\[\]/); assert.ok(sql.values.includes("温见清")); }
+        else if (domain === "sales") { assert.match(sql.text, /pd\."userNameList" @> ARRAY\[\$\d+\]::text\[\]/); assert.match(sql.text, /EXISTS \(/); assert.ok(sql.values.includes("温见清")); }
         else { assert.doesNotMatch(sql.text, /userNameList/); assert.ok(!sql.values.includes("温见清")); }
         assert.doesNotMatch(sql.text, /payload/);
       }
