@@ -73,6 +73,9 @@
   --z-sticky: 10;
   --z-dropdown: 30;
   --z-drawer: 40;
+  /* 全局导航二级浮层：portal 到 body，需盖过页面内的 sticky topbar/sidebar（部分页面用到 40），
+     但保持在模态(50)/查看器(55)/Toast(60)之下。 */
+  --z-nav-flyout: 45;
   --z-modal: 50;
   --z-viewer: 55;
   --z-toast: 60;
