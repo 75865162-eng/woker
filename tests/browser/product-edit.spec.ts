@@ -86,6 +86,35 @@ test("商品表格复制 SKU 有成功与失败反馈", async ({ page }) => {
   expect(await page.evaluate(() => (window as Window & { openedSku?: string }).openedSku)).toBe("SKU-1");
 });
 
+test("利润试算即时计算材积重与旺季配送费，切换单位及手动覆盖", async ({ page }) => {
+  const state = await setup(page);
+  const section = page.getByRole("heading", { name: "区域 1：利润试算", exact: true }).locator("../..");
+  const row = section.locator("tbody tr").first();
+  const field = (column: number) => row.locator("td").nth(column).locator("input");
+  await field(1).fill("4");
+  await field(2).fill("2");
+  await field(3).fill("0.4");
+  await expect(row.locator("td").nth(5)).toHaveText("0.0005333");
+  await field(4).fill("1");
+  await field(6).fill("2");
+  await expect(field(8)).toHaveAttribute("placeholder", "5.47");
+  await field(8).fill("4");
+  await field(6).fill("22");
+  await expect(field(8)).toHaveValue("4");
+  await field(8).fill("");
+  await expect(field(8)).toHaveAttribute("placeholder", "6.29");
+  await section.getByRole("button", { name: "长 in", exact: true }).click();
+  await expect(field(1)).toHaveValue("1.5748");
+  await expect(section.getByRole("button", { name: "宽 in", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await section.getByRole("button", { name: "实际重 lb", exact: true }).click();
+  await expect(field(4)).toHaveValue("2.2046");
+  await expect(row.locator("td").nth(5)).toHaveText("0.001176");
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await expect.poll(() => state.saves).toBe(1);
+  const saved = (state.product as Product & { workbookDetail: TrialProductDraft }).workbookDetail.pricingRows[0];
+  expect(saved).toMatchObject({ lengthCm: 4, widthCm: 2, heightCm: 0.4, actualWeightKg: 1, suggestedPrice: 22, fbaFee: 0 });
+});
+
 test("reopening a product image preview reuses its signed URL without another signing request", async ({ page }) => {
   let previewRequests = 0;
   page.on("request", (request) => {
