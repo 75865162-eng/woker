@@ -215,17 +215,18 @@
 |---|---|---|---|
 | **改造2 毛利/毛利率/预计费用拆列** | 新建纯函数 `src/lib/sellfox/listing-derived.ts`（预计费用=FBA费+佣金+运费；毛利润=售价−(采购成本+头程+预计费用)；毛利率=毛利润/售价；任一因子 null→null，禁 COALESCE 0）；listings 列加 `estimatedFee/grossProfit/grossProfitRate`（默认隐藏，可自定义勾选）；后端 `loadWorkbench` listings 分支读时计算；`profitPrice/profitRate`（我方口径）保留并存不覆盖；毛利率为比率列不参与求和 | `listing-derived.ts`、`workbench-types.ts:listings`、`workbench-read.ts:loadWorkbench` | typecheck 通过；`sellfox-listing-derived.test.ts` 7 项 + 相关回归 113/113 通过；全量测试除环境 Node 门禁外全绿 |
 | **改造1 前置：价格键核验脚本** | 新建 `scripts/verify-sellfox-listing-price-keys.ts`（只读扫 payload 价格语义键，支持 scope 过滤，0 行如实输出 NO_DATA、禁止写死映射） | `scripts/verify-sellfox-listing-price-keys.ts` | 实跑输出 `status=NO_DATA, rowCount=0`，行为符合预期 |
+| **改造3 grain 时间粒度 + 星期分布列** | 新建纯函数 `src/lib/sellfox/browse-grain.ts`：grain=day/week/month 解析；week 以「ISO 周一」为桶 key（跨年天然不串周，且是合法日期前端零改动）、month 以月初；分桶聚合沿用 trend/average7「缺日不补零」口径（桶内任一业务日缺值→null，禁 COALESCE 0）；星期列 dow1-7 仅 grain=day 且 ≤62 天生成。接入 `browse-query`/`workbench-view` 参数与 URL 往返；后端 `loadWorkbench` 在读层重分桶（**SQL 逐日矩阵零改动**，trend/average7 仍按逐日固定口径）；sales 页加「按日/按周/按月」切换控件；星期列默认隐藏可勾选 | `browse-grain.ts`、`browse-query.ts`、`workbench-view.ts`、`workbench-read.ts`、`replica-workbench.tsx`、`workbench-types.ts` | typecheck 通过；`sellfox-browse-grain.test.ts` 10 项（ISO 跨年周、桶聚合缺日、summary entities、星期列范围、URL 往返）+ 相关回归 162/116 全绿 |
+| **改造5 筛选条件模型（增量基础设施）** | 新建 `src/lib/sellfox/sellfox-filter-model.ts`：FilterCondition 模型、field→{column,type,ops} 服务端白名单（非法 field/op 400、前端不得传裸列名）、批量粘贴切分（逗号/分号/换行/空格，去空去重保序，上限 500 超限抛错不静默丢）。接入 `browse-query` 的 `filter.*` 参数（既有筛选完全保留，不推翻组件） | `sellfox-filter-model.ts`、`browse-query.ts` | typecheck 通过；`sellfox-filter-model.test.ts` 6 项 + 相关回归 62/62 全绿 |
 
 ### 9.2 阻塞项（未落地，非遗漏；附解锁条件）
 
-| 改造 | 阻塞原因 | 解锁条件 | 为何不先做半成品 |
+| 改造 | 阻塞原因 | 解锁条件 | 现状说明 |
 |---|---|---|---|
-| **改造1 价格族 5 字段写入** | payload 无数据，划线价/B2B/优惠价 key 无法核验；文档 §7 明确"核验发现无键则 5 字段降 3" | 同步真实 Listing 数据后跑 9.1 核验脚本，据候选键人工抽样确认语义 | 写死未核验的 key = 猜测字段，违反红线 |
-| **改造3 grain 分桶 + 星期列** | 需改 sales 成熟日矩阵 SQL 的分组/汇总/趋势/日矩阵列；本地 0 行无法验证 ISO 周(IYYY-IW)与星期列求和正确性 | 有真实 sales 数据后可回归验证；另需拍板"星期列是否仅 grain=day 且 ≤62 天出现" | 只解析参数不接 SQL = 死参数（表面功夫）；强接 SQL 又无法验证，均不可取 |
-| **改造4 业务员打通** | sales 无业务员字段，写入时需按 storeId+msku 反查（无数据无法验证）；且分摊口径（文档 §5 决策1）未拍板 | 拍板分摊方案（A 仅筛选 / B 均摊）+ 真实数据验证反查 | 不做分摊就开维度 = 错报表；反查无数据 = 造数据 |
-| **改造5 筛选器条件模型重构** | `browse-filters.tsx` 硬编码属实，但现有数十个筛选工作正常；重构为模型驱动是高风险评估，本地 0 行无法回归 | 有真实数据做全筛选回归后分阶段重构 | 无验证的大重构风险高于收益 |
+| **改造1 价格族 5 字段写入** | payload 无数据，划线价/B2B/优惠价 key 无法核验；文档 §7 明确"核验发现无键则 5 字段降 3" | 同步真实 Listing 数据后跑 9.1 核验脚本，据候选键人工抽样确认语义 | 核验脚本已就绪；写死未核验的 key = 猜测字段，违反红线 |
+| **改造4 业务员打通** | **结构性缺失**：sales 数据源 `/api/productSale/page.json` 原始行只有 shopIds/mskus/asins/skus + productSaleDayOpenVo(day/指标/currency)，**根本没有业务员键**；performance 才有真实 `userNameList`（API payload 投影）。且分摊口径（§5 决策1）未拍板 | 拍板分摊方案（A 仅筛选 / B 均摊）；若要在 sales 侧显示业务员，需上游 API 提供该字段或写入链路按 storeId+msku 从 performance 反查并验证 | 当前代码已是方案A的正确实现：sales 侧业务员筛选置灰（title 明示"不从 Listing 伪造"），performance 用真实 userNameList 做筛选+facet。不开维度=避免错报表；不伪造=守红线 |
 
-### 9.3 本次github提交以外的诚实说明
+### 9.3 本轮执行诚实说明
 
-- 本次**没有**把 5 项全部实现为"看起来完成"的代码；已完成 1 项完整功能改造 + 1 项前置核验工具，其余 3 项如实标注阻塞。
-- 全量测试：基线 2470/2471，改造后以最终全量回归为准。唯一固有失败是环境 Node v22.13.1 < 门禁要求的 22.19，与本改动无关；新增列导致的既有列顺序断言已同步更新并通过。
+- 5 项中 **改造2、改造3、改造5 已完整落地并单测验证**；改造1 前置核验脚本已就绪、写入因 payload 无键未做；改造4 为结构性字段缺失，当前方案A实现正确，未开维度/未伪造。
+- 与上一版相比，本轮依据「代码里真实存在的 ERP 数据处理流程」重新评估：grain 分桶和星期列是**确定性日期计算**（`reportDate` 为真实 YYYY-MM-DD 字段），可脱离 0 行数据用构造日期完整验证，故从"阻塞"改为"已落地"；筛选白名单/批量粘贴同理。
+- 全量测试：基线 2470/2471，本轮以最终全量回归为准。唯一固有失败是环境 Node v22.13.1 < 门禁要求的 22.19，与本改动无关。

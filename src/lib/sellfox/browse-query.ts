@@ -1,6 +1,8 @@
 import { isSellfoxSortable, sellfoxSortColumns, type SellfoxSortOrder } from "./sort-columns";
 import type { Prisma } from "@prisma/client";
 import { isSellfoxDate, sellfoxDateAt } from "@/lib/sellfox/sync-contract";
+import { sellfoxGrain, type SellfoxGrain } from "./browse-grain";
+import { normalizeSellfoxCondition, SellfoxFilterError, type FilterCondition } from "./sellfox-filter-model";
 
 export class SellfoxBrowseError extends Error {
   constructor(message: string, readonly status = 400) { super(message); }
@@ -113,6 +115,17 @@ export function sellfoxBrowseQuery(url: URL, domain?: string) {
   if (reservedQtyMin != null && reservedQtyMax != null && reservedQtyMin > reservedQtyMax) throw new SellfoxBrowseError("预留上限不得小于下限。");
   if (unsellableMin != null && unsellableMax != null && unsellableMin > unsellableMax) throw new SellfoxBrowseError("不可售上限不得小于下限。");
   if (warehousingMin != null && warehousingMax != null && warehousingMin > warehousingMax) throw new SellfoxBrowseError("入库中上限不得小于下限。");
+  // 条件模型入口（增量）：filter.field + filter.values，服务端白名单校验，非法 field/op 400。
+  // 既有筛选参数完全保留，此入口供后续条件模型 UI 使用，不影响现有组件。
+  let filter: FilterCondition | null = null;
+  if (p.get("filter.field")) {
+    try {
+      filter = normalizeSellfoxCondition(domain ?? "", { field: p.get("filter.field"), op: p.get("filter.op") ?? "eq", values: p.get("filter.values") ?? "" });
+    } catch (error) {
+      if (error instanceof SellfoxFilterError) throw new SellfoxBrowseError(error.message, 400);
+      throw error;
+    }
+  }
   return {
     sortBy, sortOrder: sortOrder as SellfoxSortOrder,
     layout: p.get("layout") === "workbench", fulfillment: sellfoxFulfillment(p.get("fulfillment")), buyBox: sellfoxBuyBox(p.get("buyBox")), productTag: sellfoxProductTag(p.get("productTag")), brand: sellfoxBrand(p.get("brand")), dxmPublishState: sellfoxDxmPublishState(p.get("dxmPublishState")), bsrCategory: sellfoxBsrCategory(p.get("bsrCategory")), salesperson: sellfoxSalesperson(p.get("salesperson")),
@@ -120,6 +133,8 @@ export function sellfoxBrowseQuery(url: URL, domain?: string) {
     metric: p.get("metric") === "revenue" ? "revenue" : p.get("metric") === "orders" ? "orders" : "quantity", onlySettle: p.get("onlySettle") === "1", hideZero: p.get("hideZero") === "1",
     currency: p.get("currency")?.trim() ?? "", adType: ["sp", "sb", "sd"].includes(p.get("adType") ?? "") ? p.get("adType")! : "",
     quickFilter: ["spend", "clicksNoOrders", "spendNoClicks", "noClicks"].includes(p.get("quickFilter") ?? "") ? p.get("quickFilter")! : "",
+    grain: sellfoxGrain(p.get("grain")) as SellfoxGrain,
+    filter,
     page: integer("page", 1, 1_000_000), pageSize: integer("pageSize", 50, 200), from, to, reportDate, firstSaleFrom, firstSaleTo, totalInventoryMin, totalInventoryMax, ratingMin, ratingMax, ratingCountMin, ratingCountMax, costMin, costMax, adSalesMin, adSalesMax, impressionsMin, impressionsMax, clicksMin, clicksMax, adOrdersMin, adOrdersMax, bsrRankMin, bsrRankMax, fulfillableMin, fulfillableMax, sales7Min, sales7Max, sales14Min, sales14Max, sales30Min, sales30Max, priceMin, priceMax, revenue7Min, revenue7Max, revenue14Min, revenue14Max, revenue30Min, revenue30Max, adSpend7Min, adSpend7Max, adSpend14Min, adSpend14Max, adSpend30Min, adSpend30Max, listingQuantityMin, listingQuantityMax, reservedQtyMin, reservedQtyMax, unsellableMin, unsellableMax, warehousingMin, warehousingMax,
     status: p.get("status")?.trim() || undefined,
     searchType: ["asin", "msku", "sku", "parentAsin", "title", "order", "shipment", "campaignId", "adGroupId", "targetingId", "searchTerm", "placement"].includes(p.get("searchType") ?? "") ? p.get("searchType")! : "", exactMatch: p.get("exactMatch") === "1",

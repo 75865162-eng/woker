@@ -21,6 +21,7 @@ type SortOrder = "asc" | "desc";
 type Filters = {
   dimension: string;
   metric: string;
+  grain: "day" | "week" | "month";
   preset: DatePreset;
   from: string;
   to: string;
@@ -100,6 +101,7 @@ function initialFilters(page: ReplicaPage): Filters {
   return {
     dimension: page.defaultDimension ?? page.dimensions.find((item) => !item.disabled)?.id ?? "",
     metric: page.metrics[0]?.id ?? "quantity",
+    grain: "day",
     preset: ranged ? "d30" : "custom",
     from: range.from,
     to: range.to,
@@ -298,7 +300,10 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
     if (scope.marketplace) params.set("marketplace", scope.marketplace);
     if (page.query === "workbench") {
       if (applied.dimension && applied.dimension !== "salesperson") params.set("dimension", applied.dimension);
-      if (page.id === "sales") params.set("metric", applied.metric);
+      if (page.id === "sales") {
+        params.set("metric", applied.metric);
+        if (applied.grain && applied.grain !== "day") params.set("grain", applied.grain);
+      }
       if (applied.from) params.set("from", applied.from);
       if (applied.to) params.set("to", applied.to);
       if (applied.site) params.set("site", applied.site);
@@ -407,6 +412,10 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
   function setMetric(id: string) {
     setDraft((current) => ({ ...current, metric: id, page: 1 }));
     setApplied((current) => ({ ...current, metric: id, page: 1 }));
+  }
+  function setGrain(value: Filters["grain"]) {
+    setDraft((current) => ({ ...current, grain: value, page: 1 }));
+    setApplied((current) => ({ ...current, grain: value, page: 1 }));
   }
   function setPreset(preset: DatePreset) {
     const range = preset === "custom" ? { from: draft.from, to: draft.to } : rangeForPreset(preset);
@@ -565,6 +574,11 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
           </select>
         ) : page.id === "sales" || page.id === "listings" ? <select aria-label="业务员" disabled title="销量日快照没有业务员字段，不从 Listing 伪造。"><option>业务员</option></select> : null}
         {page.id === "sales" || page.id === "performance" ? <select aria-label="业绩归属人" disabled title="本地快照没有业绩归属人。"><option>业绩归属人</option></select> : null}
+        {page.id === "sales" ? <select aria-label="时间粒度" title="日/周/月统计粒度；周按 ISO 周聚合、跨年不串周，缺日不补零" value={draft.grain} onChange={(event) => setGrain(event.target.value as Filters["grain"])}>
+          <option value="day">按日</option>
+          <option value="week">按周</option>
+          <option value="month">按月</option>
+        </select> : null}
         {page.showDate ? (
           <>
             <span className="sf-label">{page.dateLabel}</span>

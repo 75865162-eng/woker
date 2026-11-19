@@ -8,6 +8,7 @@ import { SellfoxBrowseError, sellfoxExportLimit, type SellfoxBrowseQuery } from 
 import { sellfoxDateAt } from "./sync-contract";
 import { resolveEffectiveReportDate } from "./browse-report-date";
 import { applyListingDerived } from "./listing-derived";
+import { regroupSellfoxDaily, regroupSellfoxSummaryDaily, sellfoxWeekdayColumns, type SellfoxGrain } from "./browse-grain";
 import {
   normalizeSellfoxCacheQuery, readThroughSellfox, SELLFOX_VERSION_SOURCE, sellfoxCacheKey,
 } from "./result-cache";
@@ -372,9 +373,17 @@ async function loadWorkbench(domain: WorkbenchDomain, query: SellfoxBrowseQuery,
   const stocksByKey = new Map(inventory.map(stock => [JSON.stringify([stock.storeId, stock.msku]), stock]));
   // Profit ranges are not day matrices: preserve open-ended/all-history reads
   // and do not impose the sales matrix's 90-day limit on their date metadata.
-  const dates = domain === "sales" ? workbenchDateRange(query) : domain === "performance"
+  const sourceDates = domain === "sales" ? workbenchDateRange(query) : domain === "performance"
     ? query.from || query.to ? dateSpan(query.from || query.to!, query.to || query.from!) : query.reportDate ? [query.reportDate] : []
     : [];
+  // Grain re-bucketing happens at the read layer: SQL keeps the逐日 matrix untouched,
+  // so trend/average7 (fixed last-7-business-day口径) stay exact. Only the displayed
+  // day: columns, summary.daily and sparkline get the re-bucketed series.
+  const grain: SellfoxGrain = domain === "sales" ? query.grain : "day";
+  const salesBuckets = domain === "sales"
+    ? regroupSellfoxDaily({}, sourceDates, grain).buckets
+    : sourceDates;
+  const dates = salesBuckets;
   for (const row of rows) {
     const pairs = memberPairs(row);
     const stocks = pairs.flatMap(pair => { const stock = stocksByKey.get(JSON.stringify(pair)); return stock ? [stock] : []; });
@@ -387,10 +396,21 @@ async function loadWorkbench(domain: WorkbenchDomain, query: SellfoxBrowseQuery,
     }
     for (const key of (domain === "listings" ? ["totalInventory"] : ["fulfillable", "totalInventory"])) row[key] = stocks.length === pairs.length && stocks.length > 0 && stocks.every(s => s[key] != null) ? stocks.reduce((sum, s) => sum + Number(s[key]), 0) : null;
     row.inventoryCapturedAt = stocks[0]?.inventoryCapturedAt ?? null;
-    if (domain === "sales") { for (const date of dates) row[`day:${date}`] = (row.daily as Row)?.[date] ?? null;
-      const values = dates.slice(-7).map(date => (row.dailyQuantity as Row)?.[date]);
+    if (domain === "sales") {
+      // Fixed last-7-business-day metrics: always computed from逐日 series, never re-bucketed.
+      const values = sourceDates.slice(-7).map(date => (row.dailyQuantity as Row)?.[date]);
       row.trend = values.length === 7 && values.every(v => v != null) ? values.join(" | ") : null;
       row.average7 = values.length === 7 && values.every(v => v != null) ? values.reduce<number>((n,v) => n + Number(v),0) / 7 : null;
+      if (grain === "day") {
+        for (const date of dates) row[`day:${date}`] = (row.daily as Row)?.[date] ?? null;
+        const weekday = sellfoxWeekdayColumns(row.daily as Row, sourceDates, grain);
+        if (weekday) for (const [key, value] of Object.entries(weekday)) row[key] = value;
+      } else {
+        const regrouped = regroupSellfoxDaily(row.daily as Row, sourceDates, grain);
+        for (const bucket of regrouped.buckets) row[`day:${bucket}`] = regrouped.daily[bucket];
+        const spark = regroupSellfoxDaily(row.dailyQuantity as Row, sourceDates, grain);
+        row.dailyQuantity = spark.daily;
+      }
     }
     if (domain === "listings") {
       // Read-time Sellfox口径 derived columns. CASE semantics: any missing factor -> null.
@@ -404,6 +424,14 @@ async function loadWorkbench(domain: WorkbenchDomain, query: SellfoxBrowseQuery,
     if (ads) {
       row.acos = row.cost != null && Number(row.adSales) > 0 ? Number(row.cost) / Number(row.adSales) : null;
       row.roas = row.adSales != null && Number(row.cost) > 0 ? Number(row.adSales) / Number(row.cost) : null;
+    }
+  }
+  if (domain === "sales" && grain !== "day") {
+    if (summary?.daily) summary.daily = regroupSellfoxSummaryDaily(summary.daily, sourceDates, grain);
+    for (const total of totals) {
+      if (total.daily && typeof total.daily === "object") {
+        total.daily = regroupSellfoxDaily(total.daily as Record<string, unknown>, sourceDates, grain).daily;
+      }
     }
   }
   return { rows, dates, totals, ...(summary ? { summary } : {}), ...(facets ? { facets } : {}), pagination: { page: query.page, pageSize: query.pageSize, total } };
