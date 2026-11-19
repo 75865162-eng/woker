@@ -42,7 +42,7 @@ export function RepricingWorkbench() {
       { label: "丢失购物车", value: String(offers.data?.summary.losing ?? 0), tone: (offers.data?.summary.losing ?? 0) > 0 ? "warn" : undefined },
       { label: "待处理建议", value: String(queue.data?.pending ?? 0), tone: (queue.data?.pending ?? 0) > 0 ? "warn" : "good" },
       { label: "启用规则", value: String((rules.data?.items ?? []).filter(row => row.enabled).length) },
-    ]} />} main={<div className="space-y-6">
+    ]} />} main={<div className="space-y-5">
     <Tabs value={tab} onChange={value => setTab(value as "RULE" | "WATCH" | "QUEUE")} tabs={[{ id: "QUEUE", label: "调价队列", count: queue.data?.pending }, { id: "WATCH", label: "跟卖监控", count: offers.data?.summary.total }, { id: "RULE", label: "调价规则", count: rules.data?.items.length }]} />
 
     {tab === "RULE" && <>

@@ -188,8 +188,8 @@ export const adsNavLinks = [
 export { adminLabelByView };
 
 export function OperationsSectionCards({ navigate }: { navigate: (view: string) => void }) {
-  return <section aria-label="经营中台业务板块" className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-    {operationsSections.map((section, index) => <article key={section.id} className="min-w-0 rounded-lg border border-border bg-surface p-4">
+  return <section aria-label="经营中台业务板块" className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+    {operationsSections.map((section, index) => <article key={section.id} className="min-w-0 rounded-lg border border-border bg-surface p-3">
       <p className="text-label font-medium text-muted">板块 {String(index + 1).padStart(2, "0")}</p>
       <h2 className="mt-1 text-sm font-semibold">{section.label}</h2>
       <p className="mt-2 text-xs leading-relaxed text-muted">{section.fields}</p>
@@ -203,7 +203,7 @@ export function OperationsSectionGuide({ view }: { view: string }) {
   const section = operationsSections.find(item => item.entries.some(entry => entry.view === view));
   if (!section) return null;
   const pending = section.entries.find(entry => entry.view === view)?.pending;
-  return <section aria-label="板块字段与来源" className="space-y-2 rounded-lg border border-border bg-surface p-3.5 text-xs leading-relaxed">
+  return <section aria-label="板块字段与来源" className="space-y-2 rounded-lg border border-border bg-surface p-3 text-xs leading-relaxed">
     <p className="font-semibold">{section.label}</p>
     <p><span className="text-muted">主要字段：</span>{pending?.fields ?? section.fields}</p>
     <p><span className="text-muted">主要来源：</span>{pending?.source ?? section.source}</p>

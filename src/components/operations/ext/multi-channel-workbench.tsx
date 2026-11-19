@@ -40,7 +40,7 @@ export function MultiChannelWorkbench() {
       { label: "渠道订单", value: String(orders.data?.items.length ?? 0) },
       { label: "待发货", value: String(orders.data?.items.filter(row => row.status === "PENDING").length ?? 0), tone: "warn" },
       { label: "覆盖渠道", value: String(new Set((accounts.data?.items ?? []).map(row => row.channel)).size) },
-    ]} />} main={<div className="space-y-6">
+    ]} />} main={<div className="space-y-5">
     <Tabs value={tab} onChange={value => setTab(value as "ACCOUNT" | "ORDER")} tabs={[{ id: "ACCOUNT", label: "渠道店铺", count: accounts.data?.items.length }, { id: "ORDER", label: "渠道订单", count: orders.data?.items.length }]} />
 
     {tab === "ACCOUNT" && <>

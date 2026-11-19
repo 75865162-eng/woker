@@ -27,7 +27,7 @@ export function UnconnectedBusinessWorkbench({ view }: { view: string }) {
       <label className="grid gap-1 text-xs">结束日期<input aria-label="结束日期" type="date" className="h-9 rounded border border-border bg-surface px-2" /></label>
       <label className="grid gap-1 text-xs">单号搜索<input aria-label="单号搜索" placeholder="请款单号 / 关联单号" className="h-9 rounded border border-border bg-surface px-2" /></label>
     </fieldset>
-    <div className="overflow-auto rounded border border-border"><table className="w-full min-w-[760px] text-left text-xs"><thead className="bg-surface-muted"><tr>{layout.columns.map(label => <th key={label} className="px-3 py-3 font-medium">{label}</th>)}</tr></thead><tbody><tr><td colSpan={layout.columns.length} className="p-10 text-center text-muted">业务数据未接入；此处不代表查询成功或业务记录为空。</td></tr></tbody></table></div>
+    <div className="overflow-auto rounded border border-border"><table className="w-full min-w-[760px] text-left text-xs"><thead className="bg-surface-muted"><tr>{layout.columns.map(label => <th key={label} className="px-3 py-3 font-medium">{label}</th>)}</tr></thead><tbody><tr><td colSpan={layout.columns.length} className="p-6 text-center text-muted">业务数据未接入；此处不代表查询成功或业务记录为空。</td></tr></tbody></table></div>
     <details className="rounded border border-border p-3 text-xs"><summary className="cursor-pointer font-medium">接入缺口与布局来源</summary><ul className="mt-3 space-y-2">{layout.gaps.map(gap => <li key={gap}>{gap}</li>)}</ul><p className="mt-3 text-muted">Wimoor：{layout.source}</p></details>
     <div className="flex flex-wrap gap-4">{layout.links.map(([href, label]) => <a key={href} href={href} className="text-xs font-medium text-brand hover:underline">{label} →</a>)}</div>
   </section>;

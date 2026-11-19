@@ -104,7 +104,7 @@ export function OpsExtensionsWorkbench() {
   return <WorkbenchPageTemplate context={<div className="space-y-2">
     {error && <p role="alert" className="rounded border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger-ink">{error}</p>}
     {notice && <p className="rounded border border-success/30 bg-success-soft px-3 py-2 text-sm text-success-ink">{notice}</p>}
-  </div>} main={<div className="space-y-6">
+  </div>} main={<div className="space-y-5">
     <section className="space-y-3">
       <div><h2 className="text-sm font-semibold">承运商主数据</h2><p className="text-xs text-muted">把头程与海外调拨里的自由文本承运商收敛为可维护资料；编码在同一工作区唯一。</p></div>
       <form className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6" onSubmit={async event => {

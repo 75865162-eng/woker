@@ -151,7 +151,7 @@ return (
                   </div>
                 </div>
               ))}
-              {!state.logs.length && <div className="py-10 text-center text-sm text-muted">上传文件或执行生成动作后将在这里记录日志</div>}
+              {!state.logs.length && <div className="py-6 text-center text-sm text-muted">上传文件或执行生成动作后将在这里记录日志</div>}
             </CardContent>
           </Card>
 
@@ -219,7 +219,7 @@ return (
                   </div>
                 </div>
               ))}
-              {!state.pdfSummaries.length && <div className="py-10 text-center text-sm text-muted">上传 PDF 后将在这里展示逐票、逐页解析结果</div>}
+              {!state.pdfSummaries.length && <div className="py-6 text-center text-sm text-muted">上传 PDF 后将在这里展示逐票、逐页解析结果</div>}
             </CardContent>
           </Card>
 

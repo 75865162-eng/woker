@@ -44,7 +44,7 @@ export function DictionaryWorkbench() {
       { label: "字典项", value: String(totalItems) },
       { label: "自定义字段", value: String(fields.data?.items.length ?? 0) },
       { label: "启用字段", value: String((fields.data?.items ?? []).filter(row => row.enabled).length) },
-    ]} />} main={<div className="space-y-6">
+    ]} />} main={<div className="space-y-5">
     <Tabs value={tab} onChange={value => setTab(value as "DICT" | "FIELD")} tabs={[{ id: "DICT", label: "数据字典", count: dictionaries.data?.items.length }, { id: "FIELD", label: "自定义字段", count: fields.data?.items.length }]} />
 
     {tab === "DICT" && <>

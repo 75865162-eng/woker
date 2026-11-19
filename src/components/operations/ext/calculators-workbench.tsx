@@ -131,8 +131,8 @@ export function CalculatorsWorkbench() {
     for (const key of Object.keys(next) as Array<keyof typeof next>) if(key!=='date'&&row.inputs[key]!==undefined) next[key]=String(row.inputs[key]);
     setMeasurementDrafts({});setForm(next);setName(row.name);setNotice('已载入方案参数，按当天费率自动测算。');setHistory(null);
   }
-  return <WorkbenchPageTemplate context={<Notice error={error||calculation.error||loadError} notice={notice}/>} main={<div className="space-y-6">
-    <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+  return <WorkbenchPageTemplate context={<Notice error={error||calculation.error||loadError} notice={notice}/>} main={<div className="space-y-5">
+    <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
       <div id="fba-inputs" className="space-y-5 scroll-mt-6 rounded-lg border border-border p-4">
         <Section title="商品参数 · 输入即测算" description="美国站 · USD。先选品类，填写售价、包装三边及实际重量；按当天日期自动识别尺寸分段与淡旺季。">
           <div className="grid gap-3 sm:grid-cols-2">
@@ -157,7 +157,7 @@ export function CalculatorsWorkbench() {
         </div></details>
       </div>
       <div className="space-y-4 xl:sticky xl:top-4" aria-live="polite" aria-atomic="false">
-        {!result?<div className="rounded-lg border border-dashed border-border p-8 text-sm text-muted">填写售价、包装长宽高和实际重量后，费用将自动显示。仓储与退货等因素可按需补充。</div>:<>
+        {!result?<div className="rounded-lg border border-dashed border-border p-6 text-sm text-muted">填写售价、包装长宽高和实际重量后，费用将自动显示。仓储与退货等因素可按需补充。</div>:<>
           <Kpis items={[
             {label:'尺寸分段',value:result.sizeTier},{label:'计费重（lb）',value:result.weightLb.toFixed(3)},
             {label:'体积（ft³）',value:result.cubicFeet.toFixed(4)},{label:'配送费率期',value:result.period},

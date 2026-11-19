@@ -1383,7 +1383,7 @@ model SellfoxProductDailySnapshot {
   imageUrl                                     String?
   refundRate                                   Float?
   refundPrice                                  Decimal?     @db.Decimal(20, 4)
-  refundNum                                    Float?
+  refundNum                                    Decimal?     @db.Decimal(20, 4)
   commodityCost                                Decimal?     @db.Decimal(20, 4)
   shippingPrice                                Decimal?     @db.Decimal(20, 4)
   taxPrice                                     Decimal?     @db.Decimal(20, 4)
@@ -1456,8 +1456,8 @@ model SellfoxProductDailySnapshot {
   promotionSalesAmount                         Decimal?     @db.Decimal(20, 4)
   promotionShippingAmount                      Decimal?     @db.Decimal(20, 4)
   promotionTaxAmount                           Decimal?     @db.Decimal(20, 4)
-  evaluationSaleNum                            Float?
-  channelSaleNum                               Float?
+  evaluationSaleNum                            Decimal?     @db.Decimal(20, 4)
+  channelSaleNum                               Decimal?     @db.Decimal(20, 4)
   adSpCost                                     Decimal?     @db.Decimal(20, 4)
   adSdCost                                     Decimal?     @db.Decimal(20, 4)
   adSbCost                                     Decimal?     @db.Decimal(20, 4)
@@ -1483,7 +1483,9 @@ model SellfoxStore {
   workspaceId                 String                        @default("default")
   externalId                  String
   name                        String                        @default("")
-  /** 赛狐店铺列表 sellerId（Amazon Seller ID），B0 底座用于与 Amazon Seller 对齐；缺失为 null 不臆造。 */
+  /**
+   * 赛狐店铺列表 sellerId（Amazon Seller ID），B0 底座用于与 Amazon Seller 对齐；缺失为 null 不臆造。
+   */
   sellerAccountId             String?
   marketplace                 String                        @default("")
   country                     String                        @default("")
@@ -1497,7 +1499,7 @@ model SellfoxStore {
   SellfoxFbaInventorySnapshot SellfoxFbaInventorySnapshot[]
   SellfoxSalesDailySnapshot   SellfoxSalesDailySnapshot[]
   SellfoxOrderSnapshot        SellfoxOrderSnapshot[]
-  SellfoxOrderDetail           SellfoxOrderDetail[]
+  SellfoxOrderDetail          SellfoxOrderDetail[]
   SellfoxFbaShipmentSnapshot  SellfoxFbaShipmentSnapshot[]
   SellfoxSnapshotHead         SellfoxSnapshotHead[]
   SellfoxListingSnapshot      SellfoxListingSnapshot[]
@@ -1645,9 +1647,9 @@ model SellfoxSalesAggDaily {
 
 /// 销量实体区间聚合：由 AggDaily 再聚合，日矩阵 jsonb 落表，页面可直接取。
 model SellfoxSalesAggEntity {
-  id              String    @id
+  id              String   @id
   organizationId  String
-  workspaceId     String    @default("default")
+  workspaceId     String   @default("default")
   identity        String
   currency        String
   dimension       String
@@ -1655,10 +1657,10 @@ model SellfoxSalesAggEntity {
   toDate          String
   quantity        Int?
   orders          Int?
-  revenueOriginal Decimal?  @db.Decimal(20, 4)
+  revenueOriginal Decimal? @db.Decimal(20, 4)
   daily           Json?
   sourceVersion   String?
-  refreshedAt     DateTime  @default(now())
+  refreshedAt     DateTime @default(now())
 
   @@unique([organizationId, workspaceId, identity, currency, dimension, fromDate, toDate], map: "sellfox_sales_agg_entity_identity")
   @@index([organizationId, workspaceId, dimension, fromDate, toDate], map: "sellfox_sales_agg_entity_range")
@@ -1688,24 +1690,24 @@ model SellfoxProfitAggDaily {
 
 /// 广告日聚合：统一 6 张 ads 日快照的公共指标粒度。
 model SellfoxAdsAggDaily {
-  id          String    @id
-  organizationId String
-  workspaceId String    @default("default")
-  storeId     String
-  reportDate  String
-  adType      String
-  campaignId  String
-  adGroupId   String?
-  targetingId String?
-  entityType  String
-  impressions Int?
-  clicks      Int?
-  cost        Decimal?  @db.Decimal(20, 4)
-  adOrders    Int?
-  adSales     Decimal?  @db.Decimal(20, 4)
-  currency    String?
+  id               String    @id
+  organizationId   String
+  workspaceId      String    @default("default")
+  storeId          String
+  reportDate       String
+  adType           String
+  campaignId       String
+  adGroupId        String?
+  targetingId      String?
+  entityType       String
+  impressions      Int?
+  clicks           Int?
+  cost             Decimal?  @db.Decimal(20, 4)
+  adOrders         Int?
+  adSales          Decimal?  @db.Decimal(20, 4)
+  currency         String?
   sourceCapturedAt DateTime?
-  refreshedAt DateTime  @default(now())
+  refreshedAt      DateTime  @default(now())
 
   @@unique([organizationId, workspaceId, storeId, reportDate, adType, campaignId, adGroupId, targetingId, entityType], map: "sellfox_ads_agg_daily_identity")
   @@index([organizationId, workspaceId, reportDate], map: "sellfox_ads_agg_daily_date")
@@ -1887,46 +1889,46 @@ model SellfoxOrderSnapshot {
 /// 一行一个订单：核心展示字段按文档抽取，完整响应（含商品行/包裹/费用明细）原样存 payload，缺失字段保留 null 不补零。
 /// 金额与订单快照一致用 Decimal(20,4)；结算口径与日利润快照不同，不与之相加。
 model SellfoxOrderDetail {
-  id                    String       @id
-  organizationId        String
-  workspaceId           String       @default("default")
-  storeId               String
-  shopExternalId        String
-  sellerOrderId         String
-  amazonOrderId         String?
-  orderStatus           String?
-  orderTotalCurrency    String?
-  orderTotalAmount      Decimal?     @db.Decimal(20, 4)
-  marketplaceId         String?
-  orderType             String?
-  purchaseDate          String?
-  paymentsDate          String?
-  refundDate            String?
-  fulfillmentChannel    String?
-  settlementStatus      String?
-  refundStatus          String?
-  productAmount         Decimal?     @db.Decimal(20, 4)
-  refundPrice           Decimal?     @db.Decimal(20, 4)
-  fbaPerUnitFulfillmentFee Decimal?  @db.Decimal(20, 4)
-  commission            Decimal?     @db.Decimal(20, 4)
-  otherAmount           Decimal?     @db.Decimal(20, 4)
-  purchaseCost          Decimal?     @db.Decimal(20, 4)
-  headTripCost          Decimal?     @db.Decimal(20, 4)
-  fbmShipCost           Decimal?     @db.Decimal(20, 4)
-  orderProfit           Decimal?     @db.Decimal(20, 4)
-  totalCost             Decimal?     @db.Decimal(20, 4)
-  totalRevenue          Decimal?     @db.Decimal(20, 4)
-  shippingCharge        Decimal?     @db.Decimal(20, 4)
-  promotionDiscount     Decimal?     @db.Decimal(20, 4)
-  taxAmount             Decimal?     @db.Decimal(20, 4)
-  isBusinessOrder       String?
-  isReturnOrder         String?
-  payload               Json
-  latestCapturedAt      DateTime
-  syncedAt              DateTime     @default(now())
-  createdAt             DateTime     @default(now())
-  updatedAt             DateTime
-  SellfoxStore          SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  id                       String       @id
+  organizationId           String
+  workspaceId              String       @default("default")
+  storeId                  String
+  shopExternalId           String
+  sellerOrderId            String
+  amazonOrderId            String?
+  orderStatus              String?
+  orderTotalCurrency       String?
+  orderTotalAmount         Decimal?     @db.Decimal(20, 4)
+  marketplaceId            String?
+  orderType                String?
+  purchaseDate             String?
+  paymentsDate             String?
+  refundDate               String?
+  fulfillmentChannel       String?
+  settlementStatus         String?
+  refundStatus             String?
+  productAmount            Decimal?     @db.Decimal(20, 4)
+  refundPrice              Decimal?     @db.Decimal(20, 4)
+  fbaPerUnitFulfillmentFee Decimal?     @db.Decimal(20, 4)
+  commission               Decimal?     @db.Decimal(20, 4)
+  otherAmount              Decimal?     @db.Decimal(20, 4)
+  purchaseCost             Decimal?     @db.Decimal(20, 4)
+  headTripCost             Decimal?     @db.Decimal(20, 4)
+  fbmShipCost              Decimal?     @db.Decimal(20, 4)
+  orderProfit              Decimal?     @db.Decimal(20, 4)
+  totalCost                Decimal?     @db.Decimal(20, 4)
+  totalRevenue             Decimal?     @db.Decimal(20, 4)
+  shippingCharge           Decimal?     @db.Decimal(20, 4)
+  promotionDiscount        Decimal?     @db.Decimal(20, 4)
+  taxAmount                Decimal?     @db.Decimal(20, 4)
+  isBusinessOrder          String?
+  isReturnOrder            String?
+  payload                  Json
+  latestCapturedAt         DateTime
+  syncedAt                 DateTime     @default(now())
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime
+  SellfoxStore             SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
 
   @@unique([storeId, sellerOrderId])
   @@index([organizationId, workspaceId, sellerOrderId])
@@ -3127,13 +3129,13 @@ model SellfoxListingSnapshot {
   referralFee     Decimal?     @db.Decimal(20, 4)
   totalFee        Decimal?     @db.Decimal(20, 4)
   headTripCost    Decimal?     @db.Decimal(20, 4)
-  reservedQty     Float?
+  reservedQty     Decimal?     @db.Decimal(20, 4)
   shippingPrice   Decimal?     @db.Decimal(20, 4)
   profitPrice     Decimal?     @db.Decimal(20, 4)
   profitRate      Float?
-  listingQuantity Float?
-  unsellable      Float?
-  warehousing     Float?
+  listingQuantity Decimal?     @db.Decimal(20, 4)
+  unsellable      Decimal?     @db.Decimal(20, 4)
+  warehousing     Decimal?     @db.Decimal(20, 4)
   productTagNames String[]     @default([])
   payload         Json
   SellfoxStore    SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
@@ -3206,13 +3208,13 @@ model SellfoxListingProfile {
   referralFee     Decimal?  @db.Decimal(20, 4)
   totalFee        Decimal?  @db.Decimal(20, 4)
   headTripCost    Decimal?  @db.Decimal(20, 4)
-  reservedQty     Float?
+  reservedQty     Decimal?  @db.Decimal(20, 4)
   shippingPrice   Decimal?  @db.Decimal(20, 4)
   profitPrice     Decimal?  @db.Decimal(20, 4)
   profitRate      Float?
-  listingQuantity Float?
-  unsellable      Float?
-  warehousing     Float?
+  listingQuantity Decimal?  @db.Decimal(20, 4)
+  unsellable      Decimal?  @db.Decimal(20, 4)
+  warehousing     Decimal?  @db.Decimal(20, 4)
   productTagNames String[]  @default([])
   ratingValue     Float?
   dxmPublishState String?

@@ -244,7 +244,7 @@ export function AssemblyWorkbench() {
         </div>
         {notice ? <p className="mt-3 rounded border border-success/30 bg-success-soft px-3 py-2 text-xs text-success-ink">{notice}</p> : null}
         {error ? <p className="mt-3 rounded border border-danger/30 bg-danger-soft px-3 py-2 text-xs text-danger-ink">{error}</p> : null}
-      </section>} main={<div className="space-y-6">
+      </section>} main={<div className="space-y-5">
 
       <section className="rounded-lg border border-border bg-surface p-4">
         <h3 className="text-sm font-semibold">新增 BOM</h3>

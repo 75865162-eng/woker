@@ -21,7 +21,7 @@ export function FbaStorageReference() {
       return <details key={view.id} id={`reference-${view.id}`} open={search.trim()?true:undefined} className="group scroll-mt-6 rounded-lg border border-border bg-surface p-4 shadow-sm open:border-brand open:ring-1 open:ring-brand/20">
         <summary className="cursor-pointer rounded text-sm font-semibold text-brand transition-colors hover:text-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">{view.title} <span className="font-normal text-muted">· {blocks.length} 项</span></summary>
         <p className="my-3 text-xs text-muted">{view.lede}</p>
-        <div className="space-y-6">{blocks.map((block,i)=><section key={i} className="space-y-2">
+        <div className="space-y-5">{blocks.map((block,i)=><section key={i} className="space-y-2">
           <h3 className="text-sm font-medium">{block.title}</h3>
           {block.note&&<p className="text-xs text-muted">{block.note}</p>}
           {block.text&&<p className="rounded bg-background p-3 text-sm">{block.text}</p>}

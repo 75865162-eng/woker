@@ -50,7 +50,7 @@ export function ProcurementCollabWorkbench() {
       { label: "待付款", value: String((payments.data?.items ?? []).filter(row => row.status === "APPROVED").length) },
       { label: "换货中", value: String((exchanges.data?.items ?? []).filter(row => ["SUBMITTED", "APPROVED", "SHIPPED"].includes(row.status)).length) },
       { label: "有效报价", value: String((quotations.data?.items ?? []).filter(row => row.status === "ACTIVE").length) },
-    ]} />} main={<div className="space-y-6">
+    ]} />} main={<div className="space-y-5">
     <Tabs value={tab} onChange={value => setTab(value as "PAY" | "EXCHANGE" | "QUOTE")} tabs={[{ id: "PAY", label: "请款单" }, { id: "EXCHANGE", label: "换货单" }, { id: "QUOTE", label: "供应商报价" }]} />
 
     {tab === "PAY" && <>
