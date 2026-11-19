@@ -810,3 +810,25 @@
 .sellfox-ui .sf-ep-form > label.sf-check { flex-direction: row; align-items: center; gap: var(--space-2); }
 .sellfox-ui .sf-ep-form > .sf-btn { align-self: end; }
 .sellfox-ui .sf-panel td .sf-btn + .sf-btn { margin-left: var(--space-1); }
+
+/* 只读复刻页：已接通交互但仅说明状态的控件（写操作/数据不足项）。 */
+.sellfox-ui .sf-btn.sf-btn-muted {
+  color: var(--muted);
+  border-style: dashed;
+}
+.sellfox-ui .sf-dims button.sf-tab-muted {
+  color: var(--muted);
+}
+.sellfox-ui .sf-filter select.sf-select-muted {
+  color: var(--muted);
+}
+.sellfox-ui .sf-check.sf-check-muted {
+  color: var(--muted);
+}
+.sellfox-ui .sf-action-notice-body {
+  margin: var(--space-3) 0;
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  color: var(--foreground);
+  white-space: pre-line;
+}

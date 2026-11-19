@@ -60,6 +60,7 @@ test("TTL table matches the plan and empty results use the short TTL", () => {
   assert.equal(SELLFOX_CACHE_TTL.performance, 300);
   assert.equal(SELLFOX_CACHE_TTL.ads_report, 600);
   assert.equal(SELLFOX_CACHE_TTL.overview, 60);
+  assert.equal(SELLFOX_CACHE_TTL.restock, 300);
   assert.equal(SELLFOX_EMPTY_TTL, 30);
 });
 
@@ -71,10 +72,15 @@ test("version sources are physical tables owned by the sellfox source", () => {
 });
 
 test("sync resource invalidates every dependent read domain", () => {
-  assert.deepEqual(syncResourceToCacheDomains("sales").sort(), ["overview", "sales"]);
+  assert.deepEqual(syncResourceToCacheDomains("sales").sort(), ["overview", "restock", "sales"]);
   assert.ok(syncResourceToCacheDomains("stores").includes("overview"));
   assert.ok(syncResourceToCacheDomains("stores").includes("sales"));
   assert.ok(syncResourceToCacheDomains("inventory").includes("performance"));
+  // 补货依赖库存/销量/listing/在途，任一变化都要失效。
+  assert.ok(syncResourceToCacheDomains("inventory").includes("restock"));
+  assert.ok(syncResourceToCacheDomains("listings").includes("restock"));
+  assert.ok(syncResourceToCacheDomains("fba_shipments").includes("restock"));
+  assert.ok(syncResourceToCacheDomains("stores").includes("restock"));
   assert.deepEqual(syncResourceToCacheDomains("ads_report"), ["ads_report", "overview"]);
 });
 
