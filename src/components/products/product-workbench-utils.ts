@@ -128,6 +128,8 @@ export function calculatePeakStandardNonApparelFbaFee(row: Pick<TrialPriceRow, "
     category: "家居及厨房用品",
     date: "2026-11-18",
   }, "peak");
+  // 这个自动档位只覆盖标准尺寸；大件/超大件费率需走计算器或人工填写。
+  if (!quote.sizeTier.includes("标准尺寸")) return null;
   // Fuel remains a separate metric in the pricing table.
   const shipping = quote.fees.find((fee) => fee.id === "shipping")?.amount;
   return shipping == null ? null : Number(shipping);
