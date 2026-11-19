@@ -30,6 +30,9 @@ export const SELLFOX_CACHE_TTL: Record<string, number> = {
   ads_campaign: 600,
   ads_ad_group: 600,
   ads_placement: 600,
+  // 补货建议是全量重查询：listing + 30 天销量 + 库存快照 + 在途，单次可达数十秒。
+  // 依赖的快照每日/每 3 小时同步一次，无需秒级实时；按数据版本失效，保证一致性。
+  restock: 300,
   overview: 60,
 };
 export const SELLFOX_DEFAULT_TTL = 300;
@@ -47,6 +50,9 @@ export const SELLFOX_VERSION_SOURCE: Record<string, { model: string; column: str
   ads_campaign: { model: "SellfoxAdsCampaignDaily", column: "syncedAt" },
   ads_ad_group: { model: "SellfoxAdsAdGroupDaily", column: "syncedAt" },
   ads_placement: { model: "SellfoxAdsPlacementDaily", column: "syncedAt" },
+  // 补货对 FBA 库存快照最敏感（同步最频繁，180 分钟）；其余输入（listing/销量/在途）
+  // 分别由各自的失效映射覆盖，任一变化都会 DEL restock 缓存，无需复合版本。
+  restock: { model: "SellfoxFbaInventorySnapshot", column: "capturedAt" },
 };
 
 /**
@@ -255,11 +261,14 @@ export async function invalidateSellfoxSyncResource(
 
 /** Pure mapping: which read-cache domains become stale after a sync resource succeeds. */
 export function syncResourceToCacheDomains(resource: string): string[] {
-  if (resource === "stores") return ["overview", "sales", "performance", "listings", "ads_report"];
-  if (resource === "sales") return ["overview", "sales"];
+  // 补货建议依赖库存 + listing + 销量 + 在途货件，任一变化都必须让其缓存失效。
+  if (resource === "stores") return ["overview", "sales", "performance", "listings", "ads_report", "restock"];
+  if (resource === "sales") return ["overview", "sales", "restock"];
   if (resource === "performance") return ["overview", "performance"];
-  if (resource === "inventory") return ["overview", "sales", "performance", "listings"];
-  if (resource === "listings") return ["sales", "performance", "listings", "ads_report"];
+  if (resource === "inventory") return ["overview", "sales", "performance", "listings", "restock"];
+  if (resource === "listings") return ["sales", "performance", "listings", "ads_report", "restock"];
+  if (resource === "fba_shipments") return ["restock"];
+  if (resource === "order_detail") return ["restock"];
   if (resource === "hourly") return ["overview"];
   if (resource.startsWith("ads_")) return [resource, "overview"];
   return ["overview"];

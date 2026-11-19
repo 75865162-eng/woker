@@ -4,6 +4,9 @@ import type { SellfoxBrowseQuery } from "./browse-query";
 import { inboundUnits, mergeRestockDays, restockDailyRates, restockPrepDays, restockSafetyDays, suggestRestockDate, suggestRestockQuantity, sumKnown, type RestockDay } from "./restock";
 import { sellfoxDateAt } from "./sync-contract";
 import { sellfoxStoreSyncFailures } from "./sync-failures";
+import {
+  normalizeSellfoxCacheQuery, readThroughSellfox, sellfoxCacheKey, SELLFOX_VERSION_SOURCE,
+} from "./result-cache";
 
 type Scope = { organizationId: string; workspaceId: string };
 export type RestockListing = {
@@ -156,4 +159,42 @@ export async function readSellfoxRestock(query: SellfoxBrowseQuery, scope: Scope
     failures,
     formula: { prepDays: restockPrepDays, safetyDays: restockSafetyDays, weights: { d7: 0.5, d14: 0.3, d30: 0.2 }, excludedRecentDays: 2 },
   };
+}
+
+/**
+ * 补货建议的读缓存包装。补货是全量重查询（listing + 30 天销量 + 库存快照 + 在途），
+ * 单次可达数十秒；依赖快照按日/每 3 小时同步，无需秒级实时。
+ * 缓存键包含 org + workspace + 归一化查询 + 用户可见店铺集合，保证权限/租户隔离；
+ * 数据版本取自库存快照 capturedAt，任一依赖域同步成功后由失效钩子 DEL。
+ * Redis 不可用/版本读取失败一律降级为直查，不影响正确性。
+ */
+export async function readSellfoxRestockCached(
+  query: SellfoxBrowseQuery,
+  scope: Scope,
+  storeIds?: string[],
+  today = sellfoxDateAt(new Date()),
+) {
+  // storeIds 是用户数据范围（权限隔离），必须进键；排序保证同一集合键稳定。
+  const storeKey = storeIds ? [...storeIds].sort().join(",") : "__unscoped__";
+  const key = sellfoxCacheKey(
+    scope.organizationId,
+    scope.workspaceId,
+    "restock",
+    normalizeSellfoxCacheQuery({ ...query, today, storeKey }),
+  );
+  const source = SELLFOX_VERSION_SOURCE.restock!;
+  const result = await readThroughSellfox(
+    key,
+    "restock",
+    async () => {
+      const rows = await prisma.$queryRaw<Array<{ v: Date | string | null }>>(Prisma.sql`
+        SELECT max(${Prisma.raw(`"${source.column}"`)}) AS v
+        FROM ${Prisma.raw(`"${source.model}"`)}
+        WHERE "organizationId"=${scope.organizationId} AND "workspaceId"=${scope.workspaceId}`);
+      return rows[0]?.v ? new Date(rows[0]!.v).toISOString() : "__empty__";
+    },
+    () => readSellfoxRestock(query, scope, storeIds, today),
+    { isEmpty: body => Array.isArray(body.rows) && body.rows.length === 0 },
+  );
+  return { ...result.body, cache: { status: result.cache, cachedAt: result.cachedAt } };
 }
