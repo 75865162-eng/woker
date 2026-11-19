@@ -8,7 +8,7 @@ import { createSponsoredProductsCampaignReader } from "@/lib/amazon-ads/sync-ada
 import { createReportingV1Transport } from "@/lib/amazon-ads/reporting-v1-transport";
 import { processSyncCenterTask } from "@/lib/amazon-sync/processor";
 import { processAmazonAdsSyncTask } from "@/lib/amazon-ads/sync-processor";
-import { startAmazonOAuth, finishAmazonOAuth } from "@/lib/amazon-sync/oauth";
+import { startAmazonOAuth, finishAmazonOAuth, buildConsentUrl } from "@/lib/amazon-sync/oauth";
 import { startAmazonAdsOAuth, finishAmazonAdsOAuth } from "@/lib/amazon-ads/authorization";
 
 const previous = process.env.AMAZON_API_EXECUTION_ROLE;
@@ -59,6 +59,21 @@ test("local OAuth and worker entry points reject before touching the database or
   await assert.rejects(finishAmazonAdsOAuth({ scope, actor: "fixture-user", params: new URLSearchParams() }), blocked);
   await assert.rejects(processSyncCenterTask("fixture-task", 1), blocked);
   await assert.rejects(processAmazonAdsSyncTask("fixture-task", 1), blocked);
+});
+
+test("consent URL works for private apps without application_id and includes it only when configured", () => {
+  const state = "fixture-state";
+  const redirect = "https://example.com/api/integrations/amazon/sp-api/oauth/callback";
+  const without = new URL(buildConsentUrl("us-east-1", "", redirect, state));
+  assert.equal(without.hostname, "sellercentral.amazon.com");
+  assert.equal(without.pathname, "/apps/authorize/consent");
+  assert.equal(without.searchParams.get("state"), state);
+  assert.equal(without.searchParams.get("redirect_uri"), redirect);
+  assert.equal(without.searchParams.has("application_id"), false);
+  const withId = new URL(buildConsentUrl("eu-west-1", "amzn1.sellerapps.app.fixture", redirect, state));
+  assert.equal(withId.hostname, "sellercentral-europe.amazon.com");
+  assert.equal(withId.searchParams.get("application_id"), "amzn1.sellerapps.app.fixture");
+  assert.throws(() => buildConsentUrl("unknown-region", "", redirect, state), /区域无效/);
 });
 
 test("cloud role is checked again after asynchronous preflight, before dispatch", async () => {

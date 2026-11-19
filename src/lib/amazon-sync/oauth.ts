@@ -13,8 +13,20 @@ import { ensureAmazonSyncInitialized } from "./scheduler";
 import { assignNewAutomaticAccount } from "./automatic-account-access";
 
 const consentHosts: Record<string, string> = { "us-east-1": "sellercentral.amazon.com", "eu-west-1": "sellercentral-europe.amazon.com", "us-west-2": "sellercentral.amazon.co.jp" };
+/** 构造 Amazon 授权 consent URL。application_id 仅公共应用需要，私有应用（轨道 A）可省略。 */
+export function buildConsentUrl(region: string, applicationId: string, redirectUri: string, state: string): string {
+  if (!consentHosts[region]) throw new SyncInputError("区域无效。");
+  const url = new URL(`https://${consentHosts[region]}/apps/authorize/consent`);
+  const params = new URLSearchParams({ state, redirect_uri: redirectUri });
+  if (applicationId) params.set("application_id", applicationId);
+  url.search = params.toString();
+  return url.toString();
+}
 function appSettings() {
-  const applicationId = requiredText(process.env.AMAZON_SP_API_APPLICATION_ID, "Amazon application ID");
+  // application_id 仅公共应用的网站授权 consent URL 需要；私有应用（直接在 UI 填
+  // refresh token 的轨道 A）不需要它。未配置时不阻断，consent URL 也不携带该参数。
+  const configuredApplicationId = process.env.AMAZON_SP_API_APPLICATION_ID;
+  const applicationId = configuredApplicationId && configuredApplicationId.trim() ? requiredText(configuredApplicationId, "Amazon application ID") : "";
   const clientId = requiredText(process.env.AMAZON_SP_API_LWA_CLIENT_ID, "LWA client ID", 1000);
   const clientSecret = requiredText(process.env.AMAZON_SP_API_LWA_CLIENT_SECRET, "LWA client secret", 16384);
   const redirectUri = requiredText(process.env.AMAZON_SP_API_OAUTH_REDIRECT_URI, "OAuth redirect URI", 1000);
@@ -35,9 +47,7 @@ export async function startAmazonOAuth(scope: SyncScope, actor: string, region: 
     await tx.amazonOAuthAttempt.create({ data: { ...scope, id, userId: actor, stateHash: mcpTokenHash(state), region, redirectUri: settings.redirectUri, expiresAt: new Date(Date.now() + 10 * 60000) } });
     await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actor, action: "amazon.oauth.started", entityType: "AmazonOAuthAttempt", entityId: id, metadata: { workspaceId: scope.workspaceId, region } } });
   });
-  const url = new URL(`https://${consentHosts[region]}/apps/authorize/consent`);
-  url.search = new URLSearchParams({ application_id: settings.applicationId, state, redirect_uri: settings.redirectUri }).toString();
-  return { consentUrl: url.toString(), expiresInSeconds: 600 };
+  return { consentUrl: buildConsentUrl(region, settings.applicationId, settings.redirectUri, state), expiresInSeconds: 600 };
 }
 
 /** Seller ID is supplied by Amazon OAuth, then checked against a seller-scoped Listings
