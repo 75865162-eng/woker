@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { GripVertical, Pin, PinOff } from "lucide-react";
+import { ChevronDown, GripVertical, Pin, PinOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { NavigationGroup, NavigationItem } from "./business-navigation";
 import { usePinnedNav } from "./pinned-nav";
@@ -81,28 +81,46 @@ export function NavigationSidebar({
 
         return (
           <div key={group.id} className="relative mb-0.5">
-            <div className="flex items-center">
-              <button
-                type="button"
-                aria-expanded={isOpen}
-                aria-label={`${group.label} 二级菜单`}
+            <div
+              className={cn(
+                "flex h-9 items-center rounded-md transition-colors",
+                isOpen || groupActive
+                  ? "bg-surface-muted font-semibold text-foreground"
+                  : "text-foreground/80 hover:bg-surface-muted hover:text-foreground",
+              )}
+            >
+              {/* 一级主体：点击直接跳转到该板块落地页；hover/focus 打开二级浮层 */}
+              <Link
+                href={group.href}
+                prefetch={false}
                 title={navCollapsed ? group.label : undefined}
+                aria-label={group.label}
                 onMouseEnter={(event) => openGroup(group.id, event.currentTarget)}
                 onFocus={(event) => openGroup(group.id, event.currentTarget)}
-                // 点击必须幂等地「打开」：鼠标移入已先触发 onMouseEnter 打开浮层，
-                // 若此处再按 isOpen 切换为关闭，用户点击时浮层会瞬间消失，表现为「点击没反应」。
-                // 关闭只交由 onMouseLeave(含延迟) 与滚动处理，触屏无 hover 时点击也能打开。
-                onClick={(event) => openGroup(group.id, event.currentTarget)}
+                onClick={closeNow}
                 className={cn(
-                  "flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md text-body leading-5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand",
-                  navCollapsed ? "justify-center px-0" : "px-2.5",
-                  isOpen || groupActive
-                    ? "bg-surface-muted font-semibold text-foreground"
-                    : "text-foreground/80 hover:bg-surface-muted hover:text-foreground",
+                  "flex h-full min-w-0 flex-1 items-center gap-2 rounded-md text-body leading-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand",
+                  navCollapsed ? "justify-center px-0" : "pl-2.5",
                 )}
               >
                 <group.icon aria-hidden className="h-4 w-4 shrink-0" />
                 <span className={cn("truncate text-left", navCollapsed && "sr-only")}>{group.label}</span>
+              </Link>
+              {/* 二级展开按钮：触屏无 hover 时点此展开；桌面 hover 主体已可展开 */}
+              <button
+                type="button"
+                aria-expanded={isOpen}
+                aria-label={`${group.label} 二级菜单`}
+                onMouseEnter={(event) => openGroup(group.id, event.currentTarget)}
+                onFocus={(event) => openGroup(group.id, event.currentTarget)}
+                // 点击幂等打开：hover 已先打开，此处不得切换为关闭，否则表现为「点击没反应」。
+                onClick={(event) => openGroup(group.id, event.currentTarget)}
+                className={cn(
+                  "flex h-full w-6 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand",
+                  navCollapsed && "hidden",
+                )}
+              >
+                <ChevronDown aria-hidden className={cn("h-3.5 w-3.5 transition-transform", isOpen && "rotate-180")} />
               </button>
             </div>
 

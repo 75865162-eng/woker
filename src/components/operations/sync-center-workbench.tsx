@@ -9,6 +9,7 @@ import { cloneElement, useCallback, useEffect, useId, useRef, useState } from "r
 import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { getJson } from "@/lib/workspace/get-json";
+import { amazonSlugView } from "@/lib/amazon/amazon-slug-routes";
 import { ExternalLink, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StandardDataTable } from "@/components/ui/table-variants";
@@ -85,7 +86,13 @@ const viewAliases: Record<string, string> = { plans: "plans", tasks: "tasks" };
 
 function pageFromLocation() {
   const params = new URLSearchParams(window.location.search);
-  const view = params.get("view");
+  let view = params.get("view");
+  // /amazon/<slug> 后缀命名空间：rewrite 后浏览器地址栏没有 ?view=，
+  // 需从 pathname 解析 slug（内部导航 pushState 带的 ?view= 优先）。
+  if (!view) {
+    const slug = window.location.pathname.match(/^\/amazon\/([^/]+)\/?$/)?.[1];
+    if (slug) view = amazonSlugView(slug);
+  }
   if (view === "sync") return "sync";
   const resolved = view ? (viewAliases[view] ?? view) : "overview";
   return allNav.some(([key]) => key === resolved) ? resolved : "overview";
