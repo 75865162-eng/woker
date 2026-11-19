@@ -9,7 +9,7 @@ import { cookies, headers } from "next/headers";
 
 const workspaceScopeCookieName = "amazon_bulk_ad_workspace_scope";
 
-type DashboardInitialData = {
+type ProductHomeInitialData = {
   workspaceId: string;
   products: ProductListItem[];
   pagination: {
@@ -34,10 +34,10 @@ function readWorkspaceId(value: string | undefined) {
   }
 }
 
-async function getDashboardInitialData(
+async function getProductHomeInitialData(
   user: Awaited<ReturnType<typeof getCurrentUser>>,
   permissions: Promise<RolePermissionMap>,
-): Promise<DashboardInitialData | null> {
+): Promise<ProductHomeInitialData | null> {
   if (!user) return null;
 
   const [requestHeaders, cookieStore] = await Promise.all([headers(), cookies()]);
@@ -62,7 +62,7 @@ async function getDashboardInitialData(
 
   const payload = (await response.json()) as {
     products?: ProductListItem[];
-    pagination?: DashboardInitialData["pagination"];
+    pagination?: ProductHomeInitialData["pagination"];
     summary?: ProductListSummary;
   };
 
@@ -78,14 +78,15 @@ async function getDashboardInitialData(
   };
 }
 
-export default async function DashboardPage() {
+/** 商品管理一级落地页：商品主档（原 /dashboard 实现，URL 统一为 /product）。 */
+export default async function ProductHomePage() {
   const user = await getCurrentUser();
   const rolePermissionsSnapshotPromise = user
     ? getOrganizationRolePermissionsSnapshot(user.organizationId)
     : null;
   const [initialData] = user
     ? await Promise.all([
-      getDashboardInitialData(
+      getProductHomeInitialData(
         user,
         rolePermissionsSnapshotPromise!.then((snapshot) => snapshot.permissions),
       ),

@@ -1,4 +1,4 @@
-import { Activity, Banknote, BookMarked, Bot, Boxes, Calculator, ChartNoAxesCombined, CircleHelp, ClipboardList, Handshake, History, Landmark, ListChecks, PackageSearch, ReceiptText, RefreshCw, SearchCheck, Settings, Sparkles, Star, Store, Tags, Target, Truck, UploadCloud, UsersRound, Warehouse } from "lucide-react";
+import { Activity, Banknote, BookMarked, Bot, Boxes, Calculator, ChartNoAxesCombined, CircleHelp, ClipboardList, Handshake, History, Landmark, ListChecks, PackageSearch, ReceiptText, RefreshCw, SearchCheck, Settings, Sparkles, Star, Store, Tags, Target, Truck, UsersRound, Warehouse } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 /**
@@ -35,21 +35,24 @@ export const accountMenuItems: NavigationItem[] = [
 ];
 
 /**
- * 7 大板块（2026-11 重组）：
- * 1 商品管理（仅主档） /Product
- * 2 赛狐数据（所有赛狐页） /sellfox
- * 3 亚马逊数据（所有 Amazon 页 + 隐藏功能页 + 系统设置业务项） /amz
+ * 7 大板块（2026-11 重组，二级统一命名空间前缀）：
+ * 1 商品管理 /product（商品主档 + 计算器中心）
+ * 2 赛狐数据 /sellfox（全部赛狐页，数据经赛狐同步）
+ * 3 亚马逊数据 /amz（全部 Amazon 页 + 隐藏功能页 + 授权/数据字典；
+ *    财务的结算报告/FBA 赔偿、仓库的 FBA 库存/库龄/事件/补货/在途/装箱
+ *    均为 Amazon 同步数据，统一收录于此）
  * 4 采购管理 /purchase
- * 5 仓库管理（含物流发货） /WMS
- * 6 财务管理 /Fin
+ * 5 仓库管理 /wms（仅自有仓库 + 物流文件，FBA 数据已归入亚马逊；一级跳物流文件工作台）
+ * 6 财务管理 /fin（ERP 自有财务）
  * 7 AI 与工具 /ai
  *
- * 系统设置的全局项（帮助/任务/版本/账号权限/系统设置）统一放在右上角账号菜单，
- * 不再作为一级板块出现。
+ * 大原则：亚马逊 / 赛狐同步下来的数据，一律归入对应大组，不在其他板块重复收录。
+ * 系统设置的全局项（帮助/任务/版本/账号权限/系统设置）统一放在右上角账号菜单。
  */
 export const navigationGroups: NavigationGroup[] = [
-  { id: "products", label: "商品管理", icon: Boxes, href: "/dashboard", items: [
-    { id: "products.master", href: "/dashboard", label: "商品主档", icon: Boxes, moduleId: "products" },
+  { id: "products", label: "商品管理", icon: Boxes, href: "/product", items: [
+    { id: "products.master", href: "/product", label: "商品主档", icon: Boxes, moduleId: "products" },
+    { id: "products.calculators", href: "/product/calculators", label: "计算器中心", icon: Calculator, moduleId: "products" },
   ] },
 
   { id: "sellfox", label: "赛狐数据", icon: Store, href: "/sellfox/profit", items: [
@@ -69,10 +72,10 @@ export const navigationGroups: NavigationGroup[] = [
     { id: "sellfox.performance", href: "/sellfox/performance", label: "经营报表", icon: Activity, moduleId: "sellfox" },
     { id: "sellfox.sync", href: "/sellfox/sync", label: "数据同步", icon: RefreshCw, moduleId: "sellfox" },
     { id: "sellfox.endpoint", href: "/sellfox/endpoint-data", label: "端点数据", icon: SearchCheck, moduleId: "sellfox" },
-    { id: "sellfox.searchMerge", href: "/saihu-search-merge", label: "搜词合并", icon: SearchCheck, moduleId: "searchMerge" },
+    { id: "sellfox.searchMerge", href: "/sellfox/search-merge", label: "搜词合并", icon: SearchCheck, moduleId: "searchMerge" },
   ] },
 
-  { id: "amazon", label: "亚马逊数据", icon: Activity, href: "/operations?view=sales-traffic", items: [
+  { id: "amazon", label: "亚马逊数据", icon: Activity, href: "/amazon/sales-traffic", items: [
     // 经营分析
     { id: "amazon.salesTraffic", href: "/amazon/sales-traffic", label: "销售与流量", icon: ChartNoAxesCombined, moduleId: "operations" },
     { id: "amazon.brandAnalytics", href: "/amazon/brand-analytics", label: "品牌分析", icon: SearchCheck, moduleId: "operations" },
@@ -94,8 +97,7 @@ export const navigationGroups: NavigationGroup[] = [
     // 广告
     { id: "amazon.ads", href: "/amazon/ads", label: "PPC 经营指标", icon: Target, moduleId: "operations" },
     { id: "amazon.campaigns", href: "/amazon/campaigns", label: "Amazon Ads", icon: Activity, moduleId: "workspace" },
-    { id: "amazon.ppcBulk", href: "/workspace", label: "PPC Bulk 优化", icon: UploadCloud, moduleId: "workspace" },
-    // 定价 / 库存 / 履约
+    // 定价 / 库存 / 履约（仓库板块的 FBA 数据统一收录于此）
     { id: "amazon.pricing", href: "/amazon/pricing", label: "定价与 BuyBox", icon: Tags, moduleId: "operations" },
     { id: "amazon.buyBox", href: "/amazon/buy-box", label: "BuyBox 历史", icon: ChartNoAxesCombined, moduleId: "operations" },
     { id: "amazon.inventory", href: "/amazon/inventory", label: "FBA 库存", icon: Warehouse, moduleId: "operations" },
@@ -108,7 +110,7 @@ export const navigationGroups: NavigationGroup[] = [
     { id: "amazon.merchantShipping", href: "/amazon/merchant-shipping", label: "商家配送", icon: Truck, moduleId: "operations" },
     { id: "amazon.mcf", href: "/amazon/mcf", label: "MCF 多渠道履约", icon: Boxes, moduleId: "operations" },
     { id: "amazon.awd", href: "/amazon/awd", label: "AWD 仓储配送", icon: Warehouse, moduleId: "operations" },
-    // 财务
+    // 财务（含原财务板块移入的结算报告 / FBA 赔偿）
     { id: "amazon.finance", href: "/amazon/finance", label: "财务交易", icon: Banknote, moduleId: "operations" },
     { id: "amazon.settlements", href: "/amazon/settlements", label: "结算报告", icon: Banknote, moduleId: "operations" },
     { id: "amazon.reimbursements", href: "/amazon/reimbursements", label: "FBA 赔偿", icon: Banknote, moduleId: "operations" },
@@ -126,50 +128,39 @@ export const navigationGroups: NavigationGroup[] = [
     { id: "amazon.adsAccounts", href: "/amazon/ads-accounts", label: "Ads 账号授权", icon: Activity, moduleId: "workspace" },
   ] },
 
-  { id: "purchase", label: "采购管理", icon: ClipboardList, href: "/operations/purchase-plans", items: [
-    { id: "purchase.plans", href: "/operations/purchase-plans", label: "采购计划", icon: ClipboardList, moduleId: "operations" },
-    { id: "purchase.orders", href: "/operations?view=purchase-orders", label: "采购订单", icon: ClipboardList, moduleId: "operations" },
-    { id: "purchase.invoices", href: "/operations/purchase-invoices", label: "采购发票", icon: ReceiptText, moduleId: "operations" },
-    { id: "purchase.suppliers", href: "/operations?view=suppliers", label: "供应商档案", icon: Store, moduleId: "operations" },
-    { id: "purchase.collab", href: "/operations/procurement-collab", label: "采购协同", icon: Handshake, moduleId: "operations" },
-    { id: "purchase.opsExtensions", href: "/operations/ops-extensions", label: "运营资料与滞销", icon: Boxes, moduleId: "operations" },
+  { id: "purchase", label: "采购管理", icon: ClipboardList, href: "/purchase/plans", items: [
+    { id: "purchase.plans", href: "/purchase/plans", label: "采购计划", icon: ClipboardList, moduleId: "operations" },
+    { id: "purchase.orders", href: "/purchase/orders", label: "采购订单", icon: ClipboardList, moduleId: "operations" },
+    { id: "purchase.invoices", href: "/purchase/invoices", label: "采购发票", icon: ReceiptText, moduleId: "operations" },
+    { id: "purchase.suppliers", href: "/purchase/suppliers", label: "供应商档案", icon: Store, moduleId: "operations" },
+    { id: "purchase.collab", href: "/purchase/collab", label: "采购协同", icon: Handshake, moduleId: "operations" },
+    { id: "purchase.opsExtensions", href: "/purchase/ops-extensions", label: "运营资料与滞销", icon: Boxes, moduleId: "operations" },
   ] },
 
-  { id: "warehouse", label: "仓库管理", icon: Warehouse, href: "/operations?view=inventory", items: [
-    { id: "warehouse.fbaInventory", href: "/operations?view=inventory", label: "FBA 库存", icon: Warehouse, moduleId: "operations" },
-    { id: "warehouse.inventoryAge", href: "/operations?view=inventory_age", label: "库存库龄", icon: Activity, moduleId: "operations" },
-    { id: "warehouse.inventoryEvents", href: "/operations?view=inventory_events", label: "库存事件", icon: Activity, moduleId: "operations" },
-    { id: "warehouse.replenishment", href: "/operations?view=replenishment", label: "补货计划", icon: Boxes, moduleId: "operations" },
-    { id: "warehouse.profile", href: "/logistics/warehouse?tab=warehouses", label: "仓库档案", icon: Warehouse, moduleId: "wms" },
-    { id: "warehouse.receipts", href: "/logistics/warehouse?tab=receipts", label: "仓库入库", icon: PackageSearch, moduleId: "wms" },
-    { id: "warehouse.reservations", href: "/logistics/warehouse?tab=reservations", label: "仓库出库", icon: PackageSearch, moduleId: "wms" },
-    { id: "warehouse.balances", href: "/logistics/warehouse?tab=balances", label: "公司库存与调拨", icon: Warehouse, moduleId: "wms" },
-    { id: "warehouse.transfers", href: "/logistics/warehouse?tab=transfers", label: "调拨流水", icon: Warehouse, moduleId: "wms" },
-    { id: "warehouse.assembly", href: "/operations/assembly", label: "组装", icon: Boxes, moduleId: "wms" },
-    // 物流发货（原「物流发货」板块并入）
-    { id: "logistics.fulfillment", href: "/operations?view=fulfillment", label: "FBA 在途货件", icon: Truck, moduleId: "operations" },
-    { id: "logistics.fbaBoxing", href: "/operations?view=fba-boxing", label: "FBA 装箱", icon: PackageSearch, moduleId: "operations" },
-    { id: "logistics.firstMile", href: "/operations?view=first-mile", label: "头程物流", icon: Truck, moduleId: "operations" },
-    { id: "logistics.files", href: "/logistics", label: "物流文件工作台", icon: PackageSearch, moduleId: "logistics" },
+  { id: "warehouse", label: "仓库管理", icon: Warehouse, href: "/wms/logistics", items: [
+    { id: "warehouse.profile", href: "/wms/warehouse", label: "仓库档案", icon: Warehouse, moduleId: "wms" },
+    { id: "warehouse.receipts", href: "/wms/receipts", label: "仓库入库", icon: PackageSearch, moduleId: "wms" },
+    { id: "warehouse.reservations", href: "/wms/reservations", label: "仓库出库", icon: PackageSearch, moduleId: "wms" },
+    { id: "warehouse.balances", href: "/wms/balances", label: "公司库存与调拨", icon: Warehouse, moduleId: "wms" },
+    { id: "warehouse.transfers", href: "/wms/transfers", label: "调拨流水", icon: Warehouse, moduleId: "wms" },
+    { id: "warehouse.assembly", href: "/wms/assembly", label: "组装", icon: Boxes, moduleId: "wms" },
+    { id: "logistics.files", href: "/wms/logistics", label: "物流文件工作台", icon: PackageSearch, moduleId: "logistics" },
   ] },
 
-  { id: "finance", label: "财务管理", icon: Banknote, href: "/operations?view=finance", items: [
-    { id: "finance.transactions", href: "/operations?view=finance", label: "财务交易", icon: Banknote, moduleId: "operations" },
-    { id: "finance.settlements", href: "/operations?view=settlements", label: "结算报告", icon: Banknote, moduleId: "operations" },
-    { id: "finance.reimbursements", href: "/operations?view=reimbursements", label: "FBA 赔偿", icon: Banknote, moduleId: "operations" },
-    { id: "finance.ledger", href: "/operations/finance-ledger", label: "财务台账", icon: BookMarked, moduleId: "operations" },
-    { id: "finance.allocations", href: "/operations/settlement-allocations", label: "结算分配", icon: ReceiptText, moduleId: "operations" },
-    { id: "finance.expenses", href: "/operations?view=expense-management", label: "ERP 费用单", icon: ReceiptText, moduleId: "operations" },
-    { id: "finance.tax", href: "/operations/tax", label: "税务与发票", icon: Landmark, moduleId: "operations" },
+  { id: "finance", label: "财务管理", icon: Banknote, href: "/fin/transactions", items: [
+    { id: "finance.transactions", href: "/fin/transactions", label: "财务交易", icon: Banknote, moduleId: "operations" },
+    { id: "finance.ledger", href: "/fin/ledger", label: "财务台账", icon: BookMarked, moduleId: "operations" },
+    { id: "finance.allocations", href: "/fin/allocations", label: "结算分配", icon: ReceiptText, moduleId: "operations" },
+    { id: "finance.expenses", href: "/fin/expenses", label: "ERP 费用单", icon: ReceiptText, moduleId: "operations" },
+    { id: "finance.tax", href: "/fin/tax", label: "税务与发票", icon: Landmark, moduleId: "operations" },
   ] },
 
   { id: "ai", label: "AI 与工具", icon: Bot, href: "/ai/lili", items: [
     { id: "ai.lili", href: "/ai/lili", label: "粒粒 Lili 技能中心", icon: Sparkles, moduleId: "agents" },
-    { id: "ai.agent", href: "/agents", label: "Amazon AI Agent", icon: Bot, moduleId: "agents" },
-    { id: "ai.skills", href: "/skills", label: "Skill 智能工作台", icon: Sparkles, moduleId: "agents" },
-    { id: "ai.listingAi", href: "/listing-ai", label: "Listing AI", icon: Sparkles, moduleId: "listingAi" },
-    { id: "ai.listingStudio", href: "/listing-ai/studio", label: "Listing 生成台", icon: Target, moduleId: "listingAi" },
-    { id: "ai.calculators", href: "/operations/calculators", label: "计算器中心", icon: Calculator, moduleId: "operations" },
+    { id: "ai.agent", href: "/ai/agent", label: "Amazon AI Agent", icon: Bot, moduleId: "agents" },
+    { id: "ai.skills", href: "/ai/skills", label: "Skill 智能工作台", icon: Sparkles, moduleId: "agents" },
+    { id: "ai.listingAi", href: "/ai/listing", label: "Listing AI", icon: Sparkles, moduleId: "listingAi" },
+    { id: "ai.listingStudio", href: "/ai/listing-studio", label: "Listing 生成台", icon: Target, moduleId: "listingAi" },
   ] },
 ];
 

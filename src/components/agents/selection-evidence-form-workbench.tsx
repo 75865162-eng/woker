@@ -86,7 +86,7 @@ export function SelectionEvidenceFormWorkbench() {
       });
       if (generation.current !== version) return;
       accept(next);
-      setMessage(next.receipt ? `SKU ${next.receipt.sku} 已创建；${next.receipt.queuePending ? "派生更新仍待完成，请稍后" : "请"}到同组织工作区 /dashboard 按 SKU 核对。` : "已保存并重建工作簿与 quality。空标签是 NEEDS_DATA（待补数据），不是没有差评。");
+      setMessage(next.receipt ? `SKU ${next.receipt.sku} 已创建；${next.receipt.queuePending ? "派生更新仍待完成，请稍后" : "请"}到同组织工作区 /product 按 SKU 核对。` : "已保存并重建工作簿与 quality。空标签是 NEEDS_DATA（待补数据），不是没有差评。");
     } catch (e) {
       if (generation.current !== version) return;
       setError(e instanceof Error ? e.message : "保存失败。");
@@ -106,7 +106,7 @@ export function SelectionEvidenceFormWorkbench() {
       <div className="flex flex-wrap items-center gap-3"><label>Slug <select aria-label="Slug" className={field} value={slug} disabled={busy || Boolean(dirty)} onChange={e => setSlug(e.target.value)}><option value="">请选择</option>{slugs.map(s => <option key={s.slug} value={s.slug}>{s.slug} · {s.status}</option>)}</select></label><Button variant="secondary" disabled={busy || Boolean(dirty)} onClick={() => void reloadSlugs()}>刷新目录</Button><Link className="text-sm text-brand underline" href="/agents/market">打开 Market 上传 draft</Link></div>
       <p className="text-xs text-muted">目录来自当前运行 aecob 的主机。编辑内容只在保存后落盘；有未保存修改时请先保存，再编辑另一区块或切换目录。</p>
       {environment && <div className="flex flex-wrap gap-2">{([["organization", "组织 ID"], ["actor", "Actor"], ["erpUrl", "ERP URL"], ["cookie", "Cookie"], ["database", "数据库"]] as const).map(([key, label]) => <Badge key={key} tone={environment[key] ? "green" : "gray"}>{label}：{environment[key] ? "已配置" : "未配置"}</Badge>)}</div>}
-      {busy && <p role="status">处理中，请稍候…</p>}{error && <p role="alert" className="text-sm text-danger">{error}</p>}{message && <p role="status" className="text-sm text-brand">{message} <Link href="/dashboard" className="underline">查看商品工作区</Link></p>}
+      {busy && <p role="status">处理中，请稍候…</p>}{error && <p role="alert" className="text-sm text-danger">{error}</p>}{message && <p role="status" className="text-sm text-brand">{message} <Link href="/product" className="underline">查看商品工作区</Link></p>}
       {!busy && !slugs.length && !error && <p className="text-sm text-muted">本机没有可用 Slug，请先完成本地选品采集。</p>}
       {data && <><p className="text-sm">关键词：{data.keyword} · 竞品 ASIN：{data.asins.join("、") || "无"}</p><div className="flex flex-wrap gap-2"><Badge tone={blocked ? "amber" : "green"}>{data.quality.status}</Badge><Badge tone={blocked ? "red" : "green"}>blockWrite：{String(data.quality.blockWrite)}</Badge>{(["validReviews", "taggedQuotes", "suppliers", "images", "uploadedImages"] as const).map((key, i) => <Badge tone="gray" key={key}>{["有效评论", "标签引用", "供应商", "本地图片", "已上传图片"][i]}：{data.quality[key]}</Badge>)}</div><ul className="list-disc pl-5 text-xs text-muted">{data.quality.reasons.map(r => <li key={r.code}>{r.code}：{r.code === "REVIEWS_NEEDS_DATA" ? "请在下方补低星评论。" : r.code === "SUPPLIERS_NEEDS_DATA" ? "请在下方补至少 3 个不同的真实 1688 商品链接。" : r.code === "TAGS_NEEDS_DATA" ? "评论尚未命中标签，需核对真实原文或由管理员补充词典。" : r.fallback}</li>)}</ul></>}
     </CardContent></Card>
@@ -129,7 +129,7 @@ export function SelectionEvidenceFormWorkbench() {
         <details><summary className="cursor-pointer text-sm font-semibold">高级：上传/写库</summary><div className="mt-3 space-y-3">
           {!uploadReason && <label className="block text-sm">一次性 Cookie（已配置时可留空）<input aria-label="一次性 Cookie" ref={cookie} disabled={busy} type="password" autoComplete="off" className={field} maxLength={16000} /><span className="text-xs text-muted">仅在点击上传时使用，提交后清空，不持久化。</span></label>}
           <Button variant="secondary" disabled={busy || Boolean(uploadReason)} title={uploadReason} onClick={() => void save("upload")}>上传竞品图</Button><p className="text-xs text-muted">{uploadReason || "仅上传已有本地图片；需要有效的当前用户会话。"}</p>
-          <Button disabled={busy || Boolean(createReason)} title={createReason} onClick={() => { if (window.confirm("确认将已审阅证据创建为当前组织/工作区的正式 SKU？")) void save("create"); }}>创建 SKU（--write）</Button><p className="text-xs text-muted">{createReason || "仅在明确点击确认后写库，成功后到同组织工作区 /dashboard 按 SKU 核对。"}</p>
+          <Button disabled={busy || Boolean(createReason)} title={createReason} onClick={() => { if (window.confirm("确认将已审阅证据创建为当前组织/工作区的正式 SKU？")) void save("create"); }}>创建 SKU（--write）</Button><p className="text-xs text-muted">{createReason || "仅在明确点击确认后写库，成功后到同组织工作区 /product 按 SKU 核对。"}</p>
         </div></details>
       </CardContent></Card>
     </>}

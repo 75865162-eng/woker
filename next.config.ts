@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import path from "node:path";
 import { amazonSlugRewrites } from "./src/lib/amazon/amazon-slug-routes";
+import { namespaceRewrites } from "./src/lib/navigation/namespace-routes";
 
 const distDir = process.env.NEXT_DIST_DIR || ".next";
 
@@ -22,9 +23,11 @@ const nextConfig: NextConfig = {
     "/**/*": localOnlyTraceExcludes,
   },
   async rewrites() {
-    // Amazon 页面后缀命名空间：/amazon/<slug> 与赛狐 /sellfox/* 并存，
-    // 复用经营中台已实现的 workbench（/operations?view=xxx 或独立子路由）。
-    return amazonSlugRewrites();
+    // 业务板块二级命名空间 → 真实页面。
+    // - 商品/采购/仓库/财务/AI 等板块的二级统一走 /product、/purchase、/wms、/fin、/ai 前缀；
+    // - Amazon 后缀 /amazon/<slug> 与赛狐 /sellfox/* 并存；
+    // 均复用经营中台已实现的 workbench（/operations?view=xxx 或独立子路由），避免重复实现。
+    return [...namespaceRewrites(), ...amazonSlugRewrites()];
   },
   async headers() {
     const headers = [

@@ -1,5 +1,6 @@
 import { buildRoleDefinitions } from "@/lib/accounts/role-definitions";
 import { resolveLiliPage } from "@/lib/lili/routes";
+import { namespacePathModules } from "@/lib/navigation/namespace-routes";
 
 export type PermissionAction = "view" | "create" | "edit" | "approve" | "export";
 
@@ -18,7 +19,7 @@ export const permissionActions: Array<{ id: PermissionAction; label: string }> =
 ];
 
 export const permissionModules = [
-  { id: "products", name: "产品管理 /dashboard", paths: ["/dashboard"] },
+  { id: "products", name: "产品管理 /product", paths: ["/product"] },
   { id: "sellfox", name: "Sellfox /sellfox", paths: ["/sellfox"] },
   { id: "workspace", name: "PPC 优化 /workspace、/amazon-ads", paths: ["/workspace", "/amazon-ads"] },
   { id: "searchMerge", name: "赛狐搜词合并 /saihu-search-merge、/history", paths: ["/saihu-search-merge", "/history"] },
@@ -40,7 +41,7 @@ export const permissionModules = [
 
 export const defaultAccessiblePaths = [
   { href: "/", moduleId: null },
-  { href: "/dashboard", moduleId: "products" },
+  { href: "/product", moduleId: "products" },
   { href: "/sellfox", moduleId: "sellfox" },
   { href: "/workspace", moduleId: "workspace" },
   { href: "/saihu-search-merge", moduleId: "searchMerge" },
@@ -57,12 +58,17 @@ export const defaultAccessiblePaths = [
   { href: "/settings", moduleId: "settings" },
 ] as const;
 
-export const routeModuleIds = permissionModules.flatMap((module) =>
-  module.paths.map((path) => ({
-    moduleId: module.id,
-    path,
-  })),
-);
+export const routeModuleIds = [
+  ...permissionModules.flatMap((module) =>
+    module.paths.map((path) => ({
+      moduleId: module.id,
+      path,
+    })),
+  ),
+  // 业务板块二级命名空间（/product、/purchase、/wms、/fin、/ai 等）也纳入权限归属，
+  // 避免 rewrite 后的 pathname 在 AppShell 被判定为 null → forbidden。
+  ...namespacePathModules(),
+];
 
 export const defaultRolePermissionMap: RolePermissionMap = Object.fromEntries(
   buildRoleDefinitions(permissionActions.map((action) => action.id), permissionModules.map((module) => module.id)).map((role) => [
@@ -91,9 +97,19 @@ export function getModuleIdForPath(pathname: string): string | null {
   if (pathname === "/lili" || pathname.startsWith("/lili/")) {
     return resolveLiliPage(pathname.split("/").filter(Boolean).slice(1))?.moduleId ?? "agents";
   }
-  const match = routeModuleIds.find(({ path }) => pathname === path || pathname.startsWith(`${path}/`));
+  // 最长匹配优先：命名空间前缀可能是彼此的父路径
+  // （如 /ai 是 /ai/listing 的父、/amazon 与 /amz 并存），必须取最具体的那条，
+  // 否则父前缀会把子路径误判到错误模块（/ai/listing 应为 listingAi 而非 agents）。
+  let matchedPath = "";
+  let matchedModuleId: string | null = null;
+  for (const { path, moduleId } of routeModuleIds) {
+    if ((pathname === path || pathname.startsWith(`${path}/`)) && path.length > matchedPath.length) {
+      matchedPath = path;
+      matchedModuleId = moduleId;
+    }
+  }
 
-  return match?.moduleId ?? null;
+  return matchedModuleId;
 }
 
 /**

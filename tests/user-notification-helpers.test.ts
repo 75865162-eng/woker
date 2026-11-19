@@ -13,7 +13,7 @@ test("workflow notification deep links preserve SKU and workspace query", () => 
   }), {
     sku: "SKU 1",
     workspaceId: "workspace/a",
-    href: "/dashboard?sku=SKU%201&workspaceId=workspace%2Fa",
+    href: "/product?sku=SKU%201&workspaceId=workspace%2Fa",
   });
   assert.equal(getProductWorkflowNotificationLink({ type: "other", metadata: { sku: "x", workspaceId: "w" } }), null);
 });

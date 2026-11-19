@@ -12,7 +12,7 @@ export function getProductWorkflowNotificationLink(item: ProductWorkflowNotifica
   return {
     sku,
     workspaceId,
-    href: `/dashboard?sku=${encodeURIComponent(sku)}&workspaceId=${encodeURIComponent(workspaceId)}`,
+    href: `/product?sku=${encodeURIComponent(sku)}&workspaceId=${encodeURIComponent(workspaceId)}`,
   };
 }
 
