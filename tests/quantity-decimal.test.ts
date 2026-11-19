@@ -5,7 +5,7 @@ import { Prisma } from "@prisma/client";
 
 const schema = readFileSync(new URL("../prisma/schema.prisma", import.meta.url), "utf8");
 const migration = readFileSync(
-  new URL("../prisma/migrations/20261222000000_quantity_float_to_decimal/migration.sql", import.meta.url),
+  new URL("../prisma/migrations/20261223000000_quantity_float_to_decimal/migration.sql", import.meta.url),
   "utf8",
 );
 const restockRead = readFileSync(new URL("../src/lib/sellfox/restock-read.ts", import.meta.url), "utf8");
