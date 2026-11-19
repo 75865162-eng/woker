@@ -142,7 +142,9 @@ test("部署入口在任何网络操作前拒绝失败、漂移或不完整的�
 });
 
 test("费用单主导航入口跳转到现有正式工作台", () => {
-  assert.match(read("src/components/app-shell/business-navigation.ts"), /href: "\/operations\?view=expense-management", label: "ERP 费用单"/);
+  // 财务板块二级统一 /fin 前缀，/fin/expenses 经 rewrite 映射到原正式工作台。
+  assert.match(read("src/components/app-shell/business-navigation.ts"), /href: "\/fin\/expenses", label: "ERP 费用单"/);
+  assert.match(read("src/lib/navigation/namespace-routes.ts"), /"\/fin\/expenses", moduleId: "operations", destination: "\/operations\?view=expense-management"/);
   assert.match(read("src/app/(erp)/operations/page.tsx"), /if \(view === "expense-management"\) redirect\("\/operations\/expenses"\)/);
   assert.match(read("src/app/(erp)/operations/expenses/page.tsx"), /<FinanceExpensesWorkbench/);
 });

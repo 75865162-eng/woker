@@ -82,7 +82,7 @@ test.describe("PPC workspace regression", () => {
     });
 
     await login(page);
-    await page.goto("/dashboard");
+    await page.goto("/product");
     await page.getByRole("button", { name: "新增商品", exact: true }).click();
 
     const imageInput = page.locator('input[type="file"][accept="image/*"]').last();

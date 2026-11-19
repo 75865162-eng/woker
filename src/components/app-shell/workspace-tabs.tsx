@@ -14,7 +14,7 @@ export type WorkspaceTab = {
   locked?: boolean;
 };
 
-export const HOME_HREF = "/dashboard";
+export const HOME_HREF = "/product";
 /** 标签上限；超过后按打开顺序自动关闭最早的标签。 */
 export const MAX_TABS = 8;
 /** 同时保留「组件状态 + DOM」的页面数上限；超出后按最近使用时间淘汰最久没打开的那个。 */

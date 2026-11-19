@@ -177,7 +177,7 @@ test("permission checks map nested routes and reject malformed permission cookie
   assert.equal(roleCanAccessModule("operations", "agents"), true);
   assert.equal(roleCanPerformAction("ppc_specialist", "workspace", "export"), true);
   assert.equal(roleCanPerformAction("operations", "workspace", "view"), false);
-  assert.equal(getAccessiblePathOrFallback("/dashboard", "operations"), "/dashboard");
+  assert.equal(getAccessiblePathOrFallback("/product", "operations"), "/product");
   assert.equal(getAccessiblePathOrFallback("/accounts", "operations"), "/");
   assert.equal(parseRolePermissionsCookie("%7Bbad-json"), null);
 });
