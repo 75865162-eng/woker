@@ -1,11 +1,15 @@
 import { build } from 'esbuild';
 import { expect, test } from '@playwright/test';
 
-test('输入商品参数即时测算，单位切换与手册可用，不请求或保存方案', async ({ page }) => {
+test('输入商品参数即时测算，单位切换与手册可用，且不写入方案', async ({ page }) => {
   const result = await build({ entryPoints: ['tests/browser/calculator-harness.tsx'], bundle: true, write: false, platform: 'browser', format: 'iife', jsx: 'automatic', define: { 'process.env.NODE_ENV': '"development"' } });
-  let requests = 0;
+  let writes = 0;
   await page.route('http://127.0.0.1:43219/**', route => {
-    if (route.request().url().includes('/api/')) requests++;
+    const request = route.request();
+    if (request.url().includes('/api/') && request.method() !== 'GET') writes++;
+    if (request.method() === 'GET' && new URL(request.url()).pathname === '/api/operations/ext') {
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ items: [] }) });
+    }
     return route.fulfill({ contentType: 'text/html', body: '<div id="root"></div>' });
   });
   await page.goto('http://127.0.0.1:43219/');
@@ -22,6 +26,7 @@ test('输入商品参数即时测算，单位切换与手册可用，不请求�
   expect(Number(await page.getByLabel('包装长（cm）').inputValue())).toBeCloseTo(4, 8);
   expect(Number(await page.getByLabel('包装宽（cm）').inputValue())).toBeCloseTo(2, 8);
   await expect(page.getByRole('heading', { name: '美国站 2026 · 完整费用手册' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '保存方案' })).toHaveCount(0);
-  expect(requests).toBe(0);
+  await expect(page.getByRole('button', { name: '保存方案' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '已保存方案' })).toBeVisible();
+  expect(writes).toBe(0);
 });
