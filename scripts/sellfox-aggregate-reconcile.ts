@@ -16,6 +16,7 @@ async function main() {
   const allowed = new Set(["organization-id", "workspace-id", "from", "to"]);
   const options = new Map<string, string>();
   for (const arg of args) {
+    if (arg === "--all") continue; // boolean flag, has no =value
     const match = /^--([^=]+)=(.+)$/.exec(arg);
     if (!match || !allowed.has(match[1]) || options.has(match[1])) throw new Error("参数无效或重复，请使用 --help。");
     options.set(match[1], match[2]);
