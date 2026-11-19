@@ -192,3 +192,39 @@ process.env.AMAZON_API_EXECUTION_ROLE === "cloud"
 
 - 在 UI 填入真实 SP-API / Ads 凭据并完成授权同步——按用户"验收完我再填入 api"的安排，凭据仍由用户在系统内自行管理。
 - 数据库物理双只读角色 (`amazon_mcp_ro`/`sellfox_mcp_ro`) 仍待 DBA 在真实库授权（外部阻塞，不影响本轮）。
+
+---
+
+## 12. 补充说明（2026-11-20）：application_id 可选 + 文档随制品发布
+
+### 12.1 背景与根因
+
+- 生产配置时点「Amazon 授权」按钮报 **"Amazon application ID 缺失或超出长度限制"**。根因是 `oauth.ts:appSettings()` 用 `requiredText(AMAZON_SP_API_APPLICATION_ID, ...)` 强制校验该环境变量，缺失即抛错。
+- 生产环境 `AMAZON_SP_API_APPLICATION_ID / LWA_CLIENT_ID / LWA_CLIENT_SECRET / OAUTH_REDIRECT_URI` **四项均缺失**，印证实际使用的是**轨道 A（直接填 refresh token）**，本就不走 OAuth consent 流程。
+- 按 [Amazon 官方 onboarding 文档](https://developer-docs.amazon.com/sp-api/lang-zh_CN/docs/onboarding-step-6-set-up-the-authorization-workflow)：`application_id` 仅**公共应用**的网站授权 URL 必需；**私有应用自我授权不需要**。
+
+### 12.2 改动（最小）
+
+- `oauth.ts:appSettings()`：`application_id` 由必填改为可选；仅当环境变量非空时按原规则校验格式。
+- 抽出纯函数 `buildConsentUrl(region, applicationId, redirectUri, state)`：仅当 `applicationId` 非空时在 consent URL 中带 `application_id` 参数；私有应用不带该参数也能正常授权跳转。
+- 新增守卫测试（无 application_id / 有 application_id / 无效区域三种情形），不碰数据库。
+- `package-ci-artifact.sh`：纳入 `docs/` 目录，验收报告等 238 个 md 随制品发布，便于服务器端查阅；原有 `-delete` 清理规则仍过滤 `.env`/日志，无敏感文件泄漏。
+
+**数据真实性/隔离**：本轮只改 OAuth 应用级凭据的可选性与打包内容，未写入任何真实凭据、未改表、未触碰赛狐数据源，隔离边界不变。
+
+### 12.3 验证与发布
+
+| 项 | 结果 |
+|---|---|
+| 目标单测 `amazon-cloud-execution.test.ts` | 6/6（含新增 consent URL 3 场景守卫）|
+| typecheck / ESLint | 通过 / 无错误 |
+| 生产构建 | 编译成功 + 235 静态页 |
+| GitHub | 远端 main `f53db0d`，tree `b4b4c58` 与本地一致 |
+| 新 release | `20261119-210103-main-2623ecf...`，health=passed，6 服务全 active，无需迁移 |
+| 服务器 docs | 238 个 md 已随制品落地，含本报告；无 `.env`/日志泄漏 |
+| 生产真实代码验证 | 无 application_id 时 consent URL 正常构造（`has_application_id=false, has_state=true`）；带 application_id 时正确附带 |
+
+### 12.4 仍待用户操作
+
+- 真实 SP-API / Ads 凭据仍由你在系统 UI 内自行填入授权（轨道 A），本轮未写入任何凭据。
+- 若日后改用公共应用 OAuth 自动化换取 refresh token（轨道 B），需在服务端补配 LWA 三件套 env（clientId/clientSecret/redirectUri）及可选 application_id。
