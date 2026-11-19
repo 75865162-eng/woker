@@ -7,6 +7,16 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    # 生产可观测性：记录 >1s 慢查询，并预载 pg_stat_statements 供 P95/慢查询分析。
+    # 首次启用 pg_stat_statements 需对目标库执行一次 CREATE EXTENSION（幂等）。
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - log_min_duration_statement=1000
+      - -c
+      - pg_stat_statements.track=all
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:

@@ -13,3 +13,15 @@ CREATE INDEX IF NOT EXISTS "SellfoxFbaInventory_orgws_store_date_captured_idx"
 -- 该索引让 max(capturedAt) 走 Index Only Scan（实测 0.147ms），缓存命中稳定在个位数毫秒。
 CREATE INDEX IF NOT EXISTS "SellfoxFbaInventory_orgws_captured_idx"
   ON "SellfoxFbaInventorySnapshot" ("organizationId", "workspaceId", "capturedAt" DESC);
+
+-- 全站共性：所有赛狐 workbench/缓存域的数据版本查询 max(versionColumn) WHERE org+ws，
+-- 缺版本列索引时走 Parallel Seq Scan（sales 1912ms / 其它域类似），拖慢每一次缓存命中。
+-- 为全部版本源表补 (org, ws, versionColumn DESC) 覆盖索引，命中降至 <1ms。
+CREATE INDEX IF NOT EXISTS "SellfoxSales_orgws_synced_idx" ON "SellfoxSalesDailySnapshot" ("organizationId","workspaceId","syncedAt" DESC);
+CREATE INDEX IF NOT EXISTS "SellfoxProdDaily_orgws_synced_idx" ON "SellfoxProductDailySnapshot" ("organizationId","workspaceId","syncedAt" DESC);
+CREATE INDEX IF NOT EXISTS "SellfoxAdsProd_orgws_synced_idx" ON "SellfoxAdsProductDaily" ("organizationId","workspaceId","syncedAt" DESC);
+CREATE INDEX IF NOT EXISTS "SellfoxAdsTarget_orgws_synced_idx" ON "SellfoxAdsTargetingDaily" ("organizationId","workspaceId","syncedAt" DESC);
+CREATE INDEX IF NOT EXISTS "SellfoxAdsSearchTerm_orgws_synced_idx" ON "SellfoxAdsSearchTermDaily" ("organizationId","workspaceId","syncedAt" DESC);
+CREATE INDEX IF NOT EXISTS "SellfoxAdsCampaign_orgws_synced_idx" ON "SellfoxAdsCampaignDaily" ("organizationId","workspaceId","syncedAt" DESC);
+CREATE INDEX IF NOT EXISTS "SellfoxAdsAdGroup_orgws_synced_idx" ON "SellfoxAdsAdGroupDaily" ("organizationId","workspaceId","syncedAt" DESC);
+CREATE INDEX IF NOT EXISTS "SellfoxAdsPlacement_orgws_synced_idx" ON "SellfoxAdsPlacementDaily" ("organizationId","workspaceId","syncedAt" DESC);
