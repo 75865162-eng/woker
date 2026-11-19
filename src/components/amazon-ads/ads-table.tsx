@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, Columns3, Download, Pencil, Search, SlidersHorizontal } from "lucide-react";
 import { csv, downloadCsv, sumMetrics } from "@/lib/amazon-ads/mock-provider";
 import type { AdsRow, AdsStatus } from "@/lib/amazon-ads/types";
-import { useColumnWidths } from "@/lib/hooks/use-column-widths";
+import { useSessionColumnWidths } from "@/lib/hooks/use-session-column-widths";
 import { ColumnResizeHandle } from "@/components/ui/column-resize-handle";
 import { AdsButton, Modal, StatusBadge } from "./ads-controls";
 export interface Column { key: keyof AdsRow; label: string; money?: boolean; percent?: boolean }
@@ -21,7 +21,7 @@ export function AdsDataTable({ rows, nameLabel, currency, context, onOpen, onSta
   const [sort, setSort] = useState<{ key: keyof AdsRow; desc: boolean }>({ key: "name", desc: false });
   const [hidden, setHidden] = useState<string[]>([]), [columnsOpen, setColumnsOpen] = useState(false), [filtersOpen, setFiltersOpen] = useState(false), [minSpend, setMinSpend] = useState(0);
   const [selected, setSelected] = useState<string[]>([]), [view, setView] = useState("default");
-  const { widths, startResize, resetWidths } = useColumnWidths(`ads:${context ?? "default"}`, ADS_COLUMN_DEFAULT_WIDTHS);
+  const { widths, startResize, resetWidths } = useSessionColumnWidths(`ads:${context ?? "default"}`, ADS_COLUMN_DEFAULT_WIDTHS);
   const widthStyle = (key: string) => (widths[key] ? ({ width: widths[key], minWidth: widths[key], maxWidth: widths[key] } as const) : undefined);
   const dimensions: Record<string, Column[]> = {
     campaigns: [{ key: "adType", label: "广告类型" }, { key: "budget", label: "每日预算", money: true }, { key: "start", label: "开始日期" }, { key: "end", label: "结束日期" }],

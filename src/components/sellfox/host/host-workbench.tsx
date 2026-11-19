@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { cachedApiGet } from "@/lib/workspace/workspace-api-cache";
 import Link from "next/link";
 import { SellfoxTabs } from "../sellfox-nav";
+import { ColumnResizeHandle } from "@/components/ui/column-resize-handle";
+import { useSessionColumnWidths } from "@/lib/hooks/use-session-column-widths";
 import { sellfoxSiteLabel } from "@/lib/sellfox/marketplace-site";
 import { rangeForPreset, shanghaiToday, type DatePreset } from "@/lib/sellfox/replica-pages";
 import { hostStatusLabel, type HostColumn, type HostDataset, type HostPage } from "@/lib/sellfox/host-pages";
@@ -92,6 +94,18 @@ function isNumeric(column: HostColumn) {
   return column.kind === "qty" || column.kind === "decimal" || column.kind === "money" || column.kind === "rate";
 }
 
+/** 展示层默认列宽：优先列定义里的 width，否则按类型给稳定宽度，使每列都可拖拽。仅展示，不参与数据。 */
+function hostColumnWidth(column: HostColumn) {
+  if (column.width) return column.width;
+  if (column.kind === "store" || column.kind === "stack") return 160;
+  if (column.kind === "tags") return 180;
+  if (isNumeric(column)) return 100;
+  return 140;
+}
+function hostWidthStyle(width: number | undefined): { width: number; minWidth: number; maxWidth: number } | undefined {
+  return width ? { width, minWidth: width, maxWidth: width } : undefined;
+}
+
 export function HostWorkbench({ page }: { page: HostPage }) {
   const today = shanghaiToday();
   const [datasetId, setDatasetId] = useState(page.datasets[0]?.id ?? "");
@@ -170,6 +184,9 @@ export function HostWorkbench({ page }: { page: HostPage }) {
   const hasTotals = totals.byCurrency.length > 0 || totals.quantity != null || totals.totalInventory != null
     || totals.impressions != null || totals.clicks != null || totals.adOrders != null;
   const columns = dynamicColumns ?? dataset?.columns ?? [];
+  // 会话级列宽：拖拽仅当前标签页生效，不写库、不持久化。默认固定宽度按列类型推导。
+  const hostDefaults = useMemo(() => Object.fromEntries(columns.map((column) => [column.key, hostColumnWidth(column)])), [columns]);
+  const { getWidth, startResize, resetWidths } = useSessionColumnWidths(`sellfox-host:${dataset?.id ?? "none"}`, hostDefaults);
 
   function applyPreset(next: "d7" | "d14" | "d30" | "d90" | "custom") {
     setPreset(next);
@@ -318,7 +335,7 @@ export function HostWorkbench({ page }: { page: HostPage }) {
               <table>
                 <thead>
                   <tr>{columns.map((column) => (
-                    <th key={column.key} scope="col" className={isNumeric(column) ? "sf-num" : undefined} title={column.hint} style={column.width ? { minWidth: column.width } : undefined}>{column.label}</th>
+                    <th key={column.key} scope="col" className={isNumeric(column) ? "sf-num" : undefined} title={column.hint} style={hostWidthStyle(getWidth(column.key))}>{column.label}<ColumnResizeHandle label={column.label} onPointerDown={(event) => startResize(event, column.key)} onReset={() => resetWidths(column.key)} /></th>
                   ))}</tr>
                 </thead>
                 <tbody>
@@ -332,7 +349,7 @@ export function HostWorkbench({ page }: { page: HostPage }) {
                   {!loading && !error ? rows.map((row, index) => (
                     <tr key={String(row.id ?? index)}>
                       {columns.map((column) => (
-                        <td key={column.key} className={isNumeric(column) ? "sf-num" : undefined}><Cell column={column} row={row} /></td>
+                        <td key={column.key} className={isNumeric(column) ? "sf-num" : undefined} style={hostWidthStyle(getWidth(column.key))}><Cell column={column} row={row} /></td>
                       ))}
                     </tr>
                   )) : null}
@@ -341,7 +358,7 @@ export function HostWorkbench({ page }: { page: HostPage }) {
                   <tfoot>
                     <tr>
                       {columns.map((column, index) => (
-                        <td key={column.key} className={isNumeric(column) ? "sf-num" : undefined}>
+                        <td key={column.key} className={isNumeric(column) ? "sf-num" : undefined} style={hostWidthStyle(getWidth(column.key))}>
                           {index === 0 ? <strong>汇总</strong> : totalNode(column)}
                         </td>
                       ))}

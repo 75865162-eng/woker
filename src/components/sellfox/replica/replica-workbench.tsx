@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { SellfoxTabs } from "@/components/sellfox/sellfox-nav";
 import { Dialog } from "@/components/ui/overlays";
+import { ColumnResizeHandle } from "@/components/ui/column-resize-handle";
+import { useSessionColumnWidths } from "@/lib/hooks/use-session-column-widths";
 import { normalizeWorkspaceScope } from "@/lib/workspace/scope";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
-import { sellfoxSiteLabel } from "@/lib/sellfox/marketplace-site";
+import { sellfoxSiteLabel, siteCodeOf } from "@/lib/sellfox/marketplace-site";
 import {
   datePresets,
   rangeForPreset,
@@ -31,6 +33,7 @@ type Filters = {
   status: string;
   productTag: string;
   salesperson: string;
+  owner: string;
   currency: string;
   searchType: string;
   search: string;
@@ -45,6 +48,46 @@ type Filters = {
 
 const noWrite = "此复刻页只读，不把同步或导入写入数据库。";
 const weekdays = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
+
+/**
+ * 列宽来自《赛狐ERP-销量统计页面UI逆向规格》表 7（ASIN 维度实测列宽）。
+ * 仅在展示层设置，不参与数据契约。未列出的列沿用默认自适应宽度。
+ */
+const COLUMN_WIDTH_PX: Record<string, number> = {
+  mainImage: 80, asin: 120, store: 120, analysis: 50, operations: 80, insight: 80,
+  parentAsin: 120, msku: 150, sku: 150, spu: 150, productTags: 138, title: 200,
+  identity: 120, asinMsku: 120, opLabel: 80, salesWindow: 150,
+};
+
+/**
+ * 币种全集来自规格 6.2.5（原币种 / CNY / USD / EUR / JPY / GBP / AUD / CAD / MXN）。
+ * 补全的是赛狐页面可见的选项；本地是否有对应币种数据取决于已同步快照，为空即显示“-”。
+ */
+const CURRENCY_OPTIONS = ["CNY", "USD", "EUR", "JPY", "GBP", "AUD", "CAD", "MXN"];
+
+/**
+ * 站点按大区分组来自规格 6.2.1。分组只作用于“全部站点”下拉的展示排序；
+ * 实际筛选值仍是原始 Marketplace ID，不参与分组计算。
+ */
+const SITE_REGIONS: { label: string; codes: string[] }[] = [
+  { label: "北美区", codes: ["US", "CA", "MX"] },
+  { label: "欧洲区", codes: ["UK", "DE", "FR", "IT", "ES", "NL", "SE", "PL", "BE", "IE"] },
+  { label: "日本", codes: ["JP"] },
+  { label: "新加坡", codes: ["SG"] },
+  { label: "澳大利亚", codes: ["AU"] },
+  { label: "印度", codes: ["IN"] },
+  { label: "阿联酋", codes: ["AE"] },
+  { label: "沙特阿拉伯", codes: ["SA"] },
+  { label: "土耳其", codes: ["TR"] },
+];
+
+function siteRegionOf(marketplace: string): string {
+  const code = siteCodeOf(marketplace);
+  return SITE_REGIONS.find((region) => region.codes.includes(code))?.label ?? "其他站点";
+}
+
+/** 数据不足项：控件可交互，但结果按缺失显示“-”，提示注明快照无此字段，不补 0、不造假。 */
+const MISSING_HINT = "本地快照没有对应字段，已接通控件但结果按缺失显示“-”，不补 0、不造假。";
 
 /**
  * 进程内短期读缓存 + 同 key in-flight 去重。只缓存只读快照响应，不持久化到
@@ -111,6 +154,7 @@ function initialFilters(page: ReplicaPage): Filters {
     status: "",
     productTag: "",
     salesperson: "",
+    owner: "",
     currency: "",
     searchType: page.searchTypes[0]?.id ?? "",
     search: "",
@@ -152,6 +196,11 @@ function money(value: unknown, currency: unknown) {
 function rate(value: unknown) {
   const number = numberOf(value);
   return number == null ? "-" : `${(number * 100).toFixed(2)}%`;
+}
+
+/** 展示列宽：会话内拖拽值优先，否则用赛狐规格表 7 的固定宽度；未收录的列返回 undefined 由 CSS 自适应。 */
+function colWidthStyle(width: number | undefined): { width: number; minWidth: number; maxWidth: number } | undefined {
+  return width ? { width, minWidth: width, maxWidth: width } : undefined;
 }
 
 function safeImage(value: unknown) {
@@ -235,6 +284,8 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [actionNotice, setActionNotice] = useState<{ title: string; message: string } | null>(null);
+  const [localChecks, setLocalChecks] = useState<Record<string, boolean>>({});
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [cacheInfo, setCacheInfo] = useState<{ status: "hit" | "miss" | "bypass"; cachedAt: string | null } | null>(null);
@@ -243,6 +294,8 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
   const [visible, setVisible] = useState<string[]>(() => page.columns.filter((column) => column.defaultVisible !== false).map((column) => column.key));
   const storageKey = `sellfox-replica-columns:${page.id}`;
   const matrix = page.id === "sales";
+  // 会话级列宽：拖拽仅当前标签页生效，不写库、不持久化。默认固定为赛狐规格表宽度。
+  const { getWidth, startResize, resetWidths } = useSessionColumnWidths(`sellfox-replica:${page.id}`, COLUMN_WIDTH_PX);
 
   useEffect(() => {
     const saved = localStorage.getItem(storageKey);
@@ -438,10 +491,19 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
     setApplied((current) => ({ ...current, sortBy: key, sortOrder: next, page: 1 }));
   }
   function runAction(id: string) {
-    if (id === "columns") setColumnsOpen(true);
-    else if (id === "refresh") setRefreshNonce((value) => value + 1);
-    else if (id === "export") exportCsv();
-    else if (id === "help") setNotice("只读复刻：按钮不会创建同步任务，导出只下载当前页已加载的行。");
+    if (id === "columns") { setColumnsOpen(true); return; }
+    if (id === "refresh") { setRefreshNonce((value) => value + 1); return; }
+    if (id === "export") { exportCsv(); return; }
+    if (id === "help") {
+      setActionNotice({ title: "帮助", message: "本页为赛狐只读复刻：读取已同步快照，不写库。可用维度、筛选、排序、分页、导出（仅当前已加载行）与自定义列；“同步/导入/费用/调价”等写操作需在赛狐 ERP 或同步中心完成，本页点击仅说明状态。" });
+      return;
+    }
+    // 其余按钮（同步、导入、费用、调价、配对等写操作）：接通点击，弹窗说明本地状态，不写库。
+    const action = page.actions.find((item) => item.id === id);
+    setActionNotice({
+      title: action?.label ?? "操作",
+      message: `${action?.reason || "该操作会写入赛狐数据。"}\n\n本页是只读复刻，不执行写入。若需真实同步，请到「数据 → 同步中心」使用赛狐同步任务。`,
+    });
   }
   function exportCsv() {
     const header = columns.map((column) => column.key === "subtotal" ? metricLabel : column.label);
@@ -507,7 +569,10 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
       {page.dimensions.length ? (
         <div className="sf-dims" role="tablist" aria-label="维度">
           {page.dimensions.map((item) => (
-            <button key={item.id} type="button" role="tab" aria-current={!item.disabled && applied.dimension === item.id ? "page" : undefined} disabled={item.disabled} title={item.reason} onClick={() => setDimension(item.id)}>{item.label}</button>
+            <button key={item.id} type="button" role="tab" aria-current={applied.dimension === item.id ? "page" : undefined} className={item.disabled ? "sf-tab-muted" : undefined} title={item.reason ?? item.label} onClick={() => {
+              setDimension(item.id);
+              if (item.disabled) setNotice(`${item.label}维度：${MISSING_HINT}`);
+            }}>{item.label}</button>
           ))}
         </div>
       ) : null}
@@ -519,7 +584,15 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
         ) : null}
         <select aria-label="全部站点" value={draft.site} onChange={(event) => patchDraft({ site: event.target.value })}>
           <option value="">全部站点</option>
-          {sites.map((site) => <option key={site} value={site}>{sellfoxSiteLabel(site)}</option>)}
+          {SITE_REGIONS.map((region) => {
+            const inRegion = sites.filter((site) => siteRegionOf(site) === region.label);
+            return inRegion.length ? (
+              <optgroup key={region.label} label={region.label}>
+                {inRegion.map((site) => <option key={site} value={site}>{sellfoxSiteLabel(site)}</option>)}
+              </optgroup>
+            ) : null;
+          })}
+          {sites.filter((site) => siteRegionOf(site) === "其他站点").map((site) => <option key={site} value={site}>{sellfoxSiteLabel(site)}</option>)}
         </select>
         <select aria-label="全部店铺" value={draft.shop} onChange={(event) => patchDraft({ shop: event.target.value })}>
           <option value="">全部店铺</option>
@@ -566,14 +639,29 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
             <option value="">产品标签</option>
             {tags.map((tag) => <option key={tag} value={tag}>{tag}</option>)}
           </select>
-        ) : page.id === "listings" ? <select aria-label="产品标签" disabled title="标签筛选会改走另一套汇总 SQL，当前列表不启用。"><option>产品标签</option></select> : null}
+        ) : page.id === "listings" ? (
+          <select aria-label="产品标签" className="sf-select-muted" title="标签筛选会改走另一套汇总 SQL，当前列表不启用。" value={draft.productTag} onChange={(event) => { patchDraft({ productTag: event.target.value }); setNotice(`产品标签：${MISSING_HINT}`); }}>
+            <option value="">产品标签</option>
+            {tags.map((tag) => <option key={tag} value={tag}>{tag}</option>)}
+          </select>
+        ) : null}
         {page.salespersonFilter ? (
           <select aria-label="业务员" value={draft.salesperson} onChange={(event) => patchDraft({ salesperson: event.target.value })}>
             <option value="">业务员</option>
             {people.map((name) => <option key={name} value={name}>{name}</option>)}
           </select>
-        ) : page.id === "sales" || page.id === "listings" ? <select aria-label="业务员" disabled title="销量日快照没有业务员字段，不从 Listing 伪造。"><option>业务员</option></select> : null}
-        {page.id === "sales" || page.id === "performance" ? <select aria-label="业绩归属人" disabled title="本地快照没有业绩归属人。"><option>业绩归属人</option></select> : null}
+        ) : page.id === "sales" || page.id === "listings" ? (
+          <select aria-label="业务员" className="sf-select-muted" title="销量日快照没有业务员字段，不从 Listing 伪造。" value={draft.salesperson} onChange={(event) => { patchDraft({ salesperson: event.target.value }); setNotice(`业务员：${MISSING_HINT}`); }}>
+            <option value="">业务员</option>
+            {people.map((name) => <option key={name} value={name}>{name}</option>)}
+          </select>
+        ) : null}
+        {page.id === "sales" || page.id === "performance" ? (
+          <select aria-label="业绩归属人" className="sf-select-muted" title="本地快照没有业绩归属人。" value={draft.owner} onChange={(event) => { patchDraft({ owner: event.target.value }); setNotice(`业绩归属人：${MISSING_HINT}`); }}>
+            <option value="">业绩归属人</option>
+            {people.map((name) => <option key={name} value={name}>{name}</option>)}
+          </select>
+        ) : null}
         {page.id === "sales" ? <select aria-label="时间粒度" title="日/周/月统计粒度；周按 ISO 周聚合、跨年不串周，缺日不补零" value={draft.grain} onChange={(event) => setGrain(event.target.value as Filters["grain"])}>
           <option value="day">按日</option>
           <option value="week">按周</option>
@@ -592,11 +680,21 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
         {page.currency ? (
           <select aria-label="原币种" value={draft.currency} onChange={(event) => patchDraft({ currency: event.target.value })}>
             <option value="">原币种</option>
-            {["USD", "EUR", "GBP", "JPY", "CAD"].map((code) => <option key={code} value={code}>{code}</option>)}
+            {CURRENCY_OPTIONS.map((code) => <option key={code} value={code}>{code}</option>)}
           </select>
         ) : null}
-        {page.id === "sales" ? <select aria-label="按日" disabled title="快照按日存储，日列即原始粒度；不做周/月重采样。"><option>按日</option></select> : null}
-        {page.id === "performance" ? <select aria-label="订购时间" disabled title="利润日期使用订购时间。"><option>订购时间</option></select> : null}
+        {page.id === "sales" ? (
+          <select aria-label="按日" className="sf-select-muted" title="快照按日存储，日列即原始粒度；不做周/月重采样。" value={draft.grain} onChange={(event) => { setGrain(event.target.value as Filters["grain"]); setNotice(`统计粒度已切换为「${event.target.value === "day" ? "按日" : event.target.value === "week" ? "按周" : "按月"}」；按周/按月在本地查询层重采样，明细快照仍按日存储。`); }}>
+            <option value="day">按日</option>
+            <option value="week">按周</option>
+            <option value="month">按月</option>
+          </select>
+        ) : null}
+        {page.id === "performance" ? (
+          <select aria-label="订购时间" className="sf-select-muted" title="利润日期使用订购时间。" onChange={() => setNotice(`订购时间：${MISSING_HINT}`)}>
+            <option>订购时间</option>
+          </select>
+        ) : null}
         <select aria-label="搜索字段" value={draft.searchType} onChange={(event) => patchDraft({ searchType: event.target.value })}>
           {page.searchTypes.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
         </select>
@@ -607,27 +705,38 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
       </div>
       {page.checks.length ? (
         <div className="sf-checks">
-          {page.checks.map((item) => (
-            <label key={item.id} className="sf-check" title={item.reason}>
-              <input
-                type="checkbox"
-                disabled={item.disabled}
-                checked={item.id === "aggregate" ? true : item.id === "parentAsin" ? applied.dimension === "parentAsin" : item.id === "hideZero" ? draft.hideZero : item.id === "onlySettle" ? draft.onlySettle : false}
-                onChange={(event) => {
-                  if (item.id === "parentAsin") setDimension(event.target.checked ? "parentAsin" : "msku");
-                  if (item.id === "hideZero") patchDraft({ hideZero: event.target.checked });
-                  if (item.id === "onlySettle") patchDraft({ onlySettle: event.target.checked });
-                }}
-              />
-              <span>{item.id === "aggregate" ? `按${page.dimensions.find((dim) => dim.id === applied.dimension)?.label ?? "维度"}汇总` : item.label}</span>
-            </label>
-          ))}
+          {page.checks.map((item) => {
+            const missingToggle = Boolean(item.disabled);
+            const checked = item.id === "aggregate"
+              ? true
+              : item.id === "parentAsin" ? applied.dimension === "parentAsin"
+              : item.id === "hideZero" ? draft.hideZero
+              : item.id === "onlySettle" ? draft.onlySettle
+              : Boolean(localChecks[item.id]);
+            return (
+              <label key={item.id} className={missingToggle ? "sf-check sf-check-muted" : "sf-check"} title={item.reason ?? item.label}>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={(event) => {
+                    if (item.id === "parentAsin") { setDimension(event.target.checked ? "parentAsin" : "msku"); return; }
+                    if (item.id === "hideZero") { patchDraft({ hideZero: event.target.checked }); return; }
+                    if (item.id === "onlySettle") { patchDraft({ onlySettle: event.target.checked }); return; }
+                    // 数据不足项：接通勾选交互，但结果按缺失占位，不写查询、不补数。
+                    setLocalChecks((current) => ({ ...current, [item.id]: event.target.checked }));
+                    setNotice(`${item.label}：${MISSING_HINT}`);
+                  }}
+                />
+                <span>{item.id === "aggregate" ? `按${page.dimensions.find((dim) => dim.id === applied.dimension)?.label ?? "维度"}汇总` : item.label}</span>
+              </label>
+            );
+          })}
         </div>
       ) : null}
       <div className="sf-actions">
         <span className="sf-spacer" />
         {page.actions.map((action) => (
-          <button key={action.id} type="button" className="sf-btn" disabled={action.disabled} title={action.reason} onClick={() => runAction(action.id)}>{action.label}</button>
+          <button key={action.id} type="button" className={action.disabled ? "sf-btn sf-btn-muted" : "sf-btn"} title={action.reason ?? action.label} onClick={() => runAction(action.id)}>{action.label}</button>
         ))}
       </div>
       {cacheInfo?.status === "hit" && cacheInfo.cachedAt ? (
@@ -638,12 +747,16 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
       <div className={matrix ? "sf-table-wrap sf-matrix" : "sf-table-wrap"}>
         <table>
           <thead>
-            <tr>{columns.map((column) => (
-              <th key={column.key} scope="col" className={column.key.startsWith("day:") ? "sf-day" : column.kind === "qty" || column.kind === "metric" ? "sf-num" : undefined} title={column.hint ?? (column.kind === "missing" ? "赛狐页面有该列，本地快照无对应字段，不造数。" : undefined)}>
+            <tr>{columns.map((column) => {
+              const width = getWidth(column.key);
+              return (
+              <th key={column.key} scope="col" style={colWidthStyle(width)} className={column.key.startsWith("day:") ? "sf-day" : column.kind === "qty" || column.kind === "metric" ? "sf-num" : undefined} title={column.hint ?? (column.kind === "missing" ? "赛狐页面有该列，本地快照无对应字段，不造数。" : undefined)}>
                 <span className="sf-th-main">{column.label}{sortButton(column)}</span>
                 {column.key.startsWith("day:") ? <span className="sf-th-sub">{weekdays[new Date(`${column.key.slice(4)}T00:00:00Z`).getUTCDay()]}</span> : null}
+                {width ? <ColumnResizeHandle label={column.label} onPointerDown={(event) => startResize(event, column.key)} onReset={() => resetWidths(column.key)} /> : null}
               </th>
-            ))}</tr>
+              );
+            })}</tr>
           </thead>
           <tbody>
             {loading ? <tr><td colSpan={Math.max(columns.length, 1)}>加载中</td></tr> : null}
@@ -656,7 +769,7 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
             {!loading && !error ? rows.map((row, index) => (
               <tr key={String(row.id ?? index)}>
                 {columns.map((column) => (
-                  <td key={column.key} className={column.key.startsWith("day:") ? "sf-day" : column.kind === "qty" || column.kind === "metric" ? "sf-num" : undefined}>
+                  <td key={column.key} style={colWidthStyle(getWidth(column.key))} className={column.key.startsWith("day:") ? "sf-day" : column.kind === "qty" || column.kind === "metric" ? "sf-num" : undefined}>
                     <Cell column={column} row={row} metric={applied.metric} />
                   </td>
                 ))}
@@ -667,7 +780,7 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
             <tfoot>
               <tr>
                 {columns.map((column, index) => (
-                  <td key={column.key} className={column.key.startsWith("day:") ? "sf-day" : column.kind === "qty" || column.kind === "metric" ? "sf-num" : undefined}>
+                  <td key={column.key} style={colWidthStyle(getWidth(column.key))} className={column.key.startsWith("day:") ? "sf-day" : column.kind === "qty" || column.kind === "metric" ? "sf-num" : undefined}>
                     {index === 0 ? <strong>汇总</strong> : totalNode(column)}
                   </td>
                 ))}
@@ -711,6 +824,17 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
           <div className="sf-modal mx-auto" role="dialog" aria-modal="true" aria-labelledby="sf-columns-title">
             <h2 id="sf-columns-title">自定义列</h2>
             <ColumnPicker columns={page.columns} selected={visible} onCancel={() => setColumnsOpen(false)} onSave={saveColumns} />
+          </div>
+        </Dialog>
+      ) : null}
+      {actionNotice ? (
+        <Dialog open bare zIndex="modal" onClose={() => setActionNotice(null)}>
+          <div className="sf-modal mx-auto" role="dialog" aria-modal="true" aria-labelledby="sf-action-notice-title">
+            <h2 id="sf-action-notice-title">{actionNotice.title}</h2>
+            <p className="sf-action-notice-body">{actionNotice.message}</p>
+            <div className="sf-modal-actions">
+              <button type="button" className="sf-btn sf-btn-primary" onClick={() => setActionNotice(null)}>知道了</button>
+            </div>
           </div>
         </Dialog>
       ) : null}
