@@ -25,3 +25,8 @@ CREATE INDEX IF NOT EXISTS "SellfoxAdsSearchTerm_orgws_synced_idx" ON "SellfoxAd
 CREATE INDEX IF NOT EXISTS "SellfoxAdsCampaign_orgws_synced_idx" ON "SellfoxAdsCampaignDaily" ("organizationId","workspaceId","syncedAt" DESC);
 CREATE INDEX IF NOT EXISTS "SellfoxAdsAdGroup_orgws_synced_idx" ON "SellfoxAdsAdGroupDaily" ("organizationId","workspaceId","syncedAt" DESC);
 CREATE INDEX IF NOT EXISTS "SellfoxAdsPlacement_orgws_synced_idx" ON "SellfoxAdsPlacementDaily" ("organizationId","workspaceId","syncedAt" DESC);
+
+-- 生产可观测性：pg_stat_statements 提供慢查询 P95/P99 分析（docker-compose
+-- 已配置 shared_preload_libraries=pg_stat_statements）。IF NOT EXISTS 保证幂等；
+-- 全新环境执行到此处时预载已就绪，可安全创建。
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
