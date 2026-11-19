@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db/prisma";
 import { SellfoxBrowseError, sellfoxExportLimit, type SellfoxBrowseQuery } from "./browse-query";
 import { sellfoxDateAt } from "./sync-contract";
 import { resolveEffectiveReportDate } from "./browse-report-date";
+import { applyListingDerived } from "./listing-derived";
 import {
   normalizeSellfoxCacheQuery, readThroughSellfox, SELLFOX_VERSION_SOURCE, sellfoxCacheKey,
 } from "./result-cache";
@@ -390,6 +391,11 @@ async function loadWorkbench(domain: WorkbenchDomain, query: SellfoxBrowseQuery,
       const values = dates.slice(-7).map(date => (row.dailyQuantity as Row)?.[date]);
       row.trend = values.length === 7 && values.every(v => v != null) ? values.join(" | ") : null;
       row.average7 = values.length === 7 && values.every(v => v != null) ? values.reduce<number>((n,v) => n + Number(v),0) / 7 : null;
+    }
+    if (domain === "listings") {
+      // Read-time Sellfox口径 derived columns. CASE semantics: any missing factor -> null.
+      // profitPrice/profitRate (our口径) are left untouched and coexist.
+      applyListingDerived(row);
     }
     if (domain === "performance") {
       row.grossProfitRate = row.grossProfit != null && Number(row.saleRevenue) > 0 ? Number(row.grossProfit) / Number(row.saleRevenue) : null;

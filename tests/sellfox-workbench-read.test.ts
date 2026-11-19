@@ -876,10 +876,10 @@ test("listing fee columns follow purchaseCost and precede parentAsin in configur
 });
 
 test("listing default Buy Box, replenishment and profitability columns stay after headTripCost and before parentAsin", () => {
-  const keys = ["buyBoxWinner", "reservedQty", "shippingPrice", "profitPrice", "profitRate"];
+  const keys = ["buyBoxWinner", "reservedQty", "shippingPrice", "profitPrice", "profitRate", "estimatedFee", "grossProfit", "grossProfitRate"];
   const sourceKeys = columns.listings.map(c => c.key);
   assert.deepEqual(sourceKeys.slice(sourceKeys.indexOf("buyBoxWinner"), sourceKeys.indexOf("parentAsin") + 1), [...keys, "parentAsin"]);
-  assert.deepEqual(visibleColumns("listings", ["profitRate", "parentAsin", "reservedQty", "headTripCost", "profitPrice", "buyBoxWinner", "shippingPrice"]).map(c => c.key), ["headTripCost", ...keys, "parentAsin"]);
+  assert.deepEqual(visibleColumns("listings", ["profitRate", "parentAsin", "reservedQty", "headTripCost", "profitPrice", "buyBoxWinner", "shippingPrice", "estimatedFee", "grossProfit", "grossProfitRate"]).map(c => c.key), ["headTripCost", ...keys, "parentAsin"]);
   for (const [key, label, numeric] of [["buyBoxWinner", "Buy Box", undefined], ["reservedQty", "预留", true], ["shippingPrice", "运费", true], ["profitPrice", "预估利润", true], ["profitRate", "利润率", true]] as const) {
     const config = visibleColumns("listings", [key]);
     assert.equal(config[0].labelZh, label);
