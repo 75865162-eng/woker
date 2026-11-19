@@ -219,7 +219,7 @@ test("header sort toggles asc/desc, resets pagination and starts new columns asc
 });
 
 
-test("salesperson trims exact names and round trips browse, UI and export for performance only", () => {
+test("salesperson trims exact names and round trips browse, UI and export for performance and sales", () => {
   const view = readSellfoxView(new URLSearchParams({ domain: "performance", salesperson: " 温见清 " }));
   assert.equal(view.salesperson, "温见清");
   assert.equal(readSellfoxView(sellfoxViewParams(view)).salesperson, "温见清");
@@ -228,7 +228,8 @@ test("salesperson trims exact names and round trips browse, UI and export for pe
     assert.equal(query(new URLSearchParams({ salesperson }).toString()).salesperson, "");
     assert.equal(sellfoxViewParams(readSellfoxView(new URLSearchParams({ domain: "performance", salesperson }))).has("salesperson"), false);
   }
-  for (const domain of ["sales", "listings", "ads"] as const) assert.equal(sellfoxViewParams({ ...view, domain }, true).has("salesperson"), false);
+  assert.equal(sellfoxViewParams({ ...view, domain: "sales" }, true).has("salesperson"), true);
+  for (const domain of ["listings", "ads"] as const) assert.equal(sellfoxViewParams({ ...view, domain }, true).has("salesperson"), false);
 });
 
 test("performance extra fee selections and sorting round trip without Listing aliases", () => {

@@ -19,7 +19,7 @@ export type ListingProfileDb = {
 
 const profileColumns = [
   "id", "organizationId", "workspaceId", "storeId", "sourceKey", "capturedAt", "asin", "msku", "sku",
-  "parentAsin", "title", "status", "price", "currency", "fulfillable", "sales7", "sales14", "sales30",
+  "parentAsin", "title", "status", "price", "promoPrice", "currency", "fulfillable", "sales7", "sales14", "sales30",
   "revenue7", "revenue14", "revenue30", "adSpend7", "adSpend14", "adSpend30", "sourceUpdatedAt",
   "shopExternalId", "name", "marketplace", "fnsku", "parentSku", "mainImage", "brand", "amazonBrand",
   "productTags", "openDate", "firstSaleDate", "bsrCategory", "buyBoxWinner", "fulfillment", "rating",

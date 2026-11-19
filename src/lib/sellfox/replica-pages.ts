@@ -79,7 +79,7 @@ export const replicaPages: ReplicaPage[] = [
     fulfillment: true,
     status: false,
     tagFilter: true,
-    salespersonFilter: false,
+    salespersonFilter: true,
     columns: [
       { key: "sku", label: "品名/品SKU", kind: "skuName" },
       { key: "mainImage", label: "图片", kind: "image" },

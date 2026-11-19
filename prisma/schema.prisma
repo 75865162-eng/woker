@@ -3040,6 +3040,8 @@ model SellfoxListingSnapshot {
   title           String?
   status          String?
   price           Decimal?     @db.Decimal(20, 4)
+  /// 官方 API「优惠价」listingPricing；真实数据核验 2026-11-19，无值保留 null 不补 0。
+  promoPrice      Decimal?     @db.Decimal(20, 4)
   currency        String?
   fulfillable     Int?
   sales7          Int?
@@ -3116,6 +3118,8 @@ model SellfoxListingProfile {
   title           String?
   status          String?
   price           Decimal?  @db.Decimal(20, 4)
+  /// 官方 API「优惠价」listingPricing；Profile 是视图镜像，随视图加列。
+  promoPrice      Decimal?  @db.Decimal(20, 4)
   currency        String?
   fulfillable     Int?
   sales7          Int?

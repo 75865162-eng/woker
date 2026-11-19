@@ -320,6 +320,14 @@ export async function readSellfoxAgentRows(domain: AgentDomain, query: ReturnTyp
       ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1)=${query.brand}`);
   }
   if (domain === "performance" && query.salesperson) clauses.push(Prisma.sql`s."userNameList" @> ARRAY[${query.salesperson}]::text[]`);
+  // 销量统计 agent/导出：与 workbench-read 同口径，按 storeId+msku EXISTS 关联真实
+  // userNameList 半连接筛选，不展开数组，关联不到则排除，不伪造业务员。
+  if (domain === "sales" && query.salesperson) clauses.push(Prisma.sql`EXISTS (
+    SELECT 1 FROM "SellfoxProductDailySnapshot" pd
+    WHERE pd."organizationId"=${scope.organizationId} AND pd."workspaceId"=${scope.workspaceId}
+      AND pd."storeId"=s."storeId" AND pd.msku=s.msku
+      AND pd."userNameList" @> ARRAY[${query.salesperson}]::text[]
+  )`);
   if (domain === "listings" && query.productTag) clauses.push(Prisma.sql`s."productTagNames" @> ARRAY[${query.productTag}]::text[]`);
   else if (query.productTag && ["sales", "performance"].includes(domain)) {
     // Select the same stable candidate BEFORE testing membership (no ASIN sibling substitution).

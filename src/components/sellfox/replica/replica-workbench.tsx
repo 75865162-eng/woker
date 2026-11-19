@@ -310,7 +310,7 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
       if (applied.shop) params.append("shopExternalId", applied.shop);
       if (applied.fulfillment) params.set("fulfillment", applied.fulfillment);
       if (applied.productTag) params.set("productTag", applied.productTag);
-      if (page.id === "performance" && applied.salesperson) params.set("salesperson", applied.salesperson);
+      if ((page.id === "performance" || page.id === "sales") && applied.salesperson) params.set("salesperson", applied.salesperson);
       if (applied.currency) params.set("currency", applied.currency);
       if (applied.hideZero) params.set("hideZero", "1");
       if (applied.onlySettle) params.set("onlySettle", "1");

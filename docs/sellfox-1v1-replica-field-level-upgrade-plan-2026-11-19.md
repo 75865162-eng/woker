@@ -230,3 +230,46 @@
 - 5 项中 **改造2、改造3、改造5 已完整落地并单测验证**；改造1 前置核验脚本已就绪、写入因 payload 无键未做；改造4 为结构性字段缺失，当前方案A实现正确，未开维度/未伪造。
 - 与上一版相比，本轮依据「代码里真实存在的 ERP 数据处理流程」重新评估：grain 分桶和星期列是**确定性日期计算**（`reportDate` 为真实 YYYY-MM-DD 字段），可脱离 0 行数据用构造日期完整验证，故从"阻塞"改为"已落地"；筛选白名单/批量粘贴同理。
 - 全量测试：基线 2470/2471，本轮以最终全量回归为准。唯一固有失败是环境 Node v22.13.1 < 门禁要求的 22.19，与本改动无关。
+
+---
+
+## 10. 生产真实数据核验与改造1/4落地（2026-11-19 · 123服务器）
+
+> 用户告知「123 服务器已配置好」，本轮通过 PEM 免密 SSH 登录 `ubuntu@123.207.47.225`，只读查询生产库
+> （`amazon-ad-bulk-operation-postgres-1` / `amazon_bulk_ad`），用真实数据解锁此前因「本地 0 行」阻塞的改造1/4。
+> **全程只读核验 + 代码层改造；生产库未执行写操作（migration 已在本地空库验证，生产执行需单独授权排期）。**
+
+### 10.1 生产真实数据核验结论
+
+| 核验项 | 真实结果 | 依据 |
+|---|---|---|
+| 快照表行数 | Listing 195930 / Sales 278689 / ProductDaily 112686 / FBA 911965 / 订单 112193 | `SELECT count(*)` 五表 |
+| 价格族真实键 | payload 有 `standardPrice`(195930)、`listingPrice`、`listingPricing`(有效值 17935)、`salePrices`(非空 28035)；**无** `marketPrice`/`strikePrice`/`b2bPrice`/`businessPrice`/`promoPrice` | `jsonb_object_keys(payload)` 全量扫描 |
+| 价格字段官方语义 | 赛狐 API 文档定义：`standardPrice`=价格、`listingPricing`=优惠价；`salePrices`/划线价/B2B 价**无官方定义** | `sellfox-api-合并.md` 指标表 |
+| 业务员真实字段 | ProductDaily `userNameList` 物理列 112686 行全有（如 `["刘丹","姚晓凡"]`）；SalesDaily payload 仅 `orderNum/productNum/salePrice` 三键，**无业务员** | `SELECT payload ? 'userNameList'` + `jsonb_object_keys` |
+| sales↔业务员关联 | 按 `storeId+msku`（不带日期，业务员是商品级属性）匹配率 **85.4%**；按 `storeId+msku+reportDate` 仅 8.7%（日期关联错误，已排除）；一个 msku 平均 2.09 业务员 | 多组 LEFT JOIN 匹配率对比 |
+
+### 10.2 改造1 落地：优惠价列（真实字段，不猜键）
+
+- 按官方定义只落地 **`promoPrice`=listingPricing（优惠价）**；`standardPrice` 已是 `price` 保留不动。
+- 划线价 / List Price / B2B 价在真实 payload 与官方 API 均无键 → **不建列、不映射、UI 显示 `—`**，符合文档 §5「5→3 降级」预期，未写死未核验的猜测键。
+- 改动：`schema.prisma`（Snapshot+Profile 两表加列）、新 migration `20261221000000_sellfox_listing_promo_price`（加列 + 重建 trigger 投影 + 重建视图末尾透出列 + `payload=payload` 真实数据回填 + Profile 镜像回填）、`listings-read.ts` 投影列、`listing-profile-refresh.ts` 列清单、`workbench-types.ts` 列定义（默认可见数值列「优惠价」）。
+- **缺值语义**：无 listingPricing 的行 `promoPrice=NULL`，禁止补 0 或复制 price；migration 在本地空库 `prisma migrate deploy` 实跑通过（视图末尾追加列规避 42P16 报错）。
+
+### 10.3 改造4 落地：sales 业务员筛选（真实 userNameList 关联）
+
+- sales 页启用业务员**筛选**（方案A，不开维度）：workbench-read 与 agent-read 均按 `storeId+msku` 用 **EXISTS 半连接**关联 ProductDaily.userNameList，绝不展开数组（避免一行多业务员导致事实行膨胀），关联不到则排除、不伪造开发员为业务员。
+- 业务员的 salespersons facet 按 scope+store/site 独立抓取（不套 sales 日期过滤，因业务员是商品级属性）。
+- URL 往返、sales 页筛选控件开关、CSV/XLSX/Agent 导出路径全部打通；维度仍禁用（一行可能多业务员，开维度=错报表）。
+- 性能：EXISTS 走 `sellfox_sales_agent_lookup`（storeId+msku+reportDate）与 product daily 的 storeId+msku 索引，生产 27.9 万行 sales / 11.3 万行 product daily 需实测响应时间（待生产执行后验证）。
+
+### 10.4 本轮验证
+
+- typecheck 通过；相关测试：listings 107/107、agent 51/51、browse-api 42/42、grain/query/workbench 163/163。
+- 全量测试以最终回归为准；唯一固有失败为环境 Node v22.13.1 < 门禁 22.19（基线固有，与改动无关）。
+
+### 10.5 生产执行待办（需授权排期，本轮未做）
+
+1. 生产库执行 `20261221000000_sellfox_listing_promo_price` migration（含 195930 行 `payload=payload` 回填，注意 WAL 与维护窗口）。
+2. 部署新版本到 123 服务器后，实测 sales 业务员筛选在 27.9 万行的响应时间，必要时给 ProductDaily 加 `(storeId,msku)` 覆盖索引。
+3. 优惠价列在在线产品页抽样核对：内容 = 真实 listingPricing，无值行显示 `—`。
