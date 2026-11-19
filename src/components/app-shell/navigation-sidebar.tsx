@@ -200,6 +200,7 @@ function PinnedRow({
       </span>
       <Link
         href={item.href}
+        prefetch={false}
         aria-current={isActive ? "page" : undefined}
         className="flex min-w-0 flex-1 items-center gap-1.5 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
       >
@@ -273,6 +274,7 @@ function Flyout({
             >
               <Link
                 href={item.href}
+                prefetch={false}
                 aria-current={active ? "page" : undefined}
                 onClick={onMouseLeave}
                 className="flex min-w-0 flex-1 items-center gap-2 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"

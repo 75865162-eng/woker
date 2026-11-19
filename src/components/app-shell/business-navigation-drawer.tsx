@@ -32,7 +32,7 @@ export function BusinessNavigationDrawer({ groups, isActive }: {
             const pinned = item.id ? isPinned(item.id) : false;
             return (
               <div key={item.href} className={`flex min-h-10 items-center gap-2 rounded px-3 py-2 text-sm ${active ? "bg-brand/10 font-semibold text-brand" : "hover:bg-surface-muted text-foreground"}`}>
-                <Link href={item.href} aria-current={active ? "page" : undefined} onClick={() => setOpen(false)} className="flex min-w-0 flex-1 items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">
+                <Link href={item.href} prefetch={false} aria-current={active ? "page" : undefined} onClick={() => setOpen(false)} className="flex min-w-0 flex-1 items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">
                   <item.icon aria-hidden className="h-4 w-4 shrink-0" />
                   <span className="truncate">{item.label}</span>
                 </Link>

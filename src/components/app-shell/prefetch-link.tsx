@@ -8,11 +8,11 @@ type PrefetchLinkProps = LinkProps &
     href: string;
   };
 
-// Kept as a named wrapper so call sites stay stable, but the previous
-// `prefetch={false}` + hover-only `router.prefetch()` combination made clicks
-// race against a half-finished prefetch (which is slower than no prefetch at
-// all). Next's built-in viewport prefetch finishes long before the pointer
-// arrives, so just delegate to <Link>.
+// Disable Next's built-in viewport RSC prefetch. This app keeps visited views
+// mounted but hidden; their <Link>s stay in the viewport and fire batch RSC
+// prefetches. When the user clicks quickly, the navigation request races those
+// prefetches and gets aborted, leaving the page frozen until a hard refresh.
+// First-screen data is still warmed by prefetchRouteData() (API-level, no RSC).
 export function PrefetchLink({ href, ...props }: PrefetchLinkProps) {
-  return <Link href={href} {...props} />;
+  return <Link href={href} prefetch={false} {...props} />;
 }

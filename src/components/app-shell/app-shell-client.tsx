@@ -241,6 +241,7 @@ export function AppShellClient({
                       <Link
                         key={item.href}
                         href={item.href}
+                        prefetch={false}
                         className={itemClassName}
                       >
                         <Icon className="h-4 w-4" />

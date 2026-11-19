@@ -281,10 +281,10 @@ export function WorkspaceShell({ children, configuration }: {
 
   const refreshCurrent = useCallback(() => { router.refresh(); }, [router]);
 
-  // 悬停只预热首屏「数据」（进页面后 useExt 直接命中缓存），不再调用 router.prefetch。
-  // 原因：router.prefetch 有约 60ms 延迟，用户快速点击时它会在 click 之后才对同一个 href
-  // 发起 RSC 预取，把导航刚发出的 RSC 请求 abort 掉，导致页面卡在原地、刷新才恢复。
-  // RSC 预取交给 <Link> 的默认行为，它与自身导航不会互相取消。
+  // 悬停只预热首屏「数据」（进页面后 useExt 直接命中缓存），不触发任何 RSC 预取。
+  // 本应用把访问过的页面保活但隐藏，隐藏视图里的 <Link> 仍在视口内会批量发起
+  // Next 默认 RSC 预取；用户快速点击时导航请求被这些预取 abort，页面卡死、刷新才恢复。
+  // 因此导航 Link 一律 prefetch={false}，RSC 预取彻底关闭，只保留这里的数据级预热。
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let pendingHref: string | null = null;
@@ -307,9 +307,9 @@ export function WorkspaceShell({ children, configuration }: {
     };
   }, []);
 
-  // 空闲预热同组页面的「首屏数据」（不是 RSC）。RSC 预取交给 <Link> 默认行为即可；
-  // 手动 router.prefetch 会在用户连续点击时与目标导航的 RSC 请求并发、互相 abort，
-  // 导致页面卡死。这里只保留数据级预热，安全且与导航互不干扰。
+  // 空闲预热同组页面的「首屏数据」（不是 RSC）。不做任何 router.prefetch / RSC 预取：
+  // 它们会在连续点击时与目标导航的 RSC 请求并发、互相 abort，导致页面卡死。
+  // 这里只保留数据级预热，安全且与导航互不干扰。
   useEffect(() => {
     if (!restored) return;
     let cancelled = false;
