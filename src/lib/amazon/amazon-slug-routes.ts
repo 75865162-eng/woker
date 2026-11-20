@@ -28,6 +28,9 @@ export const amazonSlugRoutes: Record<string, string> = {
   ads: "view:ads",
   campaigns: "/amazon-ads/campaigns",
   // 库存 / 履约
+  // inventory 已由真实页面 src/app/(erp)/amazon/inventory/page.tsx 提供（参考赛狐分组下钻范式重写）。
+  // 此处保留 view:inventory 映射作为导航兜底声明；Next.js 真实文件路径优先于 afterFiles rewrite，
+  // 故 /amazon/inventory 实际命中真实 page，不会落到通用 view 表格。
   inventory: "view:inventory",
   "inventory-age": "view:inventory_age",
   "inventory-events": "view:inventory_events",
