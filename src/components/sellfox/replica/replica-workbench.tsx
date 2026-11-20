@@ -769,7 +769,7 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
             {!loading && !error ? rows.map((row, index) => (
               <tr key={String(row.id ?? index)}>
                 {columns.map((column) => (
-                  <td key={column.key} style={colWidthStyle(getWidth(column.key))} className={column.key.startsWith("day:") ? "sf-day" : column.kind === "qty" || column.kind === "metric" ? "sf-num" : undefined}>
+                  <td key={column.key} style={colWidthStyle(getWidth(column.key))} title={cellText(column, row, applied.metric) || undefined} className={column.key.startsWith("day:") ? "sf-day" : column.kind === "qty" || column.kind === "metric" ? "sf-num" : undefined}>
                     <Cell column={column} row={row} metric={applied.metric} />
                   </td>
                 ))}

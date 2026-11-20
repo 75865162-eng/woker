@@ -60,7 +60,12 @@ function text(value: unknown) {
   return String(value);
 }
 
+function safeImage(value: unknown) {
+  return typeof value === "string" && /^https?:\/\//.test(value) ? value : "";
+}
+
 function cellText(column: HostColumn, row: Row) {
+  if (column.kind === "image") return "";
   if (column.kind === "qty") return qty(row[column.key]);
   if (column.kind === "decimal") return qty(row[column.key], 2);
   if (column.kind === "money") return money(row[column.key], row.currency);
@@ -71,6 +76,10 @@ function cellText(column: HostColumn, row: Row) {
 }
 
 function Cell({ column, row }: { column: HostColumn; row: Row }) {
+  if (column.kind === "image") {
+    const src = safeImage(row[column.key]);
+    return src ? <img className="sf-thumb" src={src} alt="商品主图" width={36} height={36} loading="lazy" decoding="async" referrerPolicy="no-referrer" /> : <span className="sf-thumb" />;
+  }
   if (column.kind === "store") {
     return (
       <span className="sf-stack">
@@ -97,6 +106,7 @@ function isNumeric(column: HostColumn) {
 /** 展示层默认列宽：优先列定义里的 width，否则按类型给稳定宽度，使每列都可拖拽。仅展示，不参与数据。 */
 function hostColumnWidth(column: HostColumn) {
   if (column.width) return column.width;
+  if (column.kind === "image") return 80;
   if (column.kind === "store" || column.kind === "stack") return 160;
   if (column.kind === "tags") return 180;
   if (isNumeric(column)) return 100;
@@ -349,7 +359,7 @@ export function HostWorkbench({ page }: { page: HostPage }) {
                   {!loading && !error ? rows.map((row, index) => (
                     <tr key={String(row.id ?? index)}>
                       {columns.map((column) => (
-                        <td key={column.key} className={isNumeric(column) ? "sf-num" : undefined} style={hostWidthStyle(getWidth(column.key))}><Cell column={column} row={row} /></td>
+                        <td key={column.key} className={isNumeric(column) ? "sf-num" : undefined} style={hostWidthStyle(getWidth(column.key))} title={cellText(column, row) || undefined}><Cell column={column} row={row} /></td>
                       ))}
                     </tr>
                   )) : null}

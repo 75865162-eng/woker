@@ -266,6 +266,20 @@
   color: var(--foreground);
 }
 
+/* 数据行单元格按列宽裁剪超长文本，避免相邻列内容互相覆盖；全文由 title 提供 */
+.sellfox-ui .sf-table-wrap tbody td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 双行单元格同样按列宽截断，不依赖 .sf-page 包裹（复刻页根为 .sellfox-ui） */
+.sellfox-ui .sf-table-wrap tbody td .sf-stack > * {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .sellfox-ui .sf-thumb {
   display: block;
   width: 36px;
