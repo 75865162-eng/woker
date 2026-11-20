@@ -95,6 +95,31 @@ export function sellfoxCacheKey(
 export function sellfoxOverviewCacheKey(organizationId: string, workspaceId: string, scopeKey: string): string {
   return `${SELLFOX_CACHE_PREFIX}ov:${organizationId}:${workspaceId}:${sha256(scopeKey)}`;
 }
+/**
+ * Map a user's authorized sellfox store ids into the pieces the overview reader
+ * needs. Three states MUST stay distinct or users share cache/prisma scope:
+ *  - undefined (admin / scoping not enabled): full workspace, legacy key;
+ *  - [] (scoping enabled, no grants): forced empty set,哨兵 key;
+ *  - concrete ids: that subset only.
+ */
+export function overviewStoreScopeParts(authorizedStoreIds: string[] | undefined): {
+  storeKeyPart: string[];
+  storeWhere: Record<string, unknown>;
+  storeTableWhere: Record<string, unknown>;
+  restrict: boolean;
+} {
+  if (authorizedStoreIds === undefined) {
+    return { storeKeyPart: [], storeWhere: {}, storeTableWhere: {}, restrict: false };
+  }
+  const ids = [...authorizedStoreIds].sort();
+  const nonEmpty = ids.length > 0;
+  return {
+    storeKeyPart: nonEmpty ? ids : ["__NO_SELLFOX_STORE__"],
+    storeWhere: { storeId: { in: ids } },
+    storeTableWhere: { id: { in: ids } },
+    restrict: true,
+  };
+}
 /** Prefix used to invalidate every cached body/version for a domain in one tenant. */
 export function sellfoxDomainInvalidationPrefix(organizationId: string, workspaceId: string, domain: string): string {
   return `${SELLFOX_CACHE_PREFIX}wb:${organizationId}:${workspaceId}:${domain}:`;

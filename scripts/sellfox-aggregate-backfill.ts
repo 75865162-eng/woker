@@ -13,7 +13,7 @@
 import { prisma } from "@/lib/db/prisma";
 import {
   salesAggDailyStatement, profitAggDailyStatement, adsAggDailyStatement,
-  overviewAggStatement, type AggRefreshInput,
+  overviewAggStatement, inventoryAggStatement, type AggRefreshInput,
 } from "@/lib/sellfox/agg-refresh";
 import { sellfoxDateAt } from "@/lib/sellfox/sync-contract";
 
@@ -23,8 +23,8 @@ async function main() {
     console.log(
       "sellfox-aggregate-backfill --organization-id=ID --workspace-id=ID " +
       "[--from=YYYY-MM-DD] [--to=YYYY-MM-DD] [--apply]\n" +
-      "从源快照回填四张预聚合表（sales/profit/ads/overview）。默认 dry-run；--apply 才写入。" +
-      "幂等可重复执行。写入为派生结果，不改业务事实、不改页面读路径。",
+      "从源快照回填五张预聚合表（sales/profit/ads/inventory/overview）。默认 dry-run；--apply 才写入。" +
+      "库存为当前态聚合，不受日期窗限制。幂等可重复执行。写入为派生结果，不改业务事实、不改页面读路径。",
     );
     return;
   }
@@ -45,7 +45,7 @@ async function main() {
   const from = options.get("from") ?? "1970-01-01";
 
   // 盘点源数据（只读），让操作者在 apply 前看到确切的日期窗与规模。
-  const [sales, profit, ads] = await Promise.all([
+  const [sales, profit, ads, inventory] = await Promise.all([
     prisma.$queryRaw<Array<{ n: bigint; d0: string | null; d1: string | null }>>`
       SELECT count(*)::bigint AS n, min("reportDate")::text AS d0, max("reportDate")::text AS d1
       FROM "SellfoxSalesDailySnapshot"
@@ -61,16 +61,22 @@ async function main() {
       FROM "SellfoxAdsProductDaily"
       WHERE "organizationId"=${organizationId} AND "workspaceId"=${workspaceId}
         AND "reportDate" BETWEEN ${from} AND ${to}`,
+    prisma.$queryRaw<Array<{ n: bigint; d0: Date | null; d1: Date | null }>>`
+      SELECT count(*)::bigint AS n, min("capturedAt") AS d0, max("capturedAt") AS d1
+      FROM sellfox_inventory_current
+      WHERE "organizationId"=${organizationId} AND "workspaceId"=${workspaceId}`,
   ]);
   const snapshot = {
     organizationId, workspaceId, window: { from, to },
     sourceRows: {
-      sales: Number(sales[0]?.n ?? 0), productDaily: Number(profit[0]?.n ?? 0), adsProduct: Number(ads[0]?.n ?? 0),
+      sales: Number(sales[0]?.n ?? 0), productDaily: Number(profit[0]?.n ?? 0),
+      adsProduct: Number(ads[0]?.n ?? 0), inventoryCurrent: Number(inventory[0]?.n ?? 0),
     },
     sourceDates: {
       sales: [sales[0]?.d0 ?? null, sales[0]?.d1 ?? null],
       productDaily: [profit[0]?.d0 ?? null, profit[0]?.d1 ?? null],
       adsProduct: [ads[0]?.d0 ?? null, ads[0]?.d1 ?? null],
+      inventoryCurrent: [inventory[0]?.d0?.toISOString() ?? null, inventory[0]?.d1?.toISOString() ?? null],
     },
     mode: args.includes("--apply") ? "apply" : "dry-run",
   };
@@ -85,6 +91,7 @@ async function main() {
     { name: "sales", sql: salesAggDailyStatement(input) },
     { name: "profit", sql: profitAggDailyStatement(input) },
     { name: "ads", sql: adsAggDailyStatement(input) },
+    { name: "inventory", sql: inventoryAggStatement(input) },
     { name: "overview", sql: overviewAggStatement(input) },
   ].filter((s): s is { name: string; sql: NonNullable<typeof s.sql> } => s.sql !== null);
 

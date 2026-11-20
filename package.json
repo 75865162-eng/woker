@@ -33,6 +33,8 @@
     "sellfox:ads-reset-stuck-creating": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/sellfox-ads-reset-stuck-creating.ts",
     "sellfox:agg-backfill": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/sellfox-aggregate-backfill.ts",
     "sellfox:agg-reconcile": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/sellfox-aggregate-reconcile.ts",
+    "sellfox:restock-materialize": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/sellfox-restock-materialize.ts",
+    "sellfox:restock-reconcile": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/sellfox-restock-reconcile.ts",
     "ops:cli": "tsx scripts/ops-cli.ts",
     "ops:credential-audit": "node scripts/credential-lifecycle-audit.mjs",
     "ops:domain-audit": "node node_modules/tsx/dist/cli.mjs scripts/domain-architecture-audit.ts",

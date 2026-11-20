@@ -8,9 +8,26 @@ import { reportAcquisitionOverview, spReportPipelineEnabled, triggerSpReportSync
 import { spReportTypeIds, isSpReportType } from "@/lib/amazon-ads/sp-report-types";
 import { prisma } from "@/lib/db/prisma";
 import { auditAmazonDataRead } from "@/lib/amazon-sync/read-audit";
+import { amazonDataAccess } from "@/lib/amazon-sync/data-access";
+import { amazonAccessFingerprint, amazonCacheKey, normalizeAmazonCacheQuery, readThroughAmazon } from "@/lib/amazon-ads/result-cache";
+import { Prisma } from "@prisma/client";
 
 export const runtime = "nodejs";
 const headers = { "Cache-Control": "no-store" };
+
+/** Version of report acquisition state; worker updates bump it and invalidate the cache. */
+async function acquisitionVersion(organizationId: string, workspaceId: string): Promise<string> {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ v: Date | string | null }>>(Prisma.sql`
+      SELECT greatest(
+        (SELECT max("updatedAt") FROM "AmazonAdsSyncPlan" WHERE "organizationId"=${organizationId} AND "workspaceId"=${workspaceId}),
+        (SELECT max("updatedAt") FROM "AmazonAdsSyncDomainState" WHERE "organizationId"=${organizationId} AND "workspaceId"=${workspaceId}),
+        (SELECT max("updatedAt") FROM "AmazonAdsSyncTask" WHERE "organizationId"=${organizationId} AND "workspaceId"=${workspaceId})
+      ) AS v`);
+    const value = rows[0]?.v;
+    return value ? new Date(value).toISOString() : "__empty__";
+  } catch { return "__empty__"; }
+}
 
 /** SP 五类绩效报表的实盘采集状态。 */
 export async function GET(request: Request) {
@@ -20,7 +37,16 @@ export async function GET(request: Request) {
     const scope = { organizationId: permission.user.organizationId, workspaceId: workspaceScopeFromRequest(request).workspaceId };
     const profileId = new URL(request.url).searchParams.get("profileId")?.trim() || undefined;
     if (profileId && profileId.length > 100) throw new SyncInputError("Profile 筛选参数无效。");
-    const overview = await reportAcquisitionOverview(scope, permission.user.id, profileId);
+    // 授权范围在缓存之外逐次解析（安全闸，命中缓存也必须校验当前成员仍有效），并生成入键指纹。
+    const access = await amazonDataAccess(scope, permission.user.id);
+    const fingerprint = amazonAccessFingerprint(access);
+    const key = amazonCacheKey(scope.organizationId, scope.workspaceId, "report_acquisition", fingerprint, normalizeAmazonCacheQuery({ profileId: profileId ?? "" }));
+    const { body: overview } = await readThroughAmazon(
+      key, "report_acquisition", fingerprint,
+      () => acquisitionVersion(scope.organizationId, scope.workspaceId),
+      () => reportAcquisitionOverview(scope, permission.user.id, profileId),
+    );
+    // 审计在缓存之外逐次执行（合规闸，命中缓存也必须记录）。
     await auditAmazonDataRead(scope, permission.user.id, "amazon-ads-report-acquisition", permission.user.role);
     return NextResponse.json(overview, { headers });
   } catch (error) {

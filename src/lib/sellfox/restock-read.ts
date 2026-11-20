@@ -105,7 +105,7 @@ export function buildRestockRows(input: {
   }).sort((left, right) => (right.suggest ?? -1) - (left.suggest ?? -1) || String(left.asin).localeCompare(String(right.asin)) || String(left.msku).localeCompare(String(right.msku)));
 }
 
-export async function readSellfoxRestock(query: SellfoxBrowseQuery, scope: Scope, storeIds?: string[], today = sellfoxDateAt(new Date())) {
+export async function readSellfoxRestock(query: SellfoxBrowseQuery, scope: Scope, storeIds?: string[], today = sellfoxDateAt(new Date()), fullRows = false) {
   const filters: Prisma.Sql[] = [Prisma.sql`l."organizationId"=${scope.organizationId}`, Prisma.sql`l."workspaceId"=${scope.workspaceId}`];
   if (storeIds) filters.push(storeIds.length ? Prisma.sql`l."storeId" IN (${Prisma.join(storeIds)})` : Prisma.sql`FALSE`);
   if (query.shopExternalIds.length) filters.push(Prisma.sql`st."externalId" IN (${Prisma.join(query.shopExternalIds)})`);
@@ -165,7 +165,9 @@ export async function readSellfoxRestock(query: SellfoxBrowseQuery, scope: Scope
   const start = (query.page - 1) * query.pageSize;
   const known = rows.length > 0 && rows.every((row) => row.suggest != null);
   return {
-    rows: rows.slice(start, start + query.pageSize),
+    // fullRows is used only by the materialization service to persist the complete
+    // computed result; every interactive page keeps the existing paginated slice.
+    rows: fullRows ? rows : rows.slice(start, start + query.pageSize),
     totals: [{ suggest: known ? rows.reduce((sum, row) => sum + Number(row.suggest), 0) : null }],
     facets: { productTags: [] as string[], salespersons: [] as string[] },
     pagination: { page: query.page, pageSize: query.pageSize, total: rows.length },
@@ -186,6 +188,7 @@ export async function readSellfoxRestockCached(
   scope: Scope,
   storeIds?: string[],
   today = sellfoxDateAt(new Date()),
+  sourceMode: "live" | "materialized" = "live",
 ) {
   // storeIds 是用户数据范围（权限隔离），必须进键；排序保证同一集合键稳定。
   const storeKey = storeIds ? [...storeIds].sort().join(",") : "__unscoped__";
@@ -193,21 +196,66 @@ export async function readSellfoxRestockCached(
     scope.organizationId,
     scope.workspaceId,
     "restock",
-    normalizeSellfoxCacheQuery({ ...query, today, storeKey }),
+    normalizeSellfoxCacheQuery({ ...query, today, storeKey, sourceMode }),
   );
-  const source = SELLFOX_VERSION_SOURCE.restock!;
+  const versionSource = SELLFOX_VERSION_SOURCE.restock!;
+  const versionReader = async () => {
+    const rows = await prisma.$queryRaw<Array<{ v: Date | string | null }>>(Prisma.sql`
+      SELECT max(${Prisma.raw(`"${versionSource.column}"`)}) AS v
+      FROM ${Prisma.raw(`"${versionSource.model}"`)}
+      WHERE "organizationId"=${scope.organizationId} AND "workspaceId"=${scope.workspaceId}`);
+    return rows[0]?.v ? new Date(rows[0]!.v).toISOString() : "__empty__";
+  };
+
+  // materialized 分支：只读已对账的物化快照，且必须版本新鲜，否则回退 live。
+  // 默认 live 完全保持既有行为；物化结果的逐行等价性由离线对账脚本保证。
+  if (sourceMode === "materialized") {
+    const snapshot = await prisma.sellfoxRestockSnapshot.findUnique({
+      where: {
+        organizationId_workspaceId_dimension_inputDate: {
+          organizationId: scope.organizationId, workspaceId: scope.workspaceId,
+          dimension: query.dimension === "msku" ? "msku" : "asin", inputDate: today,
+        },
+      },
+    });
+    const currentVersion = await versionReader();
+    const fresh = snapshot && snapshot.inputVersion === currentVersion;
+    if (fresh && Array.isArray(snapshot.rows)) {
+      const allRows = snapshot.rows as unknown as Array<Record<string, unknown>>;
+      const filtered = filterRestockRows(allRows, query, storeIds);
+      const start = (query.page - 1) * query.pageSize;
+      const known = allRows.length > 0 && allRows.every((row) => row.suggest != null);
+      return {
+        rows: filtered.slice(start, start + query.pageSize),
+        totals: [{ suggest: known ? filtered.reduce((sum, row) => sum + Number(row.suggest ?? 0), 0) : null }],
+        facets: { productTags: [], salespersons: [] },
+        pagination: { page: query.page, pageSize: query.pageSize, total: filtered.length },
+        formula: { source: "materialized", generatedAt: snapshot.generatedAt, inputVersion: snapshot.inputVersion },
+        cache: { status: "materialized", cachedAt: snapshot.generatedAt },
+      };
+    }
+    // 快照缺失/过期 → 透明回退 live（与缓存未命中同语义）。
+  }
+
   const result = await readThroughSellfox(
     key,
     "restock",
-    async () => {
-      const rows = await prisma.$queryRaw<Array<{ v: Date | string | null }>>(Prisma.sql`
-        SELECT max(${Prisma.raw(`"${source.column}"`)}) AS v
-        FROM ${Prisma.raw(`"${source.model}"`)}
-        WHERE "organizationId"=${scope.organizationId} AND "workspaceId"=${scope.workspaceId}`);
-      return rows[0]?.v ? new Date(rows[0]!.v).toISOString() : "__empty__";
-    },
+    versionReader,
     () => readSellfoxRestock(query, scope, storeIds, today),
     { isEmpty: body => Array.isArray(body.rows) && body.rows.length === 0 },
   );
   return { ...result.body, cache: { status: result.cache, cachedAt: result.cachedAt } };
+}
+
+/** Apply the interactive filters to a materialized row set (same semantics as the live path). */
+export function filterRestockRows(rows: Array<Record<string, unknown>>, query: SellfoxBrowseQuery, storeIds?: string[]) {
+  const scoped = storeIds ? rows.filter((row) => storeIds.includes(String(row.storeId ?? ""))) : rows;
+  const searched = query.search ? scoped.filter((row) => {
+    const text = String(row[query.searchType || "asin"] ?? "").toLowerCase();
+    const values = query.searchType ? [text] : ["asin", "msku", "sku", "title", "parentAsin"].map((k) => String(row[k] ?? "").toLowerCase());
+    return query.exactMatch ? values.some((v) => v === query.search.toLowerCase()) : values.some((v) => v.includes(query.search.toLowerCase()));
+  }) : scoped;
+  if (query.status === "needs") return searched.filter((row) => Number(row.suggest ?? 0) > 0);
+  if (query.status === "covered") return searched.filter((row) => Number(row.suggest ?? 0) === 0);
+  return searched;
 }
