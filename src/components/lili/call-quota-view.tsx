@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useApiResource } from "@/lib/hooks/use-api-resource";
 
 type Entry = { id: string; kind: string; delta: number; status: string; balanceAfter: number; provider: string | null;
   tool: string | null; workspaceId: string | null; runId: string | null; callId: string | null; note: string; createdAt: string };
@@ -9,26 +10,21 @@ type Quota = { balance: number; used: number; pending: number; entries: Entry[];
 const statuses: Record<string, string> = { RESERVED: "已预扣 · 待核对", COMPLETED: "已完成", FAILED: "请求失败 · 已扣次", UNKNOWN: "结果未知 · 待核对", REFUNDED: "未发送 · 已退回" };
 
 export function CallQuotaView() {
-  const [data, setData] = useState<Quota | null>(null);
   const [page, setPage] = useState(1);
-  const [refresh, setRefresh] = useState(0);
-  const [busy, setBusy] = useState(true);
-  const [error, setError] = useState("");
-  useEffect(() => {
-    const controller = new AbortController();
-    setBusy(true); setError("");
-    void fetch(`/api/lili/call-quota?page=${page}`, { cache: "no-store", signal: controller.signal }).then(async response => {
-      if (!response.ok) throw new Error("读取失败");
-      const result = await response.json() as Quota;
-      if (!controller.signal.aborted) setData(result);
-    }).catch(() => { if (!controller.signal.aborted) setError("暂时无法读取调用额度，请重试。"); })
-      .finally(() => { if (!controller.signal.aborted) setBusy(false); });
-    return () => controller.abort();
-  }, [page, refresh]);
+  // 统一获取层：page 作为 query 参与缓存键，变更即重新读取；fetch 错误转为业务提示。
+  // 卸载由 hook 内部 abort 在途请求，分页快速切换只保留最后一次结果。
+  const resource = useApiResource<Quota>({
+    url: "/api/lili/call-quota",
+    query: { page },
+    ttlMs: 0, // 额度实时性高，仅并发合并、不做跨次缓存（对齐规划 §5.2）
+  });
+  const data = resource.data ?? null;
+  const busy = resource.loading;
+  const error = resource.error ? "暂时无法读取调用额度，请重试。" : "";
   return <div className="space-y-5">
     <section className="lili-card space-y-3 p-5">
       <div className="flex items-center justify-between gap-3"><h1 className="text-xl font-semibold">调用额度与扣减记录</h1>
-        <button className="lili-btn-ghost" disabled={busy} onClick={() => setRefresh(value => value + 1)}>刷新</button></div>
+        <button className="lili-btn-ghost" disabled={busy} onClick={() => void resource.reload()}>刷新</button></div>
       <p>每个同事账号拥有独立账本，新建账号初始余额为 0。同一 ERP 账号与 Lili 共用额度，在当前组织内跨工作区使用，卖家精灵和西柚共同扣减。</p>
       {error ? <p role="alert" className="text-danger-ink">{error}</p> : null}
       {busy ? <p role="status">正在读取…</p> : null}
