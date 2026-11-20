@@ -4,7 +4,7 @@ export type HostStatus = "live" | "planned" | "blocked";
 
 export type HostPriority = "P0" | "P1" | "P2";
 
-export type HostColumnKind = "text" | "stack" | "qty" | "decimal" | "money" | "rate" | "date" | "store" | "tags";
+export type HostColumnKind = "text" | "stack" | "qty" | "decimal" | "money" | "rate" | "date" | "store" | "tags" | "image";
 
 export type HostColumn = {
   key: string;

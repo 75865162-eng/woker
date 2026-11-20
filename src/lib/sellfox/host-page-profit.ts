@@ -19,6 +19,7 @@ export const profitHostPage: HostPage = {
         endpoint: "/api/sellfox/performance",
         columns: [
           { key: "identity", label: "标题/ASIN", kind: "stack", sub: "asin" },
+          { key: "mainImage", label: "图片", kind: "image", width: 80 },
           { key: "sku", label: "品名/SKU", kind: "stack" },
           storeColumn,
           { key: "saleRevenue", label: "销售额", kind: "money" },
