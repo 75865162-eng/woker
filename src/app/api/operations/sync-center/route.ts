@@ -43,7 +43,7 @@ import { syncDomains, syncCenterEnabled, SyncInputError, requireSyncCenter, requ
 import { readTaskSnapshot } from "@/lib/amazon-sync/snapshots";
 import { listSources, readOverview, readTasks, taskSummary } from "@/lib/amazon-sync/read";
 import { listAuthorizations } from "@/lib/amazon-sync/service";
-import { requestChange, approvalSelect } from "@/lib/amazon-sync/change-approval";
+import { requestChange, decideChange, applyChange, approvalSelect } from "@/lib/amazon-sync/change-approval";
 import { logUnexpectedSyncCenterError } from "@/lib/amazon-sync/log-unexpected";
 export const runtime = "nodejs";
 function json(value: unknown, status = 200) { return NextResponse.json(value, { status, headers: { "Cache-Control": "no-store" } }); }
@@ -173,6 +173,20 @@ export async function POST(request: Request) {
     if (!process.env.DATABASE_URL) return json({ error: "数据库未配置。" }, 503);
     const actor = permission.user.id;
     const change = await requestChange(scope, actor, body);
-    return json({ approvalRequired: true, changeRequest: change }, 202);
+    // 免审批：提交后立即自动批准并应用，配置与同步随即生效。
+    // 仍完整复用 decideChange/applyChange 的权限校验、完整性校验、幂等锁与审计。
+    // 若提交者不具备 approve 权限（如仅有 create/edit 的运营角色），自动批准会失败，
+    // 此时保留 REQUESTED 申请、回退到原有人工审批流程，避免削弱既有权限边界；
+    // owner/database_admin 默认具备 approve 权限，配置类操作亦要求 scopeAdmin，故即时生效。
+    const changeId = String(change.id);
+    let approved: Awaited<ReturnType<typeof decideChange>>;
+    try {
+      approved = await decideChange(scope, actor, changeId, "APPROVED", "提交后自动批准（免审批环节）");
+    } catch {
+      return json({ approvalRequired: true, changeRequest: change, autoApproveDeferred: true }, 202);
+    }
+    // 应用失败如实抛出：申请此时已 APPROVED，可在变更审批处重试应用，不误报为"待审批"。
+    const applied = await applyChange(scope, actor, changeId);
+    return json({ approvalRequired: false, applied: true, changeRequest: approved, applyResult: applied }, 200);
   } catch (error) { return fail(error, typeof action === "string" && /^[a-z0-9-]{1,40}$/.test(action) ? `post:${action}` : undefined); }
 }
