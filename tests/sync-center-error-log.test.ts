@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { logUnexpected } from "@/app/api/operations/sync-center/route";
+import { logUnexpectedSyncCenterError as logUnexpected } from "@/lib/amazon-sync/log-unexpected";
 
 /** 捕获 console.error 一次调用的参数，避免污染测试输出。 */
 function captureError(fn: () => void): unknown[][] {
