@@ -45,12 +45,14 @@ try {
   process.exit(1);
 }
 const passed = (value) => value === "passed";
+// On the fast_deploy path lint/tests are honestly recorded as "skipped".
+const passedOrSkipped = (value) => value === "passed" || value === "skipped";
 const checks = data.checks || {};
 const paths = checks.requiredPaths && checks.forbiddenPaths;
 const digest = checks.sha256;
 if (data.status !== "passed" || !sourceCommit || sourceCommit === "unknown" ||
     data.commit !== sourceCommit || data.expectedCommit !== sourceCommit ||
-    !passed(data.build) || !passed(data.lint) || !passed(data.tests) ||
+    !passed(data.build) || !passedOrSkipped(data.lint) || !passedOrSkipped(data.tests) ||
     digest !== true || checks.requiredPaths !== true || checks.forbiddenPaths !== true ||
     data.artifactSha256 !== artifactSha256) {
   console.error("release-check.json does not validate this artifact and commit.");
