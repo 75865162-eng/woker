@@ -9,6 +9,13 @@ SOURCE_BRANCH="${SOURCE_BRANCH:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null ||
 RELEASE_LINT_STATUS="${RELEASE_LINT_STATUS:-unknown}"
 RELEASE_TEST_STATUS="${RELEASE_TEST_STATUS:-unknown}"
 RELEASE_BUILD_STATUS="${RELEASE_BUILD_STATUS:-unknown}"
+# 测试档位：full=全量单测，fast=按改动范围的子集。默认 full 保持向后兼容。
+RELEASE_TEST_TIER="${RELEASE_TEST_TIER:-full}"
+RELEASE_TEST_SCOPE="${RELEASE_TEST_SCOPE:-0}"
+if [ "$RELEASE_TEST_TIER" != "full" ] && [ "$RELEASE_TEST_TIER" != "fast" ]; then
+  echo "RELEASE_TEST_TIER must be 'full' or 'fast'." >&2
+  exit 1
+fi
 
 cleanup() {
   rm -rf "$WORK_DIR"
@@ -16,12 +23,8 @@ cleanup() {
 
 trap cleanup EXIT
 
-# Build must pass. Lint/tests may be explicitly "skipped" on the fast_deploy
-# path (workflow dispatches with fast_deploy=true); the manifest records this
-# honestly rather than claiming a check that never ran.
-status_ok() { [ "$1" = "passed" ] || [ "$1" = "skipped" ]; }
-if [ "$RELEASE_BUILD_STATUS" != "passed" ] || ! status_ok "$RELEASE_LINT_STATUS" || ! status_ok "$RELEASE_TEST_STATUS"; then
-  echo "Build must pass; lint and tests must pass or be explicitly skipped before packaging." >&2
+if [ "$RELEASE_BUILD_STATUS" != "passed" ] || [ "$RELEASE_LINT_STATUS" != "passed" ] || [ "$RELEASE_TEST_STATUS" != "passed" ]; then
+  echo "Build, lint, and tests must all pass before packaging." >&2
   exit 1
 fi
 
@@ -79,7 +82,9 @@ cat > "$PACKAGE_DIR/RELEASE-METADATA.json" <<JSON
   "branch": "$(json_escape "$SOURCE_BRANCH")",
   "lint": "$(json_escape "$RELEASE_LINT_STATUS")",
   "tests": "$(json_escape "$RELEASE_TEST_STATUS")",
-  "build": "$(json_escape "$RELEASE_BUILD_STATUS")"
+  "build": "$(json_escape "$RELEASE_BUILD_STATUS")",
+  "testTier": "$(json_escape "$RELEASE_TEST_TIER")",
+  "testScope": $RELEASE_TEST_SCOPE
 }
 JSON
 
@@ -108,6 +113,8 @@ cat > "$manifest_path" <<JSON
   "build": "$(json_escape "$RELEASE_BUILD_STATUS")",
   "lint": "$(json_escape "$RELEASE_LINT_STATUS")",
   "tests": "$(json_escape "$RELEASE_TEST_STATUS")",
+  "testTier": "$(json_escape "$RELEASE_TEST_TIER")",
+  "testScope": $RELEASE_TEST_SCOPE,
   "artifact": "$(basename "$ARTIFACT_PATH")",
   "artifactSha256": "$artifact_sha256",
   "artifactSize": $artifact_size,

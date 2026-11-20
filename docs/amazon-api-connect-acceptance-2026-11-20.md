@@ -383,6 +383,14 @@ process.env.AMAZON_API_EXECUTION_ROLE === "cloud"
 | 相关单测（约束/授权/日志） | 10/10 |
 | typecheck / lint（Node 22.23.4） | 通过 / 0 error |
 | 全量单测（Node 22.23.4） | 2626/2626 全部通过 |
-| build / package / release-check | 进行中 |
+| build / package / release-check | 全部通过 |
+| 部署 `migrate deploy` | passed（约束 20261227000000 已应用） |
+| 生产端到端 INSERT `enable-authorization` | ok（真实 scope+owner 插入成功并清理），已越过原 23514 关卡 |
 
-> 待部署由 `migrate deploy` 应用新约束后，用户再次点击「重新启用授权」应返回 202 审批请求（不再 500），经批准应用后恢复为待验证态。
+### 17.4 交付与一致性
+
+- 本地 = GitHub main = 生产 = `8d3d245`（含并行合并的赛狐维度分析页 `82ae8c8`）。
+- 6 服务全部 active，`aoocy.com/api/health` 200，`runtimeReleaseVerified: true`，`migration: passed`。
+- 生产库约束 `AmazonDataCenterChangeRequest_operation_check` 已确认含 `enable-authorization`；用真实 scope 与 owner 身份 INSERT 该 operation 成功（随后清理，未污染数据）。
+- 用户再次点击「重新启用授权」应返回 **202 审批请求**（不再 500 兜底），经批准并应用后授权恢复为待验证态。临时诊断脚本已全部清理。
+

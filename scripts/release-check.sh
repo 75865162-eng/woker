@@ -28,6 +28,8 @@ artifact_size="$(stat -f%z "$ARTIFACT_PATH" 2>/dev/null || stat -c%s "$ARTIFACT_
 manifest_sha256="$(node -e 'const fs=require("fs"); const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(data.artifactSha256 || "")' "$MANIFEST_PATH")"
 manifest_commit="$(node -e 'const fs=require("fs"); const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(data.commit || "")' "$MANIFEST_PATH")"
 manifest_statuses="$(node -e 'const fs=require("fs"); const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write([data.build,data.lint,data.tests].join(","))' "$MANIFEST_PATH")"
+manifest_test_tier="$(node -e 'const fs=require("fs"); const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(String(data.testTier || "full"))' "$MANIFEST_PATH")"
+manifest_test_scope="$(node -e 'const fs=require("fs"); const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(String(data.testScope ?? 0))' "$MANIFEST_PATH")"
 
 if [ "$artifact_sha256" != "$manifest_sha256" ]; then
   echo "Artifact SHA256 does not match release manifest." >&2
@@ -39,8 +41,17 @@ if [ "$EXPECTED_COMMIT" != "unknown" ] && [ "$manifest_commit" != "$EXPECTED_COM
   exit 1
 fi
 
-if [ "$manifest_statuses" != "passed,passed,passed" ] && [ "$manifest_statuses" != "passed,skipped,skipped" ]; then
-  echo "Release manifest must report passed build and passed/skipped lint and tests." >&2
+if [ "$manifest_statuses" != "passed,passed,passed" ]; then
+  echo "Release manifest must report passed build, lint, and tests." >&2
+  exit 1
+fi
+
+if [ "$manifest_test_tier" != "full" ] && [ "$manifest_test_tier" != "fast" ]; then
+  echo "Release manifest testTier must be 'full' or 'fast'." >&2
+  exit 1
+fi
+if [ "$manifest_test_tier" = "fast" ] && { ! [[ "$manifest_test_scope" =~ ^[0-9]+$ ]] || [ "$manifest_test_scope" -lt 1 ]; }; then
+  echo "Fast-tier release must report a positive testScope." >&2
   exit 1
 fi
 
@@ -101,6 +112,13 @@ const manifest = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
 for (const field of ["commit", "build", "lint", "tests"]) {
   if (!manifest[field] || metadata[field] !== manifest[field]) throw Error(`Artifact metadata mismatch: ${field}`);
 }
+for (const field of ["testTier", "testScope"]) {
+  if (metadata[field] !== manifest[field]) throw Error(`Artifact metadata mismatch: ${field}`);
+}
+// 向后兼容：旧制品可能没有 testTier 字段，按 full 处理；一旦存在必须是合法值。
+if (metadata.testTier !== undefined && !["full", "fast"].includes(String(manifest.testTier))) {
+  throw Error("Artifact metadata has invalid testTier");
+}
 for (const prefix of [".next-build/standalone/.next-build/server/", ".next-build/standalone/.next-build/static/", "prisma/migrations/"]) {
   if (![...members.keys()].some(name => name.startsWith(prefix) && !name.endsWith("/"))) throw Error(`Empty required artifact directory: ${prefix}`);
 }
@@ -124,6 +142,8 @@ const check = {
   build: manifest.build,
   lint: manifest.lint,
   tests: manifest.tests,
+  testTier: manifest.testTier,
+  testScope: manifest.testScope,
   artifact: manifest.artifact,
   artifactSha256,
   artifactSize: Number(artifactSize),
