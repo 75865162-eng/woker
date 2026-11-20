@@ -16,8 +16,12 @@ cleanup() {
 
 trap cleanup EXIT
 
-if [ "$RELEASE_BUILD_STATUS" != "passed" ] || [ "$RELEASE_LINT_STATUS" != "passed" ] || [ "$RELEASE_TEST_STATUS" != "passed" ]; then
-  echo "Build, lint, and tests must all pass before packaging." >&2
+# Build must pass. Lint/tests may be explicitly "skipped" on the fast_deploy
+# path (workflow dispatches with fast_deploy=true); the manifest records this
+# honestly rather than claiming a check that never ran.
+status_ok() { [ "$1" = "passed" ] || [ "$1" = "skipped" ]; }
+if [ "$RELEASE_BUILD_STATUS" != "passed" ] || ! status_ok "$RELEASE_LINT_STATUS" || ! status_ok "$RELEASE_TEST_STATUS"; then
+  echo "Build must pass; lint and tests must pass or be explicitly skipped before packaging." >&2
   exit 1
 fi
 

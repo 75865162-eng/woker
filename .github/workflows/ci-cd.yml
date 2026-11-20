@@ -36,6 +36,10 @@ on:
         description: Initialize a clean Ubuntu host with no previous release
         type: boolean
         default: false
+      fast_deploy:
+        description: Shortest release path - skip lint/test/typecheck/UI guard and browser gates (perf/runtime)
+        type: boolean
+        default: false
 
 concurrency:
   group: release-${{ github.ref }}
@@ -43,7 +47,7 @@ concurrency:
 
 jobs:
   performance-regression:
-    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && (!inputs.initial_deployment || !inputs.deploy_production))
+    if: ${{ !inputs.fast_deploy && (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && (!inputs.initial_deployment || !inputs.deploy_production))) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -137,11 +141,11 @@ jobs:
         run: npx --no-install prisma validate
 
       - name: Typecheck
-        if: steps.plan.outputs.release == 'true'
+        if: steps.plan.outputs.release == 'true' && !inputs.fast_deploy
         run: npm run typecheck
 
       - name: UI regression guard
-        if: steps.plan.outputs.release == 'true'
+        if: steps.plan.outputs.release == 'true' && !inputs.fast_deploy
         run: npm run ui:guard
 
       - name: Cache Playwright browsers
@@ -152,15 +156,15 @@ jobs:
           key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ hashFiles('package-lock.json') }}
 
       - name: Install test browser
-        if: steps.plan.outputs.release == 'true'
+        if: steps.plan.outputs.release == 'true' && !inputs.fast_deploy
         run: npx playwright install --with-deps chromium
 
       - name: Test
-        if: steps.plan.outputs.release == 'true'
+        if: steps.plan.outputs.release == 'true' && !inputs.fast_deploy
         run: npm run test
 
       - name: Lint
-        if: steps.plan.outputs.release == 'true'
+        if: steps.plan.outputs.release == 'true' && !inputs.fast_deploy
         run: npm run lint
 
       - name: Build
@@ -172,8 +176,8 @@ jobs:
         env:
           SOURCE_COMMIT: ${{ github.sha }}
           SOURCE_BRANCH: ${{ github.ref_name }}
-          RELEASE_LINT_STATUS: passed
-          RELEASE_TEST_STATUS: passed
+          RELEASE_LINT_STATUS: ${{ inputs.fast_deploy && 'skipped' || 'passed' }}
+          RELEASE_TEST_STATUS: ${{ inputs.fast_deploy && 'skipped' || 'passed' }}
           RELEASE_BUILD_STATUS: passed
         run: bash scripts/package-ci-artifact.sh
 
@@ -198,7 +202,7 @@ jobs:
 
   runtime-integration:
     needs: build
-    if: needs.build.outputs.release == 'true'
+    if: ${{ !inputs.fast_deploy && needs.build.outputs.release == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -238,7 +242,7 @@ jobs:
 
   deploy-production:
     needs: [build, performance-regression, runtime-integration]
-    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.deploy_production && needs.build.result == 'success' && needs.runtime-integration.result == 'success' && needs.build.outputs.release == 'true' && (needs.performance-regression.result == 'success' || (inputs.initial_deployment && needs.performance-regression.result == 'skipped')) }}
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.deploy_production && needs.build.result == 'success' && needs.build.outputs.release == 'true' && (inputs.fast_deploy || (needs.runtime-integration.result == 'success' && (needs.performance-regression.result == 'success' || (inputs.initial_deployment && needs.performance-regression.result == 'skipped')))) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment: production

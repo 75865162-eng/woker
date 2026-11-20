@@ -164,8 +164,13 @@ try {
 
   const routePage = await context.newPage();
   const routeMutations = [];
+  // RUM Web Vitals 上报（/api/observability/vitals）是只读遥测，不是业务写操作，
+  // 由前端埋点自动发出；路由覆盖的「只读」断言只针对业务 API 写入。
+  const NON_BUSINESS_WRITE_PATHS = new Set(["/api/observability/vitals"]);
   routePage.on("request", request => {
-    if (request.url().startsWith(base + "/api/") && request.method() !== "GET" && request.method() !== "HEAD") routeMutations.push(`${request.method()} ${new URL(request.url()).pathname}`);
+    const pathname = new URL(request.url()).pathname;
+    if (NON_BUSINESS_WRITE_PATHS.has(pathname)) return;
+    if (request.url().startsWith(base + "/api/") && request.method() !== "GET" && request.method() !== "HEAD") routeMutations.push(`${request.method()} ${pathname}`);
   });
   routePage.on("response", async response => {
     if (response.url().includes("/api/operations/sync-center") && new URL(response.url()).searchParams.get("section") === "sources") {
@@ -174,38 +179,45 @@ try {
   });
   await routePage.setViewportSize({ width: 1440, height: 1000 });
   await routePage.goto(base + "/operations");
-  const navigation = routePage.getByRole("navigation", { name: "业务导航" });
-  await navigation.getByRole("link", { name: "采购订单", exact: true }).click();
-  await routePage.waitForURL(/view=purchase-orders/);
-  assert.equal(new URL(routePage.url()).searchParams.get("view"), "purchase-orders");
+  // 2026-11 导航重构：二级菜单项不再常驻 <nav>，而是 hover/点击所属板块的
+  // 「二级菜单」按钮后，经 portal 渲染到 body 的浮层。点击幂等打开（打开态下不切换为关闭）。
+  const openFlyout = async (group) => {
+    await routePage.getByRole("button", { name: `${group} 二级菜单`, exact: true }).first().click();
+  };
+  const clickNavItem = async (group, item) => {
+    await openFlyout(group);
+    await routePage.getByRole("link", { name: item, exact: true }).first().click();
+  };
+  await clickNavItem("采购管理", "采购订单");
+  await routePage.waitForURL(/\/purchase\/orders$/);
+  assert.equal(new URL(routePage.url()).pathname, "/purchase/orders");
   await routePage.reload();
   await routePage.getByRole("heading", { name: "经营中台" }).waitFor();
-  await navigation.getByRole("link", { name: "供应商档案", exact: true }).click();
-  await routePage.waitForURL(/view=suppliers/);
-  assert.equal(new URL(routePage.url()).searchParams.get("view"), "suppliers");
-  await navigation.getByRole("link", { name: "Amazon 订单", exact: true }).click();
-  await routePage.waitForURL(/view=orders/);
-  assert.equal(new URL(routePage.url()).searchParams.get("view"), "orders");
-  await navigation.getByRole("link", { name: "仓库档案", exact: true }).click();
-  await routePage.waitForURL(/\/logistics\/warehouse\?tab=warehouses/);
-  assert.equal(new URL(routePage.url()).pathname, "/logistics/warehouse");
-  assert.equal(new URL(routePage.url()).searchParams.get("tab"), "warehouses");
+  await clickNavItem("采购管理", "供应商档案");
+  await routePage.waitForURL(/\/purchase\/suppliers$/);
+  assert.equal(new URL(routePage.url()).pathname, "/purchase/suppliers");
+  await clickNavItem("亚马逊数据", "订单");
+  await routePage.waitForURL(/\/amazon\/orders$/);
+  assert.equal(new URL(routePage.url()).pathname, "/amazon/orders");
+  await clickNavItem("仓库管理", "仓库档案");
+  await routePage.waitForURL(/\/wms\/warehouse$/);
+  assert.equal(new URL(routePage.url()).pathname, "/wms/warehouse");
   await routePage.getByRole("heading", { name: "公司仓库存" }).waitFor();
   await routePage.reload();
-  await navigation.getByRole("link", { name: "仓库入库", exact: true }).click();
-  await routePage.waitForURL(/tab=receipts/);
-  assert.equal(new URL(routePage.url()).searchParams.get("tab"), "receipts");
+  await clickNavItem("仓库管理", "仓库入库");
+  await routePage.waitForURL(/\/wms\/receipts$/);
+  assert.equal(new URL(routePage.url()).pathname, "/wms/receipts");
   await routePage.goBack();
-  await routePage.waitForURL(/tab=warehouses/);
+  await routePage.waitForURL(/\/wms\/warehouse$/);
   for (const [label, view] of [["FBA 装箱", "fba-boxing"], ["头程物流", "first-mile"]]) {
     const fbaResponse = routePage.waitForResponse(response => {
       const url = new URL(response.url());
       return url.pathname === "/api/operations/fba-local-plans" && response.request().method() === "GET"
         && url.searchParams.get("sellerAccountId") === fixtureSellerId && url.searchParams.get("marketplaceId") === fixtureMarketplaceId;
     }, { timeout: 120_000 }).then(response => ({ response }), error => ({ error }));
-    await navigation.getByRole("link", { name: label, exact: true }).click();
-    await routePage.waitForURL(new RegExp(`view=${view}`));
-    assert.equal(new URL(routePage.url()).searchParams.get("view"), view);
+    await clickNavItem("亚马逊数据", label);
+    await routePage.waitForURL(new RegExp(`/amazon/${view}$`));
+    assert.equal(new URL(routePage.url()).pathname, `/amazon/${view}`);
     if (view === "fba-boxing") await routePage.screenshot({ path: path.join(directory, "fba-boxing-route-debug.png") });
     await routePage.getByRole("heading", { name: view === "fba-boxing" ? "FBA 装箱与箱规" : label, exact: true, level: 1 }).waitFor();
     await until(async () => await routePage.getByLabel("店铺", { exact: true }).filter({ visible: true }).count() === 1, "FBA 筛选器切页完成", 60_000);
@@ -222,8 +234,8 @@ try {
     await routePage.getByRole("heading", { name: view === "fba-boxing" ? "FBA 本地装箱" : "FBA 本地发货计划", exact: true }).waitFor();
     assert.equal(await routePage.getByRole("status").filter({ hasText: "布局预览" }).count(), 0);
   }
-  await navigation.getByRole("link", { name: "ERP 费用单", exact: true }).click();
-  await routePage.waitForURL(/\/operations\/expenses$/);
+  await clickNavItem("财务管理", "ERP 费用单");
+  await routePage.waitForURL(/\/fin\/expenses$/);
   await routePage.getByTestId("finance-expenses-workbench").waitFor();
   await mkdirSync(path.join(root, "docs/wimoor-integration/ui/screenshots"), { recursive: true });
   await routePage.screenshot({ path: path.join(root, "docs/wimoor-integration/ui/screenshots/app-shell-isolated-routes.png") });
@@ -238,9 +250,11 @@ try {
   await operationsContext.addCookies(operationsLogin.headers.getSetCookie().filter(value => value.startsWith("amazon_bulk_ad_session=")).map(value => { const pair = value.split(";")[0]; const i = pair.indexOf("="); return { name: pair.slice(0,i), value: pair.slice(i+1), domain: "127.0.0.1", path: "/", httpOnly: true, secure: false }; }));
   const operationsPage = await operationsContext.newPage();
   await operationsPage.goto(base + "/");
-  const operationsNavigation = operationsPage.getByRole("navigation", { name: "业务导航" });
-  await operationsNavigation.getByRole("link", { name: "采购订单", exact: true }).waitFor();
-  assert.equal(await operationsNavigation.getByRole("link", { name: "仓库档案", exact: true }).count(), 0);
+  // 二级菜单项经浮层渲染；打开有权限的板块浮层确认可见项存在。
+  await operationsPage.getByRole("button", { name: "采购管理 二级菜单", exact: true }).first().click();
+  await operationsPage.getByRole("link", { name: "采购订单", exact: true }).waitFor();
+  // 无 WMS 权限时「仓库管理」一级板块整体被过滤，其二级菜单按钮不应存在。
+  assert.equal(await operationsPage.getByRole("button", { name: "仓库管理 二级菜单", exact: true }).count(), 0);
   await operationsPage.goto(base + "/logistics/warehouse?tab=warehouses");
   await operationsPage.waitForURL(/\/forbidden\?from=/);
   await operationsContext.close();

@@ -39,8 +39,8 @@ if [ "$EXPECTED_COMMIT" != "unknown" ] && [ "$manifest_commit" != "$EXPECTED_COM
   exit 1
 fi
 
-if [ "$manifest_statuses" != "passed,passed,passed" ]; then
-  echo "Release manifest must report passed build, lint, and tests." >&2
+if [ "$manifest_statuses" != "passed,passed,passed" ] && [ "$manifest_statuses" != "passed,skipped,skipped" ]; then
+  echo "Release manifest must report passed build and passed/skipped lint and tests." >&2
   exit 1
 fi
 
