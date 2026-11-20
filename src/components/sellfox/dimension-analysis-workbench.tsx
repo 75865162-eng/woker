@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { SellfoxTabs } from "@/components/sellfox/sellfox-nav";
 import { normalizeWorkspaceScope } from "@/lib/workspace/scope";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
-import { sellfoxSiteLabel } from "@/lib/sellfox/marketplace-site";
-import type { Dimension } from "@/lib/sellfox/dimension-analysis";
+import { sellfoxSiteLabel, siteCodeOf } from "@/lib/sellfox/marketplace-site";
+import type { AsinRow, Dimension } from "@/lib/sellfox/dimension-analysis";
 
 type StoreLink = { storeId: string; externalId: string; name: string; marketplace: string };
 type PersonLink = { name: string; storeCount: number; mskuCount: number; stores: StoreLink[]; sites: string[] };
@@ -14,12 +14,13 @@ type StorePersonView = {
   externalId: string; name: string; marketplace: string; code: string; label: string;
   country: string; status: string; personCount: number; mskuCount: number; people: string[];
 };
-type Coverage = { stores: number; people: number; sites: number; snapshotRows: number };
+type Coverage = { stores: number; people: number; sites: number; snapshotRows: number; asins: number };
 type Body = {
   dimension?: Dimension;
   salespeople?: PersonLink[];
   stores?: StorePersonView[];
   sites?: SiteLink[];
+  asinByStore?: Record<string, AsinRow[]>;
   coverage?: Coverage;
   cache?: { status: "hit" | "miss" | "bypass"; cachedAt: string | null };
   error?: string;
@@ -31,21 +32,43 @@ const DIM_TABS: { id: Dimension; label: string }[] = [
   { id: "site", label: "站点" },
 ];
 
+/** 站点代码 → 国旗 emoji；仅用于展示，无对应则留空。 */
+const SITE_FLAG: Record<string, string> = {
+  US: "🇺🇸", CA: "🇨🇦", MX: "🇲🇽", BR: "🇧🇷", UK: "🇬🇧", DE: "🇩🇪", FR: "🇫🇷", IT: "🇮🇹",
+  ES: "🇪🇸", NL: "🇳🇱", SE: "🇸🇪", PL: "🇵🇱", BE: "🇧🇪", IE: "🇮🇪", JP: "🇯🇵", AU: "🇦🇺",
+  SG: "🇸🇬", IN: "🇮🇳", AE: "🇦🇪", SA: "🇸🇦", TR: "🇹🇷",
+};
+
+/** 从店铺名剥离末尾站点后缀（如 "Coco店-US" → "Coco店"），得到账号/分组名。 */
+function accountOf(name: string, code: string): string {
+  const trimmed = (name || "").trim();
+  const suffix = `-${code || ""}`.toUpperCase();
+  if (code && trimmed.toUpperCase().endsWith(suffix) && trimmed.length > suffix.length) {
+    return trimmed.slice(0, trimmed.length - suffix.length).trim();
+  }
+  // 兜底：剥离任意 -XX 两位站点后缀。
+  return trimmed.replace(/-[A-Z]{2}$/i, "").trim() || trimmed || "未命名";
+}
+
 function list(values: string[] | undefined, empty = "-"): string {
   if (!values || !values.length) return empty;
   return values.join("、");
 }
 
-function storeList(stores: StoreLink[] | undefined): string {
-  if (!stores || !stores.length) return "-";
-  return stores.map((s) => `${sellfoxSiteLabel(s.marketplace) || s.marketplace}-${s.name}`).join("、");
+function fmtMoney(value: string | null): string {
+  if (value == null || value === "") return "-";
+  const n = Number(value);
+  return Number.isFinite(n) ? `¥${n.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}` : value;
 }
 
 export function DimensionAnalysisWorkbench() {
   const [ready, setReady] = useState(false);
   const [scope, setScope] = useState(() => normalizeWorkspaceScope());
-  const [dimension, setDimension] = useState<Dimension>("salesperson");
-  const [query, setQuery] = useState("");
+  const [dimension, setDimension] = useState<Dimension>("store");
+  const [siteFilter, setSiteFilter] = useState("");
+  const [shopFilter, setShopFilter] = useState("");
+  const [personFilter, setPersonFilter] = useState("");
+  const [expandedStore, setExpandedStore] = useState<string | null>(null);
   const [body, setBody] = useState<Body | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -90,69 +113,194 @@ export function DimensionAnalysisWorkbench() {
     return () => controller.abort();
   }, [headers, ready, nonce, scope.accountId, scope.marketplace, scope.workspaceId]);
 
-  const coverage = body?.coverage ?? { stores: 0, people: 0, sites: 0, snapshotRows: 0 };
-  const q = query.trim().toLowerCase();
-  const match = (value: string) => !q || value.toLowerCase().includes(q);
+  const allStores = body?.stores ?? [];
+  const allPeople = body?.salespeople ?? [];
+  const allSites = body?.sites ?? [];
+  const asinByStore = body?.asinByStore ?? {};
+  const coverage = body?.coverage ?? { stores: 0, people: 0, sites: 0, snapshotRows: 0, asins: 0 };
 
-  const people = (body?.salespeople ?? []).filter((p) => match(p.name) || p.stores.some((s) => match(s.name) || match(s.marketplace)));
-  const stores = (body?.stores ?? []).filter((s) => match(s.name) || match(s.externalId) || match(s.label) || match(s.marketplace) || s.people.some(match));
-  const sites = (body?.sites ?? []).filter((s) => match(s.label) || match(s.code) || match(s.marketplace));
+  // 三个筛选联动：先按站点收窄店铺候选，再按业务员收窄，最终得到可见店铺集合。
+  const siteOptions = allSites.map((s) => ({ value: s.marketplace, label: s.label || s.code }));
+  const shopOptions = allStores
+    .filter((s) => !siteFilter || s.marketplace === siteFilter)
+    .filter((s) => !personFilter || s.people.includes(personFilter))
+    .map((s) => ({ value: s.externalId, label: `${s.name || s.externalId}（${s.label || s.code}）` }));
+  const personOptions = allPeople
+    .filter((p) => !siteFilter || p.sites.includes(siteFilter))
+    .filter((p) => !shopFilter || p.stores.some((st) => st.externalId === shopFilter))
+    .map((p) => ({ name: p.name }));
+
+  const visibleStores = allStores.filter((s) =>
+    (!siteFilter || s.marketplace === siteFilter) &&
+    (!shopFilter || s.externalId === shopFilter) &&
+    (!personFilter || s.people.includes(personFilter))
+  );
+
+  const clearFilters = () => { setSiteFilter(""); setShopFilter(""); setPersonFilter(""); setExpandedStore(null); };
+  const activeFilter = Boolean(siteFilter || shopFilter || personFilter);
 
   return (
     <section className="sellfox-ui">
       <SellfoxTabs current="/sellfox/dimensions" />
       <div className="sf-dims" role="tablist" aria-label="维度">
         {DIM_TABS.map((tab) => (
-          <button key={tab.id} type="button" role="tab" aria-current={dimension === tab.id ? "page" : undefined} onClick={() => setDimension(tab.id)}>{tab.label}</button>
+          <button key={tab.id} type="button" role="tab" aria-current={dimension === tab.id ? "page" : undefined} onClick={() => { setDimension(tab.id); setExpandedStore(null); }}>{tab.label}</button>
         ))}
       </div>
       <div className="sf-filter">
-        <input aria-label="名单搜索" placeholder="搜索业务员 / 店铺 / 站点" value={query} onChange={(e) => setQuery(e.target.value)} />
-        <button type="button" className="sf-btn" onClick={() => setQuery("")}>清空</button>
+        <select aria-label="站点筛选" value={siteFilter} onChange={(e) => { setSiteFilter(e.target.value); setShopFilter(""); setExpandedStore(null); }}>
+          <option value="">全部站点</option>
+          {siteOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <select aria-label="店铺筛选" value={shopFilter} onChange={(e) => { setShopFilter(e.target.value); setExpandedStore(null); }}>
+          <option value="">全部店铺</option>
+          {shopOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <select aria-label="业务员筛选" value={personFilter} onChange={(e) => { setPersonFilter(e.target.value); setExpandedStore(null); }}>
+          <option value="">全部业务员</option>
+          {personOptions.map((o) => <option key={o.name} value={o.name}>{o.name}</option>)}
+        </select>
+        <button type="button" className="sf-btn" onClick={clearFilters}>清空筛选</button>
         <button type="button" className="sf-btn" onClick={() => setNonce((n) => n + 1)}>刷新</button>
-        <span className="sf-label">覆盖 {coverage.people} 业务员 / {coverage.stores} 店铺 / {coverage.sites} 站点 · {coverage.snapshotRows.toLocaleString("zh-CN")} 快照行</span>
+        <span className="sf-label">覆盖 {coverage.people} 业务员 / {coverage.stores} 店铺 / {coverage.sites} 站点 / {coverage.asins} ASIN</span>
       </div>
       {body?.cache?.status === "hit" && body.cache.cachedAt ? (
         <p className="sf-notice" role="status">缓存更新于 {new Date(body.cache.cachedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false })}；点「刷新」获取实时口径。</p>
       ) : null}
       {error ? <p className="sf-notice" role="alert">{error}</p> : null}
-      <div className="sf-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              {dimension === "salesperson" ? <><th>业务员</th><th>关联店铺数</th><th>关联商品数</th><th>关联店铺（站点-店铺）</th><th>关联站点</th></> : null}
-              {dimension === "store" ? <><th>店铺</th><th>店铺 ID</th><th>站点</th><th>国家</th><th>状态</th><th>关联业务员</th><th>关联商品数</th></> : null}
-              {dimension === "site" ? <><th>站点</th><th>Marketplace ID</th><th>关联店铺数</th><th>关联业务员数</th><th>关联商品数</th><th>关联店铺</th><th>关联业务员</th></> : null}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? <tr><td colSpan={7}>加载中</td></tr> : null}
-            {!loading && dimension === "salesperson" ? people.map((p) => (
-              <tr key={p.name}>
-                <td>{p.name}</td><td className="sf-num">{p.storeCount}</td><td className="sf-num">{p.mskuCount}</td>
-                <td>{storeList(p.stores)}</td><td>{list(p.sites.map(sellfoxSiteLabel))}</td>
-              </tr>
-            )) : null}
-            {!loading && dimension === "store" ? stores.map((s) => (
-              <tr key={s.externalId}>
-                <td>{s.name || "-"}</td><td>{s.externalId}</td><td>{s.label || s.marketplace || "-"}</td>
-                <td>{s.country || "-"}</td><td>{s.status || "-"}</td>
-                <td>{list(s.people)}</td><td className="sf-num">{s.mskuCount}</td>
-              </tr>
-            )) : null}
-            {!loading && dimension === "site" ? sites.map((s) => (
-              <tr key={s.marketplace}>
-                <td>{s.label}</td><td>{s.marketplace}</td><td className="sf-num">{s.storeCount}</td>
-                <td className="sf-num">{s.personCount}</td><td className="sf-num">{s.mskuCount}</td>
-                <td>{storeList(s.stores)}</td><td>{list(s.people)}</td>
-              </tr>
-            )) : null}
-            {!loading && !error && ((dimension === "salesperson" && people.length === 0) || (dimension === "store" && stores.length === 0) || (dimension === "site" && sites.length === 0)) ? (
-              <tr><td colSpan={7}><div className="sf-empty" role="status"><strong>暂无名单</strong>本地快照尚无该维度的关联数据；不补 0、不臆造。</div></td></tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+
+      {/* 店铺维度：按账号分组，点店铺行内联展开该店铺 ASIN（只显示该店铺）。 */}
+      {!loading && dimension === "store" ? (() => {
+        const groups = new Map<string, StorePersonView[]>();
+        for (const s of visibleStores) {
+          const key = accountOf(s.name, s.code);
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key)!.push(s);
+        }
+        const groupList = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+        if (!groupList.length) return <div className="sf-table-wrap"><table><tbody><tr><td><div className="sf-empty" role="status"><strong>暂无符合条件的店铺</strong>调整筛选或点「刷新」；不补 0、不臆造。</div></td></tr></tbody></table></div>;
+        return (
+          <div className="sf-group-table">
+            {groupList.map(([account, rows]) => (
+              <section className="sf-group" key={account}>
+                <div className="sf-group-head"><strong>账号：{account}</strong><span className="sf-muted">{rows.length} 个站点店铺 · {rows.reduce((n, s) => n + (asinByStore[s.externalId]?.length ?? 0), 0)} 个 ASIN</span></div>
+                <div className="sf-table-wrap">
+                  <table>
+                    <thead><tr><th>店铺名称</th><th>站点</th><th>关联业务员</th><th>ASIN 数</th><th>商品数</th><th>状态</th><th>操作</th></tr></thead>
+                    <tbody>
+                      {rows.map((s) => {
+                        const asins = asinByStore[s.externalId] ?? [];
+                        const expanded = expandedStore === s.externalId;
+                        return (
+                          <FragmentRow key={s.externalId}>
+                            <tr className={expanded ? "sf-row-expanded" : undefined}>
+                              <td><span className="sf-stack"><strong>{s.name || s.externalId}</strong><small className="sf-muted">ID {s.externalId}</small></span></td>
+                              <td><span className="sf-site-cell">{SITE_FLAG[s.code] || "🏳️"} {s.label || s.code || s.marketplace}</span></td>
+                              <td>{list(s.people)}</td>
+                              <td className="sf-num">{asins.length}</td>
+                              <td className="sf-num">{s.mskuCount}</td>
+                              <td>{s.status || "-"}</td>
+                              <td><button type="button" className="sf-link" aria-expanded={expanded} onClick={() => setExpandedStore(expanded ? null : s.externalId)}>{expanded ? "收起 ASIN" : "查看 ASIN"}</button></td>
+                            </tr>
+                            {expanded ? (
+                              <tr className="sf-asin-row"><td colSpan={7}>
+                                <div className="sf-asin-panel">
+                                  <p className="sf-muted">{s.name || s.externalId} · 共 {asins.length} 个 ASIN（仅显示本店铺）</p>
+                                  {asins.length ? (
+                                    <div className="sf-table-wrap"><table>
+                                      <thead><tr><th>图片</th><th>ASIN</th><th>标题</th><th>SKU / MSKU</th><th>销量</th><th>净销售额</th></tr></thead>
+                                      <tbody>
+                                        {asins.map((a) => (
+                                          <tr key={a.asin}>
+                                            {/* 赛狐快照图片为外部域名，沿用复刻页 sf-thumb 原生 img 范式 */}
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <td>{a.imageUrl ? <img className="sf-thumb" src={a.imageUrl} alt="" loading="lazy" /> : <span className="sf-muted">-</span>}</td>
+                                            <td><span className="sf-mono">{a.asin}</span></td>
+                                            <td><span className="sf-stack"><span>{a.title || "-"}</span>{a.parentAsin ? <small className="sf-muted">父 ASIN {a.parentAsin}</small> : null}</span></td>
+                                            <td><span className="sf-muted">{a.sku || "-"}{a.msku && a.msku !== a.sku ? ` / ${a.msku}` : ""}</span></td>
+                                            <td className="sf-num">{a.saleQuantity ?? "-"}</td>
+                                            <td className="sf-num">{fmtMoney(a.netRevenue)}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table></div>
+                                  ) : <div className="sf-empty"><strong>该店铺暂无 ASIN 快照</strong>不补 0、不臆造。</div>}
+                                </div>
+                              </td></tr>
+                            ) : null}
+                          </FragmentRow>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            ))}
+          </div>
+        );
+      })() : null}
+
+      {/* 业务员维度：按业务员分组，列出其关联店铺。 */}
+      {!loading && dimension === "salesperson" ? (() => {
+        const groups = allPeople.filter((p) => !personFilter || p.name === personFilter).filter((p) =>
+          (!siteFilter || p.sites.includes(siteFilter)) &&
+          (!shopFilter || p.stores.some((st) => st.externalId === shopFilter))
+        );
+        if (!groups.length) return <div className="sf-table-wrap"><table><tbody><tr><td><div className="sf-empty" role="status"><strong>暂无符合条件的业务员</strong>调整筛选或点「刷新」。</div></td></tr></tbody></table></div>;
+        return (
+          <div className="sf-group-table">
+            {groups.map((p) => (
+              <section className="sf-group" key={p.name}>
+                <div className="sf-group-head"><strong>业务员：{p.name}</strong><span className="sf-muted">{p.storeCount} 个店铺 · {p.mskuCount} 个商品</span></div>
+                <div className="sf-table-wrap"><table>
+                  <thead><tr><th>店铺名称</th><th>站点</th><th>ASIN 数</th></tr></thead>
+                  <tbody>
+                    {p.stores.filter((st) => !siteFilter || st.marketplace === siteFilter).filter((st) => !shopFilter || st.externalId === shopFilter).map((st) => {
+                      const store = allStores.find((s) => s.externalId === st.externalId);
+                      const code = store?.code || siteCodeOf(st.marketplace);
+                      return <tr key={st.storeId}><td><span className="sf-stack"><strong>{st.name || st.externalId}</strong><small className="sf-muted">ID {st.externalId}</small></span></td><td>{SITE_FLAG[code] || "🏳️"} {sellfoxSiteLabel(st.marketplace) || st.marketplace}</td><td className="sf-num">{(asinByStore[store?.externalId ?? ""] ?? []).length}</td></tr>;
+                    })}
+                  </tbody>
+                </table></div>
+              </section>
+            ))}
+          </div>
+        );
+      })() : null}
+
+      {/* 站点维度：按站点分组，列出其下店铺。 */}
+      {!loading && dimension === "site" ? (() => {
+        const groups = allSites.filter((s) => !siteFilter || s.marketplace === siteFilter).filter((s) =>
+          !shopFilter || s.stores.some((st) => st.externalId === shopFilter)
+        ).filter((s) => !personFilter || s.people.includes(personFilter));
+        if (!groups.length) return <div className="sf-table-wrap"><table><tbody><tr><td><div className="sf-empty" role="status"><strong>暂无符合条件的站点</strong>调整筛选或点「刷新」。</div></td></tr></tbody></table></div>;
+        return (
+          <div className="sf-group-table">
+            {groups.map((s) => (
+              <section className="sf-group" key={s.marketplace}>
+                <div className="sf-group-head"><strong>{SITE_FLAG[s.code] || "🏳️"} 站点：{s.label}</strong><span className="sf-muted">Marketplace ID {s.marketplace} · {s.storeCount} 店铺 · {s.personCount} 业务员</span></div>
+                <div className="sf-table-wrap"><table>
+                  <thead><tr><th>店铺名称</th><th>关联业务员</th><th>ASIN 数</th><th>商品数</th></tr></thead>
+                  <tbody>
+                    {s.stores.filter((st) => !shopFilter || st.externalId === shopFilter).map((st) => {
+                      const store = allStores.find((x) => x.externalId === st.externalId);
+                      return <tr key={st.storeId}><td><span className="sf-stack"><strong>{st.name || st.externalId}</strong><small className="sf-muted">ID {st.externalId}</small></span></td><td>{list(store?.people)}</td><td className="sf-num">{(asinByStore[st.externalId] ?? []).length}</td><td className="sf-num">{store?.mskuCount ?? "-"}</td></tr>;
+                    })}
+                  </tbody>
+                </table></div>
+              </section>
+            ))}
+          </div>
+        );
+      })() : null}
+
+      {loading ? <div className="sf-table-wrap"><table><tbody><tr><td>加载中…</td></tr></tbody></table></div> : null}
+      {!loading && activeFilter && dimension === "store" && visibleStores.length === 0 ? null : null}
     </section>
   );
+}
+
+/** 让一个店铺的“行 + 展开 ASIN 行”成对渲染，避免被 React 当作两个独立 tr。 */
+function FragmentRow({ children }: { children: ReactNode }) {
+  return <>{children}</>;
 }

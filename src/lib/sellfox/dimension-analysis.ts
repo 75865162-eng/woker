@@ -32,12 +32,20 @@ export type StorePersonView = {
   country: string; status: string; personCount: number; mskuCount: number; people: string[];
 };
 
+/** 店铺下的 ASIN 明细（来自 ProductDaily 快照，DISTINCT 收敛，不按日放大）。 */
+export type AsinRow = {
+  asin: string; parentAsin: string; title: string; imageUrl: string | null;
+  sku: string; msku: string; saleQuantity: number | null; netRevenue: string | null;
+};
+
 export type DimensionAnalysis = {
   dimension: Dimension;
   salespeople: PersonLink[];
   stores: StorePersonView[];
   sites: SiteLink[];
-  coverage: { stores: number; people: number; sites: number; snapshotRows: number };
+  /** storeId → 该店铺 ASIN 明细；前端选中店铺时只展示该店铺的 ASIN。 */
+  asinByStore: Record<string, AsinRow[]>;
+  coverage: { stores: number; people: number; sites: number; snapshotRows: number; asins: number };
 };
 
 function siteMeta(marketplace: string) {
@@ -54,7 +62,7 @@ export async function readDimensionAnalysis(scope: Scope, visibleStoreIds?: stri
   const ws = scope.workspaceId;
   // 空集可见店铺：直接返回空名单，不回退全量。
   if (visibleStoreIds && visibleStoreIds.length === 0) {
-    return { dimension: "salesperson", salespeople: [], stores: [], sites: [], coverage: { stores: 0, people: 0, sites: 0, snapshotRows: 0 } };
+    return { dimension: "salesperson", salespeople: [], stores: [], sites: [], asinByStore: {}, coverage: { stores: 0, people: 0, sites: 0, snapshotRows: 0, asins: 0 } };
   }
   const storeFilter = visibleStoreIds
     ? Prisma.sql`AND st."id" IN (${Prisma.join(visibleStoreIds)})`
@@ -84,14 +92,37 @@ export async function readDimensionAnalysis(scope: Scope, visibleStoreIds?: stri
     WHERE p."organizationId"=${org} AND p."workspaceId"=${ws}
   `);
 
-  return buildDimensionAnalysis(storeRows, triples, Number(snapshotRows[0]?.n ?? 0));
+  // ASIN 明细：按 (storeId, asin) DISTINCT 收敛，避免快照按日重复放大。
+  // 标题/图片取该店铺该 ASIN 最近一次非空值（窗口函数）；金额转字符串避免 Float 精度。
+  const asinRows = await prisma.$queryRaw<Array<{
+    storeId: string; asin: string; parentAsin: string; title: string; imageUrl: string | null;
+    sku: string; msku: string; saleQuantity: number | null; netRevenue: Prisma.Decimal | null;
+  }>>(Prisma.sql`
+    SELECT * FROM (
+      SELECT DISTINCT ON (p."storeId", p.asin)
+        p."storeId", p.asin, p."parentAsin", p.title, p."imageUrl", p.sku, p.msku,
+        p."saleQuantity", p."netRevenue"
+      FROM "SellfoxProductDailySnapshot" p
+      JOIN "SellfoxStore" st ON st."id"=p."storeId" AND st."organizationId"=${org} AND st."workspaceId"=${ws} ${storeFilter}
+      WHERE p."organizationId"=${org} AND p."workspaceId"=${ws} AND length(trim(p.asin)) > 0
+      ORDER BY p."storeId", p.asin, p."reportDate" DESC
+    ) t ORDER BY "storeId", asin
+  `);
+
+  return buildDimensionAnalysis(storeRows, triples, Number(snapshotRows[0]?.n ?? 0), asinRows);
 }
 
 export type DimensionStoreRow = { id: string; externalId: string; name: string; marketplace: string; country: string; status: string };
 export type DimensionTriple = { person: string; storeId: string; msku: string };
+export type DimensionAsinRow = { storeId: string; asin: string; parentAsin: string; title: string; imageUrl: string | null; sku: string; msku: string; saleQuantity: number | null; netRevenue: { toString(): string } | null };
 
-/** 纯函数：从店铺名单 + (业务员,店铺,商品) 三元组派生三维名单与关联，便于单测。 */
-export function buildDimensionAnalysis(storeRows: DimensionStoreRow[], triples: DimensionTriple[], snapshotRowCount: number): DimensionAnalysis {
+/** 纯函数：从店铺名单 + (业务员,店铺,商品) 三元组 + ASIN 明细派生三维名单、关联与店铺 ASIN，便于单测。 */
+export function buildDimensionAnalysis(
+  storeRows: DimensionStoreRow[],
+  triples: DimensionTriple[],
+  snapshotRowCount: number,
+  asinRows: DimensionAsinRow[] = [],
+): DimensionAnalysis {
   const storeById = new Map(storeRows.map((s) => [s.id, s]));
   const storeLinks = (id: string): StoreLink | null => {
     const s = storeById.get(id);
@@ -167,14 +198,33 @@ export function buildDimensionAnalysis(storeRows: DimensionStoreRow[], triples: 
     })
     .sort((a, b) => b.storeCount - a.storeCount || a.label.localeCompare(b.label));
 
+  // 店铺 → ASIN 明细：只保留可见店铺（storeById），金额转字符串。
+  const asinByStore: Record<string, AsinRow[]> = {};
+  for (const a of asinRows) {
+    if (!storeById.has(a.storeId)) continue;
+    const asin = (a.asin ?? "").trim();
+    if (!asin) continue;
+    (asinByStore[a.storeId] ??= []).push({
+      asin,
+      parentAsin: (a.parentAsin ?? "").trim(),
+      title: (a.title ?? "").trim(),
+      imageUrl: a.imageUrl || null,
+      sku: (a.sku ?? "").trim(),
+      msku: (a.msku ?? "").trim(),
+      saleQuantity: a.saleQuantity ?? null,
+      netRevenue: a.netRevenue == null ? null : a.netRevenue.toString(),
+    });
+  }
+
   return {
     dimension: "salesperson",
-    salespeople, stores, sites,
+    salespeople, stores, sites, asinByStore,
     coverage: {
       stores: storeRows.length,
       people: salespeople.length,
       sites: sites.length,
       snapshotRows: snapshotRowCount,
+      asins: Object.values(asinByStore).reduce((sum, list) => sum + list.length, 0),
     },
   };
 }
