@@ -6,6 +6,7 @@ import { BrandAnalyticsWorkbench } from "./brand-analytics-workbench";
 import { SyncCoverageWorkbench } from "./sync-coverage-workbench";
 import { ObservationsWorkbench } from "./observations-workbench";
 import { cloneElement, useCallback, useEffect, useId, useRef, useState } from "react";
+import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
 import { useSearchParams } from "next/navigation";
 import { getJson } from "@/lib/workspace/get-json";
 import { amazonSlugView } from "@/lib/amazon/amazon-slug-routes";
@@ -216,16 +217,17 @@ export function SyncCenterWorkbench() {
     return () => window.removeEventListener(workspaceScopeChangedEventName, update);
   }, [localFbaPage, load]);
   useEffect(() => { setData({}); void load(); return invalidateLoad; }, [load, invalidateLoad]);
-  useEffect(() => {
-    if (scopeEmpty) return;
-    // P2 轮询条件化（文档 A8）：仅运维页或有在途任务时静默轮询；纯只读业务页停轮询。
-    const activeStatuses = new Set(["WAITING", "QUEUED", "RUNNING", "RETRY_WAIT", "PAUSED"]);
-    const hasActiveTask = (data.rows ?? []).some(t => activeStatuses.has(t.status)) || Boolean(data.metrics?.running);
-    const pollView = ["overview", "sync", "plans", "tasks", "connections"].includes(page);
-    if (!pollView && !hasActiveTask) return;
-    const timer = window.setInterval(() => { if (!document.hidden && !busy && editor === undefined && authEditor === undefined) void load(true); }, 30000);
-    return () => window.clearInterval(timer);
-  }, [load, busy, editor, authEditor, scopeEmpty, page, data.rows, data.metrics?.running]);
+  // P2 轮询条件化（文档 A8）：仅运维页或有在途任务时静默轮询；纯只读业务页停轮询。
+  // 可见性感知：后台标签停表、编辑弹层打开或操作进行中跳过、回前台立即刷新。
+  const activeStatuses = new Set(["WAITING", "QUEUED", "RUNNING", "RETRY_WAIT", "PAUSED"]);
+  const hasActiveTask = (data.rows ?? []).some(t => activeStatuses.has(t.status)) || Boolean(data.metrics?.running);
+  const pollView = ["overview", "sync", "plans", "tasks", "connections"].includes(page);
+  useVisiblePolling({
+    intervalMs: 30000,
+    enabled: !scopeEmpty && (pollView || hasActiveTask),
+    busy: busy || editor !== undefined || authEditor !== undefined,
+    onPoll: () => { void load(true); },
+  });
   const act = async (body: Record<string, unknown>) => {
     const n = ++mutation.current; setBusy(true); setError(""); setNotice("");
     setAuthorizationAction(typeof body.id === "string" && (body.action === "validate-authorization" || body.action === "disable-authorization" || body.action === "enable-authorization") ? { id: body.id, kind: body.action === "validate-authorization" ? "validate" : body.action === "enable-authorization" ? "enable" : "disable" } : null);
