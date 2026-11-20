@@ -1,5 +1,5 @@
 {
-  "nativeTables": 88,
+  "nativeTables": 89,
   "rawPalette": 0,
   "arbitraryText": 1,
   "hexInTsx": 0,
@@ -8,6 +8,6 @@
   "arbitraryTwValue": 1,
   "nonTokenRadius": 0,
   "boldDecls": 374,
-  "legacySfVars": 61,
+  "legacySfVars": 15,
   "adsCssRules": 664
 }

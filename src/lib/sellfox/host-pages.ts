@@ -34,6 +34,7 @@ export const sellfoxNavOrder = [
   "/sellfox/purchase",
   "/sellfox/shipments",
   "/sellfox/finance",
+  "/sellfox/dimensions",
   "/sellfox/sync",
   "/sellfox",
 ] as const;

@@ -9,6 +9,7 @@ type NavItem = { href: string; label: string };
 const extra: Record<string, string> = {
   "/sellfox": "数据总览",
   "/sellfox/sync": "同步",
+  "/sellfox/dimensions": "维度分析",
 };
 
 /** 赛狐模块统一一级导航：6 个已交付页 + 7 个承接页 + 数据总览/同步，顺序按赛狐后台模块。 */
