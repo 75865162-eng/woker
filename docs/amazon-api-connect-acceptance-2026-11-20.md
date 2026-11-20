@@ -351,3 +351,38 @@ process.env.AMAZON_API_EXECUTION_ROLE === "cloud"
 | build / package-ci-artifact / release-check | 全部通过 |
 
 > 待部署后由真实请求复现一次，读取 `[operations.sync-center]` 的 SQLSTATE → 精准修复真正根因。临时只读诊断脚本已全部清理。
+
+## 17. 同步中心 500 根因确定与修复：enable-authorization 约束缺失（2026-11-20 续）
+
+### 17.1 拿到真实 SQLSTATE，根因确定
+
+- 部署第 16 章的增强日志后，用户于 13:48:25 复现，日志直接给出：
+  ```
+  [operations.sync-center] { name: 'PrismaClientKnownRequestError', code: 'P2039', sqlstate: '23514', driver: 'postgres' }
+  ```
+- **SQLSTATE 23514 = `check_violation`（CHECK 约束违反）**。这推翻了第 16 章「底层驱动并发错误」的猜测：pg 的 `already executing a query` 告警是同进程独立噪声，非根因。
+- 证据链（100% 确定）：
+  1. 用户点击「重新启用授权」（`sync-center-workbench.tsx` / `amazon-connections.tsx`）→ POST `{action:"enable-authorization"}`；
+  2. `change-approval.ts:340` 创建审批请求时写入 `operation: "enable-authorization"`；
+  3. 代码权威白名单 `approval-policy.ts` 的 `operationTypes` 共 12 项，**含** `enable-authorization`；
+  4. 但生产库约束 `AmazonDataCenterChangeRequest_operation_check` 只有 11 项，**缺** `enable-authorization`（生产实测 `pg_constraint.pg_get_constraintdef` 确认，也缺 `adopt-identity/recover-finance-window/recover-report` 之外的 update，最新定义停在 `20261106060000`）；
+  5. INSERT 违反 CHECK → PostgreSQL 23514 → Prisma 包装为 P2039 → `fail()` 500 兜底文案。
+- 单测此前未拦截的原因：`amazon-authorization-approval.test.ts` 的 mock `changeRequest.create` 直接返回对象，绕过真实数据库 CHECK 约束。
+
+### 17.2 修复（最小，针对根因）
+
+- 新增 migration `prisma/migrations/20261227000000_amazon_change_request_enable_operation/migration.sql`：DROP 并重建 `AmazonDataCenterChangeRequest_operation_check`，使其与代码 `operationTypes` 的 12 项完全一致（补齐 `enable-authorization`）。
+- 生产已应用全部 201 个既有 migration（与本地一致），故 `migrate deploy` 只会应用这 1 个新 migration，无积压风险；部署由 `server-artifact-release.sh` 依据 `requiresMigration=true` 用独立 `MIGRATION_DATABASE_URL` 执行。
+- 新增防回归单测 `tests/amazon-change-operation-constraint.test.ts`（PGlite 离线 DDL）：① 解析代码 `operationTypes` 断言含 `enable-authorization`；② 用旧约束重现 INSERT 23514 失败；③ 逐字应用新 migration 后所有代码 operation 均可 INSERT；④ 未知 operation 仍被拒。杜绝代码白名单与数据库约束再次漂移。
+
+### 17.3 验证
+
+| 项 | 结果 |
+|---|---|
+| 新增 migration 一致性测试 | 1/1（重现旧约束失败 + 修复后全通过） |
+| 相关单测（约束/授权/日志） | 10/10 |
+| typecheck / lint（Node 22.23.4） | 通过 / 0 error |
+| 全量单测（Node 22.23.4） | 2626/2626 全部通过 |
+| build / package / release-check | 进行中 |
+
+> 待部署由 `migrate deploy` 应用新约束后，用户再次点击「重新启用授权」应返回 202 审批请求（不再 500），经批准应用后恢复为待验证态。
