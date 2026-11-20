@@ -75,7 +75,8 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   const filters: Prisma.Sql[] = [scoped("s", scope)];
   if (query.shopExternalIds.length) filters.push(Prisma.sql`st."externalId" IN (${Prisma.join(query.shopExternalIds)})`);
   if (query.storeId) filters.push(Prisma.sql`s."storeId"=${query.storeId}`);
-  if (query.site) filters.push(Prisma.sql`st.marketplace=${query.site}`);
+  if (query.sites.length) filters.push(Prisma.sql`st.marketplace IN (${Prisma.join(query.sites)})`);
+  else if (query.site) filters.push(Prisma.sql`st.marketplace=${query.site}`);
   if (query.currency) filters.push(Prisma.sql`s.currency=${query.currency}`);
   if (domain === "sales") {
     const dates = workbenchDateRange(query);
@@ -92,15 +93,29 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   if (domain === "performance") filters.push(Prisma.sql`s."onlySettle"=${query.onlySettle}`);
   // Facets follow fact scope/date/currency/settlement, ignoring member selections/search.
   const salespersonFacetFilters = [...filters];
-  if (domain === "performance" && query.salesperson) filters.push(Prisma.sql`s."userNameList" @> ARRAY[${query.salesperson}]::text[]`);
+  // 业务员筛选真实来源是 userNameList（商品级数组），不展开数组、不伪造开发员为业务员。
+  // 单值沿用原 @> 包含语义（兼容既有 SQL 与 URL）；仅当确有多值或"无业务员"哨兵时，
+  // 才切到 && 数组重叠（OR）/ cardinality=0 分支。
+  const salespersonNames = query.salespersons.length ? query.salespersons : (query.salesperson ? [query.salesperson] : []);
+  const isMultiSalesperson = salespersonNames.length > 1 || salespersonNames.includes("__none__");
+  const salespersonFilter = (column: Prisma.Sql, name: string) => Prisma.sql`${column} @> ARRAY[${name}]::text[]`;
+  const multiSalespersonFilter = (column: Prisma.Sql) => {
+    const others = salespersonNames.filter((n) => n !== "__none__");
+    const parts: Prisma.Sql[] = [];
+    if (others.length) parts.push(Prisma.sql`${column} && ARRAY[${Prisma.join(others)}]::text[]`);
+    if (salespersonNames.includes("__none__")) parts.push(Prisma.sql`cardinality(${column})=0`);
+    return Prisma.sql`(${Prisma.join(parts, " OR ")})`;
+  };
+  const spClause = (column: Prisma.Sql) => isMultiSalesperson ? multiSalespersonFilter(column) : salespersonFilter(column, salespersonNames[0]);
+  if (salespersonNames.length && domain === "performance") filters.push(spClause(Prisma.sql`s."userNameList"`));
   // 销量统计无业务员列，但可按 storeId+msku 关联到销售利润日快照的真实 userNameList
   // （生产核验：85.4% sales 行可关联，业务员是商品级属性与日期无关）。用 EXISTS 半连接，
   // 绝不展开数组，避免一行多业务员导致事实行膨胀；关联不到则排除，不伪造开发员为业务员。
-  if (domain === "sales" && query.salesperson) filters.push(Prisma.sql`EXISTS (
+  if (salespersonNames.length && domain === "sales") filters.push(Prisma.sql`EXISTS (
     SELECT 1 FROM "SellfoxProductDailySnapshot" pd
     WHERE pd."organizationId"=${scope.organizationId} AND pd."workspaceId"=${scope.workspaceId}
       AND pd."storeId"=s."storeId" AND pd.msku=s.msku
-      AND pd."userNameList" @> ARRAY[${query.salesperson}]::text[]
+      AND ${spClause(Prisma.sql`pd."userNameList"`)}
   )`);
   // Current Listing metadata: filter member rows before any entity/day/KPI rollup.
   // Blank/unknown values remain in all, never in the AFN/MFN subsets.
@@ -168,7 +183,11 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   if (domain === "performance") searchFields.push(Prisma.sql`s.title`);
   const typedSearch: Record<string, Prisma.Sql> = { asin: Prisma.sql`s.asin`, msku: Prisma.sql`s.msku`, title: domain === "performance" ? Prisma.sql`s.title` : Prisma.sql`l.title` };
   if (!ads) typedSearch.sku = Prisma.sql`s.sku`;
-  if (domain === "sales" || domain === "performance") typedSearch.parentAsin = domain === "sales" ? Prisma.sql`l."parentAsin"` : Prisma.sql`s."parentAsin"`;
+  // SPU 有真实落点（listing CTE 的 COALESCE spu）；styleName/model/productName 属 NEEDS_DATA，不接入搜索。
+  if (domain === "sales" || domain === "performance") {
+    typedSearch.parentAsin = domain === "sales" ? Prisma.sql`l."parentAsin"` : Prisma.sql`s."parentAsin"`;
+    typedSearch.spu = Prisma.sql`l.spu`;
+  }
   if (ads) { typedSearch.campaignId = Prisma.sql`s."campaignId"`; if (domain !== "ads_campaign") typedSearch.adGroupId = Prisma.sql`s."adGroupId"`; }
   if (domain === "ads_targeting" || domain === "ads_search_term") {
     searchFields.push(Prisma.sql`s."targetingId"`, Prisma.sql`s."targetingText"`);
@@ -180,7 +199,14 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   if (domain === "ads_ad_group") searchFields.push(Prisma.sql`s."adGroupName"`, Prisma.sql`s."targetingText"`);
   const selectedSearch = query.searchType ? typedSearch[query.searchType] : undefined;
   if (query.searchType && !selectedSearch) throw new SellfoxBrowseError("当前域不支持该搜索类型。");
-  if (query.search) filters.push(Prisma.sql`(${Prisma.join((selectedSearch ? [selectedSearch] : searchFields).map(field => query.exactMatch ? Prisma.sql`lower(${field})=lower(${query.search})` : Prisma.sql`${field} ILIKE ${`%${query.search}%`}`), " OR ")})`);
+  const searchTargets = selectedSearch ? [selectedSearch] : searchFields;
+  // 批量搜索：多个关键词各自匹配所选/默认字段，term 之间 OR（上限 200 由 filter-codec 校验）。
+  // 单关键词沿用原行为，保证旧 URL 与精确/模糊开关不变。
+  const searchTerms = query.searchTerms.length ? query.searchTerms : (query.search ? [query.search] : []);
+  if (searchTerms.length) {
+    const termClauses = searchTerms.map((term) => Prisma.sql`(${Prisma.join(searchTargets.map(field => query.exactMatch ? Prisma.sql`lower(${field})=lower(${term})` : Prisma.sql`${field} ILIKE ${`%${term}%`}`), " OR ")})`);
+    filters.push(Prisma.sql`(${Prisma.join(termClauses, " OR ")})`);
+  }
   const fields = domain === "sales" ? Prisma.sql`s.id,s."storeId",s."reportDate",s.asin,s.msku,s.sku,s.currency,s.quantity,s.revenue,s.orders,s.complete,${baseIdentity} AS identity`
     : domain === "performance" ? Prisma.sql`s.id,s."storeId",s."reportDate",s.asin,s.msku,s.sku,s.currency,s."userNameList",s.title,s."parentAsin",s."saleQuantity",s."saleRevenue",s."grossProfit",s."adCost",s."promotionDiscount",s."giftWrapFee",s."imageUrl",s."orderNum",s."netRevenue",s."refundRate",s."refundPrice",s."refundNum",s."commodityCost",s."shippingPrice",s."taxPrice",s."headTripPrice",s."avgPurchaseCost",s."amazonCommissionPrice",s."evaluationSaleNum",s."channelSaleNum",s."adSpCost",s."adSdCost",s."adSbCost",s."adSbvCost",s."adSbsCost",s."fbaStorageFeeAmount",s."fbaLongTermStorageFeeAmount",s."fbaRemovalFeeAmount",s."fbaDisposalFeeAmount",s."customAsinFee",s."customShopFee",s."serviceFeeAmount",s."storageFeeAmount",s."compensationAmount",s."evaluationFee",s."promotionTotalAmount",s."fbaOverageFeeAmount",s."chargebackAmount",s."guaranteeClaimAmount",s."digitalServicesFeeAmount",s."otherPriceAmount",s."shippingChargeAmount",s."regulatoryFeeAmount",s."couponPaymentAmount",s."sellerDealPaymentAmount",s."vineFeeAmount",s."starStorageFeeAmount",s."subscriptionAmount",s."fbaCustomerReturnAmount",s."fbaInboundConvenienceFeeAmount",s."inboundTransportationFeeAmount",s."shippingChargebackAmount",s."giftwrapChargebackAmount",s."costOfPointsGrantedAmount",s."orderOtherPriceAmount",s."fbaInboundTransportationProgramFee",s."aglFeeAmount",s."paidServicesFeeAmount",s."customerReturnHrrUnitFeeAmount",s."amazonUpstreamStorageTransportationFeeAmount",s."amazonUpstreamProcessingFeeAmount",s."mfnPostageFeeAmount",s."adjustmentFeeAmount",s."otherServiceFeeAmount",s."avgHeadTripPrice",s."purchaseRefundPrice",s."revenueAmount",s."fbaPerUnitFulfillmentFeeRefundAmount",s."fbaWeightBasedFeeRefundAmount",s."deferredAmount",s."withheldTaxAmount",s."otherPriceIncomeAmount",s."paymentMethodFeeAmount",s."fixedClosingFeeAmount",s."variableClosingFeeAmount",s."imagingServicesFeeAmount",s."netCoAmount",s."comminglingVatAmount",s."codFeeAmount",s."evaluationCapital",s."evaluationCommission",s."dealPerformanceFeeAmount",s."couponParticipationFeeAmount",s."safetReimbursedAmount",s."affordabilityExpenseAmount",s."withheldFeeAmount",s."chargebackIncomeAmount",s."guaranteeClaimIncomeAmount",s."promotionSalesAmount",s."promotionShippingAmount",s."promotionTaxAmount",s."fbaQuantity",s."fbmQuantity",${baseIdentity} AS identity`
     : Prisma.join(sellfoxAgentColumns[domain].map(key => Prisma.raw(`s."${key}"`)));

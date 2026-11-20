@@ -66,6 +66,8 @@ export const replicaPages: ReplicaPage[] = [
     stub: false,
     query: "workbench",
     dimensions: salesDims,
+    // 销量页首屏按品名(MSKU) grain：经真实赛狐页面 1:1 校准并由测试锁定。
+    // v4 规划文档 D1 称「默认 ASIN」为一般性描述，不覆盖实地校准结果；保持 msku。
     defaultDimension: "msku",
     metrics: [
       { id: "quantity", label: "销量" },

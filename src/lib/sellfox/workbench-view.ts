@@ -68,7 +68,7 @@ export function readSellfoxView(params: URLSearchParams): SellfoxView {
     salesView: params.get("salesView") === "matrix" ? "matrix" : "wide",
     grain: sellfoxGrain(params.get("grain")),
     pageSize: [20, 50, 100, 200].includes(Number(params.get("pageSize"))) ? Number(params.get("pageSize")) : 20,
-    searchType: ["asin", "msku", "sku", "parentAsin", "title", "campaignId", "adGroupId", "targetingId", "searchTerm", "placement"].includes(params.get("searchType") ?? "") ? params.get("searchType")! : "", exactMatch: params.get("exactMatch") === "1",
+    searchType: ["asin", "msku", "sku", "parentAsin", "spu", "title", "campaignId", "adGroupId", "targetingId", "searchTerm", "placement"].includes(params.get("searchType") ?? "") ? params.get("searchType")! : "", exactMatch: params.get("exactMatch") === "1",
     search: params.get("search") ?? "", site: params.get("site") ?? "", shops: [...new Set(params.getAll("shopExternalId").filter(Boolean))],
     page: Number.isSafeInteger(page) && page >= 1 && page <= 1_000_000 ? page : 1, allDates: params.get("allDates") === "1",
   };

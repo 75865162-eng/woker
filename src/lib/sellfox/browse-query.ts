@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { isSellfoxDate, sellfoxDateAt } from "@/lib/sellfox/sync-contract";
 import { sellfoxGrain, type SellfoxGrain } from "./browse-grain";
 import { normalizeSellfoxCondition, SellfoxFilterError, type FilterCondition } from "./sellfox-filter-model";
+import { decodeBatchSearch, decodeMultiParam, SellfoxFilterCodecError } from "./filter-codec";
 
 export class SellfoxBrowseError extends Error {
   constructor(message: string, readonly status = 400) { super(message); }
@@ -31,6 +32,20 @@ export function sellfoxBsrCategory(value: string | null | undefined): string {
 }
 export function sellfoxSalesperson(value: string | null | undefined): string {
   return value?.trim() ?? "";
+}
+/** Marketplace 格式白名单：大写字母/数字，长度 2–32（兼容站点代码 US/DE 与完整 ID）。防注入与超长值；不猜测未知站点。 */
+function validMarketplace(value: string): boolean {
+  return value.length >= 2 && value.length <= 32 && /^[A-Z0-9]+$/.test(value);
+}
+/** 解析多值站点：只读复数键 sites（CSV/重复键），非法格式 400。单值站点仍由 site 字段承载，互不干扰。 */
+function parseSites(p: URLSearchParams): string[] {
+  const raw = decodeMultiParam(p, "sites");
+  for (const value of raw) if (!validMarketplace(value)) throw new SellfoxBrowseError(`站点标识无效：${value.slice(0, 40)}。`);
+  return raw;
+}
+/** 解析多值业务员：只读复数键 salespersons；单值 salesperson 仍由原字段承载。 */
+function parseSalespersons(p: URLSearchParams): string[] {
+  return decodeMultiParam(p, "salespersons").filter((name) => name.length <= 128);
 }
 export function sellfoxBrowseQuery(url: URL, domain?: string) {
   const p = url.searchParams;
@@ -62,6 +77,13 @@ export function sellfoxBrowseQuery(url: URL, domain?: string) {
     const number = Number(value);
     if (!Number.isFinite(number)) throw new SellfoxBrowseError(`${key} 必须是数字。`);
     return number;
+  }
+  let searchTerms: string[] = [];
+  try {
+    searchTerms = decodeBatchSearch(p.get("searchTerms") ?? p.get("search"));
+  } catch (error) {
+    if (error instanceof SellfoxFilterCodecError) throw new SellfoxBrowseError(error.message, error.status);
+    throw error;
   }
   const from = date("from"), to = date("to"), reportDate = date("reportDate");
   const firstSaleFrom = date("firstSaleFrom"), firstSaleTo = date("firstSaleTo");
@@ -137,9 +159,13 @@ export function sellfoxBrowseQuery(url: URL, domain?: string) {
     filter,
     page: integer("page", 1, 1_000_000), pageSize: integer("pageSize", 50, 200), from, to, reportDate, firstSaleFrom, firstSaleTo, totalInventoryMin, totalInventoryMax, ratingMin, ratingMax, ratingCountMin, ratingCountMax, costMin, costMax, adSalesMin, adSalesMax, impressionsMin, impressionsMax, clicksMin, clicksMax, adOrdersMin, adOrdersMax, bsrRankMin, bsrRankMax, fulfillableMin, fulfillableMax, sales7Min, sales7Max, sales14Min, sales14Max, sales30Min, sales30Max, priceMin, priceMax, revenue7Min, revenue7Max, revenue14Min, revenue14Max, revenue30Min, revenue30Max, adSpend7Min, adSpend7Max, adSpend14Min, adSpend14Max, adSpend30Min, adSpend30Max, listingQuantityMin, listingQuantityMax, reservedQtyMin, reservedQtyMax, unsellableMin, unsellableMax, warehousingMin, warehousingMax,
     status: p.get("status")?.trim() || undefined,
-    searchType: ["asin", "msku", "sku", "parentAsin", "title", "order", "shipment", "campaignId", "adGroupId", "targetingId", "searchTerm", "placement"].includes(p.get("searchType") ?? "") ? p.get("searchType")! : "", exactMatch: p.get("exactMatch") === "1",
+    searchType: ["asin", "msku", "sku", "parentAsin", "spu", "title", "order", "shipment", "campaignId", "adGroupId", "targetingId", "searchTerm", "placement"].includes(p.get("searchType") ?? "") ? p.get("searchType")! : "", exactMatch: p.get("exactMatch") === "1",
     search: p.get("search")?.trim() ?? "", site: p.get("site")?.trim() ?? "", allDates: p.get("allDates") === "1",
-    shopExternalIds: [...new Set(p.getAll("shopExternalId").map((value) => value.trim()).filter(Boolean))],
+    searchTerms, sites: parseSites(p), salespersons: parseSalespersons(p),
+    // 店铺多值：优先复数键（CSV/重复键），否则回退到现有单值/重复 shopExternalId。
+    shopExternalIds: decodeMultiParam(p, "shopExternalIds").length
+      ? decodeMultiParam(p, "shopExternalIds")
+      : [...new Set(p.getAll("shopExternalId").map((value) => value.trim()).filter(Boolean))],
     storeId: p.get("storeId")?.trim() || undefined,
   };
 }
@@ -149,23 +175,31 @@ export function sellfoxDateFilter(query: SellfoxBrowseQuery, defaultYesterday = 
   if (query.reportDate) return { reportDate: query.reportDate };
   return defaultYesterday && !query.allDates ? { reportDate: sellfoxDateAt(new Date(), -1) } : {};
 }
+function marketplaceFilter(query: SellfoxBrowseQuery) {
+  if (query.sites.length) return { marketplace: { in: query.sites } };
+  return query.site ? { marketplace: query.site } : {};
+}
 export function sellfoxStoreWhere(query: SellfoxBrowseQuery, organizationId: string, workspaceId: string, storeIds?: string[]): Prisma.SellfoxStoreWhereInput {
   return {
-    organizationId, workspaceId, ...(storeIds ? { id: { in: storeIds } } : {}), ...(query.site ? { marketplace: query.site } : {}),
+    organizationId, workspaceId, ...(storeIds ? { id: { in: storeIds } } : {}), ...marketplaceFilter(query),
     ...(query.search ? { OR: [{ name: { contains: query.search, mode: "insensitive" } }, { externalId: { contains: query.search } }, { marketplace: { contains: query.search, mode: "insensitive" } }] } : {}),
   };
+}
+function storeRelationFilter(query: SellfoxBrowseQuery) {
+  const marketplace = marketplaceFilter(query);
+  return Object.keys(marketplace).length ? { SellfoxStore: marketplace } : {};
 }
 export function sellfoxSnapshotWhere(query: SellfoxBrowseQuery, organizationId: string, workspaceId: string, storeIds?: string[], performance = false) {
   return {
     organizationId, workspaceId, ...(storeIds ? { storeId: { in: storeIds } } : {}), ...sellfoxDateFilter(query, performance), ...(performance ? { onlySettle: query.onlySettle } : {}),
-    ...(query.site ? { SellfoxStore: { marketplace: query.site } } : {}),
+    ...storeRelationFilter(query),
     ...(query.search ? { OR: (performance ? ["sku", "msku", "asin", "title"] : ["sku", "msku", "asin"]).map((field) => ({ [field]: { contains: query.search, mode: "insensitive" as const } })) } : {}),
   };
 }
 export function sellfoxHourlyWhere(query: SellfoxBrowseQuery, organizationId: string, workspaceId: string, storeIds?: string[]): Prisma.SellfoxHourlyMetricWhereInput {
   return {
     organizationId, workspaceId, ...(storeIds ? { storeId: { in: storeIds } } : {}), ...sellfoxDateFilter(query),
-    ...(query.site ? { SellfoxStore: { marketplace: query.site } } : {}),
+    ...storeRelationFilter(query),
     ...(query.search ? { OR: ["entityId", "entityName"].map((field) => ({ [field]: { contains: query.search, mode: "insensitive" as const } })) } : {}),
   };
 }
