@@ -72,6 +72,22 @@ test("basic connection saves without Seller ID and never substitutes the display
   assert.equal(state.savedSellerId, "");
 }));
 
+// 免审批提交入口的核心编排：owner 提交后立即自批自应用，配置当次生效（不再停留在 REQUESTED）。
+test("auto-approve flow: owner request→approve→apply saves in one pass and reaches APPLIED", async () => fixture(async state => {
+  state.role = "owner"; state.canApprove = true;
+  const change = await requestChange(scope, "admin", command), id = String(change.id);
+  assert.equal(state.row?.status, "REQUESTED");
+  const approved = await decideChange(scope, "admin", id, "APPROVED", "提交后自动批准（免审批环节）");
+  assert.equal(approved.status, "APPROVED");
+  assert.equal(state.saved, 0);
+  const applied = await applyChange(scope, "admin", id);
+  assert.deepEqual(applied, { applied: true, changeRequestId: id });
+  assert.equal(state.saved, 1);
+  assert.equal(state.row?.status, "APPLIED");
+  assert.ok(state.audits.some(a => a.action.endsWith(".approved") && a.metadata.selfApproved === true));
+  assert.ok(state.audits.some(a => a.action.endsWith(".applied")));
+}));
+
 for (const role of ["owner", "database_admin"]) test(`${role} can explicitly approve own authorization; only application saves it and replay fails`, async () => fixture(async state => {
   state.role = role;
   const change = await requestChange(scope, "admin", command), id = String(change.id);

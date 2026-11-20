@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
 import {
   Clock3,
   FileText,
@@ -308,22 +309,19 @@ export function ListingAiChatPanel() {
     }
   }, [activeConversationId, conversations]);
 
+  const elapsedPollingEnabled = loading && responseStartedAt != null;
   useEffect(() => {
-    if (!loading || responseStartedAt == null) {
-      setResponseElapsedSeconds(0);
-      return;
-    }
-
-    const updateElapsedSeconds = () => {
+    if (!elapsedPollingEnabled) setResponseElapsedSeconds(0);
+  }, [elapsedPollingEnabled]);
+  useVisiblePolling({
+    intervalMs: 1000,
+    enabled: elapsedPollingEnabled,
+    onPoll: () => {
+      if (responseStartedAt == null) return;
       const elapsedSeconds = Math.floor((Date.now() - responseStartedAt) / 1000);
       setResponseElapsedSeconds(Math.max(0, elapsedSeconds));
-    };
-
-    updateElapsedSeconds();
-    const timer = window.setInterval(updateElapsedSeconds, 1000);
-
-    return () => window.clearInterval(timer);
-  }, [loading, responseStartedAt]);
+    },
+  });
 
   const activeConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === activeConversationId) ?? null,

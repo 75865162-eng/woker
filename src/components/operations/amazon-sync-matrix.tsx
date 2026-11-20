@@ -9,6 +9,7 @@
  * - 统一浮层底座：Dialog / Drawer 复用 overlays.tsx（ESC / 遮罩关闭、busy 锁定）。
  */
 import { cloneElement, isValidElement, useCallback, useEffect, useId, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, Drawer } from "@/components/ui/overlays";
@@ -128,7 +129,13 @@ export function AmazonSyncMatrix({ initialTab = "sp" }: { initialTab?: "sp" | "a
     finally { if (n === seq.current && mounted.current) setLoading(false); }
   }, [tab]);
   useEffect(() => { void load(); }, [load, reloadKey]);
-  useEffect(() => { if (!mounted.current) return; const t = window.setInterval(() => { if (!document.hidden && !busy && !logTarget && !syncTarget) void load(); }, 30000); return () => window.clearInterval(t); }, [load, busy, logTarget, syncTarget]);
+  // 可见性感知轮询：后台标签停表、弹层打开或操作进行中跳过、回前台立即刷新。
+  useVisiblePolling({
+    intervalMs: 30000,
+    enabled: true,
+    busy: busy || logTarget !== null || syncTarget !== null,
+    onPoll: () => { void load(); },
+  });
 
   const spConnections = [...new Set(spSources.map(s => `${s.seller.id}:${s.seller.displayName || s.seller.accountKey}`))].map(v => { const [id, name] = v.split(":"); return { id, name }; });
   const adsConnections = [...new Map(adsPlans.map(p => [p.profile.authorization.name || p.profile.profileId, p.profile.authorization.name || p.profile.profileId])).entries()].map(([name]) => ({ id: name, name }));

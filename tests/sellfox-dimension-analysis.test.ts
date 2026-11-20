@@ -65,7 +65,7 @@ test("buildDimensionAnalysis lists people/stores/sites with deduplicated associa
   assert.equal(jp.mskuCount, 0);
 
   // coverage 口径。
-  assert.deepEqual(result.coverage, { stores: 4, people: 3, sites: 3, snapshotRows: 5000 });
+  assert.deepEqual(result.coverage, { stores: 4, people: 3, sites: 3, snapshotRows: 5000, asins: 0 });
 });
 
 test("buildDimensionAnalysis with no triples still lists all stores and sites but no people", () => {
@@ -93,4 +93,28 @@ test("buildDimensionAnalysis keeps unrecognized marketplace ID as-is", () => {
   assert.equal(result.sites[0].label, "UNKNOWN_ID");
   assert.equal(result.sites[0].code, "UNKNOWN_ID");
   assert.equal(result.stores[0].label, "UNKNOWN_ID");
+});
+
+test("buildDimensionAnalysis groups ASIN details by store and hides unknown stores", () => {
+  const asins = [
+    { storeId: "s1", asin: "B01", parentAsin: "B00", title: "商品一", imageUrl: "https://img/1.jpg", sku: "S1", msku: "M1", saleQuantity: 12, netRevenue: { toString: () => "99.5000" } },
+    { storeId: "s1", asin: "B02", parentAsin: "", title: "商品二", imageUrl: null, sku: "S2", msku: "M2", saleQuantity: null, netRevenue: null },
+    { storeId: "s3", asin: "B03", parentAsin: "B00", title: "商品三", imageUrl: "", sku: "S3", msku: "M3", saleQuantity: 5, netRevenue: { toString: () => "10.0000" } },
+    { storeId: "not-in-scope", asin: "B99", parentAsin: "", title: "越权店铺商品", imageUrl: null, sku: "S9", msku: "M9", saleQuantity: 1, netRevenue: null },
+  ];
+  const result = buildDimensionAnalysis(stores, [], 0, asins);
+
+  // ASIN 按店铺归集；越权店铺被丢弃。
+  assert.deepEqual(Object.keys(result.asinByStore).sort(), ["s1", "s3"]);
+  assert.deepEqual(result.asinByStore.s1.map((a) => a.asin), ["B01", "B02"]);
+  assert.equal(result.asinByStore.s1[0].netRevenue, "99.5000");
+  assert.equal(result.asinByStore.s1[1].saleQuantity, null);
+  assert.equal(result.asinByStore.s3[0].imageUrl, null); // 空串归一为 null
+  assert.equal(result.coverage.asins, 3);
+});
+
+test("buildDimensionAnalysis returns empty asinByStore when ASINs omitted (backward compatible)", () => {
+  const result = buildDimensionAnalysis(stores, [], 0);
+  assert.deepEqual(result.asinByStore, {});
+  assert.equal(result.coverage.asins, 0);
 });

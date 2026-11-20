@@ -946,3 +946,43 @@
 .sellfox-ui .sf-empty small {
   color: var(--muted);
 }
+/* ===== 维度分析页：按账号分组表格 + 店铺 ASIN 内联展开 ===== */
+.sellfox-ui .sf-group-table {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.sellfox-ui .sf-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--surface);
+}
+.sellfox-ui .sf-group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-body);
+}
+.sellfox-ui .sf-group-head .sf-muted { margin-left: auto; }
+.sellfox-ui .sf-group .sf-table-wrap { border: 0; border-radius: 0; }
+.sellfox-ui .sf-site-cell { white-space: nowrap; }
+.sellfox-ui .sf-row-expanded td { background: var(--surface-muted); }
+.sellfox-ui .sf-asin-row > td {
+  padding: 0;
+  background: var(--surface-muted);
+  white-space: normal;
+}
+.sellfox-ui .sf-asin-panel {
+  padding: var(--space-3);
+  border-top: 1px dashed var(--border);
+}
+.sellfox-ui .sf-asin-panel > p { margin: 0 0 var(--space-2); }
+.sellfox-ui .sf-asin-panel .sf-table-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
