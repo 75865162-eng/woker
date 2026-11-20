@@ -39,6 +39,31 @@ test("sync-center 500 兜底不泄露 message / 凭证 / 堆栈", () => {
   assert.equal(detail?.code, "P1001");
 });
 
+test("sync-center 500 兜底记录 P2039 的 SQLSTATE 与驱动类型", () => {
+  const [args] = captureError(() => logUnexpected({
+    name: "PrismaClientKnownRequestError",
+    code: "P2039",
+    meta: { driverAdapterError: { cause: { kind: "postgres", originalCode: "25P02", originalMessage: "current transaction is aborted: refreshToken=LEAK" } } },
+  }, "overview"));
+  const detail = args?.[1] as Record<string, unknown>;
+  assert.equal(detail?.code, "P2039");
+  assert.equal(detail?.sqlstate, "25P02");
+  assert.equal(detail?.driver, "postgres");
+  assert.equal(detail?.section, "overview");
+  const serialized = JSON.stringify(args);
+  assert.ok(!serialized.includes("LEAK"), "不得记录 driverAdapterError.cause.originalMessage");
+});
+
+test("sync-center 500 兜底对畸形 driverAdapterError 安全降级", () => {
+  for (const badMeta of [{ driverAdapterError: "x" }, { driverAdapterError: { cause: "y" } }, { driverAdapterError: { cause: { originalCode: "bad-code", kind: {} } } }]) {
+    const [args] = captureError(() => logUnexpected({ name: "PrismaClientKnownRequestError", code: "P2039", meta: badMeta }, "bad section!"));
+    const detail = args?.[1] as Record<string, unknown>;
+    assert.equal(detail?.code, "P2039");
+    assert.equal(detail?.sqlstate, undefined);
+    assert.equal(detail?.section, undefined);
+  }
+});
+
 test("sync-center 500 兜底对畸形异常安全降级，不抛错", () => {
   for (const bad of [null, undefined, 42, "boom", { name: 123, code: {}, meta: "x" }]) {
     const calls = captureError(() => logUnexpected(bad));

@@ -316,3 +316,38 @@ process.env.AMAZON_API_EXECUTION_ROLE === "cloud"
 | 全量单测 | 2584/2585；唯一失败为本地 Node 22.13.1 低于部署门禁 22.19（生产 22.23.4 达标），既有环境项 |
 
 > 生产临时只读诊断脚本已全部清理，未遗留。后续若再现 500，可从 `journalctl -u amazon-web` 的 `[operations.sync-center]` 日志直接读到脱敏后的真实错误类型与 Prisma 错误码，据此精确定位根因。
+
+## 16. 同步中心 500 真实错误码 P2039 与脱敏诊断增强（2026-11-20 续）
+
+### 16.1 从生产日志抓到真实错误码
+
+- 第 15 章的脱敏日志上线后（`b2f91e7`，生产 `amazon-web` 运行 commit 一致），在生产 `journalctl -u amazon-web` 抓到真实兜底异常：
+  - `Nov 20 12:53:57 [operations.sync-center] { name: 'PrismaClientKnownRequestError', code: 'P2039' }`
+  - `Nov 20 12:54:03 [operations.sync-center] { name: 'PrismaClientKnownRequestError', code: 'P2039' }`
+  - 两条之前紧邻 `(node) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0`（pg 8.23 的同一 client 并发查询告警）。
+- 依赖版本：`prisma/@prisma/client/@prisma/adapter-pg 7.10.0` + `pg 8.23.0`。P2039 是 Prisma 7.10（prisma/prisma#29512）新引入的「**未被单独映射的底层数据库驱动错误**」兜底码：当驱动错误 kind 为 `postgres` 但不在 P1000–P2037 映射表内时，Prisma 统一抛 P2039，真实 SQLSTATE 藏在 `meta.driverAdapterError.cause.originalCode`。
+- 因此 P2039 只是外壳，**根因必须看 SQLSTATE**（如 40001 序列化冲突、25P02 事务已中止、08P01 协议错误等）才能对症修复，不做猜测性改动。
+
+### 16.2 离线复现结论（未写业务数据）
+
+- 生产只读探查：全库仅 1 个 active owner、`AmazonDataAccessGrant` 与 `AmazonRoleDataAccessGrant` 均为 0 行；因此所有数据 section 在 `amazonDataAccess` 处返回受控 `AMAZON_SCOPE_EMPTY`（403），管理类 section（connections/settings/approvals/plans/sources）逐项直查均 200。**当前 DB 状态下离线遍历全部 section 均不复现 P2039**，说明 12:53–12:54 触发时段的数据/授权/并发状态与当前不同。
+- 独立脚本（新建 PrismaClient）并发压测 overview trend 原生查询、事务内 `Promise.all` 多查询、管理类 section 并发（25 轮 × 双并发）均未触发 P2039 或 pg 并发告警；P2039 仅在运行中的 Next.js 进程（共享 prisma 单例、处理真实并发 HTTP 请求）里出现，依赖真实会话与并发时序，离线不可复现。
+- 代码侧排查：确认存在 `$transaction(async tx => Promise.all([tx.*, tx.*]))` 模式（finance/orders/returns/field-coverage 等），事务在 adapter-pg 下独占单个 pg client，并发查询会在该 client 的 `_queryQueue` 堆积并触发 pg 告警——是 P2039 的可疑诱因之一；但当前权限状态下这些 section 走不到，**无证据指向具体哪一 section，故不在无据情况下批量串行化**。
+
+### 16.3 本轮改动（最小，仍仅补可观测性）
+
+- `src/lib/amazon-sync/log-unexpected.ts`：`logUnexpectedSyncCenterError(error, section?)` 在原有 name/code/字段名之外，新增记录 **SQLSTATE**（`meta.driverAdapterError.cause.originalCode`，正则白名单 `^[0-9A-Z]{5}$`）、**驱动类型**（`cause.kind`）与**触发 section/action**；三项均经严格白名单，**绝不记录** `originalMessage`、SQL、参数、凭证、租户标识或堆栈。
+- `src/app/api/operations/sync-center/route.ts`：`fail(error, section?)` 透传 section；GET 从 `?section=` 传入、POST 从 `action` 传入；返回客户端的文案与状态码不变。
+- 目的：下一次生产触发时，`[operations.sync-center]` 日志将直接给出 section + SQLSTATE + 驱动类型，据此可做**有据的精准修复**（而非猜测）。
+
+### 16.4 验证
+
+| 项 | 结果 |
+|---|---|
+| typecheck（Node 22.23.4） | 通过 |
+| ESLint（Node 22.23.4） | 0 error（6 既有 warning，非本次改动） |
+| `tests/sync-center-error-log.test.ts` | 5/5：原 3 项 + 新增 P2039 SQLSTATE/driver/section 记录、不泄露 originalMessage、畸形 driverAdapterError 安全降级 |
+| 全量单测（Node 22.23.4） | 2625/2625 全部通过 |
+| build / package-ci-artifact / release-check | 全部通过 |
+
+> 待部署后由真实请求复现一次，读取 `[operations.sync-center]` 的 SQLSTATE → 精准修复真正根因。临时只读诊断脚本已全部清理。
