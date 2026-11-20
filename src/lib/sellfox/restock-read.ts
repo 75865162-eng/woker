@@ -207,34 +207,43 @@ export async function readSellfoxRestockCached(
     return rows[0]?.v ? new Date(rows[0]!.v).toISOString() : "__empty__";
   };
 
-  // materialized 分支：只读已对账的物化快照，且必须版本新鲜，否则回退 live。
-  // 默认 live 完全保持既有行为；物化结果的逐行等价性由离线对账脚本保证。
+  // materialized 分支：读最近一期已物化快照，避免每次冷加载都对 100 万行库存表
+  // 做全量重算（生产实测 live 冷加载 13s，物化命中 <0.5s）。
+  // 数据口径：补货建议依赖的快照按日/每 3 小时同步，本身无需秒级实时；读取最近一期
+  // 物化结果最多滞后一个同步周期，且逐行等价性由离线对账保证。快照的 generatedAt /
+  // inputVersion / inputDate 随响应返回，前端可据此向用户标注数据时效。
+  // 不再要求 inputVersion === 当前版本：库存每 3 小时同步会让严格版本比对几乎永不成立，
+  // 从而永远回退 live —— 这正是冷加载 13s 的根因。
+  // 快照完全缺失或 rows 结构异常时仍透明回退 live（保留正确性兜底）。
   if (sourceMode === "materialized") {
-    const snapshot = await prisma.sellfoxRestockSnapshot.findUnique({
-      where: {
-        organizationId_workspaceId_dimension_inputDate: {
-          organizationId: scope.organizationId, workspaceId: scope.workspaceId,
-          dimension: query.dimension === "msku" ? "msku" : "asin", inputDate: today,
-        },
-      },
-    });
-    const currentVersion = await versionReader();
-    const fresh = snapshot && snapshot.inputVersion === currentVersion;
-    if (fresh && Array.isArray(snapshot.rows)) {
+    const dimension = query.dimension === "msku" ? "msku" : "asin";
+    // fail-open：物化快照读取异常不应让补货页 500，透明回退 live。
+    let snapshot: Awaited<ReturnType<typeof prisma.sellfoxRestockSnapshot.findFirst>> = null;
+    try {
+      snapshot = await prisma.sellfoxRestockSnapshot.findFirst({
+        where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, dimension },
+        orderBy: [{ inputDate: "desc" }, { generatedAt: "desc" }],
+      });
+    } catch { /* 物化读失败 → 回退 live */ }
+    if (snapshot && Array.isArray(snapshot.rows)) {
       const allRows = snapshot.rows as unknown as Array<Record<string, unknown>>;
       const filtered = filterRestockRows(allRows, query, storeIds);
       const start = (query.page - 1) * query.pageSize;
       const known = allRows.length > 0 && allRows.every((row) => row.suggest != null);
+      const ageHours = Math.max(0, Math.round((Date.now() - snapshot.generatedAt.getTime()) / 3_600_000));
       return {
         rows: filtered.slice(start, start + query.pageSize),
         totals: [{ suggest: known ? filtered.reduce((sum, row) => sum + Number(row.suggest ?? 0), 0) : null }],
         facets: { productTags: [], salespersons: [] },
         pagination: { page: query.page, pageSize: query.pageSize, total: filtered.length },
-        formula: { source: "materialized", generatedAt: snapshot.generatedAt, inputVersion: snapshot.inputVersion },
+        formula: {
+          source: "materialized", generatedAt: snapshot.generatedAt,
+          inputVersion: snapshot.inputVersion, inputDate: snapshot.inputDate, snapshotAgeHours: ageHours,
+        },
         cache: { status: "materialized", cachedAt: snapshot.generatedAt },
       };
     }
-    // 快照缺失/过期 → 透明回退 live（与缓存未命中同语义）。
+    // 快照缺失/结构异常 → 透明回退 live（与缓存未命中同语义）。
   }
 
   const result = await readThroughSellfox(

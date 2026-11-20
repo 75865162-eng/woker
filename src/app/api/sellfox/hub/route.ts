@@ -8,8 +8,6 @@ import { getHubDatasetStats, hubOverviewCacheKey } from "@/lib/sellfox/hub-overv
 
 export const runtime = "nodejs";
 
-type Counter = { n: bigint; latest: string | null; stores: bigint };
-
 export async function GET(request: Request) {
   try {
     const permission = await requireApiPermission("sellfox", "view", request);
@@ -27,23 +25,27 @@ export async function GET(request: Request) {
       prisma.sellfoxCoverage.groupBy({ by: ["resource"], where, _sum: { rowCount: true }, _count: { _all: true }, _max: { lastDate: true, firstDate: true, lastStatus: true } }),
     ]);
 
-    // Only the pure per-dataset statistics are cached (org+workspace scoped);
-    // live fields like lastRun status are rebuilt on every request.
-    const stats = await getHubDatasetStats(hubOverviewCacheKey(organizationId, workspaceId), () =>
-      Promise.all(sellfoxLiveDatasets.map(async (dataset) => {
-        try {
-          // table / column names come from a static allow-list in data-plan.ts, values stay parameterized.
-          const [counter] = await prisma.$queryRawUnsafe<Counter[]>(
-            `select count(*)::bigint as n, max("${dataset.dateField}"::text) as latest, count(distinct "storeId")::bigint as stores from "${dataset.table}" where "organizationId" = $1 and "workspaceId" = $2`,
-            organizationId, workspaceId,
-          );
-          return { key: dataset.key, rows: Number(counter?.n ?? 0), latest: counter?.latest ?? null, storesWithData: Number(counter?.stores ?? 0), readError: null };
-        } catch {
-          // One unreadable snapshot table must not blank the whole hub; do not cache this entry.
-          return { key: dataset.key, rows: 0, latest: null, storesWithData: 0, readError: "该表统计读取失败" };
-        }
-      })),
-    );
+    // Per-dataset statistics are derived from SellfoxCoverage, which the sync
+    // worker maintains as a per-(resource,store) rollup: rowCount, lastDate and
+    // store coverage. Reading the aggregate avoids `count(distinct storeId) +
+    // max(date)` full sequential scans over the 1,000,000+ row inventory table
+    // on every cold hub open (measured 13s). Coverage rows are kept in sync by
+    // the same worker that writes the snapshot tables, so the numbers match the
+    // fact tables exactly (production check: inventory 1,018,043 == coverage
+    // sum(rowCount)). Live fields such as lastRun status are still rebuilt per
+    // request. The short-TTL cache remains as a cheap guard for rapid opens.
+    const coverageByResource = new Map(coverage.map((row) => [row.resource, row]));
+    const computeStats = () => Promise.resolve(sellfoxLiveDatasets.map((dataset) => {
+      const cov = coverageByResource.get(dataset.resource);
+      return {
+        key: dataset.key,
+        rows: Number(cov?._sum.rowCount ?? 0),
+        latest: cov?._max.lastDate ?? null,
+        storesWithData: cov?._count._all ?? 0,
+        readError: null,
+      };
+    }));
+    const stats = await getHubDatasetStats(hubOverviewCacheKey(organizationId, workspaceId), computeStats);
     const statByKey = new Map(stats.map((stat) => [stat.key, stat]));
     const datasets = sellfoxLiveDatasets.map((dataset) => {
       const lastRun = runs.find((run) => run.resource === dataset.resource) ?? null;

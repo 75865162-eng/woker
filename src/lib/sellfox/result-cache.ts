@@ -22,8 +22,12 @@ import { recordCacheEvent } from "@/lib/observability/metrics-collector";
 
 /** Workbench domains that share the heavy CTE and their TTL (seconds). */
 export const SELLFOX_CACHE_TTL: Record<string, number> = {
-  sales: 300,
-  performance: 300,
+  // 销量/利润是按日快照（每日同步），且同步成功后有失效钩子主动 DEL，
+  // 因此 5 分钟 TTL 过度保守：每 5 分钟后第一个请求都要全量重算 workbench CTE
+  // （生产实测冷加载 6~8s）。延长到 30 分钟可把冷加载频率降低约 6 倍，
+  // 用户正常浏览命中 17ms；数据新鲜度仍由同步失效保证，不靠 TTL。
+  sales: 1800,
+  performance: 1800,
   listings: 300,
   ads_report: 600,
   ads_targeting: 600,

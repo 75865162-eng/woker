@@ -90,8 +90,9 @@ test("invalidation prefixes target only the intended tenant/domain", () => {
 });
 
 test("TTL table matches the plan and empty results use the short TTL", () => {
-  assert.equal(SELLFOX_CACHE_TTL.sales, 300);
-  assert.equal(SELLFOX_CACHE_TTL.performance, 300);
+  // sales/performance 按日快照 + 同步失效钩子，延长到 1800s 降低冷加载(6~8s)频率。
+  assert.equal(SELLFOX_CACHE_TTL.sales, 1800);
+  assert.equal(SELLFOX_CACHE_TTL.performance, 1800);
   assert.equal(SELLFOX_CACHE_TTL.ads_report, 600);
   assert.equal(SELLFOX_CACHE_TTL.overview, 60);
   assert.equal(SELLFOX_CACHE_TTL.restock, 300);
