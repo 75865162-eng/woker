@@ -58,7 +58,11 @@ export async function assertChangePermission(scope: SyncScope, actor: string, ac
   const permissions: RolePermissionMap = { ...defaultRolePermissionMap };
   for (const role of await tx.organizationRosterRole.findMany({ where: { organizationId: scope.organizationId }, select: { id: true, permissions: true } })) permissions[role.id] = { ...(permissions[role.id] ?? {}), ...normalizeRolePermissions(role.permissions) };
   if (!member || member.user.status !== "active" || !roleCanPerformAction(member.role, moduleId, permission, permissions)) throw new SyncInputError("操作权限不足。", 403);
-  if (config) await assertAmazonScopeAdmin(scope, actor, tx);
+  // 审批与执行同样属于管理权限：组织所有者/数据库管理员管理整个同步中心范围，
+  // 不应因未分配具体 Seller 数据授权而被拒。否则提交后自动批准（approve）在
+  // 无 data grant 的工作区必然失败并回退人工审批。与 amazonDataAccess 对 scope admin
+  // 的既有放行语义保持一致；非管理员仍按原样校验数据范围。
+  if (config || isAmazonScopeAdmin(member.role)) await assertAmazonScopeAdmin(scope, actor, tx);
   else await amazonDataAccess(scope, actor, tx);
   if ((action === "save-plan" || action === "control-task") && !roleCanPerformAction(member.role, "operations", "create", permissions)) throw new SyncInputError("执行策略变更需要 create 权限。", 403);
   return member;

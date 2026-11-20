@@ -25,19 +25,23 @@ async function fixture(work: (state: ReturnType<typeof mockDatabase>) => Promise
   }
 }
 function mockDatabase() {
-  const state = { role: "owner", active: true, canApprove: true, workspace: true, member: true, row: undefined as AmazonDataCenterChangeRequest | undefined, envelope: null as { ciphertext: string } | null, saved: 0, savedSellerId: undefined as string | undefined, envelopeReads: 0, audits: [] as Array<{ action: string; metadata: Record<string, unknown> }> };
+  const state = { role: "owner", active: true, canApprove: true, workspace: true, member: true, dataGrants: true, auth: null as null | { id: string; name: string; amazonSellerId: string; awsRegion: string; endpoint: string; revision: number; status: string; approvedRoles: string[]; rolesAttestedAt: null }, row: undefined as AmazonDataCenterChangeRequest | undefined, envelope: null as { ciphertext: string } | null, saved: 0, savedSellerId: undefined as string | undefined, enabled: 0, envelopeReads: 0, audits: [] as Array<{ action: string; metadata: Record<string, unknown> }> };
   const db = {
     $executeRaw: async () => 0,
     workspaceMembership: { findUnique: async () => ({ userId: "admin" }) },
     workspaceScope: { findUnique: async () => state.workspace ? { id: scope.workspaceId } : null },
     organizationMember: { findUnique: async () => state.member ? { role: state.role, user: { status: state.active ? "active" : "disabled" } } : null },
     organizationRosterRole: { findMany: async () => [{ id: state.role, permissions: { operations: state.canApprove ? ["view", "create", "edit", "approve"] : ["view", "create", "edit"] } }] },
-    amazonDataAccessGrant: { findMany: async () => [{ sellerAccountId: "fixture-seller", marketplaceIds: [], actions: ["view", "sync"] }] },
+    amazonDataAccessGrant: { findMany: async () => state.dataGrants ? [{ sellerAccountId: "fixture-seller", marketplaceIds: [], actions: ["view", "sync"] }] : [] },
     amazonRoleDataAccessGrant: { findMany: async () => [] },
     amazonSpApiAuthorization: {
-      findFirst: async () => null,
+      findFirst: async () => state.auth,
       create: async ({ data }: { data: { amazonSellerId: string } }) => { state.saved++; state.savedSellerId = data.amazonSellerId; return {}; },
       findUniqueOrThrow: async () => ({ id: "saved-fixture" }),
+      updateMany: async ({ where, data }: { where: { revision: number; status: string }; data: { revision: number; status: string } }) => {
+        if (where.revision === state.auth?.revision && where.status === "DISABLED") { state.enabled++; if (state.auth) { state.auth.revision = data.revision; state.auth.status = data.status; } return { count: 1 }; }
+        return { count: 0 };
+      },
     },
     amazonDataCenterChangeRequest: {
       create: async ({ data }: { data: object }) => (state.row = { status: "REQUESTED", approvedByUserId: null, decidedAt: null, decisionReason: null, appliedAt: null, createdAt: new Date(), ...data } as AmazonDataCenterChangeRequest),
@@ -86,6 +90,23 @@ test("auto-approve flow: owner request→approve→apply saves in one pass and r
   assert.equal(state.row?.status, "APPLIED");
   assert.ok(state.audits.some(a => a.action.endsWith(".approved") && a.metadata.selfApproved === true));
   assert.ok(state.audits.some(a => a.action.endsWith(".applied")));
+}));
+
+// 线上回归：owner 但工作区没有任何 Seller 数据授权（data grant 表为空）时，
+// 重新启用授权仍须提交即生效。此前 approve 权限校验误走 amazonDataAccess(view)，
+// 要求具体 Seller 授权，导致自动批准抛 AMAZON_SCOPE_EMPTY 被空 catch 吞掉并回退人工审批。
+test("re-enable auto-approves for scope admin even without any seller data grant", async () => fixture(async state => {
+  state.role = "owner"; state.canApprove = true; state.dataGrants = false;
+  state.auth = { id: "auth-1", name: "Fixture", amazonSellerId: "FIXTURE-SELLER", awsRegion: "us-east-1", endpoint: "https://sellingpartnerapi-na.amazon.com", revision: 1, status: "DISABLED", approvedRoles: [], rolesAttestedAt: null };
+  const change = await requestChange(scope, "admin", { action: "enable-authorization", id: "auth-1", revision: 1 }), id = String(change.id);
+  assert.equal(state.row?.status, "REQUESTED");
+  const approved = await decideChange(scope, "admin", id, "APPROVED", "提交后自动批准（免审批环节）");
+  assert.equal(approved.status, "APPROVED");
+  const applied = await applyChange(scope, "admin", id);
+  assert.deepEqual(applied, { applied: true, changeRequestId: id });
+  assert.equal(state.row?.status, "APPLIED");
+  assert.equal(state.enabled, 1);
+  assert.equal(state.auth.status, "NOT_CONFIGURED");
 }));
 
 for (const role of ["owner", "database_admin"]) test(`${role} can explicitly approve own authorization; only application saves it and replay fails`, async () => fixture(async state => {
