@@ -18,6 +18,9 @@ export const amazonSlugRoutes: Record<string, string> = {
   order: "view:orders", // 单数别名：/amazon/order 与 /sellfox/order 对称
   "order-items": "view:order-items",
   // 商品 / Listing
+  // catalog 已由真实页面 src/app/(erp)/amazon/catalog/page.tsx 提供（参考赛狐分组下钻范式重写）。
+  // 此处保留 view:catalog 映射作为导航兜底声明；Next.js 真实文件路径优先于 afterFiles rewrite，
+  // 故 /amazon/catalog 实际命中真实 page，不会落到通用 view 表格。
   catalog: "view:catalog",
   listing: "view:listing_details",
   "listing-details": "view:listing_details",
