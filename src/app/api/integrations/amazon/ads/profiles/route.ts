@@ -14,19 +14,47 @@ import { adsScopeEnabled } from "@/lib/amazon-ads/sync-policy";
 import { amazonDataAccess } from "@/lib/amazon-sync/data-access";
 import { SyncInputError } from "@/lib/amazon-sync/policy";
 import { buildAdsProfileWhere } from "@/lib/amazon-ads/query-service";
+import { amazonAccessFingerprint, amazonCacheKey, normalizeAmazonCacheQuery, readThroughAmazon } from "@/lib/amazon-ads/result-cache";
+import { Prisma } from "@prisma/client";
 export const runtime = "nodejs";
 const jsonHeaders = { "Cache-Control": "no-store" };
+
+/** Version of the metadata the profiles page reads. Any binding/seller change bumps it. */
+async function metadataVersion(organizationId: string, workspaceId: string): Promise<string> {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ v: Date | string | null }>>(Prisma.sql`
+      SELECT greatest(
+        (SELECT max("updatedAt") FROM "AmazonAdsProfile" WHERE "organizationId"=${organizationId} AND "workspaceId"=${workspaceId}),
+        (SELECT max("updatedAt") FROM "AmazonAdsAuthorization" WHERE "organizationId"=${organizationId} AND "workspaceId"=${workspaceId}),
+        (SELECT max("updatedAt") FROM "SellerAccount" WHERE "organizationId"=${organizationId} AND "workspaceId"=${workspaceId})
+      ) AS v`);
+    const value = rows[0]?.v;
+    return value ? new Date(value).toISOString() : "__empty__";
+  } catch { return "__empty__"; }
+}
 
 export async function GET(request: Request) {
   const permission = await requireApiPermission("settings", "view", request);
   if (!permission.ok) return NextResponse.json({ error: "Forbidden." }, { status: permission.response.status, headers: jsonHeaders });
   const scope = { organizationId: permission.user.organizationId, workspaceId: workspaceScopeFromRequest(request).workspaceId };
   try {
+    // 授权范围在缓存之外逐次解析（安全闸，不可跳过）：既校验当前成员仍有效，也生成入键指纹。
     const access = await amazonDataAccess(scope, permission.user.id);
-    const [profiles, sellers] = await Promise.all([
-      listAmazonAdsProfiles(scope, buildAdsProfileWhere(scope, access, {})),
-      prisma.sellerAccount.findMany({ where: { ...scope, status: "active", ...(access.allSellers ? {} : { id: { in: access.sellerIds } }) }, select: { id: true, displayName: true, marketplaceCode: true }, orderBy: { displayName: "asc" }, take: 500 }),
-    ]);
+    const fingerprint = amazonAccessFingerprint(access);
+    const key = amazonCacheKey(scope.organizationId, scope.workspaceId, "ads_metadata", fingerprint, normalizeAmazonCacheQuery({ page: "profiles" }));
+    const { body: meta } = await readThroughAmazon(
+      key, "ads_metadata", fingerprint,
+      () => metadataVersion(scope.organizationId, scope.workspaceId),
+      async () => {
+        const [profiles, sellers] = await Promise.all([
+          listAmazonAdsProfiles(scope, buildAdsProfileWhere(scope, access, {})),
+          prisma.sellerAccount.findMany({ where: { ...scope, status: "active", ...(access.allSellers ? {} : { id: { in: access.sellerIds } }) }, select: { id: true, displayName: true, marketplaceCode: true }, orderBy: { displayName: "asc" }, take: 500 }),
+        ]);
+        return { profiles, sellers };
+      },
+    );
+    const { profiles, sellers } = meta;
+    // 审计在缓存之外逐次执行（合规闸，命中缓存也必须记录）。
     await auditAmazonDataRead(scope, permission.user.id, "amazon-ads-profiles", permission.user.role);
     let canImportReplica = false;
     if (!amazonCloudExecutionEnabled() && cloudRelayConfigured()) {
