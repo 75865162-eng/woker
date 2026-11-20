@@ -83,7 +83,11 @@ export async function GET(request: Request) {
     // 避免把无权店铺标识透露给受限用户。全量用户（authorizedStoreIds=null）不过滤。
     const visibleExternalIds = new Set(stores.map((store) => store.externalId));
 
-    return NextResponse.json({
+    // load 必须返回普通数据对象：readThroughSellfox 会把该返回值作为 body 缓存，
+    // 外层统一用 NextResponse.json({ ...result.body, cache }) 包裹。若这里直接返回
+    // NextResponse.json(...)，Response 的业务字段不在对象自有属性上，展开后 body 只剩
+    // 空对象 + cache，前端 body.stores ?? [] 恒为空 → 站点/店铺/业务员下拉全空。
+    return {
       configured: (await getSellfoxCredentialStatus(where)).configured,
       stores,
       hourlyCount,
@@ -114,12 +118,13 @@ export async function GET(request: Request) {
         sales: earliestSalesRow?.reportDate ?? null,
         performance: earliestPerformanceRow?.reportDate ?? null,
       },
-    });
+    };
     };
     const result = await readThroughSellfox(
       key, "overview",
       () => overviewVersion(where.organizationId, where.workspaceId),
       load,
+      { isEmpty: (body) => (body as { stores?: unknown[] }).stores?.length === 0 },
     );
     return NextResponse.json({ ...result.body, cache: { status: result.cache, cachedAt: result.cachedAt } });
   } catch {
