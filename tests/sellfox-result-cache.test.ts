@@ -5,7 +5,7 @@ import {
   SELLFOX_VERSION_SOURCE, normalizeSellfoxCacheQuery, sellfoxCacheKey,
   sellfoxOverviewCacheKey, sellfoxDomainInvalidationPrefix, sellfoxOverviewInvalidationPrefix,
   syncResourceToCacheDomains, setSellfoxCacheRedisForTest, readThroughSellfox,
-  invalidateSellfoxDomain, type CachedBody,
+  invalidateSellfoxDomain, overviewStoreScopeParts, type CachedBody,
 } from "../src/lib/sellfox/result-cache";
 
 const ORG = "org-1";
@@ -48,6 +48,40 @@ test("overview key isolated by tenant and scope", () => {
   const b = sellfoxOverviewCacheKey(ORG, WS, "scope-2");
   assert.ok(a.startsWith(`${SELLFOX_CACHE_PREFIX}ov:`));
   assert.notEqual(a, b);
+});
+
+test("overview store-scope three states never collide (full / empty / subset)", () => {
+  const full = overviewStoreScopeParts(undefined);
+  const empty = overviewStoreScopeParts([]);
+  const subset = overviewStoreScopeParts(["s2", "s1"]);
+
+  // 全量：不收紧、旧键（空数组被归一化丢弃）
+  assert.equal(full.restrict, false);
+  assert.deepEqual(full.storeWhere, {});
+  assert.deepEqual(full.storeTableWhere, {});
+  assert.equal(normalizeSellfoxCacheQuery({ storeIds: full.storeKeyPart }), "");
+
+  // 空集：强制空集 + 哨兵，键区别于全量，避免越权用户读到全量缓存
+  assert.equal(empty.restrict, true);
+  assert.deepEqual(empty.storeWhere, { storeId: { in: [] } });
+  assert.deepEqual(empty.storeTableWhere, { id: { in: [] } });
+  assert.ok(normalizeSellfoxCacheQuery({ storeIds: empty.storeKeyPart }).includes("__NO_SELLFOX_STORE__"));
+
+  // 子集：按 id 排序、各自独立键
+  assert.equal(subset.restrict, true);
+  assert.deepEqual(subset.storeWhere, { storeId: { in: ["s1", "s2"] } });
+  assert.deepEqual(subset.storeTableWhere, { id: { in: ["s1", "s2"] } });
+  assert.deepEqual(subset.storeKeyPart, ["s1", "s2"]);
+
+  const keyOf = (ids: string[] | undefined) =>
+    sellfoxOverviewCacheKey(ORG, WS, normalizeSellfoxCacheQuery({ storeIds: overviewStoreScopeParts(ids).storeKeyPart }));
+  const otherSubset = overviewStoreScopeParts(["s3"]).storeKeyPart;
+  const keys = new Set([
+    keyOf(undefined), keyOf([]), keyOf(["s1", "s2"]),
+    sellfoxOverviewCacheKey(ORG, WS, normalizeSellfoxCacheQuery({ storeIds: otherSubset })),
+  ]);
+  assert.equal(keys.size, 4, "全量/空集/两个不同子集必须产生 4 个不同的缓存键");
+  assert.equal(keyOf(["s1", "s2"]), keyOf(["s2", "s1"]), "同一集合顺序不同应命中同一键");
 });
 
 test("invalidation prefixes target only the intended tenant/domain", () => {
