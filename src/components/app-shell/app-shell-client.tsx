@@ -15,6 +15,7 @@ import { getModuleIdForPath, roleCanAccessModule, type RolePermissionMap } from 
 import { useShellStore } from "@/lib/stores/shell-store";
 import { cn } from "@/lib/utils";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
+import { startWebVitals } from "@/lib/observability/web-vitals";
 import { AppShellUserProvider } from "./app-shell-context";
 import { BusinessNavigationDrawer } from "./business-navigation-drawer";
 import { WorkspaceScopeSelector } from "./workspace-scope-selector";
@@ -108,6 +109,12 @@ export function AppShellClient({
   useEffect(() => {
     hydrateNav();
   }, [hydrateNav]);
+
+  // M0 RUM：采集 FCP/LCP/INP/CLS/TTFB，路由变化时重新观测该页。
+  useEffect(() => {
+    const stop = startWebVitals({ page: pathname || "/" });
+    return () => stop();
+  }, [pathname]);
 
   useEffect(() => {
     let cancelled = false;

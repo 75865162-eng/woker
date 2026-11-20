@@ -33,6 +33,7 @@
 import { createHash } from "node:crypto";
 import RedisClient from "ioredis";
 import type { AmazonDataAccess } from "@/lib/amazon-sync/data-access";
+import { recordCacheEvent } from "@/lib/observability/metrics-collector";
 
 export const AMAZON_CACHE_PREFIX = "amazon:";
 export const AMAZON_DEFAULT_TTL = 120;
@@ -159,6 +160,9 @@ function client(): RedisLike | undefined {
 
 function metric(event: "cacheHit" | "cacheMiss" | "cacheError" | "cacheBypass", domain: string, detail?: string) {
   console.info(JSON.stringify({ scope: "amazon.result-cache", event, domain, ...(detail ? { detail } : {}) }));
+  // M0 命中率指标出口：bypass 视为未命中（未从缓存取到）。
+  const kind = event === "cacheHit" ? "hit" : event === "cacheError" ? "error" : "miss";
+  recordCacheEvent(kind, `amazon:${domain}`);
 }
 
 const inFlight = new Map<string, Promise<unknown>>();

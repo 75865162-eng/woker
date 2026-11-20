@@ -10,6 +10,7 @@ import { prisma } from "@/lib/db/prisma";
 import { auditAmazonDataRead } from "@/lib/amazon-sync/read-audit";
 import { amazonDataAccess } from "@/lib/amazon-sync/data-access";
 import { amazonAccessFingerprint, amazonCacheKey, normalizeAmazonCacheQuery, readThroughAmazon } from "@/lib/amazon-ads/result-cache";
+import { startTrace } from "@/lib/observability/perf-trace";
 import { Prisma } from "@prisma/client";
 
 export const runtime = "nodejs";
@@ -33,23 +34,31 @@ async function acquisitionVersion(organizationId: string, workspaceId: string): 
 export async function GET(request: Request) {
   const permission = await requireApiPermission("settings", "view", request);
   if (!permission.ok) return NextResponse.json({ error: "Forbidden." }, { status: permission.response.status, headers });
+  const trace = startTrace({ route: "/api/integrations/amazon/ads/reports", organizationId: permission.user.organizationId });
   try {
     const scope = { organizationId: permission.user.organizationId, workspaceId: workspaceScopeFromRequest(request).workspaceId };
     const profileId = new URL(request.url).searchParams.get("profileId")?.trim() || undefined;
     if (profileId && profileId.length > 100) throw new SyncInputError("Profile 筛选参数无效。");
     // 授权范围在缓存之外逐次解析（安全闸，命中缓存也必须校验当前成员仍有效），并生成入键指纹。
     const access = await amazonDataAccess(scope, permission.user.id);
+    trace.segment("auth", trace.mark());
     const fingerprint = amazonAccessFingerprint(access);
     const key = amazonCacheKey(scope.organizationId, scope.workspaceId, "report_acquisition", fingerprint, normalizeAmazonCacheQuery({ profileId: profileId ?? "" }));
+    const dataStart = trace.mark();
     const { body: overview } = await readThroughAmazon(
       key, "report_acquisition", fingerprint,
       () => acquisitionVersion(scope.organizationId, scope.workspaceId),
       () => reportAcquisitionOverview(scope, permission.user.id, profileId),
     );
+    trace.segment("db", dataStart); // 缓存+DB+计算合并段（细分需在 readThroughAmazon 内埋点）
     // 审计在缓存之外逐次执行（合规闸，命中缓存也必须记录）。
+    const auditStart = trace.mark();
     await auditAmazonDataRead(scope, permission.user.id, "amazon-ads-report-acquisition", permission.user.role);
+    trace.segment("compute", auditStart);
+    trace.finish("serialize");
     return NextResponse.json(overview, { headers });
   } catch (error) {
+    trace.finish();
     if (error instanceof AdsQueryError) return NextResponse.json({ error: error.message }, { status: error.status, headers });
     if (error instanceof SyncInputError) return NextResponse.json({ error: error.message }, { status: error.status, headers });
     return NextResponse.json({ error: "无法读取报表采集状态。" }, { status: 500, headers });

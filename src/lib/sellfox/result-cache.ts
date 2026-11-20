@@ -18,6 +18,7 @@
  */
 import { createHash } from "node:crypto";
 import RedisClient from "ioredis";
+import { recordCacheEvent } from "@/lib/observability/metrics-collector";
 
 /** Workbench domains that share the heavy CTE and their TTL (seconds). */
 export const SELLFOX_CACHE_TTL: Record<string, number> = {
@@ -203,6 +204,9 @@ function client(): RedisLike | undefined {
 
 function metric(event: "cacheHit" | "cacheMiss" | "cacheError", domain: string, detail?: string) {
   console.info(JSON.stringify({ scope: "sellfox.result-cache", event, domain, ...(detail ? { detail } : {}) }));
+  // M0 命中率指标出口：console.info 保留兼容，同时写入可聚合收集器。
+  const kind = event === "cacheHit" ? "hit" : event === "cacheMiss" ? "miss" : "error";
+  recordCacheEvent(kind, `sellfox:${domain}`);
 }
 
 /** Process-local singleflight: concurrent callers with the same key share one fetch. */
