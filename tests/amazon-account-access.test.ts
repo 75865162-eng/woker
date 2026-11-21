@@ -26,7 +26,7 @@ function fixture() {
       assert.equal(where.workspaceId, scope.workspaceId); assert.equal(where.enabled, true);
       return state.roleAssigned.map(sellerAccountId => ({ sellerAccountId, marketplaceIds: [], actions: [], mcpEnabled: false }));
     } },
-    sellerAccount: { findMany: async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.filter(id => id !== "seller-inactive").map(id => ({ id })) },
+    sellerAccount: { findMany: async ({ where }: { where: { id?: { in: string[] } } }) => (where.id?.in ?? ["seller-a", "seller-b", "seller-c"]).filter(id => id !== "seller-inactive").map(id => ({ id })) },
     // P0 并集：双读期无 MCP_TOOL 授权记录 → 回退凭据自身 tools（getMcpToolGrantScope 返回 null）。
     resourceGrant: { findMany: async () => [] },
     organizationRosterRole: { findMany: async () => { throw new Error("Read must not use module permissions"); } },
@@ -63,12 +63,18 @@ test("view/export union role-level grants with member grants; inactive seller do
   await assert.rejects(explicitAmazonDataAccess(scope, "user-a", db, "view"), /没有已分配/);
 });
 
-test("administrator management does not grant unassigned seller reads", async () => {
+test("scope admins read all active sellers on direct ERP reads without per-seller grants; MCP token reads still require grants", async () => {
   const { state, db } = fixture(); state.role = "owner";
   await assertAmazonScopeAdmin(scope, "user-a", db);
-  await assert.rejects(assertSellerAccess(scope, "user-a", ["seller-b"], db), /Seller/);
+  // New contract: owner/database_admin see every active seller on direct ERP reads.
+  assert.deepEqual((await amazonDataAccess(scope, "user-a", db)).sellerIds, ["seller-a", "seller-b", "seller-c"]);
+  await assertSellerAccess(scope, "user-a", ["seller-b"], db);
   state.assigned = [];
-  await assert.rejects(amazonDataAccess(scope, "user-a", db), /没有已分配/);
+  assert.deepEqual((await amazonDataAccess(scope, "user-a", db)).sellerIds, ["seller-a", "seller-b", "seller-c"]);
+  // MCP token reads keep their grant scope and do not inherit admin-wide access.
+  await withAmazonMcpBoundary({ ...scope, userId: "user-a", credentialId: "credential", tool: "finance_get_transactions", action: "view" }, async () => {
+    await assert.rejects(amazonDataAccess(scope, "user-a", db), /没有已分配/);
+  });
   await assertAmazonScopeAdmin(scope, "user-a", db);
   state.role = "viewer";
   await assert.rejects(assertAmazonScopeAdmin(scope, "user-a", db), /管理员/);

@@ -10,10 +10,11 @@ import { withApprovedChange } from "@/lib/amazon-sync/approved-context";
 import { getAmazonSyncQueueName, amazonSyncQueueName } from "@/lib/queue/redis-queue";
 
 const scope = { organizationId: "fixture-org", workspaceId: "fixture-ws" };
-test("scope grants require a live member, workspace and exact seller; admins also require account assignment", async () => {
+test("scope grants require a live member, workspace and exact seller; scope admins read all active sellers", async () => {
   let role = "operations", active = true, workspace = true, sellers = ["seller-a"];
   const db = {
     amazonRoleDataAccessGrant: { findMany: async () => [] },
+    sellerAccount: { findMany: async ({ where }: { where: { id?: { in: string[] } } }) => (where.id?.in ?? ["seller-a"]).filter(id => id !== "seller-inactive").map(id => ({ id })) },
     organizationRosterRole: { findMany: async () => [{ id: "operations", permissions: { operations: ["view"] } }] },
     organizationMember: { findUnique: async (arg: { where: { organizationId_userId: { organizationId: string } } }) => { assert.equal(arg.where.organizationId_userId.organizationId, scope.organizationId); return { role, user: { status: active ? "active" : "disabled" } }; } },
     workspaceMembership: { findUnique: async () => ({ userId: "user" }) },
@@ -27,7 +28,7 @@ test("scope grants require a live member, workspace and exact seller; admins als
   await assert.rejects(() => assertSellerAccess(scope, "user", ["seller-b"], tx), /超出/);
   role = "unknown-role"; assert.equal((await amazonDataAccess(scope, "user", tx)).allSellers, false); role = "operations";
   sellers = []; await assert.rejects(() => amazonDataAccess(scope, "user", tx), /没有已分配/);
-  role = "owner"; await assert.rejects(() => amazonDataAccess(scope, "user", tx), /没有已分配/);
+  role = "owner"; assert.deepEqual((await amazonDataAccess(scope, "user", tx)).sellerIds, ["seller-a"]); role = "operations";
   active = false; await assert.rejects(() => amazonDataAccess(scope, "user", tx), /不可访问/);
   active = true; workspace = false; await assert.rejects(() => amazonDataAccess(scope, "user", tx), /不可访问/);
 });

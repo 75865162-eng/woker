@@ -28,6 +28,7 @@ const readOnlyDb = new Proxy({}, { get: (_, table: string) => new Proxy({}, { ge
   assert.ok(["findFirst", "findMany", "findUnique", "aggregate"].includes(method), `unexpected database mutation: ${method}`);
   calls.push({ table, args });
   if (table === "amazonDataAccessGrant") return [{ sellerAccountId: "seller" }];
+  if (table === "sellerAccount") return [{ id: "seller" }];
   if (table === "organizationMember") return { role: "owner", user: { status: "active" } };
   if (table === "workspaceScope") return { id: "ws" };
   if (table === "organizationRosterRole") return [{ id: "owner", permissions: { operations: ["view"], workspace: ["view"], agents: ["view"] } }];
