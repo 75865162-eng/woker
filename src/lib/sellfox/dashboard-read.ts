@@ -104,7 +104,7 @@ export async function readDashboard(
           return emptySales();
         });
 
-  const [sales, kpiRows, ranking, pendingCount, coverage] = await Promise.all([
+  const [sales, kpiRows, ranking, pendingCount, coverageRaw] = await Promise.all([
     salesPromise,
     readAggregateKpis(db, scope, storeScoped, windowFrom, windowTo, degraded),
     readRanking(db, scope, authorizedStoreIds, windowFrom, windowTo, degraded),
@@ -118,6 +118,9 @@ export async function readDashboard(
   const revenueTotal = sumRevenue(sales.points);
   const quantityTotal = sales.points.reduce((sum, p) => sum + p.quantity, 0);
   const ordersTotal = sales.points.reduce((sum, p) => sum + p.orders, 0);
+  // salesDays = 窗口内有销售数据的天数，直接取 sales 汇总的天数（已按 reportDate 分组）。
+  // 不能再对 28 万行快照表做无窗口 count——那既返回错误值（行数当天数），又稳定 ~1s。
+  const coverage: DashboardData["coverage"] = { ...coverageRaw, salesDays: sales.points.length };
 
   const kpis: DashboardKpi[] = [
     { key: "revenue", label: "销售额(近30天)", value: revenueTotal.value, currency: revenueTotal.currency, source: sales.source },
@@ -260,29 +263,31 @@ async function readRanking(
   }
 }
 
+type CoverageBase = Omit<DashboardData["coverage"], "salesDays">;
+
 async function readCoverage(
   db: typeof prisma,
   scope: DashboardScope,
   storeScoped: Record<string, unknown>,
   storeTableScoped: Record<string, unknown>,
   degraded: string[],
-): Promise<DashboardData["coverage"]> {
+): Promise<CoverageBase> {
   try {
-    const [stores, salesDays, inventoryRows, lastRun] = await Promise.all([
+    // salesDays 不再查库：由 readDashboard 用 sales.points.length 精确给出（窗口内有数据的天数）。
+    // 旧实现对 28 万行快照表做无窗口 count，既返回错误的"行数当天数"又稳定 ~1s。
+    const [stores, inventoryRows, lastRun] = await Promise.all([
       db.sellfoxStore.count({ where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, ...storeTableScoped } }).catch(() => 0),
-      db.sellfoxSalesDailySnapshot.count({ where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, ...storeScoped } }).catch(() => 0),
       // 覆盖率同样读当前态预聚合表，避免对 108 万行原始快照 count（实测 ~12s）。
       db.sellfoxInventoryAgg.count({ where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, ...storeScoped } }).catch(() => 0),
       db.sellfoxSyncRun.findFirst({ where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, status: "done" }, orderBy: { startedAt: "desc" }, select: { finishedAt: true } }).catch(() => null),
     ]);
     return {
       stores,
-      salesDays,
       inventoryRows,
       lastSyncAt: lastRun?.finishedAt?.toISOString() ?? null,
     };
   } catch {
     degraded.push("coverage");
-    return { stores: 0, salesDays: 0, inventoryRows: 0, lastSyncAt: null };
+    return { stores: 0, inventoryRows: 0, lastSyncAt: null };
   }
 }
