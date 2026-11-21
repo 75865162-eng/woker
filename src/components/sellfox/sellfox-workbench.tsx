@@ -16,7 +16,8 @@ import { SellfoxDomainTabs } from "./domain-tabs";
 import { SellfoxResourceTable } from "./resource-table";
 import { SellfoxRecentRuns, SellfoxSyncRunsPanel } from "./sync-runs-panel";
 import { SellfoxRecordDetail } from "./record-detail";
-import { browseEmptyMessage, defaultVisibleColumnKeys, resourceLabels, type Overview, type Pagination, type Row, type Schedule } from "./workbench-types";
+import { browseEmptyMessage, defaultVisibleColumnKeys, resourceLabels, type Overview, type Pagination, type Row, type Schedule, type StoreRow } from "./workbench-types";
+import { useStores, useSalespersons } from "@/lib/stores/sellfox-reference-store";
 
 function readScope() {
   try { return normalizeWorkspaceScope(JSON.parse(localStorage.getItem("amazon_bulk_ad_workspace_scope") ?? "{}")); }
@@ -27,6 +28,9 @@ function endpoint(view: SellfoxView) { return `/api/sellfox/${view.domain === "a
 
 export function SellfoxWorkbench() {
   const shellUser = useAppShellUser();
+  // 引用数据来自会话级 store：店铺/业务员下拉不依赖 overview 重接口，首帧即可用。
+  const referenceStores = useStores();
+  const referencePeople = useSalespersons();
   const canSync = roleCanPerformAction(shellUser?.userRole, "sellfox", "create", shellUser?.rolePermissions);
   const canExport = roleCanPerformAction(shellUser?.userRole, "sellfox", "export", shellUser?.rolePermissions);
   const [view, setView] = useState(defaultSellfoxView); const [scope, setScope] = useState(normalizeWorkspaceScope());
@@ -196,7 +200,7 @@ export function SellfoxWorkbench() {
         <label className="flex flex-wrap items-center gap-2 border border-border bg-surface p-3 text-xs text-muted">销量历史补数起始日<input type="date" aria-label="销量补数起始日" value={backfillStart || schedules.find((item) => item.resource === "sales")?.backfillStart || ""} onChange={(event) => setBackfillStart(event.target.value)} className="h-8 border border-border px-2" /><span>下次启用销量计划时保存；修改起始日将重置补数游标。每天 T-1 + 默认7天历史，失败保留断点。{schedules.find((item) => item.resource === "sales")?.backfillNextDate ? `当前游标：${schedules.find((item) => item.resource === "sales")?.backfillNextDate}` : ""}</span></label>
         <SellfoxRecentRuns runs={latestRuns} onAll={() => navigate({ domain: "runs" })} />
       </> : <>
-        <SellfoxBrowseFilters dxmPublishStates={dxmPublishStates} bsrCategories={bsrCategories} salespersons={salespersons} brands={brands} productTags={productTags} onRefresh={() => setRefreshVersion(value => value + 1)} exportHref={canExport ? exportHref : undefined} onSync={() => void sync(resourceForDomain(view))} syncDisabled={!canSync || working || !overview?.configured || Boolean(sellfoxSyncDisabledReason(resourceForDomain(view)))} view={view} stores={overview?.stores ?? []} onChange={navigate} selectedColumns={columnSelection[columnSelectionKey]} onColumns={keys => setColumnSelection(current => ({ ...current, [columnSelectionKey]: keys }))} />
+        <SellfoxBrowseFilters dxmPublishStates={dxmPublishStates} bsrCategories={bsrCategories} salespersons={referencePeople.length ? referencePeople.map((p) => p.name) : salespersons} brands={brands} productTags={productTags} onRefresh={() => setRefreshVersion(value => value + 1)} exportHref={canExport ? exportHref : undefined} onSync={() => void sync(resourceForDomain(view))} syncDisabled={!canSync || working || !overview?.configured || Boolean(sellfoxSyncDisabledReason(resourceForDomain(view)))} view={view} stores={(referenceStores.length ? referenceStores : (overview?.stores ?? [])) as StoreRow[]} onChange={navigate} selectedColumns={columnSelection[columnSelectionKey]} onColumns={keys => setColumnSelection(current => ({ ...current, [columnSelectionKey]: keys }))} />
         <div className={view.domain === "ads" ? "grid min-w-0 gap-2 sm:grid-cols-[140px_minmax(0,1fr)]" : "min-w-0"}>{view.domain === "ads" ? <aside aria-label="广告组合列表" className="border border-border bg-surface p-3 text-xs"><h3 className="font-semibold">广告组合</h3><p className="mt-3 text-muted">暂无本地数据 · 待接</p><p className="mt-2 text-muted">赛狐有、API/本地无</p></aside> : null}<SellfoxResourceTable sortBy={view.sortBy} sortOrder={view.sortOrder} onSort={key => navigate(sellfoxSortPatch(view, key))} columnDomain={sellfoxColumnDomain(view)} metric={view.metric} matrix={view.salesView === "matrix"} dates={dates} totals={totals} selectedColumns={columnSelection[columnSelectionKey]} dimension={view.dimension} domain={view.domain} rows={rows} pagination={pagination} loading={loading} page={view.page} emptyMessage={browseEmptyMessage(view.domain, overview)} onEmptySync={() => void sync(resourceForDomain(view))} syncDisabled={!canSync || working || !overview?.configured || Boolean(sellfoxSyncDisabledReason(resourceForDomain(view)))} onPageSize={pageSize => navigate({ pageSize, page: 1 })} onPage={(page) => navigate({ page })} onSelect={setSelectedRow} /></div>
         <details className="border border-border bg-surface px-3 py-2 text-label text-muted"><summary className="cursor-pointer">读取口径与数据来源 · 本地快照只读</summary><div className="mt-2 space-y-2">
         <p className="text-xs text-muted">{domainLabel}{view.domain === "inventory" ? "默认读取最近完整快照；选择日期或全部历史可回看历史采集。" : ""} · 抓取与同步时间按本机时区显示。导出上限 10,000 条，超限请缩小范围。</p>

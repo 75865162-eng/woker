@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { cachedApiGet } from "@/lib/workspace/workspace-api-cache";
+import { useStores, useSellfoxReferenceStore } from "@/lib/stores/sellfox-reference-store";
 import Link from "next/link";
 import { SellfoxTabs } from "../sellfox-nav";
 import { ColumnResizeHandle } from "@/components/ui/column-resize-handle";
@@ -130,7 +131,13 @@ export function HostWorkbench({ page }: { page: HostPage }) {
   const [total, setTotal] = useState(0);
   const [totals, setTotals] = useState<Totals>(emptyTotals);
   const [coverage, setCoverage] = useState({ stores: 0, rows: 0 });
-  const [stores, setStores] = useState<Store[]>([]);
+  const [legacyStores, setLegacyStores] = useState<Store[]>([]);
+  const referenceStores = useStores();
+  const referenceStatus = useSellfoxReferenceStore((s) => s.status);
+  // 引用数据优先：provider 已加载时直接用会话级 store，不再请求 overview；未就绪时回退旧路径。
+  const stores: Store[] = referenceStatus === "ready" && referenceStores.length
+    ? referenceStores.map((s) => ({ externalId: s.externalId, name: s.name, marketplace: s.marketplace }))
+    : legacyStores;
   const [pageNo, setPageNo] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(false);
@@ -140,6 +147,9 @@ export function HostWorkbench({ page }: { page: HostPage }) {
   const live = dataset?.status === "live";
 
   useEffect(() => {
+    // 店铺下拉优先来自会话级 reference store；仅当引用数据加载失败时才回退旧的 overview 路径，
+    // 正常情况下不再为拿店铺清单等待 17 查询的 overview。
+    if (referenceStatus !== "error") return;
     let active = true;
     void cachedApiGet({
       queryKey: "sellfox:overview:stores",
@@ -147,9 +157,9 @@ export function HostWorkbench({ page }: { page: HostPage }) {
         const response = await fetch("/api/sellfox/overview", { cache: "no-store" });
         return response.ok ? (await response.json() as { stores?: Store[] }) : { stores: [] as Store[] };
       },
-    }).then((body) => { if (active) setStores(body.stores ?? []); }).catch(() => { if (active) setStores([]); });
+    }).then((body) => { if (active) setLegacyStores(body.stores ?? []); }).catch(() => { if (active) setLegacyStores([]); });
     return () => { active = false; };
-  }, []);
+  }, [referenceStatus]);
 
   useEffect(() => {
     if (!live || !dataset) return;

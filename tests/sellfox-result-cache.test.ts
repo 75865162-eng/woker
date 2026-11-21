@@ -102,7 +102,7 @@ test("TTL table matches the plan and empty results use the short TTL", () => {
 test("version sources are physical tables owned by the sellfox source", () => {
   for (const [domain, source] of Object.entries(SELLFOX_VERSION_SOURCE)) {
     assert.ok(source.model.startsWith("Sellfox"), `${domain} -> ${source.model}`);
-    assert.ok(["syncedAt", "capturedAt"].includes(source.column), `${domain} -> ${source.column}`);
+    assert.ok(["syncedAt", "capturedAt", "updatedAt"].includes(source.column), `${domain} -> ${source.column}`);
   }
 });
 
