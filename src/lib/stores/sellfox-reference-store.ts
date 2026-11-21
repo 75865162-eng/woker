@@ -13,6 +13,7 @@
  * - 不持久化到 sessionStorage：避免同步后失效遗漏导致陈旧，刷新页重拉一次成本可接受。
  */
 import { create } from "zustand";
+import { readApiResource } from "@/lib/hooks/api-resource-cache";
 
 export type ReferenceStoreItem = { id: string; externalId: string; name: string; marketplace: string; country: string; status: string; lastSyncedAt: string | null };
 export type ReferenceSiteItem = { marketplace: string; code: string; label: string; storeCount: number };
@@ -49,9 +50,11 @@ let inflight: Promise<void> | null = null;
 let inflightScope: string | null = null;
 
 async function fetchReference(scopeKey: string): Promise<Payload> {
-  const response = await fetch(`${ENDPOINT}?scope=${encodeURIComponent(scopeKey)}`, { cache: "no-store" });
-  if (!response.ok) throw new Error(`reference fetch failed: ${response.status}`);
-  return await response.json() as Payload;
+  const url = `${ENDPOINT}?scope=${encodeURIComponent(scopeKey)}`;
+  // 走客户端统一取数层：获得网络错误/5xx 有限重试；TTL 交给本 store 的会话级缓存管理（ttlMs=0）。
+  const result = await readApiResource<Payload>(`sellfox:reference:${scopeKey}`, url, {}, { ttlMs: 0, retries: 1 });
+  if (!result.ok) throw result.error;
+  return result.value;
 }
 
 export const useSellfoxReferenceStore = create<SellfoxReferenceState>((set, get) => ({

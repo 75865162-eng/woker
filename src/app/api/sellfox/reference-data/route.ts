@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { apiError, apiOk } from "@/lib/server/api-response";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { resolveSellfoxVisibleStoreIds } from "@/lib/sellfox/store-access";
@@ -43,8 +43,8 @@ export async function GET(request: Request) {
       () => readSellfoxReferenceData(where, visibleStoreIds),
       { isEmpty: (body) => (body as { stores?: unknown[] }).stores?.length === 0 },
     );
-    return NextResponse.json({ ...result.body, cache: { status: result.cache, cachedAt: result.cachedAt } });
+    return apiOk({ ...result.body, cache: { status: result.cache, cachedAt: result.cachedAt } });
   } catch {
-    return NextResponse.json({ error: "读取赛狐引用数据失败，请稍后重试。" }, { status: 500 });
+    return apiError("读取赛狐引用数据失败，请稍后重试。", 500);
   }
 }
