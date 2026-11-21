@@ -395,11 +395,14 @@ export class AmazonSpApiClient {
       const downloadTimeoutMs = timeoutMs !== undefined && Number.isFinite(timeoutMs) ? Math.min(90_000, Math.max(5_000, timeoutMs)) : this.requestTimeoutMs;
       const response = await this.fetcher(url.toString(), { method: "GET", redirect: "error", cache: "no-store", signal: AbortSignal.timeout(downloadTimeoutMs) });
       this.onResponse?.({ operation: "downloadReportDocument", status: response.status, requestId: null, rateLimit: null });
-      if (!response.ok) { await response.body?.cancel(); throw new AmazonSpApiError("报告下载失败。", { status: response.status, retryable: response.status === 429 || response.status >= 500 }); }
-      if (!response.body || Number(response.headers.get("content-length") ?? 0) > limit) { await response.body?.cancel(); throw new AmazonSpApiError("报告超过下载大小限制。"); }
+      // A 403/404 here means the pre-signed S3 URL expired (Amazon documents a
+      // five-minute lifetime). Mark it explicitly so the observation state machine
+      // can re-fetch a fresh document URL per the official retrieval flow.
+      if (!response.ok) { await response.body?.cancel(); throw new AmazonSpApiError("报告下载失败。", { status: response.status, retryable: response.status === 429 || response.status >= 500, upstreamCode: [403, 404].includes(response.status) ? "REPORT_URL_EXPIRED" : null }); }
+      if (!response.body || Number(response.headers.get("content-length") ?? 0) > limit) { await response.body?.cancel(); throw new AmazonSpApiError("报告超过下载大小限制。", { upstreamCode: "REPORT_TOO_LARGE" }); }
       const reader = response.body.getReader(), chunks: Uint8Array[] = []; let length = 0;
       try {
-        while (true) { const part = await reader.read(); if (part.done) break; length += part.value.length; if (length > limit) { await reader.cancel(); throw new AmazonSpApiError("报告超过下载大小限制。"); } downloadedBytes = length; chunks.push(part.value); }
+        while (true) { const part = await reader.read(); if (part.done) break; length += part.value.length; if (length > limit) { await reader.cancel(); throw new AmazonSpApiError("报告超过下载大小限制。", { upstreamCode: "REPORT_TOO_LARGE" }); } downloadedBytes = length; chunks.push(part.value); }
       } finally { reader.releaseLock(); }
       const data = Buffer.concat(chunks);
       let decoded = data;
@@ -411,17 +414,21 @@ export class AmazonSpApiClient {
         const declared = /charset\s*=\s*["']?([^;\s"']+)/i.exec(response.headers.get("content-type") ?? "")?.[1].toLowerCase();
         const encoding = !declared || ["utf-8", "utf8"].includes(declared) ? "utf-8"
           : ["cp1252", "windows-1252"].includes(declared) ? "windows-1252" : null;
-        if (!encoding) throw new AmazonSpApiError("报告声明的字符编码不支持。");
+        // The download itself succeeded (2xx); a failure here is response-content
+        // processing, NOT an authorization/parameter/pagination-token rejection.
+        // Tag with a stable upstreamCode so classifySyncFailure can route it to the
+        // correct remediation instead of the misleading API_REJECTED guidance.
+        if (!encoding) throw new AmazonSpApiError("报告声明的字符编码不支持。", { upstreamCode: "REPORT_CHARSET_UNSUPPORTED" });
         try { return new TextDecoder(encoding, { fatal: true }).decode(decoded); }
-        catch { throw new AmazonSpApiError("报告内容不符合声明的字符编码。"); }
+        catch { throw new AmazonSpApiError("报告内容不符合声明的字符编码。", { upstreamCode: "REPORT_CHARSET_MISMATCH" }); }
       }
       if (rawJsonOnly) {
         try { return new TextDecoder("utf-8", { fatal: true }).decode(decoded); }
-        catch { throw new AmazonSpApiError("JSON 报告字符编码无效。"); }
+        catch { throw new AmazonSpApiError("JSON 报告字符编码无效。", { upstreamCode: "REPORT_JSON_ENCODING" }); }
       }
       try {
         return JSON.parse(decoded.toString("utf8"));
-      } catch { throw new AmazonSpApiError("报告不是有效 JSON。"); }
+      } catch { throw new AmazonSpApiError("报告不是有效 JSON。", { upstreamCode: "REPORT_JSON_INVALID" }); }
     } catch (error) {
       if (error instanceof AmazonSpApiError) throw error;
       // Signed URLs and upstream exception text must never reach logs or responses.

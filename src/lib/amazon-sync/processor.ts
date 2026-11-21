@@ -64,8 +64,27 @@ export function classifySyncFailure(error: unknown): { code: string; retryable: 
     || typeof sqlCode === "string" && ["40001", "40P01", "57P01", "57P02", "57P03", "08006"].includes(sqlCode)) {
     return { code: "DATABASE_TRANSIENT", retryable: true, message: "数据库暂时不可用；保留原件和检查点，自动退避恢复。", retryAfterMs: 1000 };
   }
-  if (error instanceof AmazonSpApiError) return { code: error.status === 429 ? "THROTTLE" : error.authorizationRejected ? "AUTH" : error.retryable ? "TRANSIENT" : "API_REJECTED", retryable: error.retryable,
-    message: error.status === 429 ? "Amazon 请求限流，按退避策略重试。" : error.authorizationRejected ? "Amazon 授权不可用，请重新验证授权和域权限。" : error.retryable ? "Amazon 网络或服务暂时异常，按检查点重试。" : "Amazon 拒绝请求，请核对授权、参数或过期分页 token；手动重试将从完整快照重新开始。", retryAfterMs: error.retryAfterMs };
+  if (error instanceof AmazonSpApiError) {
+    // Report-document content failures happen AFTER a successful (2xx) download.
+    // They are data/contract problems, not authorization or pagination-token
+    // rejections; route them to their own code with official remediation guidance.
+    const reportContentCodes = ["REPORT_CHARSET_UNSUPPORTED", "REPORT_CHARSET_MISMATCH", "REPORT_JSON_ENCODING", "REPORT_JSON_INVALID", "REPORT_TOO_LARGE"];
+    if (error.upstreamCode && reportContentCodes.includes(error.upstreamCode)) return {
+      code: "REPORT_CONTENT", retryable: false,
+      message: `报告已下载成功，但内容处理失败（${error.upstreamCode}）。这不是授权或分页 token 问题。请按 Amazon《Retrieve a report》文档核对报告文档的字符集/压缩与完整性；重新执行该任务会按检查点重新获取报告文档并解析，不会重复扣费。`,
+      retryAfterMs: 0,
+    };
+    // Only the S3 document download tags REPORT_URL_EXPIRED. A plain HTTP 403
+    // from a Reports/Orders SP-API endpoint is a real authorization/role problem
+    // and must stay API_REJECTED so authorization-recovery can detect it.
+    if (error.upstreamCode === "REPORT_URL_EXPIRED") return {
+      code: "REPORT_URL_EXPIRED", retryable: true,
+      message: "报告文档下载地址已过期（Amazon 预签名 URL 仅 5 分钟有效）。将按官方流程重新调用 getReportDocument 获取新地址后重试，无需重新生成报告。",
+      retryAfterMs: error.retryAfterMs || 1000,
+    };
+    return { code: error.status === 429 ? "THROTTLE" : error.authorizationRejected ? "AUTH" : error.retryable ? "TRANSIENT" : "API_REJECTED", retryable: error.retryable,
+      message: error.status === 429 ? "Amazon 请求限流，按退避策略重试。" : error.authorizationRejected ? "Amazon 授权不可用（HTTP 401/403），请重新完成 OAuth 授权并核对开发者档案的 API 角色。" : error.retryable ? "Amazon 网络或服务暂时异常，按检查点重试。" : "Amazon 拒绝请求（非限流、非授权）：请核对请求参数、报告周期是否完整闭合、站点与角色资格；分页场景请确认 nextToken 未过期且未跨窗口复用。旧 token 需从完成快照重新开始。", retryAfterMs: error.retryAfterMs };
+  }
   return { code: "VALIDATION_OR_CONFIGURATION", retryable: false, message: "同步配置、响应完整性或检查点校验失败；未发布新快照。请核对数据源及授权后重试。", retryAfterMs: 0 };
 }
 async function assertActor(run: AmazonSyncRun) {

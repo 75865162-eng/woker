@@ -88,6 +88,24 @@ test("retry handles missing quota, 429/5xx/network and never persists raw upstre
   assert.equal(classifySyncFailure(new AmazonSpApiError("network", { retryable: true })).retryable, true);
   assert.equal(retryDelay(2, 60000, () => 0), 60000); assert.equal(readRetryAfter("60", new Date()), 60000); assert.equal(readRetryAfter("invalid", new Date()), 0);
 });
+test("report-document content failures are not mislabeled as authorization/token rejection", () => {
+  // A 2xx download followed by charset/JSON/decode failure must map to its own code
+  // and point to the official Retrieve-a-report remediation, not a misleading
+  // "check authorization / pagination token" guidance.
+  for (const upstreamCode of ["REPORT_CHARSET_UNSUPPORTED", "REPORT_CHARSET_MISMATCH", "REPORT_JSON_ENCODING", "REPORT_JSON_INVALID", "REPORT_TOO_LARGE"]) {
+    const f = classifySyncFailure(new AmazonSpApiError("upstream private detail", { upstreamCode }));
+    assert.equal(f.code, "REPORT_CONTENT", upstreamCode);
+    assert.equal(f.retryable, false);
+    assert.ok(f.message.includes("不是授权或分页 token 问题"), f.message);
+    assert.ok(!f.message.includes("upstream private detail"));
+  }
+  // An expired S3 pre-signed URL is retryable via getReportDocument re-fetch.
+  const expired = classifySyncFailure(new AmazonSpApiError("expired", { status: 403, upstreamCode: "REPORT_URL_EXPIRED" }));
+  assert.equal(expired.code, "REPORT_URL_EXPIRED"); assert.equal(expired.retryable, true);
+  // A bare SP-API endpoint 403 (missing role; request() sets authorizationRejected=false
+  // for non-401) stays API_REJECTED so authorization-recovery can detect it.
+  assert.equal(classifySyncFailure(new AmazonSpApiError("no role", { status: 403, authorizationRejected: false })).code, "API_REJECTED");
+});
 test("task filters are server-side, scoped and reject invalid UTC dates", () => {
   const w = taskFilters(scope, new URLSearchParams({ sellerAccountId: "store", marketplaceId: "US", status: "FAILED", from: "2026-11-01", to: "2026-11-04" }));
   assert.equal(w.organizationId, "org"); assert.equal(w.executionVersion, 2); assert.equal(w.status, "FAILED"); assert.ok(w.source);
