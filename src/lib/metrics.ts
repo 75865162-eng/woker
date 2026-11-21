@@ -1,4 +1,5 @@
 import type { MetricSnapshot, PerformanceRow } from "@/lib/types";
+import { computeMetric, type ObservedMetrics } from "@/lib/metrics-registry";
 
 function requireObservedMetrics(row: PerformanceRow) {
   for (const key of ["sales", "spend", "orders", "impressions", "clicks"] as const) {
@@ -18,26 +19,13 @@ export function enrichMetric(row: PerformanceRow, metric: string): number | null
   const impressions = row.impressions;
   const orders = row.orders;
 
-  switch (metric) {
-    case "acos":
-      return sales > 0 ? (spend / sales) * 100 : null;
-    case "roas":
-      return spend > 0 ? sales / spend : 0;
-    case "ctr":
-      return impressions > 0 ? (clicks / impressions) * 100 : 0;
-    case "cpc":
-      return clicks > 0 ? spend / clicks : 0;
-    case "cvr":
-      return clicks > 0 ? (orders / clicks) * 100 : 0;
-    case "cpa":
-      return orders > 0 ? spend / orders : spend;
-    case "acots":
-      return sales > 0 ? (spend / (sales * 1.18)) * 100 : 0;
-    case "asots":
-      return sales > 0 ? (sales / (sales * 1.32)) * 100 : 0;
-    default:
-      return typeof row[metric as keyof PerformanceRow] === "number" ? row[metric as keyof PerformanceRow] as number : null;
-  }
+  const observed: ObservedMetrics = { spend, sales, clicks, impressions, orders };
+  const derived = computeMetric(metric, observed);
+  // 仅当 metric 是已注册的派生指标时返回结果；否则回退读取 row 上的原始字段。
+  if (derived !== null) return derived;
+  // ACOS 在零分母时合法地返回 null，需与"未知指标"区分。
+  if (metric === "acos") return null;
+  return typeof row[metric as keyof PerformanceRow] === "number" ? row[metric as keyof PerformanceRow] as number : null;
 }
 
 export function aggregateMetrics(
@@ -69,11 +57,11 @@ export function aggregateMetrics(
     orders: totals.orders,
     impressions: totals.impressions,
     clicks: totals.clicks,
-    acos: totals.sales > 0 ? (totals.spend / totals.sales) * 100 : null,
-    roas: totals.spend > 0 ? totals.sales / totals.spend : 0,
-    ctr: totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0,
-    cpc: totals.clicks > 0 ? totals.spend / totals.clicks : 0,
-    cvr: totals.clicks > 0 ? (totals.orders / totals.clicks) * 100 : 0,
+    acos: computeMetric("acos", totals),
+    roas: computeMetric("roas", totals) ?? 0,
+    ctr: computeMetric("ctr", totals) ?? 0,
+    cpc: computeMetric("cpc", totals) ?? 0,
+    cvr: computeMetric("cvr", totals) ?? 0,
   };
 }
 
@@ -103,11 +91,11 @@ export function aggregateMetricsForCampaignGroups(
     orders: totals.orders,
     impressions: totals.impressions,
     clicks: totals.clicks,
-    acos: totals.sales > 0 ? (totals.spend / totals.sales) * 100 : null,
-    roas: totals.spend > 0 ? totals.sales / totals.spend : 0,
-    ctr: totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0,
-    cpc: totals.clicks > 0 ? totals.spend / totals.clicks : 0,
-    cvr: totals.clicks > 0 ? (totals.orders / totals.clicks) * 100 : 0,
+    acos: computeMetric("acos", totals),
+    roas: computeMetric("roas", totals) ?? 0,
+    ctr: computeMetric("ctr", totals) ?? 0,
+    cpc: computeMetric("cpc", totals) ?? 0,
+    cvr: computeMetric("cvr", totals) ?? 0,
   };
 }
 
