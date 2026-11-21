@@ -131,7 +131,7 @@ test('broken inventory-events checkpoint can only be abandoned when empty and un
     amazonSyncReportRow: { count: async () => 0 },
   } as unknown as Prisma.TransactionClient;
   const p = await previewReportRecovery(tx, scope, 'source', undefined, undefined, true);
-  assert.equal((p as any).abandon.cursorDigest.length > 0, true);
+  assert.equal("abandon" in p && typeof (p as { abandon?: { cursorDigest?: string } }).abandon?.cursorDigest === "string" && (p as { abandon: { cursorDigest: string } }).abandon.cursorDigest.length > 0, true);
   // Any report/document id in the checkpoint blocks abandonment.
   state.source.resourceCursor.reportStateCiphertext = encryptCheckpoint(JSON.stringify({ creating: true, polls: 4, reportId: 'upstream' }), scope, 'cursor')!;
   await assert.rejects(() => previewReportRecovery(tx, scope, 'source', undefined, undefined, true));
