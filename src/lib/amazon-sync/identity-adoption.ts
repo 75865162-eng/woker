@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { AmazonSpApiClient } from "@/lib/amazon/sp-api-client";
 import { decryptAmazonSpApiCredentials } from "@/lib/amazon/integration-secrets";
 import { preflightIdentityRecovery } from "./identity-recovery";
-import { digest, targetEnvironment, unseal } from "./approval-policy";
+import { digest, targetEnvironment, unseal, productionRecoveryUnlocked } from "./approval-policy";
 import { parseFinancePage } from "./finance";
 import { assertAmazonScopeAdmin } from "./data-access";
 import { assertChangePermission } from "./change-approval";
@@ -15,7 +15,7 @@ import { scopeLock } from "./service";
  * facts, frozen scopes and checkpoint ciphertext are deliberately untouched. */
 export async function performIdentityAdoption(scope: SyncScope, actor: string, approvalId: string, command: Record<string, unknown>) {
   const target = new URL(process.env.DATABASE_URL ?? "invalid:");
-  if (targetEnvironment() !== "local" || !["127.0.0.1", "localhost", "[::1]"].includes(target.hostname) || target.port !== "55439" || target.pathname !== "/amazon_sync_live_local" || scope.organizationId !== "amazon-live-local" || scope.workspaceId !== "default") throw new SyncInputError("身份接管仅允许已审阅的独立本机环境。", 403);
+  if (!productionRecoveryUnlocked(scope) && (targetEnvironment() !== "local" || !["127.0.0.1", "localhost", "[::1]"].includes(target.hostname) || target.port !== "55439" || target.pathname !== "/amazon_sync_live_local" || scope.organizationId !== "amazon-live-local" || scope.workspaceId !== "default")) throw new SyncInputError("身份接管仅允许已审阅的独立本机环境。", 403);
   const id = requiredText(command.id, "授权 ID"), sellerId = requiredText(command.amazonSellerId, "Seller ID"), reviewedAt = new Date(requiredText(command.reviewedAt, "预审时间"));
   const check = async (tx: Parameters<typeof preflightIdentityRecovery>[0]) => {
     await assertChangePermission(scope, actor, "adopt-identity", tx);

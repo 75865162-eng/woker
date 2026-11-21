@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { approvedContext } from "./approved-context";
-import { digest, targetEnvironment, unseal } from "./approval-policy";
+import { digest, targetEnvironment, unseal, productionRecoveryUnlocked } from "./approval-policy";
 import { decryptCheckpoint, encryptCheckpoint } from "./checkpoint";
 import { domainReportTypes, parseDomainReport, reimbursementRunWindow } from "./domain-reports";
 import { activeTaskStatuses, SyncInputError, type SyncScope } from "./policy";
@@ -50,7 +50,7 @@ export async function previewReportArchiveRecovery(tx: Prisma.TransactionClient,
 
 export async function applyReportArchiveRecovery(scope: SyncScope, actor: string, command: Record<string, unknown>) {
   const url = new URL(process.env.DATABASE_URL ?? "invalid:");
-  if (targetEnvironment() !== "local" || url.hostname !== "127.0.0.1" || url.port !== "55439" || url.pathname !== "/amazon_sync_live_local" || scope.organizationId !== "amazon-live-local" || scope.workspaceId !== "default") throw new SyncInputError("仅限已批准本地数据环境。", 403);
+  if (!productionRecoveryUnlocked(scope) && (targetEnvironment() !== "local" || url.hostname !== "127.0.0.1" || url.port !== "55439" || url.pathname !== "/amazon_sync_live_local" || scope.organizationId !== "amazon-live-local" || scope.workspaceId !== "default")) throw new SyncInputError("仅限已批准本地数据环境。", 403);
   const { tx, approvalId } = approvedContext(scope, "recover-report");
   const p = await previewReportArchiveRecovery(tx, scope, String(command.id), String(command.taskId), String(command.reportDocumentId));
   if (command.revision !== p.source.revision || command.recoveryDigest !== p.recoveryDigest) throw new SyncInputError("历史原件恢复清单已变化。", 409);

@@ -4,7 +4,7 @@ import { assertAmazonScopeAdmin } from "./data-access";
 import { recordReportQualityIssue } from "./quality-issues";
 import { createHash } from "node:crypto";
 import { approvedContext } from "./approved-context";
-import { digest, targetEnvironment, unseal } from "./approval-policy";
+import { digest, targetEnvironment, unseal, productionRecoveryUnlocked } from "./approval-policy";
 import { parseDomainReport, type DomainReportResource } from "./domain-reports";
 import { markReportRowAttribution, persistReportAttributionMarkers, reportVerifiedRowWhere, recoveredReportAttributionProof } from "./report-row-attribution";
 import { SyncInputError, type SyncScope, activeTaskStatuses } from "./policy";
@@ -121,7 +121,7 @@ export async function previewReportAttribution(tx: Prisma.TransactionClient, sco
 }
 export async function applyReportAttribution(scope: SyncScope, actor: string, command: Record<string, unknown>) {
   const u = new URL(process.env.DATABASE_URL ?? "invalid:");
-  if (targetEnvironment() !== "local" || u.hostname !== "127.0.0.1" || u.port !== "55439" || u.pathname !== "/amazon_sync_live_local" || scope.organizationId !== "amazon-live-local" || scope.workspaceId !== "default") throw new SyncInputError("仅限已批准独立本机环境。", 403);
+  if (!productionRecoveryUnlocked(scope) && (targetEnvironment() !== "local" || u.hostname !== "127.0.0.1" || u.port !== "55439" || u.pathname !== "/amazon_sync_live_local" || scope.organizationId !== "amazon-live-local" || scope.workspaceId !== "default")) throw new SyncInputError("仅限已批准独立本机环境。", 403);
   const { tx, approvalId } = approvedContext(scope, "recover-report");
   const p = await previewReportAttribution(tx, scope, String(command.id));
   if (p.recoveryDigest !== command.recoveryDigest || p.source.revision !== command.revision) throw new SyncInputError("归属清单已变化。", 409);

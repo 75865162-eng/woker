@@ -31,6 +31,23 @@ export function targetEnvironment() {
   if (!["local", "staging", "production"].includes(value)) throw new SyncInputError("Amazon 数据中心环境标识无效。", 503);
   return value;
 }
+/**
+ * 历史恢复 apply 的「生产显式解锁」逃生口。默认关闭：生产环境仍按原样拒绝，
+ * 只有服务端部署配置同时满足以下两点才放行某一 scope 的恢复 apply：
+ *   1) AMAZON_DATA_CENTER_RECOVERY_UNLOCK=1（显式开关，客户端无法提供）；
+ *   2) AMAZON_DATA_CENTER_RECOVERY_SCOPES 为该 scope 的 JSON 白名单。
+ * 解锁只替代「环境闸」本身；审批链、scope admin、审计、身份核验、revision/digest
+ * 一致性校验全部在调用方原样保留，未在本题做任何削弱。
+ */
+export function productionRecoveryUnlocked(scope: SyncScope): boolean {
+  if (process.env.AMAZON_DATA_CENTER_RECOVERY_UNLOCK !== "1") return false;
+  const raw = process.env.AMAZON_DATA_CENTER_RECOVERY_SCOPES;
+  if (!raw) return false;
+  let scopes: unknown;
+  try { scopes = JSON.parse(raw); } catch { return false; }
+  if (!Array.isArray(scopes)) return false;
+  return scopes.some(item => Array.isArray(item) && item.length === 2 && item[0] === scope.organizationId && item[1] === scope.workspaceId);
+}
 export function operation(value: unknown): ChangeOperation {
   if (typeof value !== "string" || !Object.hasOwn(operationTypes, value)) throw new SyncInputError("未知操作。", 400);
   return value as ChangeOperation;

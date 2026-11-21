@@ -2,7 +2,7 @@ import { settlementScope } from "./settlement-scope";
 import { parseSettlementPolicy } from "./settlements";
 import type { Prisma } from '@prisma/client';
 import { approvedContext } from './approved-context';
-import { digest, targetEnvironment } from './approval-policy';
+import { digest, targetEnvironment, productionRecoveryUnlocked } from './approval-policy';
 import { decryptCheckpoint, encryptCheckpoint } from './checkpoint';
 import { AmazonSpApiClient } from '@/lib/amazon/sp-api-client';
 import { decryptAmazonSpApiCredentials } from '@/lib/amazon/integration-secrets';
@@ -54,7 +54,7 @@ export async function previewReportRecovery(tx: Prisma.TransactionClient, scope:
 }
 export async function applyReportRecovery(scope: SyncScope, actor: string, command: Record<string, unknown>) {
   const url = new URL(process.env.DATABASE_URL ?? 'invalid:');
-  if (targetEnvironment() !== 'local' || url.hostname !== '127.0.0.1' || url.port !== '55439' || url.pathname !== '/amazon_sync_live_local' || scope.organizationId !== 'amazon-live-local' || scope.workspaceId !== 'default') throw new SyncInputError('仅限已批准本地环境。', 403);
+  if (!productionRecoveryUnlocked(scope) && (targetEnvironment() !== 'local' || url.hostname !== '127.0.0.1' || url.port !== '55439' || url.pathname !== '/amazon_sync_live_local' || scope.organizationId !== 'amazon-live-local' || scope.workspaceId !== 'default')) throw new SyncInputError('仅限已批准本地环境。', 403);
   const { tx, approvalId } = approvedContext(scope, 'recover-report');
   const p = await previewReportRecovery(tx, scope, String(command.id), command.reportWindow, command.settlementPolicy);
   if (p.source.revision !== command.revision || p.recoveryDigest !== command.recoveryDigest) throw new SyncInputError('报告恢复清单已变化。', 409);

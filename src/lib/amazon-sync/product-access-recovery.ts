@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { AmazonSpApiClient, AmazonSpApiError, type AmazonRequestEvent } from "@/lib/amazon/sp-api-client";
 import { decryptAmazonSpApiCredentials } from "@/lib/amazon/integration-secrets";
 import { approvedContext } from "./approved-context";
-import { digest, seal, targetEnvironment } from "./approval-policy";
+import { digest, seal, targetEnvironment, productionRecoveryUnlocked } from "./approval-policy";
 import { parseObservationPolicy } from "./observation-policy";
 import { productAccessEvidence } from "./product-access-evidence";
 import { parseProductDetail } from "./product-observations";
@@ -32,7 +32,7 @@ export async function previewProductAccessRecovery(tx: Prisma.TransactionClient,
 
 export async function applyProductAccessRecovery(scope: SyncScope, actor: string, command: Record<string, unknown>) {
   const url = new URL(process.env.DATABASE_URL ?? "invalid:");
-  if (targetEnvironment() !== "local" || url.hostname !== "127.0.0.1" || url.port !== "55439" || url.pathname !== "/amazon_sync_live_local" || scope.organizationId !== "amazon-live-local" || scope.workspaceId !== "default") throw new SyncInputError("仅限已批准本地续验环境。", 403);
+  if (!productionRecoveryUnlocked(scope) && (targetEnvironment() !== "local" || url.hostname !== "127.0.0.1" || url.port !== "55439" || url.pathname !== "/amazon_sync_live_local" || scope.organizationId !== "amazon-live-local" || scope.workspaceId !== "default")) throw new SyncInputError("仅限已批准本地续验环境。", 403);
   const { tx, approvalId } = approvedContext(scope, "recover-report");
   const p = await previewProductAccessRecovery(tx, scope, String(command.id), String(command.taskId));
   if (command.revision !== p.source.revision || command.recoveryDigest !== p.recoveryDigest) throw new SyncInputError("目录续验清单已变化。", 409);

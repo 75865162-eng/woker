@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { approvedContext } from "./approved-context";
-import { digest, unseal, targetEnvironment } from "./approval-policy";
+import { digest, unseal, targetEnvironment, productionRecoveryUnlocked } from "./approval-policy";
 import { parseObservationPolicy } from "./observation-policy";
 import { advanceObservation, initialObservationState, observationOperation } from "./observation-machine";
 import type { SafeFact } from "./observation-parsers";
@@ -73,7 +73,7 @@ export async function previewInboundItemRecovery(tx: Prisma.TransactionClient, s
 
 export async function applyInboundItemRecovery(scope: SyncScope, actor: string, command: Record<string, unknown>) {
   const url = new URL(process.env.DATABASE_URL ?? "invalid:");
-  if (targetEnvironment() !== "local" || url.hostname !== "127.0.0.1" || url.port !== "55439" || url.pathname !== "/amazon_sync_live_local") throw new SyncInputError("本次 FBA 补齐仅限已批准本地数据环境。", 403);
+  if (!productionRecoveryUnlocked(scope) && (targetEnvironment() !== "local" || url.hostname !== "127.0.0.1" || url.port !== "55439" || url.pathname !== "/amazon_sync_live_local")) throw new SyncInputError("本次 FBA 补齐仅限已批准本地数据环境。", 403);
   const { tx, approvalId } = approvedContext(scope, "recover-report");
   const p = await previewInboundItemRecovery(tx, scope, String(command.id), String(command.taskId));
   if (p.recoveryDigest !== command.recoveryDigest || p.source.revision !== command.revision) throw new SyncInputError("FBA 补齐清单已变化。", 409);

@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { approvedContext } from "./approved-context";
 import { assertAmazonScopeAdmin } from "./data-access";
-import { digest, targetEnvironment } from "./approval-policy";
+import { digest, targetEnvironment, productionRecoveryUnlocked } from "./approval-policy";
 import { activeTaskStatuses, SyncInputError, type SyncScope } from "./policy";
 import { assertFinanceRequestWindow, parseFinancePolicy, previewFinanceRetentionRecovery } from "./finance";
 import { decryptCheckpoint, encryptCheckpoint } from "./checkpoint";
@@ -28,7 +28,7 @@ export async function previewFinanceReplay(tx: Prisma.TransactionClient, scope: 
 export async function applyFinanceReplay(scope: SyncScope, actor: string, command: Record<string, unknown>) {
   const target = new URL(process.env.DATABASE_URL ?? "invalid:");
   const fixture = process.env.AMAZON_SYNC_OFFLINE_FIXTURE === "1" && target.hostname === "127.0.0.1" && target.pathname === "/amazon_sync_test" && scope.organizationId.startsWith("finance-fixture-") && scope.workspaceId === "finance-test";
-  if (!fixture && (targetEnvironment() !== "local" || target.hostname !== "127.0.0.1" || target.port !== "55439" || target.pathname !== "/amazon_sync_live_local" || scope.organizationId !== "amazon-live-local" || scope.workspaceId !== "default")) throw new SyncInputError("财务重放仅限已批准独立本机。", 403);
+  if (!fixture && !productionRecoveryUnlocked(scope) && (targetEnvironment() !== "local" || target.hostname !== "127.0.0.1" || target.port !== "55439" || target.pathname !== "/amazon_sync_live_local" || scope.organizationId !== "amazon-live-local" || scope.workspaceId !== "default")) throw new SyncInputError("财务重放仅限已批准独立本机。", 403);
   const { tx, approvalId } = approvedContext(scope, "recover-finance-window");
   await assertAmazonScopeAdmin(scope, actor, tx);
   const { source, cursor, manifest, recoveryDigest } = await previewFinanceReplay(tx, scope, String(command.id));
@@ -63,7 +63,7 @@ export async function previewFinanceRecovery(tx: Prisma.TransactionClient, scope
 }
 export async function applyFinanceRecovery(scope: SyncScope, actor: string, command: Record<string, unknown>) {
   const target = new URL(process.env.DATABASE_URL ?? "invalid:");
-  if (targetEnvironment() !== "local" || !["127.0.0.1", "localhost", "[::1]"].includes(target.hostname) || target.port !== "55439" || target.pathname !== "/amazon_sync_live_local" || scope.organizationId !== "amazon-live-local" || scope.workspaceId !== "default") throw new SyncInputError("财务恢复仅允许已审阅的独立本机环境。", 403);
+  if (!productionRecoveryUnlocked(scope) && (targetEnvironment() !== "local" || !["127.0.0.1", "localhost", "[::1]"].includes(target.hostname) || target.port !== "55439" || target.pathname !== "/amazon_sync_live_local" || scope.organizationId !== "amazon-live-local" || scope.workspaceId !== "default")) throw new SyncInputError("财务恢复仅允许已审阅的独立本机环境。", 403);
   const { tx, approvalId } = approvedContext(scope, "recover-finance-window");
   await assertAmazonScopeAdmin(scope, actor, tx);
   const report = await previewFinanceRecovery(tx, scope, String(command.id), new Date(String(command.reviewedAt)));
