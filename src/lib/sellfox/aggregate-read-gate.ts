@@ -83,3 +83,21 @@ export async function readAggregateOrLive<T>(args: {
   const body = await args.loadLive();
   return { body, source: "live", decision: probe.decision };
 }
+
+/**
+ * 组合切换决策（供 reader 使用）：只有「env 总开关 ON + 该域对账 verdict=ok + 聚合有数据」
+ * 三者同时成立才允许切读预聚合。verdict 读不到时默认 false（fail-closed → 走 live）。
+ *
+ * 这把此前孤立的 readAggregateOrLive 接上了真实的对账来源：
+ * `sellfox:agg-reconcile --publish-verdict` 通过 0-diff 后写入 verdict，此处读取。
+ */
+export function resolveAggregateCutover(args: {
+  switchEnabled: boolean;
+  verdictOk: boolean;
+  aggregateHasRows: boolean;
+}): CutoverDecision {
+  if (!args.switchEnabled) return { useAggregate: false, reason: "disabled" };
+  if (!args.verdictOk) return { useAggregate: false, reason: "not-reconciled" };
+  if (!args.aggregateHasRows) return { useAggregate: false, reason: "aggregate-empty" };
+  return { useAggregate: true, reason: "ok" };
+}

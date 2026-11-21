@@ -6,11 +6,13 @@ import {
   reconcileOverviewAgg, reconcileInventoryAgg, assertReconciled, type ReconcileReport,
 } from "@/lib/sellfox/aggregate-reconcile";
 import { sellfoxDateAt } from "@/lib/sellfox/sync-contract";
+import { publishAggregateVerdict } from "@/lib/sellfox/aggregate-read-state";
+import { aggregateReadEnabled } from "@/lib/sellfox/aggregate-read-gate";
 
 async function main() {
   const args = process.argv.slice(2);
   if (args.includes("--help")) {
-    console.log("sellfox-aggregate-reconcile --organization-id=ID --workspace-id=ID [--from=YYYY-MM-DD] [--to=YYYY-MM-DD] [--all]\n对同一 org/ws/日期窗比对源表权威口径与预聚合表，逐字段输出差异。0 差异才允许切读路径。\n默认只核对 sales（兼容既有调用）；--all 同时核对 sales/profit/ads/inventory/overview 五张预聚合表。");
+    console.log("sellfox-aggregate-reconcile --organization-id=ID --workspace-id=ID [--from=YYYY-MM-DD] [--to=YYYY-MM-DD] [--all] [--publish-verdict]\n对同一 org/ws/日期窗比对源表权威口径与预聚合表，逐字段输出差异。0 差异才允许切读路径。\n默认只核对 sales（兼容既有调用）；--all 同时核对 sales/profit/ads/inventory/overview 五张预聚合表。\n--publish-verdict：对账 0 差异后把 verdict 写入 Redis，供读路径闸门安全地切到预聚合表；不指定则只读不发布。");
     return;
   }
   const allowed = new Set(["organization-id", "workspace-id", "from", "to"]);
@@ -52,7 +54,19 @@ async function main() {
   for (const { report } of reports) {
     assertReconciled(report);
   }
-  console.log(`RECONCILE_OK: ${reports.map((r) => r.name).join(",")} 0 差异，可在预发按变更清单切换读路径。`);
+  const publish = args.includes("--publish-verdict");
+  if (publish) {
+    if (!aggregateReadEnabled()) {
+      throw new Error("SELLFOX_AGG_READ_ENABLED 未开启：拒绝发布 verdict（避免切读开关关闭时写入孤立 verdict）。");
+    }
+    for (const { name, report } of reports) {
+      const ok = await publishAggregateVerdict(organizationId, workspaceId, name, {
+        ok: report.ok, at: new Date().toISOString(), sourceRows: report.sourceRows, aggregateRows: report.aggregateRows,
+      });
+      console.log(`VERDICT_PUBLISH: ${name} ok=${report.ok} published=${ok}`);
+    }
+  }
+  console.log(`RECONCILE_OK: ${reports.map((r) => r.name).join(",")} 0 差异${publish ? "，verdict 已发布" : "；如需切读路径请加 --publish-verdict"}。`);
 }
 
 main().catch((error) => {
