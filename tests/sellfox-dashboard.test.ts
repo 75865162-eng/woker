@@ -8,8 +8,9 @@ const NOW = new Date("2026-11-21T00:00:00Z");
 
 function fakePrisma() {
   return {
-    sellfoxProfitAggDaily: { findMany: async () => [] },
-    sellfoxAdsAggDaily: { findMany: async () => [] },
+    // profit/ads KPI 用数据库端 SUM（非 findMany 拉全明细到 JS reduce），语义等价。
+    sellfoxProfitAggDaily: { aggregate: async () => ({ _sum: { netRevenue: 0n }, _count: { id: 0 } }), findFirst: async () => null },
+    sellfoxAdsAggDaily: { aggregate: async () => ({ _sum: { cost: 0n }, _count: { id: 0 } }), findFirst: async () => null },
     // 库存 KPI/coverage 读当前态预聚合表（非 108 万行原始快照表），保持与生产一致。
     sellfoxInventoryAgg: { aggregate: async () => ({ _sum: { quantity: 5n, inTransit: 2n } }), count: async () => 0 },
     sellfoxStore: { count: async () => 0 },

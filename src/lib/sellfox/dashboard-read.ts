@@ -191,15 +191,16 @@ async function readAggregateKpis(
   degraded: string[],
 ): Promise<DashboardKpi[]> {
   try {
-    const [profit, ads, inventory] = await Promise.all([
-      db.sellfoxProfitAggDaily.findMany({
-        where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, reportDate: { gte: from, lte: to } },
-        select: { netRevenue: true, grossProfit: true, currency: true },
-      }).catch(() => null),
-      db.sellfoxAdsAggDaily.findMany({
-        where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, reportDate: { gte: from, lte: to } },
-        select: { cost: true, adSales: true, currency: true },
-      }).catch(() => null),
+    // 生产真实数据下 findMany 会把 30 天全明细拉到 JS 再 reduce：
+    // SellfoxAdsAggDaily 40.9 万行(DB ~946ms + 传输 + reduce ≈ 3s)、ProfitAgg 6.4 万行。
+    // 改成数据库端 SUM：ads 40.9 万行聚合实测 ~200ms 且只回传 1 行，语义完全等价。
+    // currency 用 findFirst 取代表值（与原 profit[0]/ads[0].currency 口径一致）。
+    const aggWhere = { organizationId: scope.organizationId, workspaceId: scope.workspaceId, reportDate: { gte: from, lte: to } };
+    const [profitSum, profitCurrency, adsSum, adsCurrency, inventory] = await Promise.all([
+      db.sellfoxProfitAggDaily.aggregate({ where: aggWhere, _sum: { netRevenue: true }, _count: { id: true } }).catch(() => null),
+      db.sellfoxProfitAggDaily.findFirst({ where: aggWhere, select: { currency: true } }).catch(() => null),
+      db.sellfoxAdsAggDaily.aggregate({ where: aggWhere, _sum: { cost: true }, _count: { id: true } }).catch(() => null),
+      db.sellfoxAdsAggDaily.findFirst({ where: aggWhere, select: { currency: true } }).catch(() => null),
       // 用按 Head 去重的预聚合读模型（约 8.8k 行），而非原始快照表（108 万行、含 6.9x 历史版本）。
       // 原始表直接 SUM 既重复累加历史快照（语义错），又在真实数据上稳定 ~12s（性能错）。
       // SellfoxInventoryAgg 与库存浏览页同源当前态口径，带 (org,ws) 索引，实测 ~28ms。
@@ -209,15 +210,13 @@ async function readAggregateKpis(
       }).catch(() => null),
     ]);
     const out: DashboardKpi[] = [];
-    if (profit && profit.length) {
-      const currency = profit[0]?.currency ?? null;
-      const net = profit.reduce((s, r) => s + Number(r.netRevenue ?? 0), 0);
-      out.push({ key: "netRevenue", label: "净销售额(近30天)", value: Math.round(net * 100) / 100, currency, source: "aggregate" });
+    if (profitSum && (profitSum._count?.id ?? 0) > 0) {
+      const net = Number(profitSum._sum.netRevenue ?? 0);
+      out.push({ key: "netRevenue", label: "净销售额(近30天)", value: Math.round(net * 100) / 100, currency: profitCurrency?.currency ?? null, source: "aggregate" });
     }
-    if (ads && ads.length) {
-      const currency = ads[0]?.currency ?? null;
-      const cost = ads.reduce((s, r) => s + Number(r.cost ?? 0), 0);
-      out.push({ key: "adSpend", label: "广告花费(近30天)", value: Math.round(cost * 100) / 100, currency, source: "aggregate" });
+    if (adsSum && (adsSum._count?.id ?? 0) > 0) {
+      const cost = Number(adsSum._sum.cost ?? 0);
+      out.push({ key: "adSpend", label: "广告花费(近30天)", value: Math.round(cost * 100) / 100, currency: adsCurrency?.currency ?? null, source: "aggregate" });
     }
     if (inventory) {
       out.push({ key: "inventory", label: "FBA在库", value: Number(inventory._sum.quantity ?? 0), currency: null, source: "snapshot" });
