@@ -58,7 +58,7 @@ const allowed: Record<ChangeOperation, string[]> = {
   "disable-authorization": ["id", "revision"], "enable-authorization": ["id", "revision"], "validate-authorization": ["id", "revision"],
   "adopt-identity": ["id", "revision", "amazonSellerId", "reviewedAt", "manifestDigest"],
   "recover-finance-window": ["id", "revision", "reviewedAt", "recoveryDigest", "sameWindowReplay"],
-  "recover-report": ["id", "revision", "recoveryDigest", "reportWindow", "settlementPolicy", "attributionOnly", "currencyOnly", "reportDocumentIds", "fieldScanOnly", "listingAttributesOnly", "orderFulfillmentOnly", "inboundItemsOnly", "archiveOnly", "productAccessOnly", "reportDocumentId", "taskId", "rawPages"],
+  "recover-report": ["id", "revision", "recoveryDigest", "reportWindow", "settlementPolicy", "attributionOnly", "currencyOnly", "reportDocumentIds", "fieldScanOnly", "listingAttributesOnly", "orderFulfillmentOnly", "inboundItemsOnly", "archiveOnly", "productAccessOnly", "reportDocumentId", "taskId", "rawPages", "abandonBrokenCheckpoint"],
   "save-source": ["id", "proposedId", "revision", "authorizationId", "sellerAccountId", "marketplaceId", "resource", "freshnessMinutes", "enabled", "orderPolicy", "financePolicy", "returnsPolicy", "domainPolicy", "settlementPolicy"],
   "save-plan": ["id", "proposedId", "revision", "name", "resource", "enabled", "mode", "intervalMinutes", "priority", "maxAttempts", "retentionDays", "sourceIds"],
   "run": ["sourceIds", "planId", "datePreset", "dateFrom", "dateTo", "eventType", "reportWindows"], "control-task": ["id", "control", "quarantineOutsideFinanceScope"],
@@ -69,8 +69,8 @@ export function normalizeCommand(body: Record<string, unknown>) {
   const command: Record<string, unknown> = { action };
   for (const field of allowed[action]) if (body[field] !== undefined && body[field] !== "") command[field] = body[field];
   if (command.quarantineOutsideFinanceScope !== undefined && (typeof command.quarantineOutsideFinanceScope !== "boolean" || command.quarantineOutsideFinanceScope && command.control !== "retry")) throw new SyncInputError("财务越界隔离仅适用于明确批准的失败任务重试。");
-  for (const flag of ["currencyOnly", "fieldScanOnly", "listingAttributesOnly", "orderFulfillmentOnly", "inboundItemsOnly", "archiveOnly", "productAccessOnly"] as const) if (command[flag] !== undefined && typeof command[flag] !== "boolean") throw new SyncInputError("报告恢复模式无效。");
-  const modes = [command.currencyOnly, command.attributionOnly, command.fieldScanOnly, command.listingAttributesOnly, command.orderFulfillmentOnly, command.inboundItemsOnly, command.archiveOnly, command.productAccessOnly].filter(flag => flag === true);
+  for (const flag of ["currencyOnly", "fieldScanOnly", "listingAttributesOnly", "orderFulfillmentOnly", "inboundItemsOnly", "archiveOnly", "productAccessOnly", "abandonBrokenCheckpoint"] as const) if (command[flag] !== undefined && typeof command[flag] !== "boolean") throw new SyncInputError("报告恢复模式无效。");
+  const modes = [command.currencyOnly, command.attributionOnly, command.fieldScanOnly, command.listingAttributesOnly, command.orderFulfillmentOnly, command.inboundItemsOnly, command.archiveOnly, command.productAccessOnly, command.abandonBrokenCheckpoint].filter(flag => flag === true);
   if (modes.length > 1 || modes.length && (command.reportWindow !== undefined || command.settlementPolicy !== undefined)) throw new SyncInputError("报告恢复模式不可混用或同时修改窗口策略。");
   if (command.rawPages !== undefined) {
     const pages = command.rawPages;
