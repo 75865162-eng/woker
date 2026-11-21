@@ -192,13 +192,12 @@ test("promotions: live ERP assignment revocation rejects MCP and Lili identities
   await assert.rejects(() => f.read());
 });
 
-test("promotions: registry discovers eligible marketplace, creates plan and task idempotently", async () => {
+test("promotions: registry discovers eligible marketplace, creates plan and task idempotently regardless of attested roles", async () => {
   const f = await fresh("promotions");
   await prisma.amazonSyncDataSource.delete({ where: { id: f.sourceId } });
+  // Role attestations are metadata only; discovery must not be gated by them.
   await prisma.amazonSpApiAuthorization.update({ where: { id: f.authorizationId }, data: { lastValidatedAt: new Date(), approvedRoles: [], rolesAttestedAt: null } });
   await ensureAmazonSyncInitialized(f.scope, f.authorizationId);
-  assert.equal(await prisma.amazonSyncDataSource.count({ where: { ...f.scope, resource: "promotions" } }), 0);
-  await prisma.amazonSpApiAuthorization.update({ where: { id: f.authorizationId }, data: { approvedRoles: ["Pricing"], rolesAttestedAt: new Date() } });
   await ensureAmazonSyncInitialized(f.scope, f.authorizationId);
   const source = await prisma.amazonSyncDataSource.findFirstOrThrow({ where: { ...f.scope, resource: "promotions" } });
   const plan = await prisma.amazonSyncSchedule.findFirstOrThrow({ where: { ...f.scope, resource: "promotions", targets: { some: { sourceId: source.id } } } });

@@ -19,8 +19,8 @@ test("official operations, rate limits, defaults and fee snapshot stay frozen", 
   assert.ok(official.definitions.PromotionFeeSnapshot.properties.previewedFeeRates);
   const adapter = automaticAdapter("promotions")!; assert.equal(adapter.executionKind, "observation"); assert.equal(adapter.plannerKind, "observation"); assert.equal(adapter.discoveryScope, "marketplace");
   const policy = parseObservationPolicy({ resource: "promotions", applicationId: "test", maxRequests: 100, maxRows: 1000, requestsPerSecond: .1 });
-  assert.throws(() => assertObservationRoles(policy, { approvedRoles: [], rolesAttestedAt: new Date() }));
-  assertObservationRoles(policy, { approvedRoles: ["Pricing"], rolesAttestedAt: new Date() });
+  assert.doesNotThrow(() => assertObservationRoles(policy, { approvedRoles: [], rolesAttestedAt: null }));
+  assert.doesNotThrow(() => assertObservationRoles(policy, { approvedRoles: [], rolesAttestedAt: new Date() }));
 });
 test("empty pages retain filters; token loop and omitted results fail closed", () => {
   const first = advancePromotions('{"totalResults":1,"promotions":[],"pagination":{"nextToken":"next"}}', initialPromotionsState(), site);

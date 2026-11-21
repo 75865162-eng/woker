@@ -88,7 +88,7 @@ test("所有赛狐页面归入赛狐数据板块", () => {
 test("隐藏 Amazon 功能页全部纳入亚马逊数据板块", () => {
   const amazon = navigationGroups.find(g => g.id === "amazon")!;
   const hrefs = new Set(amazon.items.map(i => i.href));
-  for (const slug of ["returns", "buyer-messages", "account-health", "pricing", "buy-box", "fees", "offers", "data-kiosk", "repeat-purchase", "merchant-shipping", "mcf", "awd"]) {
+  for (const slug of ["returns", "pricing", "buy-box", "fees", "repeat-purchase"]) {
     assert.ok(hrefs.has(`/amazon/${slug}`), `隐藏页 /amazon/${slug} 应纳入亚马逊数据`);
   }
 });

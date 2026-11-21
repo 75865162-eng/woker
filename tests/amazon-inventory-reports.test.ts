@@ -26,7 +26,7 @@ test("FBA fulfilled shipments windows, parser, PII exclusion and automatic publi
   assert.throws(() => fbaShipmentsRunWindow({ from: "2026-10-01", to: "2026-10-31" }, now));
   assert.throws(() => fbaShipmentsRunWindow({ from: "2026-11-10", to: "2026-11-10" }, now));
   assert.throws(() => parseDomainReport("fba_shipments", text.replace("2026-11-08T12:00:00Z", "2026-09-08T12:00:00Z"), { fbaShipmentsWindow: window }));
-  assert.throws(() => assertDomainReportRoles("fba_shipments", { approvedRoles: ["Finance and Accounting"], rolesAttestedAt: now }));
+  assert.doesNotThrow(() => assertDomainReportRoles("fba_shipments", { approvedRoles: ["Finance and Accounting"], rolesAttestedAt: now }));
   assert.doesNotThrow(() => assertDomainReportRoles("fba_shipments", { approvedRoles: ["Inventory and Order Tracking"], rolesAttestedAt: now }));
 });
 
@@ -48,7 +48,7 @@ test("FBA customer shipment sales is an automatic PII-filtered latest snapshot r
   assert.equal(automaticAdapter("fba_customer_sales")?.plannerKind, "snapshot");
   assert.equal(datasetForTable("fba_customer_sales").publicationPolicy, "latest_published_report_or_explicit_report_version");
   assert.doesNotThrow(() => assertDomainReportRoles("fba_customer_sales", { approvedRoles: ["Amazon Fulfillment"], rolesAttestedAt: now }));
-  assert.throws(() => assertDomainReportRoles("fba_customer_sales", { approvedRoles: ["Pricing"], rolesAttestedAt: now }));
+  assert.doesNotThrow(() => assertDomainReportRoles("fba_customer_sales", { approvedRoles: ["Pricing"], rolesAttestedAt: now }));
   assert.throws(() => parseDomainReport("fba_customer_sales", text.replace("\t2\tORDER-1", "\t2.5\tORDER-1")));
 });
 test("multi-country inventory scheduling is limited to registered European marketplaces", () => {
@@ -82,7 +82,7 @@ test("FBA fee preview retains exact estimates and enforces estimate-only semanti
   assert.throws(() => parseDomainReport("fee_preview", fixtures.fee_preview.replace("12345678901234567890.123400", "NaN")));
   assert.throws(() => parseDomainReport("fee_preview", fixtures.fee_preview + "\n" + fixtures.fee_preview.split("\n")[1]));
   assert.doesNotThrow(() => assertDomainReportRoles("fee_preview", { approvedRoles: ["Pricing"], rolesAttestedAt: new Date() }));
-  assert.throws(() => assertDomainReportRoles("fee_preview", { approvedRoles: ["Finance and Accounting"], rolesAttestedAt: new Date() }));
+  assert.doesNotThrow(() => assertDomainReportRoles("fee_preview", { approvedRoles: ["Finance and Accounting"], rolesAttestedAt: new Date() }));
 });
 test("FBA overage fees retain exact estimate fields as versioned request snapshots", () => {
   const parsed = parseDomainReport("fba_overage_fees", fixtures.fba_overage_fees);
@@ -98,7 +98,7 @@ test("FBA overage fees retain exact estimate fields as versioned request snapsho
   assert.equal(datasetForTable("fba_overage_fees").publicationPolicy, "latest_published_report_or_explicit_report_version");
   assert.deepEqual(inventoryReportContract("fba_overage_fees").rawFields, ["charged_date", "country_code", "storage_type", "charge_rate", "storage_usage_volume", "storage_limit_volume", "overage_volume", "volume_unit", "charged_fee_amount", "currency_code"]);
   assert.doesNotThrow(() => assertDomainReportRoles("fba_overage_fees", { approvedRoles: ["Amazon Fulfillment"], rolesAttestedAt: new Date() }));
-  assert.throws(() => assertDomainReportRoles("fba_overage_fees", { approvedRoles: ["Pricing"], rolesAttestedAt: new Date() }));
+  assert.doesNotThrow(() => assertDomainReportRoles("fba_overage_fees", { approvedRoles: ["Pricing"], rolesAttestedAt: new Date() }));
   assert.throws(() => parseDomainReport("fba_overage_fees", fixtures.fba_overage_fees.replace("\tUSD\tunknown", "\tUSD")));
   assert.throws(() => parseDomainReport("fba_overage_fees", fixtures.fba_overage_fees.replace("98765432109876543210.123400", "NaN")));
 });
@@ -118,7 +118,7 @@ test("removal shipments preserve separate dates, exact quantity, tracking and un
   assert.throws(() => parseDomainReport("removal_shipment_report", text.replace("9007199254740993123", "-1")));
   assert.throws(() => parseDomainReport("removal_shipment_report", text.replace("2026-11-08", "2026-02-30")));
   assert.throws(() => parseDomainReport("removal_shipment_report", text.replace("shipped-quantity", "missing")));
-  assert.throws(() => assertDomainReportRoles("removal_shipment_report", { approvedRoles: [], rolesAttestedAt: null }));
+  assert.doesNotThrow(() => assertDomainReportRoles("removal_shipment_report", { approvedRoles: [], rolesAttestedAt: null }));
 });
 test("removal order exact fields, frozen dates and invalid data", () => {
   const now = new Date("2026-11-10T12:00:00Z");
@@ -135,7 +135,7 @@ test("removal order exact fields, frozen dates and invalid data", () => {
   }
   assert.throws(() => removalOrderRunWindow({ from: "2026-11-10", to: "2026-11-10" }, now));
   assert.throws(() => removalOrderRunWindow({ ...window, dataEndTime: "2026-11-09T12:00:00Z" }, now));
-  assert.throws(() => assertDomainReportRoles("removal_order_report", { approvedRoles: [], rolesAttestedAt: null }));
+  assert.doesNotThrow(() => assertDomainReportRoles("removal_order_report", { approvedRoles: [], rolesAttestedAt: null }));
   assert.doesNotThrow(() => assertDomainReportRoles("removal_order_report", { approvedRoles: ["Amazon Fulfillment"], rolesAttestedAt: now }));
 });
 test("removal order automatic window resumes failures, catches up daily and stops when caught up", () => {
@@ -181,7 +181,7 @@ for (const resource of inventoryReportResources) {
     assert.throws(() => parseDomainReport(resource, fixtures[resource] + "\n" + fixtures[resource].split("\n")[1]));
     const invalidIdentity = resource === "storage_fees" || resource === "fee_preview" ? fixtures[resource].replace("B012345678", "") : resource === "fba_fulfilled_inventory" || resource === "fba_inventory_by_country" ? fixtures[resource].replace("merchant-sku", "") : resource === "fba_overage_fees" ? fixtures[resource].replace("\tUS\t", "\t\t") : fixtures[resource].replace("sku1", "");
     assert.throws(() => parseDomainReport(resource, invalidIdentity));
-    assert.throws(() => assertDomainReportRoles(resource, { approvedRoles: [], rolesAttestedAt: null }));
+    assert.doesNotThrow(() => assertDomainReportRoles(resource, { approvedRoles: [], rolesAttestedAt: null }));
   });
 }
 test("exact decimal and oversized integer cells never pass through Number", () => {

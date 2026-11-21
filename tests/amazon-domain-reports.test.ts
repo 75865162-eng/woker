@@ -47,9 +47,9 @@ test("settlement report discovery validates identity and retains creation time",
   assert.throws(() => parseGetReportsPage({ reports: [{ reportId: "r-1", reportType: "wrong", marketplaceIds: ["M"] }] }, "T", "M"));
 });
 
-test("report windows and attested roles are enforced", () => {
+test("report windows are enforced; role attestations are metadata only", () => {
   assert.throws(() => domainReportRunWindow("settlements", { createdSince: "2025-01-01T00:00:00Z", createdUntil: "2025-05-01T00:00:00Z" }));
-  assert.doesNotThrow(() => assertDomainReportRoles("settlements", { approvedRoles: ["Finance and Accounting"], rolesAttestedAt: null }));
+  assert.doesNotThrow(() => assertDomainReportRoles("settlements", { approvedRoles: [], rolesAttestedAt: null }));
 });
 
 test("inventory events validate a closed bounded report window and event allowlist", () => {
@@ -166,5 +166,5 @@ test("MFN returns enforce a closed 60-day window and preserve exact safe return 
   assert.equal(JSON.stringify(parsed.rows).includes("private-tracking"), false);
   assert.throws(() => parseDomainReport("mfn_returns", raw.replace("2026-10-03", "2026-11-11"), { mfnReturnsWindow: window }));
   assert.doesNotThrow(() => assertDomainReportRoles("mfn_returns", { approvedRoles: ["Inventory and Order Tracking"], rolesAttestedAt: new Date() }));
-  assert.throws(() => assertDomainReportRoles("mfn_returns", { approvedRoles: ["Amazon Fulfillment"], rolesAttestedAt: new Date() }));
+  assert.doesNotThrow(() => assertDomainReportRoles("mfn_returns", { approvedRoles: [], rolesAttestedAt: null }));
 });

@@ -96,9 +96,9 @@ export function parseObservationPolicy(value: unknown, resource?: string): Obser
   return { ...base, resource: p.resource, reportKind, reportPeriod, asins, from, to, marketplaceTimeZone, brandEligibilityAttested: p.brandEligibilityAttested === true, ...(p.automaticDiscovery === true ? { automaticDiscovery: true } : {}), ...(p.collection === undefined ? {} : { collection: parseBrandCollection(p.collection) }) };
 }
 export function assertObservationRoles(policy: ObservationPolicy, auth: { approvedRoles: readonly string[]; rolesAttestedAt: Date | null }, context?: Omit<ProductAccessContext, "resource"> & { currentEvidence?: string }): void {
-  if (policy.resource === "promotions" && (!auth.rolesAttestedAt || !auth.approvedRoles.some(role => ["Pricing", "Product Listing"].includes(role)))) throw new SyncInputError("Promotions 需要已核验的 Pricing 或 Product Listing 角色；实际资格由 Amazon 响应确认。", 403);
   if ((policy.resource === "listing_details" || policy.resource === "catalog_items") && context && (context.currentEvidence || policy.accessEvidence)) { assertProductAccessEvidence(context.currentEvidence ?? policy.accessEvidence!, { ...context, resource: policy.resource }); return; }
   // Account RBAC and source/identity checks are enforced by callers; Amazon enforces API roles.
+  // Role attestations were admin-attested metadata only, never an authorization gate.
   void auth;
 }
 export function assertObservationClosed(policy: ObservationPolicy, now = new Date(), marketplaceId?: string): void {

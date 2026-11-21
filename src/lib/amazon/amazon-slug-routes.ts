@@ -25,7 +25,6 @@ export const amazonSlugRoutes: Record<string, string> = {
   listing: "view:listing_details",
   "listing-details": "view:listing_details",
   "catalog-items": "view:catalog_items",
-  "product-types": "view:product-types",
   "a-plus": "view:a-plus",
   // 广告
   ads: "view:ads",
@@ -41,9 +40,6 @@ export const amazonSlugRoutes: Record<string, string> = {
   fulfillment: "view:fulfillment",
   "fba-boxing": "view:fba-boxing",
   "first-mile": "view:first-mile",
-  "merchant-shipping": "view:merchant-shipping",
-  mcf: "view:mcf",
-  awd: "view:awd",
   // 财务
   finance: "view:finance",
   settlements: "view:settlements",
@@ -68,14 +64,10 @@ export const amazonSlugRoutes: Record<string, string> = {
   notifications: "view:notifications",
   // 分析 / 数据
   "brand-analytics": "view:brand_analytics",
-  "data-kiosk": "view:data-kiosk",
   "buy-box": "view:buy_box_history",
   pricing: "view:pricing",
-  fees: "view:fee-estimates",
-  offers: "view:offer-notifications",
+  fees: "view:fee_preview",
   returns: "view:returns",
-  "buyer-messages": "view:buyer-messages",
-  "account-health": "view:account-health",
   "repeat-purchase": "view:repeat-purchase",
   // 同步 / 配置
   sync: "view:amazon-sync",

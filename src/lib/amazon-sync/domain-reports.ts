@@ -391,9 +391,10 @@ export function reportDomainRoles(resource: DomainReportResource): string[] {
 
 export function assertDomainReportRoles(resource: DomainReportResource, auth: { approvedRoles: string[]; rolesAttestedAt: Date | null }, automaticRead = false) {
   // API capabilities are enforced by Amazon. Member permissions live in account settings.
-  // Keep the legacy signature for stored callers; role attestations are metadata only.
-  if ((isInventoryReport(resource) || resource === "fba_shipments" || resource === "fba_customer_sales" || resource === "mfn_returns" || resource === "long_term_storage_fees" || isRemovalReport(resource)) && (!auth.rolesAttestedAt || !auth.approvedRoles.some(role => reportDomainRoles(resource).includes(role)))) throw new SyncInputError("BLOCKED_ROLE：报告所需角色须先核验；账号资格由 Amazon 响应核验。", 403);
-  void automaticRead;
+  // Role attestations were admin-attested metadata only, never an authorization gate:
+  // the official API response is the sole source of truth for account eligibility.
+  // Keep the legacy signature for stored callers.
+  void resource; void auth; void automaticRead;
 }
 
 export function parseGetReportsPage(value: unknown, expectedType: string, marketplaceId: string, collectionMarketplaceIds?: string[]) {

@@ -150,7 +150,9 @@ export function assertInboundPlanMarketplace(plan: InboundPlanObservation, marke
 }
 
 export function assertInboundRoles(auth: { approvedRoles: readonly string[]; rolesAttestedAt: Date | null }): void {
-  if (!(auth.rolesAttestedAt instanceof Date) || !Number.isFinite(auth.rolesAttestedAt.getTime()) || !auth.approvedRoles.includes("Amazon Fulfillment")) return invalid();
+  // API capabilities are enforced by Amazon. Role attestations were admin
+  // metadata only, never an authorization gate. Keep the legacy signature.
+  void auth;
 }
 
 export type InboundTraversalEvidence = {

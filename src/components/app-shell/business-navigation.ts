@@ -79,20 +79,17 @@ export const navigationGroups: NavigationGroup[] = [
     // 经营分析
     { id: "amazon.salesTraffic", href: "/amazon/sales-traffic", label: "销售与流量", icon: ChartNoAxesCombined, moduleId: "operations" },
     { id: "amazon.brandAnalytics", href: "/amazon/brand-analytics", label: "品牌分析", icon: SearchCheck, moduleId: "operations" },
-    { id: "amazon.dataKiosk", href: "/amazon/data-kiosk", label: "数据看板", icon: SearchCheck, moduleId: "operations" },
     { id: "amazon.dataDictionary", href: "/amazon/data-dictionary", label: "数据字典", icon: BookMarked, moduleId: "operations" },
     // 商品 / Listing
     { id: "amazon.catalog", href: "/amazon/catalog", label: "在线商品与库存", icon: Store, moduleId: "operations" },
     { id: "amazon.listing", href: "/amazon/listing", label: "Listing 信息", icon: ClipboardList, moduleId: "operations" },
     { id: "amazon.catalogItems", href: "/amazon/catalog-items", label: "目录属性", icon: ClipboardList, moduleId: "operations" },
-    { id: "amazon.productTypes", href: "/amazon/product-types", label: "商品类型", icon: Tags, moduleId: "operations" },
     { id: "amazon.aPlus", href: "/amazon/a-plus", label: "A+ 页面", icon: Sparkles, moduleId: "operations" },
     { id: "amazon.repricing", href: "/amazon/repricing", label: "跟卖与调价", icon: Tags, moduleId: "operations" },
     // 订单
     { id: "amazon.orders", href: "/amazon/orders", label: "订单", icon: ClipboardList, moduleId: "operations" },
     { id: "amazon.orderItems", href: "/amazon/order-items", label: "订单商品", icon: Boxes, moduleId: "operations" },
     { id: "amazon.returns", href: "/amazon/returns", label: "退货与退款", icon: RefreshCw, moduleId: "operations" },
-    { id: "amazon.buyerMessages", href: "/amazon/buyer-messages", label: "买家消息", icon: Handshake, moduleId: "operations" },
     { id: "amazon.repeatPurchase", href: "/amazon/repeat-purchase", label: "重复购买", icon: RefreshCw, moduleId: "operations" },
     // 广告
     { id: "amazon.ads", href: "/amazon/ads", label: "PPC 经营指标", icon: Target, moduleId: "operations" },
@@ -107,15 +104,11 @@ export const navigationGroups: NavigationGroup[] = [
     { id: "amazon.fulfillment", href: "/amazon/fulfillment", label: "FBA 在途货件", icon: Truck, moduleId: "operations" },
     { id: "amazon.fbaBoxing", href: "/amazon/fba-boxing", label: "FBA 装箱", icon: PackageSearch, moduleId: "operations" },
     { id: "amazon.firstMile", href: "/amazon/first-mile", label: "头程物流", icon: Truck, moduleId: "operations" },
-    { id: "amazon.merchantShipping", href: "/amazon/merchant-shipping", label: "商家配送", icon: Truck, moduleId: "operations" },
-    { id: "amazon.mcf", href: "/amazon/mcf", label: "MCF 多渠道履约", icon: Boxes, moduleId: "operations" },
-    { id: "amazon.awd", href: "/amazon/awd", label: "AWD 仓储配送", icon: Warehouse, moduleId: "operations" },
     // 财务（含原财务板块移入的结算报告 / FBA 赔偿）
     { id: "amazon.finance", href: "/amazon/finance", label: "财务交易", icon: Banknote, moduleId: "operations" },
     { id: "amazon.settlements", href: "/amazon/settlements", label: "结算报告", icon: Banknote, moduleId: "operations" },
     { id: "amazon.reimbursements", href: "/amazon/reimbursements", label: "FBA 赔偿", icon: Banknote, moduleId: "operations" },
     { id: "amazon.fees", href: "/amazon/fees", label: "费用估算", icon: Calculator, moduleId: "operations" },
-    { id: "amazon.offers", href: "/amazon/offers", label: "报价通知", icon: ClipboardList, moduleId: "operations" },
     // 报告与观察中心（Amazon 报告原始行 + 促销/通知观察，数据已落库，与赛狐隔离）
     { id: "amazon.fbaCustomerSales", href: "/amazon/fba-customer-sales", label: "FBA 客户发货销售", icon: ReceiptText, moduleId: "operations" },
     { id: "amazon.mfnReturns", href: "/amazon/mfn-returns", label: "自配送退货明细", icon: ReceiptText, moduleId: "operations" },
@@ -138,7 +131,6 @@ export const navigationGroups: NavigationGroup[] = [
     { id: "amazon.salesPlans", href: "/amazon/sales-plans", label: "销售计划与预测", icon: Target, moduleId: "operations" },
     { id: "amazon.multiChannel", href: "/amazon/multi-channel", label: "多渠道经营", icon: Store, moduleId: "operations" },
     { id: "amazon.reviews", href: "/amazon/reviews", label: "评论与店铺绩效", icon: Star, moduleId: "operations" },
-    { id: "amazon.accountHealth", href: "/amazon/account-health", label: "账号健康", icon: Activity, moduleId: "operations" },
     // 同步 / 授权（原系统设置业务项）
     { id: "amazon.syncCenter", href: "/amazon/sync-center", label: "同步中心", icon: RefreshCw, moduleId: "operations" },
     { id: "amazon.syncMatrix", href: "/amazon/sync", label: "Amazon 同步矩阵", icon: Activity, moduleId: "operations" },

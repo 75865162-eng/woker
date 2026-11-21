@@ -232,13 +232,12 @@ for (const resource of [...inventoryReportResources, "removal_order_report" as c
 
   });
 }
-test("automatic discovery checks roles, creates report plans and tasks idempotently", async () => {
+test("automatic discovery creates report plans and tasks idempotently regardless of attested roles", async () => {
   const f = await fresh("reserved_inventory");
   await prisma.amazonSyncDataSource.delete({ where: { id: f.source.id } });
+  // Role attestations are metadata only; discovery must not be gated by them.
   await prisma.amazonSpApiAuthorization.update({ where: { id: f.authorizationId }, data: { awsRegion: "us-east-1", endpoint: endpoints["us-east-1"], lastValidatedAt: new Date(), approvedRoles: [], rolesAttestedAt: null } });
   await ensureAmazonSyncInitialized(f.scope, f.authorizationId);
-  assert.equal(await prisma.amazonSyncDataSource.count({ where: { ...f.scope, resource: { in: inventoryReportResources } } }), 0);
-  await prisma.amazonSpApiAuthorization.update({ where: { id: f.authorizationId }, data: { approvedRoles: ["Amazon Fulfillment"], rolesAttestedAt: new Date() } });
   await ensureAmazonSyncInitialized(f.scope, f.authorizationId);
   await ensureAmazonSyncInitialized(f.scope, f.authorizationId);
   for (const resource of [...inventoryReportResources.filter(resource => resource !== "fba_inventory_by_country"), "removal_order_report" as const, "removal_shipment_report" as const, "long_term_storage_fees" as const, "fba_shipments" as const, "fba_customer_sales" as const]) {

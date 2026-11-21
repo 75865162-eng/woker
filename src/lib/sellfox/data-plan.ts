@@ -74,7 +74,6 @@ export const sellfoxPlanGroups: SellfoxPlanGroup[] = [
       { id: "store-performance", label: "店铺表现按天", api: ["文档：店铺表现按天查询"], status: "live", priority: "P1", note: "店铺表现按天（顶层数组），global/range 通用采集器，实测单区间 246 行。" },
       { id: "custom-report", label: "自定义报表", api: ["文档：获取自定义报表列表数据"], status: "planned", priority: "P2" },
       { id: "profit-report", label: "利润报表／结算利润（9 维度 × 2 套）", api: ["/api/financial/v2/monthProfit/shop.json", "/api/financial/v2/monthProfit/sku.json", "/api/financial/v2/monthProfit/msku.json", "/api/financial/v2/monthProfit/asin.json", "/api/financial/v2/monthProfit/parentAsin.json", "/api/financial/v2/monthProfit/spu.json", "/api/financial/v2/monthProfit/developer.json", "/api/financial/v2/monthProfit/salesMan.json", "/api/financial/v2/monthProfit/shopSummary.json"], status: "planned", priority: "P1", note: "通用采集器落地（实测已验证）：用真实凭据+dateType=2/yyyyMMdd 调通 shop/asin 等维度，reportList[] 返回 200+ 数值字段（salesNum/productSales/grossProfit/roi 等）及 currency+rate；shopSummary 传同参报 40014 需单独校准。响应字段无官方定义，仍走 fin_profit_* 种子 payload 原样落 SellfoxApiRecord，不臆造 typed 表；金额上游为 number，建 typed 表时须按规范转 Decimal(18,4)+三列。口径与日快照独立不覆盖" },
-      { id: "profit-daily", label: "按日利润（8 维度，接口已下线）", api: ["文档：按日利润报表-ASIN／父ASIN／MSKU／SKU／SPU／开发员／业务员／店铺"], status: "blocked", priority: "P2", note: "DEPRECATED：文档标注结算利润接口已下线（selectDailyFinancialAsin 等），不作为活跃采集域，不登记通用端点；日粒度利润以 performance 快照与 monthProfit(dateType=2) 为准。状态为 blocked 不生成端点候选" },
     ],
   },
   {
@@ -170,7 +169,6 @@ export const sellfoxPlanGroups: SellfoxPlanGroup[] = [
     items: [
       { id: "amazon-report", label: "Amazon 原表 / 报告任务", api: ["/api/report/center/add.json", "/api/report/center/pageList.json", "/api/report/center/task/createTask.json"], status: "planned", priority: "P2" },
       { id: "amazon-fee", label: "赔偿 / 盘库 / 仓储费报告", api: ["文档：获取Amazon赔偿报告", "文档：获取Amazon长期仓储费报告"], status: "planned", priority: "P2" },
-      { id: "multi-platform", label: "Temu / TikTok / SHEIN / Walmart / AliExpress", api: ["/api/financial/cross/temuPartReport/queryPageSku.json"], status: "blocked", priority: "P2", note: "需要这些平台的店铺授权，仅 Amazon 店铺无法拉取" },
     ],
   },
 ];

@@ -126,11 +126,11 @@ test("missing or foreign child reads block complete traversal", () => {
   assert.throws(() => assertInboundTraversalComplete(evidence));
 });
 
-test("Marketplace participation alone cannot attest Amazon Fulfillment role", () => {
-  assert.throws(() => assertInboundRoles({ approvedRoles: ["Amazon Fulfillment"], rolesAttestedAt: null }));
-  assert.throws(() => assertInboundRoles({ approvedRoles: ["Inventory and Order Tracking"], rolesAttestedAt: new Date() }));
-  assert.throws(() => assertInboundRoles({ approvedRoles: ["Amazon Fulfillment"], rolesAttestedAt: new Date(NaN) }));
-  assert.doesNotThrow(() => assertInboundRoles({ approvedRoles: ["Amazon Fulfillment"], rolesAttestedAt: new Date("2026-11-01T00:00:00Z") }));
+test("Role attestations are metadata only and never gate inbound reads", () => {
+  assert.doesNotThrow(() => assertInboundRoles({ approvedRoles: [], rolesAttestedAt: null }));
+  assert.doesNotThrow(() => assertInboundRoles({ approvedRoles: ["Inventory and Order Tracking"], rolesAttestedAt: new Date() }));
+  assert.doesNotThrow(() => assertInboundRoles({ approvedRoles: ["Amazon Fulfillment"], rolesAttestedAt: new Date(NaN) }));
+  assert.doesNotThrow(() => assertInboundRoles({ approvedRoles: [], rolesAttestedAt: new Date("2026-11-01T00:00:00Z") }));
 });
 
 function mockClient(respond: (url: URL, init?: RequestInit) => Response, events: AmazonRequestEvent[] = []) {

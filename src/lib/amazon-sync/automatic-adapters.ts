@@ -158,7 +158,11 @@ export function automaticAdapterHasRequiredPolicy(adapter: AutomaticAdapter, sou
 }
 
 export function automaticAdapterHasRequiredRoles(adapter: AutomaticAdapter, rolesAttested: boolean, roles: readonly string[]) {
-  return !adapter.requiredAnyRoles?.length || rolesAttested && adapter.requiredAnyRoles.some(role => roles.includes(role));
+  // Role attestations were admin-attested metadata only. Amazon enforces API
+  // authorization per response; do not gate automatic source discovery on it.
+  // Keep the legacy signature for stored callers.
+  void adapter; void rolesAttested; void roles;
+  return true;
 }
 
 export function automaticAdapterFreshnessMinutes(adapter: AutomaticAdapter) {

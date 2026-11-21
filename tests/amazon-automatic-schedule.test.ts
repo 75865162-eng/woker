@@ -69,15 +69,13 @@ test("a registered planner callback can introduce window semantics without a coo
   await assert.rejects(() => planAutomaticTask({ ...adapter, planTask: () => { throw new Error("fixture-planner-blocked"); } }, scope, source, plan, now), /fixture-planner-blocked/);
 });
 
-test("adapter role eligibility is declared and evaluated generically", () => {
+test("adapter discovery is never gated by attested roles", () => {
   for (const definition of automaticAdapters) {
     const adapter = automaticAdapter(definition.resource)!;
-    if (!adapter.requiredAnyRoles?.length) continue;
-    assert.equal(automaticAdapterHasRequiredRoles(adapter, false, adapter.requiredAnyRoles), false, `${adapter.resource} requires role attestation`);
-    assert.equal(automaticAdapterHasRequiredRoles(adapter, true, []), false);
-    assert.equal(automaticAdapterHasRequiredRoles(adapter, true, [adapter.requiredAnyRoles[0]]), true);
+    // Role attestations are metadata only; Amazon enforces API access by response.
+    assert.equal(automaticAdapterHasRequiredRoles(adapter, false, []), true, `${adapter.resource} must not be gated by roles`);
+    assert.equal(automaticAdapterHasRequiredRoles(adapter, true, adapter.requiredAnyRoles ?? []), true);
   }
-  assert.equal(automaticAdapterHasRequiredRoles(automaticAdapter("catalog")!, false, []), true);
 });
 
 test("registered planners freeze resource-specific automatic windows and snapshot slots", async () => {
