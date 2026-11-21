@@ -92,13 +92,20 @@ test("report-document content failures are not mislabeled as authorization/token
   // A 2xx download followed by charset/JSON/decode failure must map to its own code
   // and point to the official Retrieve-a-report remediation, not a misleading
   // "check authorization / pagination token" guidance.
-  for (const upstreamCode of ["REPORT_CHARSET_UNSUPPORTED", "REPORT_CHARSET_MISMATCH", "REPORT_JSON_ENCODING", "REPORT_JSON_INVALID", "REPORT_TOO_LARGE"]) {
+  for (const upstreamCode of ["REPORT_CHARSET_UNSUPPORTED", "REPORT_CHARSET_MISMATCH", "REPORT_JSON_ENCODING", "REPORT_JSON_INVALID"]) {
     const f = classifySyncFailure(new AmazonSpApiError("upstream private detail", { upstreamCode }));
     assert.equal(f.code, "REPORT_CONTENT", upstreamCode);
     assert.equal(f.retryable, false);
     assert.ok(f.message.includes("不是授权或分页 token 问题"), f.message);
     assert.ok(!f.message.includes("upstream private detail"));
   }
+  // A decompressed-size overflow is terminal (retrying the same document never
+  // succeeds) and must not starve the other report combinations behind it.
+  const oversized = classifySyncFailure(new AmazonSpApiError("oversized", { upstreamCode: "REPORT_TOO_LARGE" }));
+  assert.equal(oversized.code, "REPORT_TOO_LARGE");
+  assert.equal(oversized.retryable, false);
+  assert.ok(oversized.message.includes("不适合当前有界采集"));
+  assert.ok(!oversized.message.includes("oversized"));
   // An expired S3 pre-signed URL is retryable via getReportDocument re-fetch.
   const expired = classifySyncFailure(new AmazonSpApiError("expired", { status: 403, upstreamCode: "REPORT_URL_EXPIRED" }));
   assert.equal(expired.code, "REPORT_URL_EXPIRED"); assert.equal(expired.retryable, true);

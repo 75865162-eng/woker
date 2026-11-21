@@ -68,7 +68,12 @@ export function classifySyncFailure(error: unknown): { code: string; retryable: 
     // Report-document content failures happen AFTER a successful (2xx) download.
     // They are data/contract problems, not authorization or pagination-token
     // rejections; route them to their own code with official remediation guidance.
-    const reportContentCodes = ["REPORT_CHARSET_UNSUPPORTED", "REPORT_CHARSET_MISMATCH", "REPORT_JSON_ENCODING", "REPORT_JSON_INVALID", "REPORT_TOO_LARGE"];
+    if (error.upstreamCode === "REPORT_TOO_LARGE") return {
+      code: "REPORT_TOO_LARGE", retryable: false,
+      message: "报告已下载成功，但解压后超过本系统有界大小上限，重试同一报告无法成功。此组合（通常是全站点搜索词类报告）不适合当前有界采集；自动调度将跳到下一个已批准的报告类型/周期。这不是授权或分页 token 问题。",
+      retryAfterMs: 0,
+    };
+    const reportContentCodes = ["REPORT_CHARSET_UNSUPPORTED", "REPORT_CHARSET_MISMATCH", "REPORT_JSON_ENCODING", "REPORT_JSON_INVALID"];
     if (error.upstreamCode && reportContentCodes.includes(error.upstreamCode)) return {
       code: "REPORT_CONTENT", retryable: false,
       message: `报告已下载成功，但内容处理失败（${error.upstreamCode}）。这不是授权或分页 token 问题。请按 Amazon《Retrieve a report》文档核对报告文档的字符集/压缩与完整性；重新执行该任务会按检查点重新获取报告文档并解析，不会重复扣费。`,

@@ -2,6 +2,7 @@
 process.env.AMAZON_API_EXECUTION_ROLE = "cloud";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { gzipSync } from "node:zlib";
 import { AmazonSpApiClient, AmazonSpApiError, financePaginationRejected } from "@/lib/amazon/sp-api-client";
 import { assertAmazonSpApiScopeAllowed, getAmazonSpApiServerConfiguration } from "@/lib/amazon/sp-api-config";
 
@@ -239,4 +240,13 @@ test("product detail clients request only their read allowlists and encode SKU p
 test("GZIP failure exposes only a fixed diagnostic and byte count", async () => {
   const client = new AmazonSpApiClient(getAmazonSpApiServerConfiguration(environment), { fetch: async () => new Response("invalid gzip private report") });
   await assert.rejects(client.downloadReportText({ url: "https://fixture.s3.amazonaws.com/report?private=secret", compressionAlgorithm: "GZIP" }), (e: unknown) => e instanceof AmazonSpApiError && e.upstreamCode === "REPORT_DOWNLOAD_GZIP" && e.downloadedBytes === 27 && !e.message.includes("secret"));
+});
+
+test("oversized decompressed report is terminal so it cannot starve the queue", async () => {
+  // A whole-marketplace report can compress small but expand beyond the 16 MiB
+  // bound. Retrying the same document never succeeds; it must be terminal so
+  // the scheduler advances to the next approved report/period combination.
+  const zipped = gzipSync(Buffer.alloc(16 * 1024 * 1024 + 1, 0x61));
+  const client = new AmazonSpApiClient(getAmazonSpApiServerConfiguration(environment), { fetch: async () => new Response(new Uint8Array(zipped)) });
+  await assert.rejects(client.downloadReportText({ url: "https://fixture.s3.amazonaws.com/report?private=secret", compressionAlgorithm: "GZIP" }), (e: unknown) => e instanceof AmazonSpApiError && e.upstreamCode === "REPORT_TOO_LARGE" && e.retryable === false && !e.message.includes("secret"));
 });

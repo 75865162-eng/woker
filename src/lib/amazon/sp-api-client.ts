@@ -408,7 +408,18 @@ export class AmazonSpApiClient {
       let decoded = data;
       if (document.compressionAlgorithm === "GZIP") {
         try { decoded = gunzipSync(data, { maxOutputLength: limit }); }
-        catch { throw new AmazonSpApiError("报告 GZIP 解压失败，原检查点保留。", { retryable: true, upstreamCode: "REPORT_DOWNLOAD_GZIP", downloadedBytes }); }
+        catch (error) {
+          // A report whose *decompressed* size exceeds the bounded limit (e.g. a
+          // whole-marketplace Brand Analytics search-terms report) is not a
+          // transient fault — retrying the same document can never succeed and
+          // starves the other report types behind it. Fail terminally so the
+          // scheduler advances to the next approved report/period combination.
+          // A genuinely corrupt gzip (Z_DATA_ERROR) stays retryable.
+          if (error instanceof Error && (error as NodeJS.ErrnoException).code === "ERR_BUFFER_TOO_LARGE") {
+            throw new AmazonSpApiError("报告解压后超过有界大小上限，原检查点保留。", { retryable: false, upstreamCode: "REPORT_TOO_LARGE", downloadedBytes });
+          }
+          throw new AmazonSpApiError("报告 GZIP 解压失败，原检查点保留。", { retryable: true, upstreamCode: "REPORT_DOWNLOAD_GZIP", downloadedBytes });
+        }
       }
       if (textOnly) {
         const declared = /charset\s*=\s*["']?([^;\s"']+)/i.exec(response.headers.get("content-type") ?? "")?.[1].toLowerCase();
