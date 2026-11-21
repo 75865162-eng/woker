@@ -79,6 +79,10 @@ try {
       const at = Date.now();
       try {
         await page.goto(base + route.path, { waitUntil: "domcontentloaded", timeout: 60000 });
+        // total 判定口径：导航完成即记录，不含后续 paint 等待时间。
+        samples.totalMs.push(Date.now() - at);
+        // FCP/LCP 在 DCL 后才会落定，短暂等一帧再取，避免 0 样本。
+        await pause(400);
         const timing = await page.evaluate(() => {
           const nav = performance.getEntriesByType("navigation")[0];
           const fcp = performance.getEntriesByName("first-contentful-paint")[0];
@@ -90,7 +94,6 @@ try {
             inp: window.__inp ? Math.round(window.__inp * 100) / 100 : 0,
           };
         });
-        samples.totalMs.push(Date.now() - at);
         samples.ttfbMs.push(timing.ttfb);
         samples.dclMs.push(timing.dcl);
         samples.fcpMs.push(timing.fcp);
