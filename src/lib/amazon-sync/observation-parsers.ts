@@ -120,7 +120,12 @@ const nullableSearchCatalog: Schema = { ...searchCatalog, definitions: Object.fr
 // Observed live SQP reports also use null for unavailable cart/purchase shares
 // and median prices. Keep counts, query identity and all non-null values strict.
 const queryNullableMetrics: Record<string, string[]> = {
-  SearchQueryPerformanceClickData: ["asinMedianClickPrice"],
+  // Live SQP reports also emit null click share / median click prices for
+  // queries where the ASIN received no clicks. Keep these symmetric with the
+  // cart-add and purchase groups; counts, query identity and every non-null
+  // value remain strict. Without these the whole bounded report fails schema
+  // validation and no rows can be published.
+  SearchQueryPerformanceClickData: ["asinClickShare", "totalMedianClickPrice", "asinMedianClickPrice"],
   SearchQueryPerformanceCartAddData: ["asinCartAddShare", "totalMedianCartAddPrice", "asinMedianCartAddPrice"],
   SearchQueryPerformancePurchaseData: ["asinPurchaseShare", "totalMedianPurchasePrice", "asinMedianPurchasePrice"],
 };

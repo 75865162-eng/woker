@@ -149,7 +149,7 @@ test("SQP preserves observed unavailable shares/prices while other fields remain
   const raw = JSON.parse(readFileSync("src/data/amazon-contracts/sellingPartnerSearchQueryPerformanceReport.json", "utf8")).examples[0];
   const p = parseObservationPolicy({ ...root(), reportKind: "search_query", asins: [asin] }) as AnalyticsPolicy;
   raw.reportSpecification = observationReportSpec(p, site); raw.dataByAsin = [raw.dataByAsin[0]];
-  const nullable = { clickData: ["asinMedianClickPrice"], cartAddData: ["asinCartAddShare", "totalMedianCartAddPrice", "asinMedianCartAddPrice"], purchaseData: ["asinPurchaseShare", "totalMedianPurchasePrice", "asinMedianPurchasePrice"] };
+  const nullable = { clickData: ["asinClickShare", "totalMedianClickPrice", "asinMedianClickPrice"], cartAddData: ["asinCartAddShare", "totalMedianCartAddPrice", "asinMedianCartAddPrice"], purchaseData: ["asinPurchaseShare", "totalMedianPurchasePrice", "asinMedianPurchasePrice"] };
   for (const [group, names] of Object.entries(nullable)) for (const name of names) raw.dataByAsin[0][group][name] = null;
   const facts = parseObservationReport(JSON.stringify(raw), p, site)[0].facts;
   for (const [group, names] of Object.entries(nullable)) for (const name of names) assert.equal((facts[group] as Record<string, unknown>)[name], null);
@@ -161,7 +161,8 @@ test("SQP preserves observed unavailable shares/prices while other fields remain
     (r: Row) => { r.cartAddData.asinCartAddCount = null; },
     (r: Row) => { r.purchaseData.asinPurchaseShare = 100.1; },
     (r: Row) => { r.cartAddData.asinCartAddShare = -0.1; },
-    (r: Row) => { r.clickData.asinClickShare = null; },
+    (r: Row) => { r.clickData.asinClickShare = 100.1; },
+    (r: Row) => { r.clickData.totalMedianClickPrice = { amount: 1, currencyCode: "bad" }; },
     (r: Row) => { r.clickData.asinMedianClickPrice = { amount: null, currencyCode: "USD" }; },
     (r: Row) => { delete r.clickData.asinMedianClickPrice; },
     (r: Row) => { r.purchaseData.asinMedianPurchasePrice = { amount: null, currencyCode: "USD" }; },
