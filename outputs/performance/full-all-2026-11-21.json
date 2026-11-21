@@ -1,0 +1,669 @@
+{
+  "schemaVersion": 2,
+  "mode": "production",
+  "scope": "all",
+  "head": "5328ba2",
+  "bundler": "webpack",
+  "fixtureOnly": true,
+  "capturedAt": "2026-11-21T16:44:49.796Z",
+  "node": "v22.21.1",
+  "routes": [
+    "/",
+    "/tasks",
+    "/workspace",
+    "/versions",
+    "/listing-ai",
+    "/listing-ai/studio",
+    "/logistics",
+    "/logistics/warehouse",
+    "/product",
+    "/accounts",
+    "/settings",
+    "/settings/amazon-connections",
+    "/help",
+    "/history",
+    "/saihu-search-merge",
+    "/amazon/catalog",
+    "/amazon/inventory",
+    "/amazon-ads",
+    "/sellfox",
+    "/sellfox/listings",
+    "/sellfox/orders",
+    "/sellfox/order-detail",
+    "/sellfox/shipments",
+    "/sellfox/inventory",
+    "/sellfox/endpoint-data",
+    "/sellfox/sync",
+    "/sellfox/products",
+    "/sellfox/purchase",
+    "/sellfox/finance",
+    "/sellfox/sales",
+    "/sellfox/performance",
+    "/sellfox/restock",
+    "/sellfox/dimensions",
+    "/sellfox/profit",
+    "/sellfox/ads",
+    "/operations",
+    "/operations/assembly",
+    "/operations/calculators",
+    "/operations/data-dictionary",
+    "/operations/expenses",
+    "/operations/finance-ledger",
+    "/operations/multi-channel",
+    "/operations/ops-extensions",
+    "/operations/procurement-collab",
+    "/operations/purchase-invoices",
+    "/operations/purchase-plans",
+    "/operations/repricing",
+    "/operations/reviews",
+    "/operations/sales-plans",
+    "/operations/settlement-allocations",
+    "/operations/tax",
+    "/agents",
+    "/agents/market",
+    "/agents/market/selection",
+    "/agents/product",
+    "/agents/supplier",
+    "/agents/listing",
+    "/agents/ppc",
+    "/agents/orchestrator",
+    "/agents/selection-research",
+    "/skills"
+  ],
+  "loginColdMs": 274.2290470000007,
+  "loginMs": {
+    "samples": [
+      1175.21,
+      47.57,
+      44.59,
+      48.55,
+      40.36,
+      38.66,
+      43.8
+    ],
+    "median": 44.59283600001072,
+    "p95": 1175.207315000007
+  },
+  "coldPages": [
+    {
+      "path": "/",
+      "tier": "A",
+      "module": "sellfox",
+      "totalMs": 461.2275479999953,
+      "fcpMs": null,
+      "lcpMs": null,
+      "inpMs": null
+    },
+    {
+      "path": "/tasks",
+      "tier": "A",
+      "module": "tasks",
+      "totalMs": 126.16015300000436,
+      "fcpMs": 100,
+      "lcpMs": 100,
+      "inpMs": null
+    },
+    {
+      "path": "/workspace",
+      "tier": "A",
+      "module": "workspace",
+      "totalMs": 99.23913299999549,
+      "fcpMs": 60,
+      "lcpMs": 60,
+      "inpMs": null
+    },
+    {
+      "path": "/versions",
+      "tier": "D",
+      "module": "versions",
+      "totalMs": 119.97990800000844,
+      "fcpMs": 92,
+      "lcpMs": 92,
+      "inpMs": null
+    },
+    {
+      "path": "/listing-ai",
+      "tier": "B",
+      "module": "listingAi",
+      "totalMs": 86.0308309999964,
+      "fcpMs": 72,
+      "lcpMs": 72,
+      "inpMs": null
+    },
+    {
+      "path": "/listing-ai/studio",
+      "tier": "B",
+      "module": "listingAi",
+      "totalMs": 96.51294999998936,
+      "fcpMs": 68,
+      "lcpMs": 68,
+      "inpMs": null
+    },
+    {
+      "path": "/logistics",
+      "tier": "B",
+      "module": "logistics",
+      "totalMs": 94.45531600000686,
+      "fcpMs": 52,
+      "lcpMs": 52,
+      "inpMs": null
+    },
+    {
+      "path": "/logistics/warehouse",
+      "tier": "B",
+      "module": "wms",
+      "totalMs": 106.68227900000056,
+      "fcpMs": 68,
+      "lcpMs": 68,
+      "inpMs": null
+    },
+    {
+      "path": "/product",
+      "tier": "B",
+      "module": "products",
+      "totalMs": 459.9838060000038,
+      "fcpMs": 104,
+      "lcpMs": 104,
+      "inpMs": null
+    },
+    {
+      "path": "/accounts",
+      "tier": "B",
+      "module": "accounts",
+      "totalMs": 902.1515829999989,
+      "fcpMs": 400,
+      "lcpMs": 400,
+      "inpMs": null
+    },
+    {
+      "path": "/settings",
+      "tier": "D",
+      "module": "settings",
+      "totalMs": 100.62393199998769,
+      "fcpMs": 56,
+      "lcpMs": 56,
+      "inpMs": null
+    },
+    {
+      "path": "/settings/amazon-connections",
+      "tier": "D",
+      "module": "settings",
+      "totalMs": 71.13858799998707,
+      "fcpMs": null,
+      "lcpMs": null,
+      "inpMs": null
+    },
+    {
+      "path": "/help",
+      "tier": "D",
+      "module": null,
+      "totalMs": 887.9594680000009,
+      "fcpMs": 412,
+      "lcpMs": 412,
+      "inpMs": null
+    },
+    {
+      "path": "/history",
+      "tier": "B",
+      "module": "searchMerge",
+      "totalMs": 80.93837999999232,
+      "fcpMs": 48,
+      "lcpMs": 48,
+      "inpMs": null
+    },
+    {
+      "path": "/saihu-search-merge",
+      "tier": "B",
+      "module": "searchMerge",
+      "totalMs": 87.07105999998748,
+      "fcpMs": 68,
+      "lcpMs": 68,
+      "inpMs": null
+    },
+    {
+      "path": "/amazon/catalog",
+      "tier": "B",
+      "module": "operations",
+      "totalMs": 107.02379400000791,
+      "fcpMs": 68,
+      "lcpMs": 68,
+      "inpMs": null
+    },
+    {
+      "path": "/amazon/inventory",
+      "tier": "B",
+      "module": "operations",
+      "totalMs": 88.56878300000972,
+      "fcpMs": 52,
+      "lcpMs": 52,
+      "inpMs": null
+    },
+    {
+      "path": "/amazon-ads",
+      "tier": "C",
+      "module": "workspace",
+      "totalMs": 853.7170889999979,
+      "fcpMs": 364,
+      "lcpMs": 400,
+      "inpMs": null
+    },
+    {
+      "path": "/sellfox",
+      "tier": "B",
+      "module": "sellfox",
+      "totalMs": 138.2235939999955,
+      "fcpMs": 48,
+      "lcpMs": 48,
+      "inpMs": null
+    },
+    {
+      "path": "/sellfox/listings",
+      "tier": "B",
+      "module": "sellfox",
+      "totalMs": 858.4461819999997,
+      "fcpMs": 368,
+      "lcpMs": 400,
+      "inpMs": null
+    },
+    {
+      "path": "/sellfox/orders",
+      "tier": "B",
+      "module": "sellfox",
+      "totalMs": 97.05170900000667,
+      "fcpMs": 56,
+      "lcpMs": 56,
+      "inpMs": null
+    },
+    {
+      "path": "/sellfox/order-detail",
+      "tier": "B",
+      "module": "sellfox",
+      "totalMs": 889.3269509999955,
+      "fcpMs": 384,
+      "lcpMs": 412,
+      "inpMs": null
+    },
+    {
+      "path": "/sellfox/shipments",
+      "tier": "B",
+      "module": "sellfox",
+      "totalMs": 97.40278899999976,
+      "fcpMs": 52,
+      "lcpMs": 52,
+      "inpMs": null
+    },
+    {
+      "path": "/sellfox/inventory",
+      "tier": "B",
+      "module": "sellfox",
+      "totalMs": 894.1964089999965,
+      "fcpMs": 396,
+      "lcpMs": 396,
+      "inpMs": null
+    },
+    {
+      "path": "/sellfox/endpoint-data",
+      "tier": "B",
+      "module": "sellfox",
+      "totalMs": 93.8018410000077,
+      "fcpMs": 56,
+      "lcpMs": 56,
+      "inpMs": null
+    },
+    {
+      "path": "/sellfox/sync",
+      "tier": "B",
+      "module": "sellfox",
+      "totalMs": 154.07952700000897,
+      "fcpMs": 120,
+      "lcpMs": 120,
+      "inpMs": null
+    },
+    {
+      "path": "/sellfox/products",
+      "tier": "B",
+      "module": "sellfox",
+      "totalMs": 156.38190799999575,
+      "fcpMs": 112,
+      "lcpMs": 112,
+      "inpMs": null
+    },
+    {
+      "path": "/sellfox/purchase",
+      "tier": "B",
+      "module": "sellfox",
+      "totalMs": 151.6090589999949,
+      "fcpMs": 108,
+      "lcpMs": 108,
+      "inpMs": null
+    },
+    {
+      "path": "/sellfox/finance",
+      "tier": "B",
+      "module": "sellfox",
+      "totalMs": 133.75977899999998,
+      "fcpMs": 96,
+      "lcpMs": 96,
+      "inpMs": null
+    },
+    {
+      "path": "/sellfox/sales",
+      "tier": "C",
+      "module": "sellfox",
+      "totalMs": 152.17737299999862,
+      "fcpMs": 96,
+      "lcpMs": 96,
+      "inpMs": null
+    },
+    {
+      "path": "/sellfox/performance",
+      "tier": "C",
+      "module": "sellfox",
+      "totalMs": 161.09467599999334,
+      "fcpMs": 108,
+      "lcpMs": 108,
+      "inpMs": null
+    },
+    {
+      "path": "/sellfox/restock",
+      "tier": "C",
+      "module": "sellfox",
+      "totalMs": 894.3110560000059,
+      "fcpMs": 392,
+      "lcpMs": 424,
+      "inpMs": null
+    },
+    {
+      "path": "/sellfox/dimensions",
+      "tier": "C",
+      "module": "sellfox",
+      "totalMs": 90.71280100000149,
+      "fcpMs": 64,
+      "lcpMs": 64,
+      "inpMs": null
+    },
+    {
+      "path": "/sellfox/profit",
+      "tier": "C",
+      "module": "sellfox",
+      "totalMs": 153.73613000000478,
+      "fcpMs": 108,
+      "lcpMs": 108,
+      "inpMs": null
+    },
+    {
+      "path": "/sellfox/ads",
+      "tier": "C",
+      "module": "sellfox",
+      "totalMs": 133.49840699999186,
+      "fcpMs": 88,
+      "lcpMs": 88,
+      "inpMs": null
+    },
+    {
+      "path": "/operations",
+      "tier": "B",
+      "module": "operations",
+      "totalMs": 163.50259899999946,
+      "fcpMs": 76,
+      "lcpMs": 124,
+      "inpMs": null
+    },
+    {
+      "path": "/operations/assembly",
+      "tier": "B",
+      "module": "operations",
+      "totalMs": 113.46678299999621,
+      "fcpMs": 52,
+      "lcpMs": 52,
+      "inpMs": null
+    },
+    {
+      "path": "/operations/calculators",
+      "tier": "B",
+      "module": "operations",
+      "totalMs": 154.07673299999442,
+      "fcpMs": 84,
+      "lcpMs": 84,
+      "inpMs": null
+    },
+    {
+      "path": "/operations/data-dictionary",
+      "tier": "B",
+      "module": "operations",
+      "totalMs": 110.73083499999484,
+      "fcpMs": 72,
+      "lcpMs": 72,
+      "inpMs": null
+    },
+    {
+      "path": "/operations/expenses",
+      "tier": "B",
+      "module": "operations",
+      "totalMs": 105.31740999998874,
+      "fcpMs": 84,
+      "lcpMs": 84,
+      "inpMs": null
+    },
+    {
+      "path": "/operations/finance-ledger",
+      "tier": "B",
+      "module": "operations",
+      "totalMs": 108.53652000000875,
+      "fcpMs": 68,
+      "lcpMs": 68,
+      "inpMs": null
+    },
+    {
+      "path": "/operations/multi-channel",
+      "tier": "B",
+      "module": "operations",
+      "totalMs": 98.60950400000729,
+      "fcpMs": 64,
+      "lcpMs": 64,
+      "inpMs": null
+    },
+    {
+      "path": "/operations/ops-extensions",
+      "tier": "B",
+      "module": "operations",
+      "totalMs": 118.21812900000077,
+      "fcpMs": 80,
+      "lcpMs": 80,
+      "inpMs": null
+    },
+    {
+      "path": "/operations/procurement-collab",
+      "tier": "B",
+      "module": "operations",
+      "totalMs": 116.51912599999923,
+      "fcpMs": 80,
+      "lcpMs": 80,
+      "inpMs": null
+    },
+    {
+      "path": "/operations/purchase-invoices",
+      "tier": "B",
+      "module": "operations",
+      "totalMs": 109.0107399999979,
+      "fcpMs": 84,
+      "lcpMs": 84,
+      "inpMs": null
+    },
+    {
+      "path": "/operations/purchase-plans",
+      "tier": "B",
+      "module": "operations",
+      "totalMs": 111.39345400000457,
+      "fcpMs": 64,
+      "lcpMs": 64,
+      "inpMs": null
+    },
+    {
+      "path": "/operations/repricing",
+      "tier": "B",
+      "module": "operations",
+      "totalMs": 90.80510199999844,
+      "fcpMs": 56,
+      "lcpMs": 56,
+      "inpMs": null
+    },
+    {
+      "path": "/operations/reviews",
+      "tier": "B",
+      "module": "operations",
+      "totalMs": 109.45208899999852,
+      "fcpMs": 88,
+      "lcpMs": 88,
+      "inpMs": null
+    },
+    {
+      "path": "/operations/sales-plans",
+      "tier": "B",
+      "module": "operations",
+      "totalMs": 118.93678400000499,
+      "fcpMs": 84,
+      "lcpMs": 84,
+      "inpMs": null
+    },
+    {
+      "path": "/operations/settlement-allocations",
+      "tier": "B",
+      "module": "operations",
+      "totalMs": 107.61159800000314,
+      "fcpMs": 76,
+      "lcpMs": 76,
+      "inpMs": null
+    },
+    {
+      "path": "/operations/tax",
+      "tier": "B",
+      "module": "operations",
+      "totalMs": 105.1257259999984,
+      "fcpMs": 68,
+      "lcpMs": 68,
+      "inpMs": null
+    },
+    {
+      "path": "/agents",
+      "tier": "B",
+      "module": "agents",
+      "totalMs": 371.6676409999927,
+      "fcpMs": null,
+      "lcpMs": null,
+      "inpMs": null
+    },
+    {
+      "path": "/agents/market",
+      "tier": "B",
+      "module": "agents",
+      "totalMs": 133.02982700000575,
+      "fcpMs": 96,
+      "lcpMs": 96,
+      "inpMs": null
+    },
+    {
+      "path": "/agents/market/selection",
+      "tier": "B",
+      "module": "agents",
+      "totalMs": 849.569491000002,
+      "fcpMs": 360,
+      "lcpMs": 408,
+      "inpMs": null
+    },
+    {
+      "path": "/agents/product",
+      "tier": "B",
+      "module": "agents",
+      "totalMs": 94.79647999998997,
+      "fcpMs": 64,
+      "lcpMs": 64,
+      "inpMs": null
+    },
+    {
+      "path": "/agents/supplier",
+      "tier": "B",
+      "module": "agents",
+      "totalMs": 94.06959300000744,
+      "fcpMs": 64,
+      "lcpMs": 64,
+      "inpMs": null
+    },
+    {
+      "path": "/agents/listing",
+      "tier": "B",
+      "module": "agents",
+      "totalMs": 100.51138899999205,
+      "fcpMs": 68,
+      "lcpMs": 68,
+      "inpMs": null
+    },
+    {
+      "path": "/agents/ppc",
+      "tier": "B",
+      "module": "agents",
+      "totalMs": 98.25516000000061,
+      "fcpMs": 56,
+      "lcpMs": 56,
+      "inpMs": null
+    },
+    {
+      "path": "/agents/orchestrator",
+      "tier": "B",
+      "module": "agents",
+      "totalMs": 112.93390300001192,
+      "fcpMs": 72,
+      "lcpMs": 72,
+      "inpMs": null
+    },
+    {
+      "path": "/agents/selection-research",
+      "tier": "B",
+      "module": "agents",
+      "totalMs": 96.07834200000798,
+      "fcpMs": 52,
+      "lcpMs": 52,
+      "inpMs": null
+    },
+    {
+      "path": "/skills",
+      "tier": "B",
+      "module": "agents",
+      "totalMs": 220.3347470000008,
+      "fcpMs": 116,
+      "lcpMs": 116,
+      "inpMs": null
+    }
+  ],
+  "render": {
+    "fcpP95": 396,
+    "lcpP95": 412,
+    "inpMax": 0,
+    "coveredPages": 58
+  },
+  "warmNavigationMs": {
+    "samples": []
+  },
+  "warmNote": "warm 导航在 /sellfox/sales 失败,已跳过: locator.click: Timeout 5000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('body a[href=\"/sellfox/sales\"]').filter({ hasText: '销量统计' }).first()\u001b[22",
+  "rsc": [],
+  "shellPersisted": true,
+  "publicRequests": [],
+  "checks": [
+    "workspace membership revocation",
+    "role revocation",
+    "cross-organization identity",
+    "disabled user"
+  ],
+  "limitations": [
+    "Disposable database and synthetic accounts; not production acceptance",
+    "External font loading excluded; CSS scan bounded to src in both measurements",
+    "Cold page navigation includes domcontentloaded + initial heading settle",
+    "Full real-route coverage from perf-routes.mjs; fixture data volume not production scale"
+  ],
+  "verdict": {
+    "pass": true,
+    "passCount": 61,
+    "failCount": 0,
+    "total": 61
+  }
+}

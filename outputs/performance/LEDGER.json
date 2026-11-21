@@ -1,0 +1,624 @@
+[
+  {
+    "capturedAt": "2026-11-21T16:44:49.796Z",
+    "head": "5328ba2",
+    "mode": "production",
+    "scope": "all",
+    "env": "fixture-production",
+    "passCount": 61,
+    "failCount": 0,
+    "verdict": [
+      {
+        "path": "/",
+        "tier": "A",
+        "metric": "coldTotalMs",
+        "value": 461.23,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/tasks",
+        "tier": "A",
+        "metric": "coldTotalMs",
+        "value": 126.16,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/workspace",
+        "tier": "A",
+        "metric": "coldTotalMs",
+        "value": 99.24,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/versions",
+        "tier": "D",
+        "metric": "coldTotalMs",
+        "value": 119.98,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/listing-ai",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 86.03,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/listing-ai/studio",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 96.51,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/logistics",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 94.46,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/logistics/warehouse",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 106.68,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/product",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 459.98,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/accounts",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 902.15,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/settings",
+        "tier": "D",
+        "metric": "coldTotalMs",
+        "value": 100.62,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/settings/amazon-connections",
+        "tier": "D",
+        "metric": "coldTotalMs",
+        "value": 71.14,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/help",
+        "tier": "D",
+        "metric": "coldTotalMs",
+        "value": 887.96,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/history",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 80.94,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/saihu-search-merge",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 87.07,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/amazon/catalog",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 107.02,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/amazon/inventory",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 88.57,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/amazon-ads",
+        "tier": "C",
+        "metric": "coldTotalMs",
+        "value": 853.72,
+        "line": 3000,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/sellfox",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 138.22,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/sellfox/listings",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 858.45,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/sellfox/orders",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 97.05,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/sellfox/order-detail",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 889.33,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/sellfox/shipments",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 97.4,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/sellfox/inventory",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 894.2,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/sellfox/endpoint-data",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 93.8,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/sellfox/sync",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 154.08,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/sellfox/products",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 156.38,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/sellfox/purchase",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 151.61,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/sellfox/finance",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 133.76,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/sellfox/sales",
+        "tier": "C",
+        "metric": "coldTotalMs",
+        "value": 152.18,
+        "line": 3000,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/sellfox/performance",
+        "tier": "C",
+        "metric": "coldTotalMs",
+        "value": 161.09,
+        "line": 3000,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/sellfox/restock",
+        "tier": "C",
+        "metric": "coldTotalMs",
+        "value": 894.31,
+        "line": 3000,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/sellfox/dimensions",
+        "tier": "C",
+        "metric": "coldTotalMs",
+        "value": 90.71,
+        "line": 3000,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/sellfox/profit",
+        "tier": "C",
+        "metric": "coldTotalMs",
+        "value": 153.74,
+        "line": 3000,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/sellfox/ads",
+        "tier": "C",
+        "metric": "coldTotalMs",
+        "value": 133.5,
+        "line": 3000,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/operations",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 163.5,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/operations/assembly",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 113.47,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/operations/calculators",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 154.08,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/operations/data-dictionary",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 110.73,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/operations/expenses",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 105.32,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/operations/finance-ledger",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 108.54,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/operations/multi-channel",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 98.61,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/operations/ops-extensions",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 118.22,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/operations/procurement-collab",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 116.52,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/operations/purchase-invoices",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 109.01,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/operations/purchase-plans",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 111.39,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/operations/repricing",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 90.81,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/operations/reviews",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 109.45,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/operations/sales-plans",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 118.94,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/operations/settlement-allocations",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 107.61,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/operations/tax",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 105.13,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/agents",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 371.67,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/agents/market",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 133.03,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/agents/market/selection",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 849.57,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/agents/product",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 94.8,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/agents/supplier",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 94.07,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/agents/listing",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 100.51,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/agents/ppc",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 98.26,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/agents/orchestrator",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 112.93,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/agents/selection-research",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 96.08,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      },
+      {
+        "path": "/skills",
+        "tier": "B",
+        "metric": "coldTotalMs",
+        "value": 220.33,
+        "line": 1500,
+        "pass": true,
+        "status": "PASS",
+        "reason": "达标"
+      }
+    ],
+    "output": "outputs/performance/full-all-2026-11-21.json"
+  }
+]
