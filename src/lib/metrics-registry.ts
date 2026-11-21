@@ -95,7 +95,10 @@ export function computeMetric(code: string, observed: ObservedMetrics): number |
 /** 供指标字典页 / 文档消费的稳定元数据列表（不含函数，便于序列化）。 */
 export function listMetricDefinitions(): Array<Omit<MetricDefinition, "compute">> {
   return (Object.keys(METRIC_REGISTRY) as MetricCode[]).map((code) => {
-    const { compute: _compute, ...meta } = METRIC_REGISTRY[code];
-    return meta;
+    const def = METRIC_REGISTRY[code];
+    return {
+      code: def.code, name: def.name, formula: def.formula,
+      unit: def.unit, precision: def.precision, zeroDenominator: def.zeroDenominator,
+    };
   });
 }
