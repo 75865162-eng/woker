@@ -17,7 +17,7 @@ import { sellerArchivePolicy, assertSellerArchiveTarget } from "./seller-archive
 import { parseSettlementPolicy } from "./settlements";
 import { settlementScope } from "./settlement-scope";
 import { isObservationResource, parseObservationPolicy, assertObservationRoles, assertObservationClosed } from "./observation-policy";
-import { parseReturnPolicy, assertReturnRoles, returnWindowFromFrozen, parseReturnState, restartTerminalReturnReport, returnCursorDigest } from "./returns";
+import { parseReturnPolicy, assertReturnRoles, returnWindowFromFrozen, parseReturnState, restartTerminalReturnReport, resumePollingReturnReport, returnCursorDigest } from "./returns";
 import { decryptCheckpoint, encryptCheckpoint } from "./checkpoint";
 import { isRemovalReport, assertDomainReportRoles, domainReportRunWindow, domainReportHistoryCursorDigest, type DomainReportResource, type DomainReportWindow } from "./domain-reports";
 import { fbaInventoryByCountryMarketplaceAllowed } from "./inventory-report-contracts";
@@ -498,11 +498,16 @@ export async function controlTask(scope: SyncScope, actorUserId: string, id: str
           }
         } else if (cursor) {
           const state = parseReturnState(decryptCheckpoint(cursor.reportStateCiphertext, scope, cursor.id));
+          const window = returnWindowFromFrozen((run.frozenScope as { returnWindow?: unknown }).returnWindow);
+          if (cursor.organizationId !== scope.organizationId || cursor.workspaceId !== scope.workspaceId || cursor.resource !== "returns" || cursor.activeRunId !== run.id || cursor.watermarkFrom.toISOString() !== window.from || cursor.watermarkTo.toISOString() !== window.to || cursor.status !== "FAILED") throw new SyncInputError("退货游标证据不属于当前任务窗口，不能续查或重新创建。", 409);
           if (state.terminalStatus) {
-            const window = returnWindowFromFrozen((run.frozenScope as { returnWindow?: unknown }).returnWindow);
-            if (cursor.organizationId !== scope.organizationId || cursor.workspaceId !== scope.workspaceId || cursor.resource !== "returns" || cursor.activeRunId !== run.id || cursor.watermarkFrom.toISOString() !== window.from || cursor.watermarkTo.toISOString() !== window.to || cursor.status !== "FAILED") throw new SyncInputError("退货终态证据不属于当前任务窗口，不能重新创建。", 409);
             await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actorUserId, action: "amazon.sync.returns.report.restart", entityType: "AmazonSyncRun", entityId: run.id, metadata: { workspaceId: scope.workspaceId, sourceId: run.sourceId, reportId: state.reportId!, terminalStatus: state.terminalStatus, executionApprovalId: approval.approvalId, window } } });
             await tx.amazonSyncResourceCursor.update({ where: { sourceId: run.sourceId! }, data: { reportStateCiphertext: encryptCheckpoint(JSON.stringify(restartTerminalReturnReport(state)), scope, cursor.id) } });
+          } else if (state.reportId && !state.documentId && !state.archiveTaskId && !state.creating) {
+            // 已批准的同一报告在轮询预算耗尽前未落地；远端报告已生成时续查并补录，不重建报告、不推断为空。
+            const resumed = resumePollingReturnReport(state, new Date());
+            await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actorUserId, action: "amazon.sync.returns.report.poll-resume", entityType: "AmazonSyncRun", entityId: run.id, metadata: { workspaceId: scope.workspaceId, sourceId: run.sourceId, reportId: state.reportId!, previousPolls: state.polls, executionApprovalId: approval.approvalId, window } } });
+            await tx.amazonSyncResourceCursor.update({ where: { sourceId: run.sourceId! }, data: { reportStateCiphertext: encryptCheckpoint(JSON.stringify(resumed), scope, cursor.id) } });
           }
         }
       }

@@ -113,9 +113,10 @@ async function inspect(tx: Prisma.TransactionClient, scope: SyncScope, command: 
     if (report.recoveryDigest !== command.recoveryDigest || report.source.revision !== command.revision) throw new SyncInputError("归属恢复清单已变化。", 409);
     before = report.manifest; sourceIds = [id]; baseRevision = report.source.revision; authId = report.source.authorizationId;
   } else if (action === "recover-report") {
-    const report = await previewReportRecovery(tx, scope, id, command.reportWindow, command.settlementPolicy);
+    const abandonBrokenCheckpoint = command.abandonBrokenCheckpoint === true;
+    const report = await previewReportRecovery(tx, scope, id, command.reportWindow, command.settlementPolicy, abandonBrokenCheckpoint);
     if (report.recoveryDigest !== command.recoveryDigest || report.source.revision !== command.revision) throw new SyncInputError("报告恢复清单已变化。", 409);
-    before = { sourceId: id, originalRunId: report.run.id, proposed: report.proposed, ...("settlement" in report ? { settlement: report.settlement } : {}) };
+    before = { sourceId: id, originalRunId: "run" in report && report.run ? report.run.id : null, proposed: report.proposed, ...("settlement" in report && report.settlement ? { settlement: report.settlement } : {}), ...(abandonBrokenCheckpoint ? { abandonBrokenCheckpoint: true } : {}) };
     sourceIds = [id]; baseRevision = report.source.revision; authId = report.source.authorizationId;
   } else if (action === "recover-finance-window" && command.sameWindowReplay === true) {
     const report = await previewFinanceReplay(tx, scope, id);

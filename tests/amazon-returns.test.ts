@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { gzipSync } from "node:zlib";
-import { reportTimestampMatches, parseReturnPolicy, parseReturnReport, nextReturnWindow, assertReturnRoles, returnPollDelay, returnWindowFromFrozen, returnReportTypes, parseReturnState, restartTerminalReturnReport } from "@/lib/amazon-sync/returns";
+import { reportTimestampMatches, parseReturnPolicy, parseReturnReport, nextReturnWindow, assertReturnRoles, returnPollDelay, returnWindowFromFrozen, returnReportTypes, parseReturnState, restartTerminalReturnReport, resumePollingReturnReport } from "@/lib/amazon-sync/returns";
 
 test("only confirmed failed reports can reset; pending, uncertain or archived evidence remains", () => {
   for (const terminalStatus of ["FATAL", "CANCELLED"] as const) {
@@ -19,6 +19,20 @@ test("only confirmed failed reports can reset; pending, uncertain or archived ev
     assert.throws(() => restartTerminalReturnReport(state));
   }
   assert.throws(() => parseReturnState(JSON.stringify({ reportId: "pending", terminalStatus: "IN_PROGRESS", polls: 0, offset: 0 })));
+});
+
+test("poll budget exhaustion on an approved in-flight report can be resumed without recreating it", () => {
+  const reviewedAt = new Date("2026-11-22T00:00:00Z");
+  const state = { reportId: "fixture-done-report", requestedAt: "2026-11-06T08:00:00Z", polls: 40, offset: 0 };
+  const resumed = resumePollingReturnReport(state, reviewedAt);
+  assert.equal(resumed.reportId, "fixture-done-report");
+  assert.equal(resumed.polls, 0);
+  assert.equal(resumed.requestedAt, reviewedAt.toISOString());
+  assert.equal(state.polls, 40);
+  // Never resume when a document/archive/terminal/creating state already exists.
+  for (const extra of [{ documentId: "doc" }, { archiveTaskId: "raw", offset: 1 }, { terminalStatus: "FATAL" }, { creating: true }, { reportId: undefined }]) {
+    assert.throws(() => resumePollingReturnReport({ polls: 40, offset: 0, ...extra } as never, reviewedAt));
+  }
 });
 
 test("report time matches exact time or whole-second truncation only", () => {

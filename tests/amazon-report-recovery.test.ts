@@ -81,3 +81,61 @@ test('inventory event apply accepts verified zero and partial progress without c
     assert.equal(result.oldTaskPreserved,true);assert.equal(audits,1);assert.equal(updates,1);assert.equal(JSON.stringify(state),before);
   }
 });
+
+test('reimbursement recovery accepts upstream CANCELLED as a verified terminal state (no document)', async t => {
+  const { applyReportRecovery } = await import('@/lib/amazon-sync/report-recovery');
+  const { withApprovedChange } = await import('@/lib/amazon-sync/approved-context');
+  const { encryptAmazonSpApiCredentials } = await import('@/lib/amazon/integration-secrets');
+  const { AmazonSpApiClient } = await import('@/lib/amazon/sp-api-client');
+  const keys=['DATABASE_URL','AMAZON_DATA_CENTER_ENVIRONMENT','AMAZON_SP_API_ENCRYPTION_KEY'] as const;
+  const prior=Object.fromEntries(keys.map(k=>[k,process.env[k]]));
+  process.env.DATABASE_URL='postgresql://fixture:fixture@127.0.0.1:55439/amazon_sync_live_local';
+  process.env.AMAZON_DATA_CENTER_ENVIRONMENT='local';
+  process.env.AMAZON_SP_API_ENCRYPTION_KEY=Buffer.alloc(32,73).toString('base64');
+  const getReport=AmazonSpApiClient.prototype.getReport;
+  t.after(()=>{for(const k of keys){if(prior[k]===undefined)delete process.env[k];else process.env[k]=prior[k];}AmazonSpApiClient.prototype.getReport=getReport;});
+  const local={organizationId:'amazon-live-local',workspaceId:'default'};
+  const {state,tx}=fixture();state.source.resource='reimbursements';
+  Object.assign(state.source,{authorizationId:'auth',authorization:{revision:2,awsRegion:'us-east-1',endpoint:'https://sellingpartnerapi-na.amazon.com',credentialsCiphertext:encryptAmazonSpApiCredentials({lwaClientId:'fixture',lwaClientSecret:'fixture',refreshToken:'fixture',awsAccessKeyId:'',awsSecretAccessKey:''},{...local,authorizationId:'auth'})}});
+  const checkpoint=encryptCheckpoint(JSON.stringify({reportId:'fixture-cancelled-report',polls:0}),local,'cursor')!;
+  state.source.resourceCursor.reportStateCiphertext=checkpoint;
+  let audits=0;
+  Object.assign(tx,{
+    auditLog:{create:async()=>{audits++;}},
+    amazonSyncResourceCursor:{update:async()=>{}},
+    amazonSyncDataSource:{...tx.amazonSyncDataSource,update:async()=>{}},
+  });
+  // Upstream CANCELLED with no document — the real production condition.
+  AmazonSpApiClient.prototype.getReport=async()=>({reportId:'fixture-cancelled-report',reportType:'GET_FBA_REIMBURSEMENTS_DATA',marketplaceIds:[state.source.marketplaceId],processingStatus:'CANCELLED'});
+  const window=nextAutomaticReimbursementWindow(new Date('2026-11-22T12:00:00Z'));
+  const p=await previewReportRecovery(tx,local,'source',window);
+  const result=await withApprovedChange({tx,scope:local,action:'recover-report',approvalId:'fixture-approval'},()=>applyReportRecovery(local,'fixture-actor',{id:'source',revision:1,recoveryDigest:p.recoveryDigest,reportWindow:window}));
+  assert.equal(result.oldCursorArchived,true);
+  assert.equal(audits,1);
+});
+
+test('broken inventory-events checkpoint can only be abandoned when empty and unpaused-plan-free', async t => {
+  const priorKey = process.env.AMAZON_SP_API_ENCRYPTION_KEY;
+  process.env.AMAZON_SP_API_ENCRYPTION_KEY = Buffer.alloc(32, 73).toString('base64');
+  t.after(() => { if (priorKey === undefined) delete process.env.AMAZON_SP_API_ENCRYPTION_KEY; else process.env.AMAZON_SP_API_ENCRYPTION_KEY = priorKey; });
+  const { state } = fixture();
+  state.source.resource = 'inventory_events';
+  Object.assign(state.source.resourceCursor, { watermarkFrom: new Date('2025-05-15T00:00:00Z'), watermarkTo: new Date('2025-06-14T23:59:00Z'), status: 'CANCELLED', lastSuccessAt: null });
+  state.source.resourceCursor.reportStateCiphertext = encryptCheckpoint(JSON.stringify({ creating: true, polls: 4, reconcileCandidates: [] }), scope, 'cursor')!;
+  const tx = {
+    amazonSyncDataSource: { findFirstOrThrow: async () => state.source },
+    amazonSyncRun: { count: async () => state.active },
+    amazonSyncSchedule: { count: async () => state.enabled },
+    amazonSyncRawPage: { count: async () => state.raw },
+    amazonSyncReportDocument: { count: async () => 0 },
+    amazonSyncReportRow: { count: async () => 0 },
+  } as unknown as Prisma.TransactionClient;
+  const p = await previewReportRecovery(tx, scope, 'source', undefined, undefined, true);
+  assert.equal((p as any).abandon.cursorDigest.length > 0, true);
+  // Any report/document id in the checkpoint blocks abandonment.
+  state.source.resourceCursor.reportStateCiphertext = encryptCheckpoint(JSON.stringify({ creating: true, polls: 4, reportId: 'upstream' }), scope, 'cursor')!;
+  await assert.rejects(() => previewReportRecovery(tx, scope, 'source', undefined, undefined, true));
+  // Non-inventory resources cannot use this path.
+  state.source.resource = 'reimbursements';
+  await assert.rejects(() => previewReportRecovery(tx, scope, 'source', undefined, undefined, true));
+});

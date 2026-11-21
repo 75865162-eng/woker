@@ -85,6 +85,16 @@ export function restartTerminalReturnReport(state: ReturnState): ReturnState {
   if (!validated.terminalStatus) throw new SyncInputError("退货报告没有已确认的失败终态，不能重新创建。", 409);
   return { polls: 0, offset: 0 };
 }
+/** Resume polling an approved in-flight report whose local poll budget was
+ * exhausted before the upstream report reached DONE. The reportId identity is
+ * retained (never recreated); the processor re-verifies report identity,
+ * marketplace and window against the frozen scope on the next getReport. */
+export function resumePollingReturnReport(state: ReturnState, reviewedAt: Date): ReturnState {
+  const validated = parseReturnState(JSON.stringify(state));
+  if (!validated.reportId || validated.documentId || validated.archiveTaskId || validated.terminalStatus || validated.creating) throw new SyncInputError("退货报告不满足轮询续查条件。", 409);
+  if (!Number.isFinite(reviewedAt.getTime())) throw new SyncInputError("退货轮询续查时间无效。", 409);
+  return { ...validated, polls: 0, requestedAt: reviewedAt.toISOString() };
+}
 export function returnPollDelay(policy: ReturnPolicy, attempt: number, random = Math.random) { return Math.ceil(Math.min(policy.pollMaxSeconds, policy.pollBaseSeconds * 2 ** Math.min(attempt, 12)) * (1 + random() * .25) * 1000); }
 
 /** RFC-style TSV quoting, BOM, CRLF, embedded tabs/newlines. Bounds also cover

@@ -9,10 +9,30 @@ import { decryptAmazonSpApiCredentials } from '@/lib/amazon/integration-secrets'
 import { domainReportTypes, reimbursementRunWindow, domainReportRunWindow, assertSettlementDiscoveryAvailable } from './domain-reports';
 import { activeTaskStatuses, SyncInputError, type SyncScope } from './policy';
 
-export async function previewReportRecovery(tx: Prisma.TransactionClient, scope: SyncScope, id: string, window?: unknown, settlementPolicy?: unknown) {
+export async function previewReportRecovery(tx: Prisma.TransactionClient, scope: SyncScope, id: string, window?: unknown, settlementPolicy?: unknown, abandonBrokenCheckpoint = false) {
   const source = await tx.amazonSyncDataSource.findFirstOrThrow({ where: { ...scope, id }, include: { resourceCursor: true, authorization: true } });
   if (!['reimbursements', 'inventory_age', 'inventory_events', 'settlements'].includes(source.resource)) throw new SyncInputError('不支持此报告恢复。');
   const cursor = source.resourceCursor;
+  // A ledger request cancelled during creation leaves a checkpoint with no
+  // reportId/documentId and no submitted evidence. It cannot be reconciled;
+  // an explicit approved abandonment drops only that empty cursor so the same
+  // source can be re-run with a fresh, valid window. No facts/documents exist.
+  if (abandonBrokenCheckpoint) {
+    if (source.resource !== 'inventory_events') throw new SyncInputError('仅库存事件支持废弃损坏检查点。', 409);
+    if (!cursor) throw new SyncInputError('没有可废弃的检查点。', 409);
+    if (source.lastSuccessAt || cursor.lastSuccessAt) throw new SyncInputError('已有成功水位，不能废弃检查点。', 409);
+    if (await tx.amazonSyncRun.count({ where: { ...scope, sourceId: id, status: { in: activeTaskStatuses } } })) throw new SyncInputError('报告仍有活动任务。', 409);
+    if (await tx.amazonSyncSchedule.count({ where: { ...scope, enabled: true, targets: { some: { sourceId: id } } } })) throw new SyncInputError('废弃前须暂停对应计划。', 409);
+    const state = cursor.reportStateCiphertext ? JSON.parse(decryptCheckpoint(cursor.reportStateCiphertext, scope, cursor.id) ?? '{}') : {};
+    if (state.reportId || state.documentId || state.archiveTaskId || state.offset || state.rows) throw new SyncInputError('检查点含报告或进度证据，不能废弃；须单独核查。', 409);
+    const rawCount = await tx.amazonSyncRawPage.count({ where: { ...scope, task: { sourceId: id } } });
+    const docCount = await tx.amazonSyncReportDocument.count({ where: { ...scope, sourceId: id } });
+    const rowCount = await tx.amazonSyncReportRow.count({ where: { ...scope, sourceId: id } });
+    if (rawCount || docCount || rowCount) throw new SyncInputError('已存在原件或数据行，不能废弃检查点。', 409);
+    return { source, cursor, run: null as never, proposed: null, partialProgress: null,
+      abandon: { cursorDigest: digest(cursor.reportStateCiphertext), marketplaceId: source.marketplaceId },
+      recoveryDigest: digest(JSON.parse(JSON.stringify({ mode: 'abandon-broken-checkpoint', sourceId: id, revision: source.revision, cursorId: cursor.id, status: cursor.status, cursorDigest: digest(cursor.reportStateCiphertext), watermarkFrom: cursor.watermarkFrom.toISOString(), watermarkTo: cursor.watermarkTo.toISOString() }))) };
+  }
   if (!cursor?.activeRunId || source.lastSuccessAt || cursor.lastSuccessAt) throw new SyncInputError('报告不符合首次失败恢复范围。', 409);
   const run = await tx.amazonSyncRun.findFirstOrThrow({ where: { ...scope, id: cursor.activeRunId, sourceId: id } });
   if (!['FAILED', 'BLOCKED'].includes(run.status) || cursor.nextTokenCiphertext) throw new SyncInputError('报告仍在运行或分页状态不符，禁止恢复。', 409);
@@ -55,9 +75,16 @@ export async function previewReportRecovery(tx: Prisma.TransactionClient, scope:
 export async function applyReportRecovery(scope: SyncScope, actor: string, command: Record<string, unknown>) {
   const url = new URL(process.env.DATABASE_URL ?? 'invalid:');
   if (!productionRecoveryUnlocked(scope) && (targetEnvironment() !== 'local' || url.hostname !== '127.0.0.1' || url.port !== '55439' || url.pathname !== '/amazon_sync_live_local' || scope.organizationId !== 'amazon-live-local' || scope.workspaceId !== 'default')) throw new SyncInputError('仅限已批准本地环境。', 403);
+  const abandonBrokenCheckpoint = command.abandonBrokenCheckpoint === true;
   const { tx, approvalId } = approvedContext(scope, 'recover-report');
-  const p = await previewReportRecovery(tx, scope, String(command.id), command.reportWindow, command.settlementPolicy);
+  const p = await previewReportRecovery(tx, scope, String(command.id), command.reportWindow, command.settlementPolicy, abandonBrokenCheckpoint);
   if (p.source.revision !== command.revision || p.recoveryDigest !== command.recoveryDigest) throw new SyncInputError('报告恢复清单已变化。', 409);
+  if ('abandon' in p && p.abandon) {
+    await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actor, action: 'amazon.sync.report.broken-checkpoint-abandoned', entityType: 'AmazonSyncDataSource', entityId: p.source.id, metadata: JSON.parse(JSON.stringify({ workspaceId: scope.workspaceId, approvalId, resource: p.source.resource, marketplaceId: p.abandon.marketplaceId, originalCursorId: p.cursor.id, originalStatus: p.cursor.status, originalCursorDigest: p.abandon.cursorDigest, originalWatermarkFrom: p.cursor.watermarkFrom.toISOString(), originalWatermarkTo: p.cursor.watermarkTo.toISOString(), historicalComplete: false })) } });
+    await tx.amazonSyncResourceCursor.delete({ where: { id: p.cursor.id } });
+    await tx.amazonSyncDataSource.update({ where: { id: p.source.id }, data: { revision: { increment: 1 } } });
+    return { id: p.source.id, brokenCheckpointAbandoned: true, noTaskStarted: true };
+  }
   if ('settlement' in p && p.settlement) {
     const collection = await settlementScope(tx, scope, { authorizationId: p.source.authorizationId, marketplaceId: p.source.marketplaceId, settlementPolicy: p.settlement.policy }, [actor]);
     if (digest(collection) !== digest({ policy: p.settlement.policy, bindings: p.settlement.bindings })) throw new SyncInputError('结算绑定已变化。', 409);
@@ -70,17 +97,23 @@ export async function applyReportRecovery(scope: SyncScope, actor: string, comma
   if (typeof state.reportId !== 'string' || p.source.resource === 'inventory_events' && (typeof state.documentId !== 'string' || (p.partialProgress ? state.archiveTaskId !== p.run.id : !!(state.archiveTaskId || state.offset || state.rows))) || p.source.resource !== 'inventory_events' && (p.partialProgress || state.archiveTaskId || state.offset || state.rows || state.documentId)) throw new SyncInputError('原报告缺少可核验终态或已有文档进度。', 409);
   const client = new AmazonSpApiClient({ ...decryptAmazonSpApiCredentials(p.source.authorization.credentialsCiphertext, { ...scope, authorizationId: p.source.authorizationId }), region: p.source.authorization.awsRegion, endpoint: p.source.authorization.endpoint });
   const remote = await client.getReport(state.reportId) as { reportId?: string; reportType?: string; marketplaceIds?: string[]; processingStatus?: string; reportDocumentId?: string };
-  const expectedStatus = p.source.resource === 'reimbursements' ? 'FATAL' : p.source.resource === 'inventory_age' ? 'CANCELLED' : 'DONE';
-  if (remote.reportId !== state.reportId || remote.reportType !== domainReportTypes[p.source.resource as 'reimbursements' | 'inventory_age' | 'inventory_events'] || remote.processingStatus !== expectedStatus || (expectedStatus === 'DONE' ? remote.reportDocumentId !== state.documentId : !!remote.reportDocumentId) || !Array.isArray(remote.marketplaceIds) || remote.marketplaceIds.length !== 1 || remote.marketplaceIds[0] !== p.source.marketplaceId) throw new SyncInputError('远端报告终态、站点或类型不符合批准范围。', 409);
+  // A reimbursement report may legitimately end as FATAL or CANCELLED upstream
+  // (no document). Either terminal state proves the original request finished
+  // without a document, so the approved recovery may reset the cursor to
+  // re-create the same frozen window. Never accept DONE here: a DONE report has
+  // a document that must be reconciled, not discarded.
+  const acceptableStatuses: string[] = p.source.resource === 'reimbursements' ? ['FATAL', 'CANCELLED']
+    : p.source.resource === 'inventory_age' ? ['CANCELLED'] : ['DONE'];
+  if (remote.reportId !== state.reportId || remote.reportType !== domainReportTypes[p.source.resource as 'reimbursements' | 'inventory_age' | 'inventory_events'] || !acceptableStatuses.includes(String(remote.processingStatus)) || (acceptableStatuses.includes('DONE') ? remote.reportDocumentId !== state.documentId : !!remote.reportDocumentId) || !Array.isArray(remote.marketplaceIds) || remote.marketplaceIds.length !== 1 || remote.marketplaceIds[0] !== p.source.marketplaceId) throw new SyncInputError('远端报告终态、站点或类型不符合批准范围。', 409);
   if (p.source.resource === 'inventory_events') {
-    await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actor, action: 'amazon.sync.report.reconciled', entityType: 'AmazonSyncDataSource', entityId: p.source.id, metadata: JSON.parse(JSON.stringify({ workspaceId: scope.workspaceId, approvalId, resource: p.source.resource, marketplaceId: p.source.marketplaceId, runId: p.run.id, cursorId: p.cursor.id, cursorDigest: digest(p.cursor.reportStateCiphertext), checkpointDigest: digest(p.run.checkpointCiphertext), reportIdDigest: digest(state.reportId), reportType: remote.reportType, remoteTerminalStatus: expectedStatus, documentIdDigest: digest(state.documentId), partialProgress: p.partialProgress, remoteVerifiedAt: new Date().toISOString(), cursorPreserved: true, taskPreserved: true })) } });
+    await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actor, action: 'amazon.sync.report.reconciled', entityType: 'AmazonSyncDataSource', entityId: p.source.id, metadata: JSON.parse(JSON.stringify({ workspaceId: scope.workspaceId, approvalId, resource: p.source.resource, marketplaceId: p.source.marketplaceId, runId: p.run.id, cursorId: p.cursor.id, cursorDigest: digest(p.cursor.reportStateCiphertext), checkpointDigest: digest(p.run.checkpointCiphertext), reportIdDigest: digest(state.reportId), reportType: remote.reportType, remoteTerminalStatus: remote.processingStatus, documentIdDigest: digest(state.documentId), partialProgress: p.partialProgress, remoteVerifiedAt: new Date().toISOString(), cursorPreserved: true, taskPreserved: true })) } });
     await tx.amazonSyncDataSource.update({ where: { id: p.source.id }, data: { revision: { increment: 1 } } });
     return { id: p.source.id, oldTaskPreserved: true, oldCursorPreserved: true, noTaskStarted: true };
   }
   const replacement = encryptCheckpoint(JSON.stringify({ polls: 0, recoveryApprovalId: approvalId }), scope, p.cursor.id);
   // Original cursor and checkpoint are retained as encrypted audit evidence;
   // no old task, raw document, fact or success watermark is deleted.
-  await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actor, action: 'amazon.sync.report.recovered', entityType: 'AmazonSyncDataSource', entityId: p.source.id, metadata: JSON.parse(JSON.stringify({ workspaceId: scope.workspaceId, approvalId, originalCursor: p.cursor, originalRunId: p.run.id, originalCheckpointDigest: digest(p.run.checkpointCiphertext), replacementStateDigest: digest(replacement), remoteTerminalStatus: expectedStatus, remoteReportDigest: digest(state.reportId), remoteVerifiedAt: new Date().toISOString(), proposed: p.proposed, historicalComplete: false })) } });
+  await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actor, action: 'amazon.sync.report.recovered', entityType: 'AmazonSyncDataSource', entityId: p.source.id, metadata: JSON.parse(JSON.stringify({ workspaceId: scope.workspaceId, approvalId, originalCursor: p.cursor, originalRunId: p.run.id, originalCheckpointDigest: digest(p.run.checkpointCiphertext), replacementStateDigest: digest(replacement), remoteTerminalStatus: remote.processingStatus, remoteReportDigest: digest(state.reportId), remoteVerifiedAt: new Date().toISOString(), proposed: p.proposed, historicalComplete: false })) } });
   await tx.amazonSyncResourceCursor.update({ where: { sourceId: p.source.id }, data: { status: 'FAILED', reportStateCiphertext: replacement, ...(p.proposed ? { watermarkFrom: new Date(p.proposed.dataStartTime), watermarkTo: new Date(p.proposed.dataEndTime) } : {}) } });
   await tx.amazonSyncDataSource.update({ where: { id: p.source.id }, data: { revision: { increment: 1 } } });
   return { id: p.source.id, oldTaskPreserved: true, oldCursorArchived: true, noTaskStarted: true };
