@@ -18,7 +18,9 @@ export function latestClosedBrandWindow(today: string, period: BrandPeriod) {
 export function automaticBrandCandidates(configured: AnalyticsPolicy, asins: string[], now: Date): AnalyticsPolicy[] {
   const { automaticDiscovery: _automatic, ...base } = configured; void _automatic;
   const today = localDate(now, configured.marketplaceTimeZone), result: AnalyticsPolicy[] = [];
-  for (const [kind, report] of Object.entries(brandReports)) for (const period of report.periods) {
+  // Prioritize bounded ASIN reports so large marketplace reports cannot starve them.
+  const orderedReports = Object.entries(brandReports).sort((a, b) => Number(b[1].asinScoped) - Number(a[1].asinScoped));
+  for (const [kind, report] of orderedReports) for (const period of report.periods) {
     const batches = report.asinScoped ? Array.from({ length: Math.ceil(asins.length / 18) }, (_, index) => asins.slice(index * 18, (index + 1) * 18)) : [[]];
     for (const batch of batches) result.push({ ...base, reportKind: kind as AnalyticsPolicy["reportKind"], reportPeriod: period, ...latestClosedBrandWindow(today, period), asins: batch });
   }

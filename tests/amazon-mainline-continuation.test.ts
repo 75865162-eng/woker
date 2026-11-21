@@ -73,6 +73,7 @@ test("Brand discovers all executable complete periods with bounded ASIN batches 
   const p = parseObservationPolicy({ ...common, resource: "brand_analytics", automaticDiscovery: true, reportKind: "search_terms", reportPeriod: "DAY", asins: [], from: "2026-07-01", to: "2026-07-01", marketplaceTimeZone: "America/Los_Angeles", brandEligibilityAttested: false }) as AnalyticsPolicy;
   assert.equal(p.brandEligibilityAttested, false);
   const candidates = automaticBrandCandidates(p, ["B123456789"], now);
+  assert.deepEqual(candidates.slice(0, 6).map(item => item.reportKind), ["search_query", "search_query", "search_query", "search_catalog", "search_catalog", "search_catalog"]);
   assert.equal(new Set(candidates.map(x => `${x.reportKind}/${x.reportPeriod}`)).size, 17);
   for (const candidate of candidates) { assert.doesNotThrow(() => parseObservationPolicy(candidate)); assert.doesNotThrow(() => assertAutomaticBrandTask(p, candidate, now)); }
   assert.equal(new Set(automaticBrandCandidates(p, [], now).map(x => x.reportKind)).size, 3);
