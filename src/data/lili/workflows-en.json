@@ -165,5 +165,19 @@
       "If there is more than one marketplace, use multi-marketplace-ads-review and compare ratios, not amounts. Skip this step when there is only one."
     ],
     "close": "Deliver an HTML monthly report. The first screen is the key numbers and three sentences. Then ads, profit, promotions, and marketplaces. End with three jobs for next month. Do not add different currencies together."
+  },
+  {
+    "index": 13,
+    "slug": "store-sales-weekly-overview",
+    "category": "reports",
+    "titleEn": "Weekly store sales overview",
+    "summaryEn": "Read a store and marketplace sales week with completeness evidence.",
+    "steps": [
+      "List authorized stores and select one seller and marketplace.",
+      "Select the last complete week in the marketplace reporting time zone and call amazon.store.overview.",
+      "Inspect missing dates, currency and sync time for both weeks; compare sales only when comparable is true.",
+      "State that order count and product-level changes are unavailable, and distinguish facts from recommendations."
+    ],
+    "close": "This workflow is read-only. Never start synchronization or modify a store."
   }
 ]

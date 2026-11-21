@@ -59,7 +59,9 @@ before(async () => {
   globalThis.fetch = async () => { throw new Error("External HTTP forbidden in fixtures"); };
   for (const s of [scope, other]) { await prisma.organization.create({ data: { id: s.organizationId, name: "Fixture", slug: s.organizationId } }); await prisma.workspaceScope.create({ data: { organizationId: s.organizationId, id: s.workspaceId, name: "Fixture" } }); }
   for (const [id, role] of [[actor, "operations"], [peer, "operations"], [owner, "owner"]] as const) await prisma.user.create({ data: { id, name: "Fixture", email: `${id}@fixture.invalid`, passwordHash: "not-login", memberships: { create: { organizationId: scope.organizationId, role } } } });
+  for (const userId of [actor, peer]) await prisma.workspaceMembership.create({ data: { ...scope, userId } });
   await prisma.organizationRosterRole.create({ data: { organizationId: scope.organizationId, id: "operations", name: "Fixture", description: "Fixture", permissions: { operations: ["view", "create", "edit", "export"] } } });
+  await prisma.organizationRosterRole.create({ data: { organizationId: scope.organizationId, id: "owner", name: "Fixture owner", description: "Fixture", permissions: {} } });
   for (const id of [sellerA, sellerB]) await prisma.sellerAccount.create({ data: { ...scope, id, accountKey: id, displayName: "ERP custom name", marketplaceCode: "US" } });
   runA = await seed(sellerA, 3); await seed(sellerB, 999);
   grantId = (await prisma.amazonDataAccessGrant.create({ data: { ...scope, id: randomUUID(), userId: actor, sellerAccountId: sellerA, marketplaceIds: [site], actions: ["view", "export"], mcpEnabled: true } })).id;
@@ -236,6 +238,41 @@ test("sales metrics is the single complete exact JSON contract", async () => {
     assert.equal(item.metrics.orderedProductSales.currencyCode, "USD");
     assert.equal("exactMetrics" in item, false); assert.equal("businessMetrics" in item, false);
   } finally { await prisma.amazonSalesTrafficSnapshot.update({ where: { id: row.id }, data: { metrics: row.metrics as Prisma.InputJsonValue } }); }
+});
+test("store overview uses live account scope and reports absent days without invented totals", async () => {
+  const identity = await authenticateAmazonMcp(`Bearer ${token}`);
+  assert.ok((await listDiscoverableAmazonMcpTools(identity)).some(tool => tool.name === "amazon.store.overview"));
+  const dates = { from: "2020-01-06", to: "2020-01-12" };
+  const result = await call("amazon.store.overview", dates) as { current: { complete: boolean; missingDates: string[]; orderedProductSales: unknown; orderCount: unknown }; previous: { complete: boolean }; productChanges: unknown };
+  assert.equal(result.current.complete, false);
+  assert.equal(result.current.missingDates.length, 7);
+  assert.equal(result.current.orderedProductSales, null);
+  assert.equal(result.current.orderCount, null);
+  assert.equal(result.productChanges, null);
+  const rpc = (method: string, params?: unknown) => handleLiliRequest(new Request("http://localhost/api/lili/mcp", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) }), ["mcp"]);
+  const listing = await (await rpc("tools/list")).json();
+  assert.ok(listing.result.tools.some((tool: { name: string }) => tool.name === "amazon.store.overview"));
+  const response = await rpc("tools/call", { name: "amazon.store.overview", arguments: { ...selectedPair, ...dates } });
+  assert.equal(response.status, 200);
+  const viaLili = JSON.parse((await response.json()).result.content[0].text);
+  assert.equal(viaLili.current.complete, false);
+  assert.deepEqual(viaLili.current.missingDates, result.current.missingDates);
+  const template = await prisma.amazonSalesTrafficSnapshot.findFirstOrThrow({ where: { ...scope, sellerAccountId: sellerA } });
+  const ids = Array.from({ length: 14 }, () => randomUUID());
+  try {
+    await prisma.amazonSalesTrafficSnapshot.createMany({ data: ids.map((id, index) => ({ ...scope, id, sourceId: template.sourceId, syncRunId: template.syncRunId, sellerAccountId: sellerA, marketplaceId: site, businessDate: new Date(Date.UTC(2019, 11, 30 + index)).toISOString().slice(0, 10), reportId: "overview-fixture", documentId: "overview-fixture", metrics: { orderedProductSales: { amount: "0.1", currencyCode: "USD" } }, quality: "VALID", capturedAt: new Date() })) });
+    const complete = await call("amazon.store.overview", dates) as { current: { complete: boolean; orderedProductSales: { amount: string; currency: string } }; previous: { complete: boolean }; comparable: boolean };
+    assert.equal(complete.current.complete, true); assert.equal(complete.previous.complete, true); assert.equal(complete.comparable, true);
+    assert.deepEqual(complete.current.orderedProductSales, { amount: "0.7", currency: "USD" });
+    const liliComplete = await rpc("tools/call", { name: "amazon.store.overview", arguments: { ...selectedPair, ...dates } });
+    assert.deepEqual(JSON.parse((await liliComplete.json()).result.content[0].text).current.orderedProductSales, complete.current.orderedProductSales);
+  } finally { await prisma.amazonSalesTrafficSnapshot.deleteMany({ where: { id: { in: ids } } }); }
+  await assert.rejects(() => call("amazon.store.overview", { ...dates, sellerAccountId: sellerB }));
+  await assert.rejects(() => call("amazon.store.overview", { ...dates, sql: "SELECT 1" }));
+  await assert.rejects(() => call("amazon.store.overview", { from: "2020-01-01", to: "2020-01-02" }));
+  await prisma.amazonDataAccessGrant.update({ where: { id: grantId }, data: { enabled: false } });
+  try { await assert.rejects(() => call("amazon.store.overview", dates)); }
+  finally { await prisma.amazonDataAccessGrant.update({ where: { id: grantId }, data: { enabled: true } }); }
 });
 test("fixed inventory and sales tools share published readers, exact values, bounded filters and live grants", async () => {
   const made = await manageMcpCredential(scope, actor, { action: "create", name: "offline fixed inventory/sales", scopes: [{ sellerAccountId: sellerA, marketplaceIds: [site] }], tools: ["get_inventory", "get_sales"], expiresAt: new Date(Date.now() + 60000).toISOString() });
@@ -609,11 +646,14 @@ test("exports inherit account reads while sync still requires approval permissio
   assert.equal((await call("amazon.sales.export") as { rowCount: number }).rowCount, 1);
   await prisma.amazonDataAccessGrant.update({ where: { id: grantId }, data: { actions: ["view", "export"] } });
 });
-test("role grants do not expand a user account assignment", async () => {
+test("role account assignments are scoped and revoked when the role grant is removed", async () => {
   const roleGrant = await prisma.amazonRoleDataAccessGrant.create({ data: { ...scope, id: randomUUID(), roleId: "operations", sellerAccountId: sellerB, marketplaceIds: [site], actions: ["view"], mcpEnabled: true } });
+  try {
+    assert.ok((await amazonDataAccess(scope, actor)).sellerIds.includes(sellerB));
+    assert.ok(JSON.stringify(await call("amazon.inventory.list", { sellerAccountId: sellerB })).includes(sellerB));
+  } finally { await prisma.amazonRoleDataAccessGrant.delete({ where: { id: roleGrant.id } }); }
   assert.ok(!(await amazonDataAccess(scope, actor)).sellerIds.includes(sellerB));
   await assert.rejects(() => call("amazon.inventory.list", { sellerAccountId: sellerB }));
-  await prisma.amazonRoleDataAccessGrant.delete({ where: { id: roleGrant.id } });
 });
 test("admin cannot cross organizations or mint implicit MCP superuser", async () => {
   await assert.rejects(() => amazonDataAccess(other, owner));
@@ -633,7 +673,7 @@ test("unverified identity and invalid published head fail closed", async () => {
       await prisma.amazonSyncRun.update({ where: { id: runA }, data: patch });
       await assert.rejects(() => call("amazon.inventory.list"), /TABLE_NOT_ALLOWED|已发布/);
       assert.equal((await call("amazon.inventory.summary") as { summary: { _count: { _all: number } } }).summary._count._all, 0);
-      assert.equal((await publishedSnapshotScopes(scope, "inventory", actor)).length, 0);
+      assert.equal((await publishedSnapshotScopes(scope, "inventory", actor, selectedPair)).length, 0);
     }
   } finally {
     await prisma.amazonSyncRun.update({ where: { id: runA }, data: { finishedAt: original.finishedAt, stage: original.stage } });
@@ -945,13 +985,13 @@ test("user and role grants support independent and admin self approval before ap
   const approver = randomUUID();
   await prisma.user.create({ data: { id: approver, name: "Approver", email: `${approver}@fixture.invalid`, passwordHash: "not-login", memberships: { create: { organizationId: scope.organizationId, role: "owner" } } } });
   await prisma.amazonDataAccessGrant.create({ data: { ...scope, id: randomUUID(), userId: approver, sellerAccountId: sellerA } });
-  for (const subject of [{ userId: actor, revision: (await prisma.amazonDataAccessGrant.findUniqueOrThrow({ where: { id: grantId } })).revision }, { roleId: "operations", revision: 0 }]) {
+  try { for (const subject of [{ userId: actor, revision: (await prisma.amazonDataAccessGrant.findUniqueOrThrow({ where: { id: grantId } })).revision }, { roleId: "operations", revision: 0 }]) {
     const change = await requestChange(scope, owner, { action: "save-access-grant", ...subject, sellerAccountId: sellerA, actions: ["view"], marketplaceIds: [site], mcpEnabled: false, enabled: true });
     const id = String(change.id);
     await decideChange(scope, "roleId" in subject ? owner : approver, id, "APPROVED", "Fixture explicit confirmation");
     await applyChange(scope, owner, id);
     assert.equal((await prisma.amazonDataCenterChangeRequest.findUniqueOrThrow({ where: { id } })).status, "APPLIED");
-  }
+  } } finally { await prisma.amazonRoleDataAccessGrant.deleteMany({ where: { ...scope, roleId: "operations", sellerAccountId: sellerA } }); }
   assert.equal((await prisma.amazonDataAccessGrant.findUniqueOrThrow({ where: { id: grantId } })).mcpEnabled, false);
 });
 test("MCP response is withheld when ERP access is revoked while the actual snapshot SQL waits", async () => {
@@ -973,8 +1013,8 @@ test("MCP response is withheld when ERP access is revoked while the actual snaps
     assert.ok(waiting, "the real snapshot SQL must reach the held PostgreSQL table lock");
     await prisma.amazonDataAccessGrant.update({ where: { id: grantId }, data: { enabled: false } });
   } finally { release(); await lock; }
-  const result = await pending; assert.ok(result.error); assert.equal(result.value, null);
-  await prisma.amazonDataAccessGrant.update({ where: { id: grantId }, data: { enabled: true } });
+  try { const result = await pending; assert.ok(result.error); assert.equal(result.value, null); }
+  finally { await prisma.amazonDataAccessGrant.update({ where: { id: grantId }, data: { enabled: true } }); }
 });
 
 test("MCP response is withheld when a source binding revision changes during snapshot SQL", async () => {
@@ -1009,7 +1049,8 @@ test("source preview refuses mixed authorization domains and another seller's ve
 
 test("bounded management routes preserve real session identity and workspace checks", async () => {
   async function request(userId: string, path: string, method: string, body: object) {
-    const session = await createSession(userId);
+    const member = await prisma.organizationMember.findUniqueOrThrow({ where: { organizationId_userId: { organizationId: scope.organizationId, userId } }, include: { user: true, organization: true } });
+    const session = await createSession(userId, { id: userId, email: member.user.email, name: member.user.name, role: member.role, organizationId: scope.organizationId, organizationName: member.organization.name });
     return new Request(`http://localhost${path}`, { method, headers: { cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}`, "x-workspace-id": scope.workspaceId, "content-type": "application/json", origin: "http://localhost" }, body: JSON.stringify(body) });
   }
   const issued = await credentialPost(await request(actor, "/api/operations/amazon-mcp", "POST", { action: "create", name: "Bounded route", tools: ["amazon.inventory.list"], scopes: [{ sellerAccountId: sellerA, marketplaceIds: [site] }], expiresAt: new Date(Date.now() + 60000).toISOString() }));

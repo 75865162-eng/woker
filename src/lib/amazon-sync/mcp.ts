@@ -21,6 +21,7 @@ import { requiredText, SyncInputError, type SyncScope } from "./policy";
 import { incrementalOperatorAction } from "./read";
 import { readTaskSnapshot } from "./snapshots";
 import { readSalesTraffic } from "./sales-query";
+import { readStoreOverview } from "./store-overview";
 import { availableSkillTables, describeSkillTable, querySkillTable, skillReadiness, skillTableAvailability } from "./skill-data";
 import { assertAdsQueryBudget } from "@/lib/amazon-ads/query-budget";
 import { queryPublishedAdsReports } from "@/lib/amazon-ads/report-query";
@@ -313,7 +314,7 @@ function argumentsObject(value: unknown, tool?: string): Record<string, unknown>
   for (const key of ["sellerAccountId", "marketplaceId"]) if (args[key] !== undefined && (typeof args[key] !== "string" || !String(args[key]).trim())) throw new SyncInputError("数据范围不可访问。", 403);
   if (args.sellerAccountId !== undefined && args.sellerAccountIds !== undefined) throw new SyncInputError("参数无效。");
   const definition = registeredAmazonMcpTools.find(item => item.name === tool);
-  const usesDataset = !!fixedAmazonMcpDataset(tool ?? "") || ["amazon.data.archive.read", "amazon.fields.coverage", "amazon.fields.catalog", "data_query", "data_describe_table", "amazon.ads.reports.list", "amazon.ads.entities.list"].includes(tool ?? "");
+  const usesDataset = !!fixedAmazonMcpDataset(tool ?? "") || ["amazon.store.overview", "amazon.data.archive.read", "amazon.fields.coverage", "amazon.fields.catalog", "data_query", "data_describe_table", "amazon.ads.reports.list", "amazon.ads.entities.list"].includes(tool ?? "");
   const allowed = usesDataset ? Object.keys(definition?.inputSchema.properties ?? {}) : ["sellerAccountId", "sellerAccountIds", "marketplaceId", "from", "to", "keyword", "page", "pageSize", "taskId", "table", "filters", "resource", "dateFrom", "dateTo", "eventType"];
   if (Object.keys(args).some(k => !allowed.includes(k))) throw new SyncInputError("FIELD_NOT_MAPPED: 参数不属于此工具的输入合同。", 400);
   for (const [k, v] of Object.entries(args)) {
@@ -644,6 +645,11 @@ async function invokeRegisteredAmazonMcp(identity: McpIdentity, tool: AmazonMcpT
           const coverage = await readSyncCoverage(scope, new URLSearchParams({ ...(args.marketplaceId ? { marketplaceId: String(args.marketplaceId) } : {}), ...(args.sellerAccountId ? { sellerAccountId: String(args.sellerAccountId) } : {}) }), actor, selected.map(s => s.id));
           result = { data: { items, total: selected.length, coverage }, meta: dataMeta(selected, "AmazonSyncDataSource", ["sellerAccountId", "marketplaceId", "resource"], ["成功快照不等于全部 API 或全部历史已完成；未报告的覆盖范围为未知。"]) };
         }
+        else if (tool === "amazon.store.overview") {
+          const salesSources = selected.filter(s => s.resource === "sales_traffic");
+          result = { ...await readStoreOverview(scope, actor, { sellerAccountId: String(args.sellerAccountId), marketplaceId: String(args.marketplaceId), from: String(args.from ?? ""), to: String(args.to ?? "") }, salesSources.map(s => s.id)),
+            sync: salesSources.map(s => ({ lastSyncedAt: s.lastSuccessAt, syncRunId: s.activeRunId })) };
+        }
         else if (tool === "amazon.stores.list" || tool === "amazon.sync.status") result = selected.map(s => ({ sellerAccountId: s.sellerAccountId, displayName: s.seller.displayName, amazonSellerId: s.authorization.amazonSellerId, marketplaceId: s.marketplaceId, region: s.authorization.awsRegion, resource: s.resource, enabled: s.enabled, lastSyncedAt: s.lastSuccessAt, source: "amazon_sp_api_snapshot", syncRunId: s.activeRunId, rowCount: s.rowCount }));
         else if (tool === "amazon.history.read") {
         const taskId = requiredText(args.taskId, "任务");
@@ -745,6 +751,7 @@ const registeredAmazonMcpTools = bindAmazonMcpHandlers<McpInvocationContext, unk
   "amazon.inventory.summary": invokeNamedTool("amazon.inventory.summary"),
   "amazon.catalog.list": invokeNamedTool("amazon.catalog.list"),
   "amazon.sales.list": invokeNamedTool("amazon.sales.list"),
+  "amazon.store.overview": invokeNamedTool("amazon.store.overview"),
   "amazon.sync.status": invokeNamedTool("amazon.sync.status"),
   "amazon.history.read": invokeNamedTool("amazon.history.read"),
   "amazon.sales.export": invokeNamedTool("amazon.sales.export"),

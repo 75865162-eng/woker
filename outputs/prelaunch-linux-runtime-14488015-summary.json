@@ -1,0 +1,108 @@
+{
+  "fixtureOnly": true,
+  "tag": "14488015",
+  "taskId": "gokU9w",
+  "exitCode": 0,
+  "startedAt": "2026-11-17T17:47:42.007Z",
+  "finishedAt": "2026-11-17T17:56:54.529Z",
+  "head": "17f3c6366ec8259dbaf6bf5e0352e3c1659efea7",
+  "uncommittedChangesIncluded": true,
+  "sha256": {
+    "scripts/test-runtime-integration.mjs": "e2b04df32c47183078996b056b938350d5857ec22ff0120923b62ba34731e428",
+    "scripts/next-run.mjs": "1664c855bd06347caa48ad439d5fd70ea9fad31b42a08b18d58957b6b018eda2"
+  },
+  "evidence": {
+    "log": "outputs/prelaunch-linux-runtime-20261117.log",
+    "fixtureLog": "outputs/prelaunch-linux-runtime-14488015-tmp/erp-runtime-integration-VvDU4e/fixture.log",
+    "fixtureLogBytes": 48845,
+    "backup": "outputs/prelaunch-linux-runtime-14488015-tmp/erp-runtime-integration-VvDU4e/backups/postgres-2026-11-17T17-55-41-332Z-cf53850d.dump",
+    "backupChecksum": "outputs/prelaunch-linux-runtime-14488015-tmp/erp-runtime-integration-VvDU4e/backups/postgres-2026-11-17T17-55-41-332Z-cf53850d.dump.sha256"
+  },
+  "tap": [
+    { "suite": "runtime-execution", "tests": 9, "pass": 9, "fail": 0, "skipped": 0, "todo": 0 },
+    { "suite": "runtime-faults", "tests": 3, "pass": 3, "fail": 0, "skipped": 0, "todo": 0 }
+  ],
+  "resultsCount": 25,
+  "results": [
+    "complete repository migration chain applied to empty disposable PostgreSQL; checksums verified and repeat deploy is idempotent",
+    "durable execution claims, expiry fencing, bounded recovery and mock success publications",
+    "import stale publication rejected; final audit failure rolls back file/export/job/success versions",
+    "import pre-publication and mock image CPU gates: SIGKILL followed by bounded lease takeover publishes once",
+    "real XLSX parser SIGKILL preserves original Bulk input and recovers to one export",
+    "image engine executable SIGKILL rejects partial output; protocol fixture retries successfully",
+    "PostgreSQL restart inside final audit rolls back job/file/export/success versions; retry publishes once",
+    "isolated dev web and database login started",
+    "all registered Worker processes visible through authenticated health API",
+    "duplicate manager refused without stopping the original registered Workers",
+    "real browser settings page renders all registered Worker heartbeats",
+    "health fetch failure clears stale online cards; successful refresh restores current state",
+    "real Next App Router: procurement, suppliers, orders, WMS deep links, refresh/back, local FBA packing/plans and finance expenses; no API writes",
+    "real AppShell screenshot captured against disposable fixture database",
+    "real permission snapshot filters WMS navigation for operations role and route guard denies direct WMS access",
+    "real upload API task consumed; invalid fixture persisted expected parse failure",
+    "valid Bulk upload → real Worker → done → authenticated download; bid updated, identity/input preserved, one export",
+    "graceful stop makes all registered Workers offline",
+    "Worker restart restores all registered heartbeats",
+    "manager SIGKILL: all owned Worker processes terminate without orphans",
+    "Redis outage: upload and image APIs retain queued database intent and original input files",
+    "Redis restart + queue loss: database queued intent recovered and consumed",
+    "connection recovery consumes both deferred jobs with original image input intact",
+    "PostgreSQL restart: web and all Worker heartbeats reconnect",
+    "fixture PostgreSQL custom backup verified and restored into a separate disposable database"
+  ],
+  "fba": {
+    "sourcesGetStatus": 200,
+    "boxingGetStatus": 200,
+    "firstMileGetStatus": 200,
+    "sellerAccountId": "fixture-seller",
+    "marketplaceId": "ATVPDKIKX0DER",
+    "emptyStateVerified": true,
+    "noWorkbenchAlert": true,
+    "sourceEnabled": false,
+    "sourceTargets": []
+  },
+  "noAutomaticSyncObservation": {
+    "observedDuringTag": "4bf61699",
+    "organizationId": "fixture-org",
+    "runs": 0,
+    "schedules": 0,
+    "enabledSources": 0,
+    "note": "前轮五类Worker启动后的实际只读查询；最终轮未重复计数查询，最终来源响应仍disabled且targets为空。"
+  },
+  "notCovered": [
+    "published-port reachability NOT VERIFIED: internal Docker network plus loopback proxy; HostConfig bindings checked instead",
+    "CI environment equivalence NOT VERIFIED: Node24.22.3 Bookworm instead of Node22.22.2 Ubuntu",
+    "native Real-ESRGAN GPU computation (executable protocol fixture tested; native engine not installed)",
+    "real provider calls",
+    "production deployment or reboot",
+    "production backup activation"
+  ],
+  "processObservation": "无init轮kill(pid,0)检查超时；最终HostConfig.Init=true且原40秒严格PID不存在断言通过。未取得旧PID的Z状态，不把僵尸推测作为已证实原因。",
+  "cleanup": {
+    "finalOuterContainer": "3387e134bf19116bc5f5d026fb5edb19077105e0d6c20b20db30b5a037c2a2f0",
+    "finalPostgresContainer": "162dee25c96e2d220f61c60ae13636083ba9522bd220adc27e254f4e9eab30c5",
+    "finalRedisContainer": "e0adf6167c616dd5bb938f57cd027b90473a4b06e885e60ae3c6cac1106af140",
+    "finalAnonymousVolumesRemoved": [
+      "28e8abf82d655c19018b397d7f01ce584a52a0d4b04370a4d84b07275ec17a52",
+      "89992c750a30c58612eda06b80c4ade790ed09ddae4a01a51b6afe4900a1dc82"
+    ],
+    "finalNetworkRemoved": "erp-linux-runtime-14488015",
+    "preparationContainerRemoved": "59a24868114ad8ed60bf3c06b67b58edec1b48fac7940600364c400a84490f35",
+    "temporaryImagesRemoved": [
+      "sha256:29fce02b08eaf82135d45067b01ea1dd1e808d49b8bc31d89339cfb561ef98fb",
+      "sha256:1b58c8abe2a12d0d3b156eecf110393b84994258ac62a1ae4d0b477c5236b5dd",
+      "sha256:848a99bf4688e15a46f8f8e577266ca5c48321e53c69328eced0253451dbba66",
+      "sha256:3840cb1afe53d4c65613f5fbf124d77cf67984b161a0066a1f271069b08d076d"
+    ],
+    "remainingFixtureContainers": 0,
+    "remainingLabeledNetworks": 0,
+    "existingServicesPreserved": ["d7acaac415db woker-postgres-1 healthy", "4e63999409c2 woker-redis-1"],
+    "officialBaseImagesPreserved": true,
+    "unknownHistoricalAnonymousVolumesPreserved": true,
+    "pruneExecuted": false
+  },
+  "committed": false,
+  "pushed": false,
+  "deployed": false,
+  "rootEnvLoaded": false
+}

@@ -3,7 +3,6 @@
 import {
   createContext,
   memo,
-  startTransition,
   useCallback,
   useContext,
   useEffect,
@@ -42,6 +41,8 @@ export type AppShellConfiguration = Omit<
 > & { authorizationRevision?: string };
 
 const ConfigurationContext = createContext<Dispatch<SetStateAction<AppShellConfiguration>> | null>(null);
+type RegisterPage = (href: string, element: ReactNode, configuration: AppShellConfiguration, context: SegmentContext) => void;
+const PageRegistrationContext = createContext<RegisterPage | null>(null);
 /** dev-only：AppShellPage 全局渲染序号，用于定位 configuration 回写风暴。 */
 let appShellRenderSeq = 0;
 const STORAGE_KEY = "woker:workspace-tabs:v3";
@@ -110,7 +111,8 @@ export function WorkspaceShell({ children, configuration }: {
     const { label, locked } = labelForHref(currentHref);
     return [{ id: currentHref, href: currentHref, src: currentHref, label, locked }];
   });
-  const [views, setViews] = useState<CachedView[]>(() => [{ href: currentHref, element: children, context: segmentContext, seq: 1 }]);
+  // 当前分段的路由上下文：视图登记时一并快照，隐藏视图靠它固定住自己的页面。
+  const [views, setViews] = useState<CachedView[]>([]);
   const [restored, setRestored] = useState(false);
   // 当前展示的视图严格跟随真实路由。此前这里叠加了一层"乐观切换"（pendingHref）：
   // 点击已保活链接时先手动切换视图、再后台 router.push。连续快速切换时，Next 会把
@@ -200,43 +202,20 @@ export function WorkspaceShell({ children, configuration }: {
     return () => window.clearTimeout(endTimer);
   }, [currentHref, restored, touch, appendTab]);
 
-  // 视图登记：只有「没见过的地址」在渲染期登记，保证新页面第一帧就渲染出来。
-  // 已有视图的 RSC 更新（路由缓存过期后的重新校验、router.refresh）放到 effect 里用
-  // transition 采用：先让用户看到保活的内容，新数据到了再无缝换上，不会卡在等 RSC 上。
-  const activeView = views.find((view) => view.href === currentHref);
-  const needsRegister = !activeView;
-  const syncedViews = needsRegister ? upsertView(views, currentHref, children, segmentContext) : views;
-  if (needsRegister) {
-    if (process.env.NODE_ENV !== "production") bumpShellCause("renderSetViews");
-    setViews(syncedViews);
-  }
-
   const viewsRef = useRef(views);
   viewsRef.current = views;
-
-  // 视图 context 的「自愈」：App Router 的 children 在所有视图之间共享同一个引用（它只是
-  // 「当前分段」的占位节点，靠 LayoutRouterContext 现场解析成具体页面），所以旧版用
-  // current.element === children 做 bail 对任何已登记视图都恒为真，这里的校正从不执行。
-  // 后果：needsRegister 在渲染期登记时若 segmentContext 还停在过渡态（上一个路由），视图
-  // 就永久渲染成别的页面、取数也落在错误路由上，切走切回不恢复，只有 F5 重建外壳才正确
-  // ——正是「切页后内容空白/错位、刷新才有数据」的根因。
-  //
-  // 这里把 segmentContext 放回依赖：导航落定 / RSC 缓存重新校验后 Next 会用新的 tree 刷新
-  // 它，effect 随即用最新 context 校正当前视图，快照与真实路由重新对齐。依赖它「不会」
-  // 重新引入假死——假死主因是把 live context 直接传给 memo 的 KeptView（击穿 memo、整棵
-  // 子树空转重渲染），而这里传给 KeptView 的始终是稳定快照 view.context（见下方渲染处）；
-  // effect 体内先用引用比较 bail，稳定页即使被调度也不会 setViews。
+  // Cache page content, never Next's live LayoutRouter element. A hidden router
+  // can issue stale server patches and prevent the next navigation committing.
+  const registerPage = useCallback<RegisterPage>((href, element, pageConfiguration, context) => {
+    setViews(prev => upsertView(prev, href, <AppShellPage configuration={pageConfiguration}>{element}</AppShellPage>, context));
+  }, []);
+  const syncedViews = views;
+  // Keep the registered page content while correcting a context captured during navigation.
   useEffect(() => {
-    const current = viewsRef.current.find((view) => view.href === currentHref);
-    if (!current || current.context === segmentContext) {
-      if (process.env.NODE_ENV !== "production") bumpShellCause("effectBail");
-      return;
-    }
-    if (process.env.NODE_ENV !== "production") bumpShellCause("effectSetViews");
-    startTransition(() => {
-      setViews((prev) => upsertView(prev, currentHref, children, segmentContext));
-    });
-  }, [children, currentHref, segmentContext]);
+    const current = viewsRef.current.find(view => view.href === currentHref);
+    if (!current || current.context === segmentContext) return;
+    setViews(previous => previous.map(view => view.href === currentHref ? { ...view, context: segmentContext } : view));
+  }, [currentHref, segmentContext]);
 
   // 只渲染仍在标签栏里的视图；被关掉或被标签上限挤掉的视图顺带释放。
   const renderedViews = syncedViews.filter(
@@ -385,6 +364,9 @@ export function WorkspaceShell({ children, configuration }: {
 
   return (
     <ConfigurationContext.Provider value={setDisplay}>
+      <PageRegistrationContext.Provider value={registerPage}>
+        <div hidden>{children}</div>
+      </PageRegistrationContext.Provider>
       <AppShellClient
         {...display}
         title={display.title ?? activeTab?.label ?? configuration.title}
@@ -416,12 +398,6 @@ export function WorkspaceShell({ children, configuration }: {
             href={view.href}
             visible={view.href === shownHref}
             element={view.element}
-            // 始终用登记时快照的 context，绝不把 Next 每帧刷新的 live segmentContext 注入子树。
-            // Live context 的对象引用会随 router 内部状态变化而反复更换，一旦作为 prop 传给
-            // memo 的 KeptView，就会击穿 memo，让整棵保活子树（含重表单/表格）跟着空转重渲染，
-            // 主线程被占满后表现为「点击假死」。路由段的正确性由登记时的 context 快照保证：
-            // 新页面在 needsRegister 分支登记的就是当时的 segmentContext，RSC 更新则由下方
-            // effect 用最新 children + segmentContext 重建快照，两者配对始终正确。
             context={view.context}
           />
         ))}
@@ -526,6 +502,14 @@ export function AppShellPage({ children, configuration }: {
   configuration: AppShellConfiguration;
 }) {
   const setConfiguration = useContext(ConfigurationContext);
+  const registerPage = useContext(PageRegistrationContext);
+  const pathname = usePathname() || "/";
+  const search = useSearchParams()?.toString() ?? "";
+  const href = normalizeHref(`${pathname}${search ? `?${search}` : ""}`);
+  const segmentContext = useContext(LayoutRouterContext);
+  useLayoutEffect(() => {
+    registerPage?.(href, children, configuration, segmentContext);
+  }, [registerPage, href, children, configuration, segmentContext]);
   const active = useTabActive();
   if (process.env.NODE_ENV !== "production") {
     appShellRenderSeq += 1;
@@ -542,5 +526,5 @@ export function AppShellPage({ children, configuration }: {
     }
   }, [active, configuration, setConfiguration]);
   if (!setConfiguration) throw new Error("Business pages must use the persistent ERP layout.");
-  return children;
+  return registerPage ? null : children;
 }

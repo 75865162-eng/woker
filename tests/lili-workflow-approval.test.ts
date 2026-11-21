@@ -10,7 +10,7 @@ test("every shipped skill and workflow uses single-task Codex chat approval with
   assert.match(entry.promptEn,/All Lili approvals happen in Codex chat/);
   assert.match(entry.promptZh,/不重复索要批准/);
  }
- assert.equal(listWorkflows().length,12);
+ assert.equal(listWorkflows().length,13);
 });
 function setup(status="REQUESTED") {
  let row:SyncChatPreview={id:"request-1",operation:"run",requestedByUserId:"owner",changeDigest:"a".repeat(64),baseRevision:4,status,expiresAt:new Date(Date.now()+60_000)};

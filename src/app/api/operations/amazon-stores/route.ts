@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { boundedJsonObject } from "@/lib/amazon-sync/request-body";
+import { boundedJsonObjectWithRaw } from "@/lib/amazon-sync/request-body";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { listAmazonStores, renameAmazonStore } from "@/lib/amazon-sync/stores";
@@ -10,8 +10,10 @@ export const runtime = "nodejs";
 const json = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { "Cache-Control": "no-store" } });
 async function handle(request: Request, write: boolean) {
   try {
-    const body = write ? await boundedJsonObject(request, 16000) : undefined;
-    const permission = await requireApiPermission(write ? "settings" : "operations", write ? "edit" : "view", request);
+    const parsed = write ? await boundedJsonObjectWithRaw(request, 16000) : undefined;
+    const body = parsed?.value;
+    const authorizationRequest = parsed ? new Request(request.url, { method: request.method, headers: request.headers, body: parsed.raw }) : request;
+    const permission = await requireApiPermission(write ? "settings" : "operations", write ? "edit" : "view", authorizationRequest);
     if (!permission.ok) return permission.response;
     const scope = { organizationId: permission.user.organizationId, workspaceId: workspaceScopeFromRequest(request).workspaceId };
     if (write) return json(await renameAmazonStore(scope, permission.user.id, body!));

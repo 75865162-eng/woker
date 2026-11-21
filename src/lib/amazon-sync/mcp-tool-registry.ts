@@ -71,6 +71,7 @@ const legacyTools = [
   ["amazon.stores.list", "查询当前授权店铺和站点"], ["amazon.inventory.list", "查询最近已同步的库存"],
   ["amazon.inventory.summary", "汇总授权库存"], ["amazon.catalog.list", "查询最近已同步的刊登"],
   ["amazon.sales.list", "查询店铺逐日销售流量快照"], ["amazon.sync.status", "查询同步状态"],
+  ["amazon.store.overview", "只读比较指定连续七个已结束业务日及前七日的店铺销售，返回逐日证据、缺日和币种；不提供订单数或商品级变化"],
   ["amazon.history.read", "查询成功同步的历史库存或刊登快照"], ["amazon.sales.export", "导出最多 1000 条授权销售快照"],
   ["data_list_tables", "列出当前授权范围内有已发布数据的 Skill 逻辑表"],
   ["data_describe_table", "查看已接入 Skill 逻辑表的字段、粒度和限制"],
@@ -85,6 +86,10 @@ function legacyToolInputSchema(name: string) {
     sellerAccountId: { type: "string" }, sellerAccountIds: { type: "array", items: { type: "string" }, maxItems: 200 },
     marketplaceId: { type: "string" },
   };
+  if (name === "amazon.store.overview") return { type: "object", additionalProperties: false, required: ["sellerAccountId", "marketplaceId", "from", "to"], properties: {
+    sellerAccountId: { type: "string", minLength: 1, maxLength: 200 }, marketplaceId: { type: "string", minLength: 1, maxLength: 200 },
+    from: { type: "string", format: "date", description: "已结束的连续七个业务日的首日" }, to: { type: "string", format: "date", description: "该七日的末日，包含当天" },
+  } };
   if (name === "amazon.data.archive.read") return { type: "object", additionalProperties: false, required: ["sourceId", "taskId", "rawPage"], properties: {
     ...scopeProperties, sourceId: { type: "string", minLength: 1, maxLength: 200 }, taskId: { type: "string", minLength: 1, maxLength: 200 },
     rawPage: { type: "integer", minimum: -2147483648, maximum: 2147483647 }, pointer: { type: "string", maxLength: 2048 },
@@ -165,6 +170,11 @@ export const amazonMcpToolDefinitions: readonly AmazonMcpToolDefinition[] = lega
         approvalRequired: { const: true }, started: { const: false }, changeRequest: { type: "object", required: ["id", "status"], properties: { id: { type: "string", minLength: 1 }, status: { const: "REQUESTED" } } },
       } }, meta: { type: "object" },
     },
+  } : name === "amazon.store.overview" ? {
+    type: "object", required: ["sellerAccountId", "marketplaceId", "timeZone", "source", "asOf", "current", "previous", "comparable", "productChanges", "sync"],
+    properties: { sellerAccountId: { type: "string" }, marketplaceId: { type: "string" }, timeZone: { type: "string" }, source: { type: "string" }, asOf: { type: "string" },
+      current: { type: "object", description: "指定七日的完整性、缺失日期、原币销售额及逐日证据；订单数未知" }, previous: { type: "object", description: "之前七日的同口径证据" },
+      comparable: { type: "boolean" }, productChanges: { type: "null" }, productChangesReason: { type: "string" }, sync: { type: "array", items: { type: "object" } } },
   } : rowQuery ? {
     type: "object", required: ["data", "meta", "pagination", "warnings"],
     properties: {

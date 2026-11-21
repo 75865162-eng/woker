@@ -7,7 +7,7 @@ import path from "node:path";
 import { randomUUID, scryptSync } from "node:crypto";
 import { createServer } from "node:net";
 import { chromium } from "@playwright/test";
-import { PERF_ROUTES, CORE_ROUTES, WARM_NAV_ROUTES, FIXTURE_MODULES } from "./perf-routes.mjs";
+import { PERF_ROUTES, CORE_ROUTES, FIXTURE_MODULES } from "./perf-routes.mjs";
 import { judgeAll } from "./perf-budget.mjs";
 
 const root = process.cwd();
@@ -217,9 +217,16 @@ try {
   }
   // Warm 导航用侧边栏真实存在的二级链接（WARM_NAV_ROUTES），先停到末页建立基线：
   // 第一次点 /product(不同页)才真正触发导航；链接均来自 business-navigation.ts items。
-  const warmBase = WARM_NAV_ROUTES[WARM_NAV_ROUTES.length - 1];
+  for (const item of CORE_ROUTES) {
+    await page.goto(base + item.path, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: item.heading, exact: true }).first().waitFor({ timeout: 30000 });
+    await pause(600);
+  }
+  const warmBase = CORE_ROUTES[CORE_ROUTES.length - 1];
+  const initialRunner = page.waitForResponse(response => new URL(response.url()).pathname === "/api/notifications/wecom/settings", { timeout: 15000 });
   await page.goto(base + warmBase.path, { waitUntil: "domcontentloaded" });
-  await pause(600); // 仅建立 nav DOM 基线；heading 由后续循环按 URL 判定，不强等
+  await initialRunner; // Wait for the initial delayed runner before counting navigation requests.
+  await pause(600);
   // DOM identity detects remounts without adding production-only test hooks.
   await page.locator("aside nav").first().evaluate(el => { window.__perfOriginalNav = el; });
   publicRequests.length = 0;
@@ -229,7 +236,7 @@ try {
   // 用 namespace routes 无法在归档 fixture 中解析；tab 切换仍保持缓存导航语义。
   // 连续重复访问同一视图，避免来回切换卡住 shell 的 route push。
   // 融合自驱动闭环容错：单步失败记 warmNote 并跳过，不中断全站 cold 主验收。
-  const warmOrder = pages.flatMap(page => [page, page, page]);
+  const warmOrder = Array.from({ length: 3 }, () => CORE_ROUTES).flat();
   let warmNote = "";
   for (const item of warmOrder) {
     const at = performance.now();
@@ -242,6 +249,16 @@ try {
       break;
     }
     warm.push(performance.now() - at);
+    if (item.path === "/listing-ai" && await page.locator('[data-workspace-view="/listing-ai"] input').count()) {
+      const input = page.locator('[data-workspace-view="/listing-ai"] input').first();
+      if (await page.evaluate(() => window.__perfListingView === undefined)) {
+        await input.fill("Fixture retained input");
+        await page.locator('[data-workspace-view="/listing-ai"]').evaluate(node => { window.__perfListingView = node; });
+      } else {
+        assert.ok(await page.locator('[data-workspace-view="/listing-ai"]').evaluate(node => window.__perfListingView === node), "Cached page view remounted");
+        assert.equal(await input.inputValue(), "Fixture retained input", "Cached page input state was lost");
+      }
+    }
     // 通用视图身份断言：切回同一路由时 [data-workspace-view] 节点必须复用（不重挂载）。
     if (await page.locator(`[data-workspace-view="${item.path}"]`).count()) {
       const key = `__perfView_${item.path.replace(/\W/g, "_")}`;

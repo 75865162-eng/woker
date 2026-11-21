@@ -22,7 +22,8 @@ test("Next standalone tracing excludes local output and user uploads", async () 
 
 test("all shipped Lili definitions, translations and full skill procedures are retained", async () => {
   assert.equal(listSkills().length, 116); assert.equal(listTools().length, 107);
-  assert.equal(listWorkflows().length, 12);
+  assert.equal(listWorkflows().length, 13);
+  assert.ok(listWorkflows().some(workflow => workflow.slug === "store-sales-weekly-overview" && workflow.promptZh.includes("amazon.store.overview")));
   for (const rows of [listSkills(), listWorkflows()]) assert.equal(new Set(rows.map((row) => row.slug)).size, rows.length);
   for (const skill of listSkills()) { assert.ok(skill.promptZh); assert.ok(skill.promptEn); assert.ok((await skillMarkdown(skill.slug))!.length > 500); }
   const recovery = await skillMarkdown("reimbursement-recovery");

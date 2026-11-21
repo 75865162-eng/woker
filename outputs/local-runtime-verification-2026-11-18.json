@@ -1,0 +1,40 @@
+{
+  "fixtureOnly": true,
+  "executionTests": {
+    "passed": 12,
+    "todo": 0
+  },
+  "results": [
+    "complete repository migration chain applied to empty disposable PostgreSQL; checksums verified and repeat deploy is idempotent",
+    "durable execution claims, expiry fencing, bounded recovery and mock success publications",
+    "import stale publication rejected; final audit failure rolls back file/export/job/success versions",
+    "import pre-publication and mock image CPU gates: SIGKILL followed by bounded lease takeover publishes once",
+    "real XLSX parser SIGKILL preserves original Bulk input and recovers to one export",
+    "image engine executable SIGKILL rejects partial output; protocol fixture retries successfully",
+    "PostgreSQL restart inside final audit rolls back job/file/export/success versions; retry publishes once",
+    "isolated dev web and database login started",
+    "all registered Worker processes visible through authenticated health API",
+    "duplicate manager refused without stopping the original registered Workers",
+    "real browser settings page renders all registered Worker heartbeats",
+    "health fetch failure clears stale online cards; successful refresh restores current state",
+    "real Next App Router: procurement, suppliers, orders, WMS deep links, refresh/back, local FBA packing/plans and finance expenses; no API writes",
+    "real AppShell screenshot captured against disposable fixture database",
+    "real permission snapshot filters WMS navigation for operations role and route guard denies direct WMS access",
+    "real upload API task consumed; invalid fixture persisted expected parse failure",
+    "valid Bulk upload → real Worker → done → authenticated download; bid updated, identity/input preserved, one export",
+    "graceful stop makes all registered Workers offline",
+    "Worker restart restores all registered heartbeats",
+    "manager SIGKILL: all owned Worker processes terminate without orphans",
+    "Redis outage: upload and image APIs retain queued database intent and original input files",
+    "Redis restart + queue loss: database queued intent recovered and consumed",
+    "connection recovery consumes both deferred jobs with original image input intact",
+    "PostgreSQL restart: web and all Worker heartbeats reconnect",
+    "fixture PostgreSQL custom backup verified and restored into a separate disposable database"
+  ],
+  "notCovered": [
+    "native Real-ESRGAN GPU computation (executable protocol fixture tested; native engine not installed)",
+    "real provider calls",
+    "production deployment or reboot",
+    "production backup activation"
+  ]
+}
