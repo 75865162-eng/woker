@@ -12,7 +12,7 @@ function fakeRedis() {
   return {
     store,
     get: async (k: string) => store.get(k) ?? null,
-    set: async (k: string, v: string, _mode: string, _ttl: number) => { store.set(k, v); return "OK"; },
+    set: async (k: string, v: string, ...rest: unknown[]) => { void rest; store.set(k, v); return "OK"; },
     on: () => {},
   };
 }
