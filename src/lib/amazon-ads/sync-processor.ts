@@ -11,6 +11,7 @@ import { adsSyncStages, adsStructureCompleteStage, nextAdsStructureStage, parseA
 import { assertAdsLivePlan } from "./sync-service";
 import { withAmazonAdsClientLease } from "./api-budget";
 import { adsStructureTaskWhere } from "./task-routing";
+import { invalidateAmazonAdsAfterSync } from "./invalidate-after-sync";
 
 const leaseMs = 5 * 60_000;
 const workerId = `ads-${process.pid}-${randomUUID()}`;
@@ -119,6 +120,9 @@ export async function processAmazonAdsSyncTask(taskId: string, dispatchVersion: 
       });
       if (stageFinished) await tx.amazonAdsSyncPlan.updateMany({ where: { ...scope, id: initial.planId, revision: initial.planRevision, status: "ACTIVE" }, data: { lastSuccessAt: new Date(), lastErrorCode: null } });
     });
+    // 结构快照成功发布后失效该租户的 Amazon 读缓存（ads_metadata/report_acquisition）。
+    // 事务已提交、任务确认为 SUCCEEDED，失效失败只记日志，不改判任务结果。
+    if (stageFinished) await invalidateAmazonAdsAfterSync(scope, "ads-structure-published");
     const current = !stageFinished && await prisma.amazonAdsSyncTask.findFirst({ where: { ...scope, id: initial.id, dispatchVersion: dispatchVersion + 1, fenceVersion, status: "WAITING" }, select: { dispatchVersion: true } });
     if (current) await getAmazonSyncQueue().add("process-amazon-ads-sync-task", { runId: initial.id, adsTaskId: initial.id, adsDispatchVersion: current.dispatchVersion }, { jobId: `ads-${initial.id}-${current.dispatchVersion}`, attempts: 1, removeOnComplete: true, removeOnFail: true });
   } catch (error) {

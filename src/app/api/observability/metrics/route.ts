@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { getMetricsCollector } from "@/lib/observability/metrics-collector";
+import { readCacheConfig } from "@/lib/observability/cache-config";
 
 export const runtime = "nodejs";
 
@@ -9,7 +10,10 @@ export async function GET(request: Request) {
   try {
     const permission = await requireApiPermission("settings", "view", request);
     if (!permission.ok) return permission.response;
-    return NextResponse.json(getMetricsCollector().snapshot(), {
+    return NextResponse.json({
+      ...getMetricsCollector().snapshot(),
+      cacheConfig: readCacheConfig(),
+    }, {
       headers: { "Cache-Control": "no-store" },
     });
   } catch (error) {

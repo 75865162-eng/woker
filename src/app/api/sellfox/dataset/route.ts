@@ -4,6 +4,7 @@ import { sellfoxBrowseQuery, SellfoxBrowseError } from "@/lib/sellfox/browse-que
 import { hostDataset } from "@/lib/sellfox/host-pages";
 import { readHostDataset, type HostQuery } from "@/lib/sellfox/host-read";
 import { readSellfoxWorkbench } from "@/lib/sellfox/workbench-read";
+import { sellfoxBrowseStoreIds } from "@/lib/sellfox/browse-store-scope";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
@@ -30,6 +31,9 @@ export async function GET(request: Request) {
   try {
     if (dataset.endpoint === "/api/sellfox/performance") {
       const query = sellfoxBrowseQuery(url, "performance");
+      // 与 /api/sellfox/performance 保持同一授权收窄：把可见店铺写回 query，
+      // 使 workbench SQL 与缓存 key 都继承三态 scope，避免承接页导出绕过店铺授权。
+      await sellfoxBrowseStoreIds(query, fullScope.organizationId, fullScope.workspaceId, { id: permission.user.id, role: permission.user.role });
       const result = await readSellfoxWorkbench("performance", query, fullScope);
       // 产品日利润的汇总由 readSellfoxWorkbench 按币种给出：values 的键直接对齐列 key。
       const byCurrency = (result.totals as Record<string, unknown>[]).map((row) => {

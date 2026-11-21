@@ -7,6 +7,7 @@ import { AdsQueryError } from "./query-contract";
 import { assertReportDeadline } from "./report-deadline";
 import type { AcquisitionState } from "./report-acquisition";
 import { assertReportScopeDigest, reportScopeDigest } from "./report-scope";
+import { invalidateAmazonAdsAfterSync } from "./invalidate-after-sync";
 
 /** Offline-only manifest. No specific live Amazon report contract is enabled by this module. */
 export type AdsReportManifest = { evidence: "ISOLATED_FIXTURE_ONLY"; reportType: string; adProduct: string; apiVersion: string; currencyCode: string; attributionWindow: string; timezone: string; from: string; to: string; dimensions: Array<"campaignId" | "adGroupId" | "targetingId" | "advertisedAsin" | "searchTerm" | "placement">; metrics: Array<"impressions" | "clicks" | "orders" | "units" | "spend" | "sales"> };
@@ -140,7 +141,7 @@ async function validateStored(tx: Prisma.TransactionClient, scope: SyncScope, ve
 }
 export async function publishAdsReportVersion(scope: SyncScope, actor: string, fence: AdsReportFence) {
   offlineOnly();
-  return prisma.$transaction(async tx => {
+  const result = await prisma.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`ads-report:${fence.taskId}`}, 0))`;
     const prior = await tx.amazonAdsReportVersion.findUnique({ where: { organizationId_workspaceId_sourceTaskId: { ...scope, sourceTaskId: fence.taskId } }, include: { sourceTask: true } });
     if (prior?.status === "PUBLISHED" && prior.sourceTask.status === "SUCCEEDED" && prior.sourceTask.dispatchVersion === fence.dispatchVersion && prior.sourceTask.fenceVersion === fence.fenceVersion) {
@@ -162,12 +163,15 @@ export async function publishAdsReportVersion(scope: SyncScope, actor: string, f
     await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actor, action: "amazon.ads.report.publish", entityType: "AmazonAdsReportVersion", entityId: prior.id, metadata: { workspaceId: scope.workspaceId, profileId: prior.profileId, rowCount: count, evidence: "ISOLATED_FIXTURE_ONLY" } } });
     return { versionId: prior.id, rowCount: count, status: "PUBLISHED" };
   }, { timeout: 20000 });
+  // 报表版本发布后失效该租户读缓存；失效失败只记日志，不改判发布结果。
+  await invalidateAmazonAdsAfterSync(scope, "ads-report-published");
+  return result;
 }
 
 /** Local fixture rollback only. Preserve original publication order and all facts. */
 export async function setAdsReportVersionVisibility(scope: SyncScope, actor: string, versionId: string, visible: boolean) {
   offlineOnly();
-  return prisma.$transaction(async tx => {
+  const result = await prisma.$transaction(async tx => {
     const identity = await tx.amazonAdsReportVersion.findFirst({ where: { ...scope, id: versionId }, select: { sourceTaskId: true } });
     if (!identity) throw new AdsQueryError("ADS_REPORT_VERSION_FORBIDDEN", 403);
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`ads-report:${identity.sourceTaskId}`}, 0))`;
@@ -180,4 +184,7 @@ export async function setAdsReportVersionVisibility(scope: SyncScope, actor: str
     await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actor, action: visible ? "amazon.ads.report.restore" : "amazon.ads.report.withdraw", entityType: "AmazonAdsReportVersion", entityId: version.id, metadata: { workspaceId: scope.workspaceId, profileId: version.profileId, retainedRowCount: version.rowCount } } });
     return { versionId, status: visible ? "PUBLISHED" : "WITHDRAWN" };
   }, { timeout: 20000 });
+  // 报表可见性切换后失效该租户读缓存（恢复/撤回都改变可读集合）。
+  await invalidateAmazonAdsAfterSync(scope, "ads-report-visibility");
+  return result;
 }

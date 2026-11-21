@@ -112,3 +112,18 @@ test("web-vitals: 指标去重与上报结构（注入 reporter + 伪 observer �
   assert.equal(seen.length, 1);
   assert.equal(seen[0].name, "LCP");
 });
+
+test("cache config snapshot reads only boolean switches", async () => {
+  const { readCacheConfig } = await import("../src/lib/observability/cache-config");
+  assert.deepEqual(readCacheConfig({}), {
+    sellfoxResultCache: false, amazonResultCache: false,
+    sellfoxAggregateRead: false, sellfoxListingProfileRead: false, allEnabled: false,
+  });
+  assert.deepEqual(readCacheConfig({
+    SELLFOX_CACHE_ENABLED: "true", AMAZON_CACHE_ENABLED: "1",
+    SELLFOX_AGG_READ_ENABLED: "true", SELLFOX_LISTING_PROFILE_READ_ENABLED: "false",
+  }), {
+    sellfoxResultCache: true, amazonResultCache: true,
+    sellfoxAggregateRead: true, sellfoxListingProfileRead: false, allEnabled: true,
+  });
+});

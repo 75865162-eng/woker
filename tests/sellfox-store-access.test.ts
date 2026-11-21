@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import { Prisma } from "@prisma/client";
 import { resolveSellfoxVisibleStoreIds } from "@/lib/sellfox/store-access";
 import { sellfoxBrowseStoreIds } from "@/lib/sellfox/browse-store-scope";
@@ -65,4 +66,13 @@ test("browse scoping injects authorized external ids into query and restricts Pr
   const result = await sellfoxBrowseStoreIds(query(), scope.organizationId, scope.workspaceId);
   assert.equal(result, undefined);
   assert.deepEqual(q.shopExternalIds, []);
+});
+
+test("source guard: dataset performance export applies store-scope narrowing", () => {
+  const datasetRoute = readFileSync(new URL("../src/app/api/sellfox/dataset/route.ts", import.meta.url), "utf8");
+  const perfBranch = datasetRoute.indexOf('dataset.endpoint === "/api/sellfox/performance"');
+  const narrowing = datasetRoute.indexOf("sellfoxBrowseStoreIds(query", perfBranch);
+  const workbenchRead = datasetRoute.indexOf('readSellfoxWorkbench("performance", query, fullScope)', perfBranch);
+  assert.ok(perfBranch >= 0, "dataset route 必须存在 performance 分支");
+  assert.ok(narrowing > perfBranch && narrowing < workbenchRead, "workbench 读取前必须先做店铺授权收窄");
 });
