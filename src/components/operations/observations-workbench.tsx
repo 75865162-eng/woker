@@ -1,5 +1,5 @@
 "use client";
-import { formatSiteStore } from "@/lib/sellfox/marketplace-site";
+import { formatSiteStore, siteCodeForDisplay } from "@/lib/sellfox/marketplace-site";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { WorkbenchDialog } from "@/components/ui/workbench-dialog";
@@ -29,8 +29,8 @@ function cells(row: Row): string[] {
   if (row.kind === "INBOUND_PLAN") return [text(f.inboundPlanId), text(f.name), text(f.sourceStatus), text(f.sourceCreatedAt), text(f.sourceUpdatedAt)];
   if (row.kind === "INBOUND_SHIPMENT") return [text(f.shipmentId), text(f.name), text(f.sourceStatus), text(f.destinationWarehouseId), text(f.inboundPlanId)];
   if (row.kind.startsWith("INBOUND_")) return [text(f.sellerSku), text(f.asin), text(f.fnsku), text(f.declaredQuantity), text(f.quantitySemantics)];
-  if (row.kind === "OWN_PRICE_ASIN") return [text(f.asin), text(f.marketplaceId), text(f.offers), "New / B2C", text(f.availability)];
-  if (row.kind === "COMPETITIVE_PRICE") return [text(f.asin), text(f.marketplaceId), text(f.featuredBuyingOptions), text(f.referencePrices), "分段赢家；自有报价见自有价格视图"];
+  if (row.kind === "OWN_PRICE_ASIN") return [text(f.asin), siteCodeForDisplay(f.marketplaceId), text(f.offers), "New / B2C", text(f.availability)];
+  if (row.kind === "COMPETITIVE_PRICE") return [text(f.asin), siteCodeForDisplay(f.marketplaceId), text(f.featuredBuyingOptions), text(f.referencePrices), "分段赢家；自有报价见自有价格视图"];
   if (row.kind === "BUY_BOX_DAY") return [text(f.businessDate), text(f.asin), f.buyBoxPercentage == null ? "未知" : `${f.buyBoxPercentage}%`, text(f.sessions), text(f.pageViews)];
   if (row.kind === "PROMOTION_SUMMARY") { const schedule = f.schedule as Record<string, unknown> | null; return [text(f.promotionId), text(f.promotionType), text(f.status), text(f.promotionTitle), text(schedule?.startDate)]; }
   if (row.kind === "PROMOTION") return [text(f.promotionId), text(f.revision), text(f.promotionType), text(f.status), text(f.trackingId)];

@@ -1,5 +1,5 @@
 "use client";
-import { formatSiteStore } from "@/lib/sellfox/marketplace-site";
+import { formatSiteStore, siteCodeForDisplay } from "@/lib/sellfox/marketplace-site";
 import { useEffect, useRef, useState } from "react";
 import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
 import { Button } from "@/components/ui/button";
@@ -72,7 +72,7 @@ export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onT
     {
       key: "businessDate",
       header: "业务日 / 来源",
-      render: (row) => (<>{row.businessDate}<span className="block text-muted">{formatSiteStore(row.marketplaceId, row.sellerName)} · {row.amazonSellerId}</span></>),
+      render: (row) => (<>{row.businessDate}<span className="block text-muted">{formatSiteStore(row.marketplaceId, row.sellerName)}</span></>),
     },
     {
       key: "sales",
@@ -91,15 +91,15 @@ export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onT
   return <div className="space-y-4" data-testid="sales-traffic-workbench">
     <p className="text-xs text-muted">店铺逐日汇总 · 日期为 Marketplace 报告业务日（含结束日） · 每日选择最新成功版本。SKU / ASIN 日销量不在本报告粒度内。</p>
     {!taskId && <form className="flex flex-wrap items-end gap-2 rounded border border-border p-3" onSubmit={e => { e.preventDefault(); void requestSync(); }}>
-      <label className="grid gap-1 text-xs">同步来源<select aria-label="报告同步来源" className={input} value={source} onChange={e => setSource(e.target.value)} required><option value="">选择 Seller / Marketplace</option>{sources.filter(s => s.resource === "sales_traffic" && s.enabled).map(s => <option key={s.id} value={s.id}>{formatSiteStore(s.marketplaceId, s.seller.displayName || s.seller.accountKey)}</option>)}</select></label>
+      <label className="grid gap-1 text-xs">同步来源<select aria-label="报告同步来源" className={input} value={source} onChange={e => setSource(e.target.value)} required><option value="">选择 Seller / Marketplace</option>{sources.filter(s => s.resource === "sales_traffic" && s.enabled).map(s => <option key={s.id} value={s.id}>{formatSiteStore(s.marketplaceId, s.seller.displayName || "未命名店铺")}</option>)}</select></label>
       <label className="grid gap-1 text-xs">同步日期<select aria-label="同步日期" className={input} value={preset} onChange={e => setPreset(e.target.value)}>{[["today", "今天"], ["yesterday", "昨天"], ["last7", "最近 7 天"], ["last30", "最近 30 天"], ["thisMonth", "本月"], ["lastMonth", "上月"], ["custom", "自定义"]].map(([v, label]) => <option value={v} key={v}>{label}</option>)}</select></label>
       {preset === "custom" && <><label className="grid gap-1 text-xs">同步开始日期<input type="date" className={input} value={syncFrom} onChange={e => setSyncFrom(e.target.value)} required /></label><label className="grid gap-1 text-xs">同步结束日期<input type="date" className={input} value={syncTo} onChange={e => setSyncTo(e.target.value)} required /></label></>}
       <Button type="submit" size="sm" disabled={!canSync || busy || !source}>申请报告同步</Button>
       <p className="w-full text-xs text-muted">每次最多 31 天、历史最多 730 天。站点时区由后端确定；含今天的范围属于未闭合周期，仅保留质量证据，不发布为完整数据。</p>
     </form>}
     <div className="flex flex-wrap gap-2">
-      <label className="grid gap-1 text-xs">Seller<select aria-label="日报 Seller" className={input} value={seller} onChange={e => select(setSeller, e.target.value)}><option value="">全部 Seller</option>{[...new Map(sources.filter(s => s.resource === "sales_traffic").map(s => [s.sellerAccountId, s.seller.displayName || s.seller.accountKey])).entries()].map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
-      <label className="grid gap-1 text-xs">Marketplace<select aria-label="日报 Marketplace" className={input} value={site} onChange={e => select(setSite, e.target.value)}><option value="">全部 Marketplace</option>{[...new Set(sources.filter(s => s.resource === "sales_traffic").map(s => s.marketplaceId))].map(id => <option key={id}>{id}</option>)}</select></label>
+      <label className="grid gap-1 text-xs">Seller<select aria-label="日报 Seller" className={input} value={seller} onChange={e => select(setSeller, e.target.value)}><option value="">全部 Seller</option>{[...new Map(sources.filter(s => s.resource === "sales_traffic").map(s => [s.sellerAccountId, s.seller.displayName || "未命名店铺"])).entries()].map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
+      <label className="grid gap-1 text-xs">Marketplace<select aria-label="日报 Marketplace" className={input} value={site} onChange={e => select(setSite, e.target.value)}><option value="">全部 Marketplace</option>{[...new Set(sources.filter(s => s.resource === "sales_traffic").map(s => s.marketplaceId))].map(id => <option key={id} value={id}>{siteCodeForDisplay(id)}</option>)}</select></label>
       <label className="grid gap-1 text-xs">业务开始日期<input className={input} type="date" value={from} onChange={e => select(setFrom, e.target.value)} /></label><label className="grid gap-1 text-xs">业务结束日期<input className={input} type="date" value={to} onChange={e => select(setTo, e.target.value)} /></label>
       <label className="grid gap-1 text-xs">店铺 / Seller / 站点搜索<input className={input} value={keyword} maxLength={200} onChange={e => select(setKeyword, e.target.value)} /></label>
       <label className="grid gap-1 text-xs">业务日期排序<select aria-label="业务日期排序" className={input} value={direction} onChange={e => select(setDirection, e.target.value)}><option value="desc">最新在前</option><option value="asc">最早在前</option></select></label>

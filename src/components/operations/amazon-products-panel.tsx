@@ -1,4 +1,5 @@
 "use client";
+import { siteCodeForDisplay } from "@/lib/sellfox/marketplace-site";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { StandardDataTable } from "@/components/ui/table-variants";
@@ -21,7 +22,7 @@ export function AmazonProductsPanel({ headers }: { headers: () => Headers }) {
     { key: "title", header: "商品标题", className: "max-w-64", render: row => row.title ?? "未同步" },
     { key: "sellerSku", header: "Seller SKU", render: row => <span className="font-semibold">{row.sellerSku}</span> },
     { key: "asin", header: "ASIN", render: row => row.asin ?? "未同步" },
-    { key: "account", header: "店铺 / 站点", render: row => <>{row.sellerAccountId}<span className="block text-xs text-muted">{row.marketplaceId}</span></> },
+    { key: "account", header: "店铺 / 站点", render: row => <>{siteCodeForDisplay(row.marketplaceId) || "站点未知"}<span className="block text-xs text-muted">{row.sellerAccountId ? "已关联店铺" : "未关联"}</span></> },
     { key: "status", header: "刊登状态", render: row => row.listingStatus ?? "未同步" },
     { key: "available", header: "可售", render: row => row.available ?? "未同步" },
     { key: "inbound", header: "在途", render: row => row.inbound ?? "未同步" },

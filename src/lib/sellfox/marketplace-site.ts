@@ -41,14 +41,23 @@ export function siteCodeOf(marketplace: unknown): string {
 }
 
 /**
- * 全站统一的「站点-店铺」展示标识，如 `US-aoocy`。
+ * 全站统一的「站点-店铺」展示标识，如 `us-aoocy`（站点码小写）。
  * 站点部分由 Marketplace ID 映射为国家代码；店铺部分用 ERP 店铺名（displayName）。
  * 仅用于展示：筛选、同步、对账仍使用原始 sellerAccountId / marketplaceId。
  */
 export function formatSiteStore(marketplace: unknown, storeName: unknown): string {
   const code = siteCodeOf(marketplace);
   const name = typeof storeName === "string" ? storeName.trim() : "";
-  if (!code) return name || "—";
-  if (!name) return code;
-  return `${code}-${name}`;
+  const lowerCode = code ? code.toLowerCase() : "";
+  if (!lowerCode) return name || "—";
+  if (!name) return lowerCode;
+  return `${lowerCode}-${name}`;
+}
+
+/**
+ * 单独的「站点」小写展示码，如 `us`。用于只有站点、没有店铺名的场景。
+ * 与 siteCodeOf 的区别：siteCodeOf 返回大写（供 SITE_FLAG 等 key 使用），本函数仅供展示。
+ */
+export function siteCodeForDisplay(marketplace: unknown): string {
+  return siteCodeOf(marketplace).toLowerCase();
 }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { normalizeWorkspaceScope } from "@/lib/workspace/scope";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
-import { sellfoxSiteLabel, siteCodeOf } from "@/lib/sellfox/marketplace-site";
+import { formatSiteStore, sellfoxSiteLabel } from "@/lib/sellfox/marketplace-site";
 
 type SiteGroup = {
   marketplaceId: string; code: string; label: string; sellerCount: number; asinCount: number;
@@ -203,7 +203,7 @@ export function AmazonInventoryWorkbench() {
                       return (
                         <FragmentRow key={key}>
                           <tr className={isExpanded ? "sf-row-expanded" : undefined}>
-                            <td><span className="sf-stack"><strong>{s.sellerName || s.sellerAccountId}</strong><small className="sf-muted">ID {s.sellerAccountId}</small></span></td>
+                            <td><span className="sf-stack"><strong>{formatSiteStore(s.marketplaceId, s.sellerName)}</strong></span></td>
                             <td><span className="sf-site-cell" style={{ color: freshnessColor(s.freshness) }}>{SITE_FLAG[s.code] || "🏳️"} {freshnessLabel(s.freshness)}</span></td>
                             <td className="sf-num">{num(s.asinCount)}</td>
                             <td className="sf-num">{num(s.skuCount)}</td>
@@ -217,7 +217,7 @@ export function AmazonInventoryWorkbench() {
                           {isExpanded ? (
                             <tr className="sf-asin-row"><td colSpan={10}>
                               <div className="sf-asin-panel">
-                                <p className="sf-muted">{s.sellerName || s.sellerAccountId} · {sellfoxSiteLabel(s.marketplaceId)}（{siteCodeOf(s.marketplaceId)}） · 快照 {s.snapshotCapturedAt ? new Date(s.snapshotCapturedAt).toLocaleString("zh-CN") : "未同步"}</p>
+                                <p className="sf-muted">{formatSiteStore(s.marketplaceId, s.sellerName)} · {sellfoxSiteLabel(s.marketplaceId)} · 快照 {s.snapshotCapturedAt ? new Date(s.snapshotCapturedAt).toLocaleString("zh-CN") : "未同步"}</p>
                                 {asinLoading === key && !asinCache[key] ? <div className="sf-empty" role="status">读取 ASIN 明细中…</div> : null}
                                 {asinCache[key]?.error ? <p className="sf-notice" role="alert">{asinCache[key].error}</p> : null}
                                 {asinCache[key] && !asinCache[key].error ? (() => {

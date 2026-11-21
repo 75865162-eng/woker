@@ -1,4 +1,5 @@
 "use client";
+import { siteCodeForDisplay } from "@/lib/sellfox/marketplace-site";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { WorkbenchDialog } from "@/components/ui/workbench-dialog";
@@ -19,7 +20,7 @@ export function FinanceWorkbench({ sellerAccountId = "", marketplaceId = "", get
   const [sourceRunId, setSourceRunId] = useState(""), [dateMode, setDateMode] = useState("day"), [fromTimestamp, setFromTimestamp] = useState(""), [toTimestamp, setToTimestamp] = useState("");
   const [selected, setSelected] = useState<FinanceResult["rows"][number] | null>(null);
   const financeColumns: DataTableColumn<FinanceResult["rows"][number]>[] = [
-    { key: "transaction", header: "交易 / 实际站点", render: (r) => (<>{r.transactionId}<span className="block text-muted">{r.marketplaceId}</span></>) },
+    { key: "transaction", header: "交易 / 实际站点", render: (r) => (<>{r.transactionId}<span className="block text-muted">站点 {siteCodeForDisplay(r.marketplaceId)}</span></>) },
     { key: "postedAt", header: "入账（UTC）", render: (r) => new Date(r.postedAt).toISOString() },
     { key: "type", header: "类型 / 原始状态", render: (r) => (<>{r.transactionType ?? "未返回"}<span className="block text-muted">{r.rawStatus ?? "未返回"}</span></>) },
     { key: "original", header: "原币金额", numeric: true, render: (r) => `${r.originalAmount} ${r.currency}` },
@@ -77,7 +78,7 @@ export function FinanceWorkbench({ sellerAccountId = "", marketplaceId = "", get
       <div className="flex justify-end gap-3 text-xs"><span>{result.pagination.total} 条 · 第 {page} / {Math.max(1, result.pagination.pageCount)} 页</span><Button size="sm" variant="secondary" disabled={loading || page <= 1} onClick={() => setPage(p => p - 1)}>财务上一页</Button><Button size="sm" variant="secondary" disabled={loading || page >= result.pagination.pageCount} onClick={() => setPage(p => p + 1)}>财务下一页</Button></div>
     </>}
     <WorkbenchDialog open={!!selected} drawer title="财务交易详情" onClose={() => setSelected(null)}>{selected && <div className="space-y-4">
-      <dl className="grid grid-cols-2 gap-4 rounded border border-border p-3 text-xs">{[["交易 ID", selected.transactionId], ["实际站点", selected.marketplaceId], ["入账时间（UTC）", new Date(selected.postedAt).toISOString()], ["交易类型", selected.transactionType], ["原始状态", selected.rawStatus], ["原币金额", `${selected.originalAmount} ${selected.currency}`], ["折算金额", selected.conversionStatus === "CONVERTED" ? `${selected.convertedAmount} ${selected.convertedCurrency}` : "未配置有效汇率"], ["关联订单", selected.orderId], ["交易分类", selected.classification === "NON_ORDER" ? "非订单交易" : "订单关联"], ["站点时区", selected.marketplaceTimeZone], ["采集时间", selected.capturedAt], ["原始入库批次", selected.sourceRunId]].map(([label, value]) => <div key={label}><dt className="text-muted">{label}</dt><dd className="mt-1 break-all">{value ?? "未返回"}</dd></div>)}</dl>
+      <dl className="grid grid-cols-2 gap-4 rounded border border-border p-3 text-xs">{[["交易 ID", selected.transactionId], ["实际站点", siteCodeForDisplay(selected.marketplaceId)], ["入账时间（UTC）", new Date(selected.postedAt).toISOString()], ["交易类型", selected.transactionType], ["原始状态", selected.rawStatus], ["原币金额", `${selected.originalAmount} ${selected.currency}`], ["折算金额", selected.conversionStatus === "CONVERTED" ? `${selected.convertedAmount} ${selected.convertedCurrency}` : "未配置有效汇率"], ["关联订单", selected.orderId], ["交易分类", selected.classification === "NON_ORDER" ? "非订单交易" : "订单关联"], ["站点时区", selected.marketplaceTimeZone], ["采集时间", selected.capturedAt], ["原始入库批次", selected.sourceRunId]].map(([label, value]) => <div key={label}><dt className="text-muted">{label}</dt><dd className="mt-1 break-all">{value ?? "未返回"}</dd></div>)}</dl>
       <p className="text-xs text-muted">已采集交易不代表最终结算；原币与折算金额分别保留，不跨币种相加。</p>
       <div className="flex flex-wrap gap-3">{onTask && <Button size="sm" variant="secondary" onClick={() => { const id = selected.sourceRunId; setSelected(null); onTask(id); }}>查看来源任务</Button>}{selected.orderId && <a className="self-center text-xs text-brand hover:underline" href={`/operations?${new URLSearchParams({ view: "orders", amazonOrderId: selected.orderId, sellerAccountId: selected.sellerAccountId, marketplaceId: selected.marketplaceId })}`}>查看关联订单</a>}</div>
       {selected.fxEvidence && <section className="space-y-2"><h3 className="text-sm font-medium">汇率依据</h3><BusinessRecordFields fields={selected.fxEvidence} /></section>}

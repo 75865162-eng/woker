@@ -1,4 +1,5 @@
 "use client";
+import { siteCodeForDisplay } from "@/lib/sellfox/marketplace-site";
 import { useEffect, useState } from "react";
 import { ActualFieldCoveragePanel } from "./actual-field-coverage-panel";
 import { Button } from "@/components/ui/button";
@@ -53,7 +54,7 @@ export function SyncCoverageWorkbench({ sellerAccountId, marketplaceId, requestH
     { key: "status", header: "真实状态", render: (d) => labels[d.status] ?? d.status },
   ];
   const sourceColumns: DataTableColumn<Coverage["sources"][number]>[] = [
-    { key: "resource", header: "数据域 / 站点", render: (s) => `${s.resource} / ${s.marketplaceId}` },
+    { key: "resource", header: "数据域 / 站点", render: (s) => `${s.resource} / ${siteCodeForDisplay(s.marketplaceId)}` },
     { key: "status", header: "状态", render: (s) => labels[s.status] ?? s.status },
     { key: "visibleRows", header: "已发布行数", numeric: true, render: (s) => String(s.visibleRows) },
     { key: "history", header: "历史覆盖", render: (s) => s.history.applicable ? s.history.percent === null ? "未知" : `${s.history.percent}%` : "当前快照，不适用" },
@@ -85,7 +86,7 @@ export function SyncCoverageWorkbench({ sellerAccountId, marketplaceId, requestH
         <StandardDataTable ariaLabel="Skill 字段级依赖" rows={activeSkill.requirements} getRowKey={(r) => `${r.table}:${r.level}:${r.fields.join(",")}`} columns={requirementColumns} empty="尚无字段级依赖审核记录。" /></>}
     </section>}
     {canConfigure && coverage && <div className="space-y-3"><label className="block text-xs">查看实际字段覆盖（管理员）<select aria-label="实际覆盖来源" className="ml-2 rounded border border-border bg-surface p-2" value={selected} onChange={event => setSelected(event.target.value)}>
-      <option value="">选择报告来源</option>{coverage.sources.filter(source => ["settlements", "reimbursements", "inventory_age", "inventory_events"].includes(source.resource)).map(source => <option key={source.sourceId} value={source.sourceId}>{source.resource} / {source.marketplaceId} / {source.sourceId.slice(0, 8)}</option>)}
+      <option value="">选择报告来源</option>{coverage.sources.filter(source => ["settlements", "reimbursements", "inventory_age", "inventory_events"].includes(source.resource)).map(source => <option key={source.sourceId} value={source.sourceId}>{source.resource} / {siteCodeForDisplay(source.marketplaceId)} / {source.sourceId.slice(0, 8)}</option>)}
     </select></label>{selected && <ActualFieldCoveragePanel key={`${sellerAccountId}:${marketplaceId}:${selected}`} sourceId={selected} requestHeaders={requestHeaders} />}</div>}
   </section>;
 }

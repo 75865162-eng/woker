@@ -1,4 +1,5 @@
 "use client";
+import { formatSiteStore } from "@/lib/sellfox/marketplace-site";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
@@ -87,7 +88,7 @@ export function OrderFulfillmentRecoveryPanel({ sourceId, taskId, sellerName, ma
   }
   return <section aria-label="订单历史履约字段补齐" className="space-y-3 rounded border border-border p-4">
     <h3 className="text-sm font-semibold">订单历史履约字段补齐</h3>
-    <p className="text-xs text-muted">{sellerName} / {marketplaceId} · 从本任务已保存的详情原件补齐缺失的履约方和配送服务等级。已有值冲突或详情版本变化时停止。</p>
+    <p className="text-xs text-muted">{formatSiteStore(marketplaceId, sellerName)} · 从本任务已保存的详情原件补齐缺失的履约方和配送服务等级。已有值冲突或详情版本变化时停止。</p>
     <div className="flex flex-wrap gap-2">
       <Button size="sm" variant="secondary" disabled={busy || working} onClick={() => void discoverPages()}>自动查找原件页</Button>
       <Button size="sm" variant="secondary" disabled={busy || working} onClick={() => void loadHistory()}>刷新补齐批次记录</Button>

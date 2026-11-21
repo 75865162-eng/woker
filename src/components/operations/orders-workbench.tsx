@@ -1,5 +1,5 @@
 "use client";
-import { formatSiteStore } from "@/lib/sellfox/marketplace-site";
+import { formatSiteStore, siteCodeForDisplay } from "@/lib/sellfox/marketplace-site";
 import { OrderFulfillmentRecoveryPanel } from "./order-fulfillment-recovery-panel";
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, RotateCcw, RefreshCw } from "lucide-react";
@@ -93,7 +93,7 @@ export function OrdersWorkbench({ sellerAccountId = "", marketplaceId = "", getH
       key: "order", header: "订单 / 站点", width: 200,
       render: (row) => <>
         <button type="button" className="block max-w-full truncate text-sm font-semibold text-brand hover:underline" onClick={() => setSelectedOrder(row)}>{row.amazonOrderId}</button>
-        <span className="mt-0.5 block truncate text-xs text-muted">{row.marketplaceId}</span>
+        <span className="mt-0.5 block truncate text-xs text-muted">站点 {siteCodeForDisplay(row.marketplaceId)}</span>
       </>,
     },
     {
@@ -176,7 +176,6 @@ export function OrdersWorkbench({ sellerAccountId = "", marketplaceId = "", getH
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="truncate text-sm font-bold text-foreground">{formatSiteStore(source.marketplaceId, source.seller.displayName)}</p>
-                    <span className="text-xs text-muted">{source.marketplaceId}</span>
                     <StatusPill tone={window.tone} dot>{window.label}</StatusPill>
                   </div>
                   <p className="mt-1 text-xs text-muted">{detailText(source)}</p>
@@ -235,7 +234,7 @@ export function OrdersWorkbench({ sellerAccountId = "", marketplaceId = "", getH
         <Section>
           <SectionHeader title="订单字段" description="仅展示当前权限返回的已采集字段，买家和地址不在此展示。" />
           <dl className="grid gap-x-4 gap-y-3 px-4 py-3 text-sm sm:grid-cols-2">
-            {[["订单号", selectedOrder.amazonOrderId], ["站点", selectedOrder.marketplaceId], ["原始状态", selectedOrder.rawStatus ?? "未返回"], ["内部状态", selectedOrder.normalizedStatus ?? "未映射"], ["创建时间（UTC）", utc(selectedOrder.createdTime)], ["更新时间（UTC）", utc(selectedOrder.sourceUpdatedAt)], ["履约方", selectedOrder.detailsCurrent ? selectedOrder.fulfilledBy ?? "未返回" : "待补齐"], ["配送服务等级", selectedOrder.detailsCurrent ? selectedOrder.fulfillmentServiceLevel ?? "未返回" : "待补齐"], ["订单收入总额", selectedOrder.detailsCurrent && selectedOrder.grandTotalOriginal != null ? selectedOrder.grandTotalOriginal + " " + (selectedOrder.currencyCode ?? "") : "未返回 / 待补齐"], ["站点时区", selectedOrder.marketplaceTimeZone]].map(([label, value]) => <div key={label} className="min-w-0">
+            {[["订单号", selectedOrder.amazonOrderId], ["站点", siteCodeForDisplay(selectedOrder.marketplaceId)], ["原始状态", selectedOrder.rawStatus ?? "未返回"], ["内部状态", selectedOrder.normalizedStatus ?? "未映射"], ["创建时间（UTC）", utc(selectedOrder.createdTime)], ["更新时间（UTC）", utc(selectedOrder.sourceUpdatedAt)], ["履约方", selectedOrder.detailsCurrent ? selectedOrder.fulfilledBy ?? "未返回" : "待补齐"], ["配送服务等级", selectedOrder.detailsCurrent ? selectedOrder.fulfillmentServiceLevel ?? "未返回" : "待补齐"], ["订单收入总额", selectedOrder.detailsCurrent && selectedOrder.grandTotalOriginal != null ? selectedOrder.grandTotalOriginal + " " + (selectedOrder.currencyCode ?? "") : "未返回 / 待补齐"], ["站点时区", selectedOrder.marketplaceTimeZone]].map(([label, value]) => <div key={label} className="min-w-0">
               <dt className="text-xs text-muted">{label}</dt>
               <dd className="mt-0.5 break-all text-sm text-foreground">{value}</dd>
             </div>)}

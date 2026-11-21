@@ -1,4 +1,5 @@
 "use client";
+import { formatSiteStore } from "@/lib/sellfox/marketplace-site";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
@@ -51,7 +52,7 @@ export function ReportAttributionRecoveryPanel({ sourceId, sellerName, marketpla
   const archivedRows = preview?.manifest.documents.reduce((sum, document) => sum + document.rowCount, 0) ?? 0;
   return <section aria-label="报告站点归属恢复" className="space-y-3 rounded border border-border p-4">
     <h3 className="text-sm font-semibold">报告站点归属恢复</h3>
-    <p className="text-xs text-muted">{sellerName} / {marketplaceId} · 仅对已归档报告逐行核验站点。无法证明归属的行继续隔离；此操作不会重新请求 Amazon 报告。</p>
+    <p className="text-xs text-muted">{formatSiteStore(marketplaceId, sellerName)} · 仅对已归档报告逐行核验站点。无法证明归属的行继续隔离；此操作不会重新请求 Amazon 报告。</p>
     <div className="flex flex-wrap gap-2">
       <Button size="sm" variant="secondary" disabled={busy || working} onClick={() => void loadPreview()}>预览归属核验</Button>
       {submitted && <Button size="sm" variant="secondary" onClick={openApprovals}>查看变更审批</Button>}

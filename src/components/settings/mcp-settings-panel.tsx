@@ -1,4 +1,5 @@
 "use client";
+import { siteCodeForDisplay } from "@/lib/sellfox/marketplace-site";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Check, Copy, KeyRound, PlugZap, RefreshCw, ShieldCheck, X } from "lucide-react";
@@ -504,7 +505,7 @@ export function McpSettingsPanel() {
                           <label key={key} className="flex items-center gap-1.5 py-0.5 text-xs">
                             <input type="checkbox" checked={amazonScopes.includes(key)} onChange={event => setAmazonScopes(value => event.target.checked ? [...value, key] : value.filter(item => item !== key))} />
                             <span className="truncate">{option.displayName}</span>
-                            <span className="text-muted">{option.marketplaceId}</span>
+                            <span className="text-muted">{siteCodeForDisplay(option.marketplaceId)}</span>
                           </label>
                         );
                       }) : <p className="text-xs text-muted">没有已授权的店铺站点，先去集成里完成授权。</p>

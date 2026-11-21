@@ -1,4 +1,5 @@
 "use client";
+import { siteCodeForDisplay } from "@/lib/sellfox/marketplace-site";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
@@ -358,7 +359,17 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true, se
         ) : null}
 
         <div className="mt-3"><SellfoxLinks workspaceId={readiness?.scope.workspaceId ?? workspaceHeaders().get("x-workspace-id") ?? "default"} /></div>
-        <p title="赛狐有、API/本地无" className="mt-3 text-sm">最新可售库存：{inventoryQuantity(readiness?.inventory.fulfillableQuantity)} · 今日广告花费：未接通日投影 · 今日订单/销量：未同步 · 赛狐有、API/本地无</p>
+        <p title="数据新鲜度来自服务端最近成功同步；赛狐独立数据见下方入口" className="mt-3 text-sm">
+          最新可售库存：{inventoryQuantity(readiness?.inventory.fulfillableQuantity)} ·{" "}
+          数据域就绪：{readiness ? amazonReadDomains.filter((d) => readiness.domains[d]?.status === "FRESH").length : "—"}/{amazonReadDomains.length} 个新鲜
+        </p>
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted" data-testid="domain-freshness-summary">
+          {amazonReadDomains.map((domain) => {
+            const summary = readiness?.domains?.[domain];
+            const badge = summary ? freshnessBadge(summary.status) : { tone: "gray" as const, label: "读取中" };
+            return <span key={domain}>{resourceLabel(domain)}：<span className={badge.tone === "green" ? "text-success-ink" : badge.tone === "red" ? "text-danger-ink" : badge.tone === "amber" ? "text-warning-ink" : undefined}>{badge.label}</span>{summary?.lastSuccessAt ? `（${formatDateTime(summary.lastSuccessAt)}）` : ""}</span>;
+          })}
+        </div>
         <div className="mt-4 grid gap-px border border-border bg-border sm:grid-cols-2 xl:grid-cols-3">
           {amazonReadDomains.map((domain) => {
             const summary = readiness?.domains?.[domain];
@@ -376,7 +387,7 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true, se
           })}
         </div>
         <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <p className="text-xs text-muted">Marketplace：{readiness?.connection.marketplaceParticipations.map((item) => `${item.countryCode} (${item.marketplaceId})`).join("、") || "尚未验证"}</p>
+          <p className="text-xs text-muted">Marketplace：{readiness?.connection.marketplaceParticipations.map((item) => `${item.countryCode} (${siteCodeForDisplay(item.marketplaceId)})`).join("、") || "尚未验证"}</p>
           <div className="flex flex-wrap items-end gap-2">
             <label className="grid gap-1 text-xs font-semibold text-muted">同步域<select value={selectedResource} onChange={(event) => setSelectedResource(event.target.value as AmazonReadDomain)} className="h-9 min-w-36 border border-border bg-surface px-2 text-sm font-medium text-foreground"><option value="inventory">库存</option>{amazonReadDomains.filter((domain) => domain !== "inventory").map((domain) => <option key={domain} value={domain}>{resourceLabel(domain)}</option>)}</select></label>
             <Button size="sm" onClick={() => void requestSync()} disabled={requesting}><ShieldCheck className="h-4 w-4" />{requesting ? "提交中..." : "请求只读同步"}</Button>
@@ -411,7 +422,7 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true, se
       </section>}
 
       <WorkbenchDialog open={tab === "inventory" && !!selectedInventory} drawer title="Amazon 库存详情" onClose={() => setSelectedInventory(null)}>{selectedInventory && <div className="space-y-4">
-        <dl className="grid grid-cols-2 gap-4 rounded border border-border p-3 text-xs">{[["Seller SKU", selectedInventory.sellerSku], ["ASIN", selectedInventory.asin], ["FNSKU", selectedInventory.fnSku], ["商品状况", selectedInventory.condition], ["站点", selectedInventory.marketplaceId], ["可售", selectedInventory.fulfillableQuantity], ["入库待发货", selectedInventory.inboundWorkingQuantity], ["入库已发货", selectedInventory.inboundShippedQuantity], ["入库接收中", selectedInventory.inboundReceivingQuantity], ["预留", selectedInventory.reservedQuantity], ["不可售", selectedInventory.unfulfillableQuantity], ["采集时间", formatDateTime(selectedInventory.capturedAt)], ["来源批次", selectedInventory.syncRunId]].map(([label, value]) => <div key={label}><dt className="text-muted">{label}</dt><dd className="mt-1 break-all">{value ?? "未返回"}</dd></div>)}</dl>
+        <dl className="grid grid-cols-2 gap-4 rounded border border-border p-3 text-xs">{[["Seller SKU", selectedInventory.sellerSku], ["ASIN", selectedInventory.asin], ["FNSKU", selectedInventory.fnSku], ["商品状况", selectedInventory.condition], ["站点", siteCodeForDisplay(selectedInventory.marketplaceId)], ["可售", selectedInventory.fulfillableQuantity], ["入库待发货", selectedInventory.inboundWorkingQuantity], ["入库已发货", selectedInventory.inboundShippedQuantity], ["入库接收中", selectedInventory.inboundReceivingQuantity], ["预留", selectedInventory.reservedQuantity], ["不可售", selectedInventory.unfulfillableQuantity], ["采集时间", formatDateTime(selectedInventory.capturedAt)], ["来源批次", selectedInventory.syncRunId]].map(([label, value]) => <div key={label}><dt className="text-muted">{label}</dt><dd className="mt-1 break-all">{value ?? "未返回"}</dd></div>)}</dl>
         <p className="text-xs text-muted">Amazon 外部库存快照；待发货、已发货和接收中分别保留，不作为公司仓库存或实际运输事件。</p>
         {selectedInventory.sellerAccountId && <a className="text-xs text-brand hover:underline" href={`/operations?${new URLSearchParams({ view: "catalog", sku: selectedInventory.sellerSku, sellerAccountId: selectedInventory.sellerAccountId, marketplaceId: selectedInventory.marketplaceId })}`}>查看在线商品</a>}
       </div>}</WorkbenchDialog>

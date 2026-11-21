@@ -81,14 +81,15 @@ async function setup(page: Page, tab = "overview") {
   return { state, calls };
 }
 
-test("overview shows six domains, stale reason/action and honest orders/ads placeholders", async ({ page }) => {
+test("overview shows six domains, stale reason/action and live freshness summary", async ({ page }) => {
   const { state } = await setup(page);
   state.stale = true;
   await page.getByRole("button", { name: "刷新数据", exact: true }).click();
   await expect(page.getByText("库存快照已超过 120 分钟", { exact: true })).toBeVisible();
   await expect(page.getByText("建议：立即同步库存并检查 worker", { exact: true })).toBeVisible();
   for (const label of ["广告", "订单", "库存", "商品目录", "财务", "履约"]) await expect(page.locator("p").getByText(label, { exact: true })).toBeVisible();
-  await expect(page.getByText(/今日广告花费：未接通日投影/)).toBeVisible();
+  await expect(page.getByText(/数据域就绪：\d+\/6 个新鲜/)).toBeVisible();
+  await expect(page.getByTestId("domain-freshness-summary")).toBeVisible();
   await page.getByRole("link", { name: "订单", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Amazon 订单" })).toBeVisible();
   await page.getByRole("link", { name: "广告联看", exact: true }).click();

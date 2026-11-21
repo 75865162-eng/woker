@@ -100,7 +100,7 @@ export function AmazonConnections() {
 
     <section className="space-y-3"><h2 className="text-sm font-semibold">Amazon SP-API 连接</h2>
       {spGroups.length ? <div className="grid gap-3 lg:grid-cols-2">{spGroups.map(g => <ConnectionCard key={g.auth.id} kind="Amazon SP-API" name={g.auth.name} status={g.auth.status}
-        summary={<><p>已发现 Marketplace：{g.marketCount} 个</p><p>权限就绪资源：{g.readyCount} · 失败资源：<span className={g.failedCount ? "text-danger-ink" : undefined}>{g.failedCount}</span></p><p>Seller ID：{g.auth.amazonSellerId} · {g.auth.awsRegion}</p><p>最近验证：{stamp(g.auth.lastValidatedAt)}</p></>}
+        summary={<><p>已发现 Marketplace：{g.marketCount} 个</p><p>权限就绪资源：{g.readyCount} · 失败资源：<span className={g.failedCount ? "text-danger-ink" : undefined}>{g.failedCount}</span></p><p>授权区域：{g.auth.awsRegion}</p><p>最近验证：{stamp(g.auth.lastValidatedAt)}</p></>}
         actions={[
           { label: "编辑凭据", variant: "secondary", disabled: !spAccess.canConfigure || busy || g.auth.status === "DISABLED", title: "在店铺与授权中编辑", onClick: () => window.location.assign("/operations?view=connections") },
           ...(g.auth.status === "DISABLED" ? [
