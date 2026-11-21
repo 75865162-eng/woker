@@ -75,7 +75,7 @@ test("standalone 清理删除环境文件但保留运行文件和项目源环境
   }
 });
 
-test("隔离 Next 配置的 baseUrl 从配置文件目录解析到项目源码", async () => {
+test("隔离 Next 配置的相对 baseUrl 从配置目录解析到项目源码", async () => {
   const ts = require("typescript") as typeof import("typescript");
   const source = readFileSync(path.resolve("scripts/next-run.mjs"), "utf8");
   const start = source.indexOf("await writeFile(typeConfig, JSON.stringify(");
@@ -83,18 +83,17 @@ test("隔离 Next 配置的 baseUrl 从配置文件目录解析到项目源码",
   assert.ok(start >= 0 && end > start);
   for (const paths of [path.posix, path.win32]) {
     const root = paths === path.win32 ? "C:\\fixture\\project" : "/fixture/project";
-    // 本地方案把临时配置放在项目根，baseUrl 为 "."；解析基准是配置文件所在目录。
-    const typeConfig = paths.join(root, ".next-types-fixture.json");
-    const ambient = paths.join(root, ".next-types-ambient-fixture.d.ts");
+    const typeDirectory = paths.join(root, ".next-types-fixture");
+    const typeConfig = paths.join(typeDirectory, "tsconfig.json");
     let config: { compilerOptions: { baseUrl: string; paths: Record<string, string[]> } } | undefined;
     await vm.runInNewContext(`(async () => { ${source.slice(start, end)} })()`, {
-      typeConfig, ambient, distDir: ".next-dev-fixture", path: paths,
-      process: { cwd: () => root }, randomBytes: () => ({ toString: () => "fixture" }),
+      typeConfig, typeDirectory, ambient: paths.join(typeDirectory, "next.d.ts"),
+      distDir: ".next-dev-fixture", path: paths, process: { cwd: () => root },
       writeFile: async (_file: string, content: string) => { config = JSON.parse(content); },
     });
     assert.ok(config);
     assert.equal(paths.isAbsolute(config.compilerOptions.baseUrl), false);
-    const baseUrl = paths.resolve(paths.dirname(typeConfig), config.compilerOptions.baseUrl).replaceAll("\\", "/");
+    const baseUrl = paths.resolve(typeDirectory, config.compilerOptions.baseUrl).replaceAll("\\", "/");
     const expected = paths.join(root, "src", "fixture.ts").replaceAll("\\", "/");
     assert.equal(baseUrl, root.replaceAll("\\", "/"));
     const resolved = ts.resolveModuleName("@/fixture", paths.join(root, "src", "entry.ts").replaceAll("\\", "/"), {
