@@ -200,7 +200,10 @@ async function readAggregateKpis(
         where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, reportDate: { gte: from, lte: to } },
         select: { cost: true, adSales: true, currency: true },
       }).catch(() => null),
-      db.sellfoxFbaInventorySnapshot.aggregate({
+      // 用按 Head 去重的预聚合读模型（约 8.8k 行），而非原始快照表（108 万行、含 6.9x 历史版本）。
+      // 原始表直接 SUM 既重复累加历史快照（语义错），又在真实数据上稳定 ~12s（性能错）。
+      // SellfoxInventoryAgg 与库存浏览页同源当前态口径，带 (org,ws) 索引，实测 ~28ms。
+      db.sellfoxInventoryAgg.aggregate({
         where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, ...storeScoped },
         _sum: { quantity: true, inTransit: true },
       }).catch(() => null),
@@ -269,7 +272,8 @@ async function readCoverage(
     const [stores, salesDays, inventoryRows, lastRun] = await Promise.all([
       db.sellfoxStore.count({ where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, ...storeTableScoped } }).catch(() => 0),
       db.sellfoxSalesDailySnapshot.count({ where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, ...storeScoped } }).catch(() => 0),
-      db.sellfoxFbaInventorySnapshot.count({ where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, ...storeScoped } }).catch(() => 0),
+      // 覆盖率同样读当前态预聚合表，避免对 108 万行原始快照 count（实测 ~12s）。
+      db.sellfoxInventoryAgg.count({ where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, ...storeScoped } }).catch(() => 0),
       db.sellfoxSyncRun.findFirst({ where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, status: "done" }, orderBy: { startedAt: "desc" }, select: { finishedAt: true } }).catch(() => null),
     ]);
     return {

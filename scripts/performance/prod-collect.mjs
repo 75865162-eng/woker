@@ -19,6 +19,10 @@ const base = (process.env.PROD_BASE_URL || option("base", "")).replace(/\/$/, ""
 const email = process.env.PROD_EMAIL || "";
 const password = process.env.PROD_PASSWORD || "";
 const rounds = Math.max(1, Number(process.env.ROUNDS || option("rounds", "3")));
+// warmup：正式采样前每页先导航一次（不计入判定），触发 dynamic chunk 首次下载/编译。
+// 真实用户重复访问走的就是这条稳态路径；首轮 chunk 冷启动属于一次性事件，不应污染 P95。
+// 设 WARMUP=0 可关闭，用于专门测冷启动（此时判定口径变为冷加载）。
+const warmup = Math.max(0, Number(process.env.WARMUP ?? option("warmup", "1")));
 const out = path.resolve(option("out", "outputs/performance/prod-collect.json"));
 const only = option("only", ""); // 可选：逗号分隔的 path 子集，便于单页复测
 assert.ok(base.startsWith("https://") || base.startsWith("http://"), "需提供 --base= 或 PROD_BASE_URL");
@@ -75,6 +79,13 @@ try {
   for (const route of routes) {
     const samples = { totalMs: [], ttfbMs: [], dclMs: [], fcpMs: [], lcpMs: [], inpMs: [] };
     const errors = [];
+    // 预热轮：不计入样本，触发 dynamic import chunk / RSC 首次编译；失败不影响正式采样。
+    for (let w = 0; w < warmup; w++) {
+      try {
+        await page.goto(base + route.path, { waitUntil: "domcontentloaded", timeout: 60000 });
+        await pause(200);
+      } catch { /* 预热失败忽略 */ }
+    }
     for (let i = 0; i < rounds; i++) {
       const at = Date.now();
       try {
@@ -122,14 +133,14 @@ try {
   }
   const verdict = {
     at: startedAt, finishedAt: new Date().toISOString(),
-    env: "PRODUCTION", base, rounds,
+    env: "PRODUCTION", base, rounds, warmup,
     login: { status: 200, ms: loginMs, account: email },
     routeCount: routes.length,
     passCount: results.filter(r => r.status === "PASS").length,
     failCount: results.filter(r => r.status === "FAIL").length,
     noDataCount: results.filter(r => r.status === "NO_DATA").length,
     pages: results,
-    note: "生产真实数据量主动采集；判定用 total P95 对档位线。TTFB 单列用于甄别服务端慢(TTFB高) vs 客户端渲染伪影(TTFB低但LCP高)。",
+    note: "生产真实数据量主动采集；判定用 total P95 对档位线。默认每页先 warmup 1 轮触发 dynamic chunk 首次下载/编译，P95 反映稳态真实性能；WARMUP=0 可测冷启动。TTFB 单列用于甄别服务端慢(TTFB高) vs 客户端渲染伪影(TTFB低但LCP高)。",
   };
   mkdirSync(path.dirname(out), { recursive: true });
   writeFileSync(out, JSON.stringify(verdict, null, 2) + "\n");
