@@ -8,6 +8,7 @@ import {
   UploadCloud,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell/app-shell";
+import { DashboardOverview } from "@/components/dashboard/dashboard-overview";
 import { PrefetchLink } from "@/components/app-shell/prefetch-link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,6 +36,7 @@ export default async function Home() {
   return (
     <AppShell title="运营工作台" subtitle="Amazon 业务系统总入口">
       <DashboardPageTemplate
+        kpis={<DashboardOverview />}
         exceptions={<section className="flex flex-col gap-[var(--gap-field)] rounded-lg border border-border bg-surface p-[var(--pad-card)] shadow-sm md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-display text-foreground">今天要处理什么？</h1>

@@ -47,3 +47,17 @@ test("存储失败不提交工作区切换，成功时同步持久化 cookie", (
   // UI 已隐藏，手动切换路径移除；保留的自动选中路径仍须在 setSelected / emit 前检查持久化结果。
   assert.equal((source.match(/if \(!writeSelectedScope\(nextSelected\)\)/g) ?? []).length, 1);
 });
+
+test("全局切换器恢复可见 select 控件,手动切换走 applySelectedScope(manual)", () => {
+  assert.match(source, /<select[\s\S]*aria-label="全局工作区切换"/);
+  assert.doesNotMatch(source, /^  return null;$/m);
+  assert.match(source, /applyRef\.current\(target, "manual"\)/);
+  assert.match(source, /emitWorkspaceScopeChanged\(\{ \.\.\.nextSelected, source \}\)/);
+});
+
+test("恢复UI后仍保留:显式快照不改写、cookie写入、默认工作区自动选中", () => {
+  assert.match(source, /if \(!explicitWorkspace\) headers\.set\("x-workspace-id", scope\.workspaceId\)/);
+  assert.match(source, /document\.cookie =/);
+  assert.match(source, /workspace\.isDefault/);
+  assert.match(source, /if \(!writeSelectedScope\(nextSelected\)\) \{[\s\S]*?return;/);
+});

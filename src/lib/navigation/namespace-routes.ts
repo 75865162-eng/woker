@@ -28,6 +28,7 @@ export const namespaceEntries: NamespaceEntry[] = [
 
   // ── 采购管理 /purchase ─────────────────────────────
   { href: "/purchase", moduleId: "operations" }, // 命名空间落地页（redirect）
+  { href: "/purchase/approvals", moduleId: "operations" }, // 审批中心，真实 page.tsx（无 destination）
   { href: "/purchase/plans", moduleId: "operations", destination: "/operations/purchase-plans" },
   { href: "/purchase/orders", moduleId: "operations", destination: "/operations?view=purchase-orders" },
   { href: "/purchase/invoices", moduleId: "operations", destination: "/operations/purchase-invoices" },

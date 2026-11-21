@@ -147,6 +147,7 @@ export const navigationGroups: NavigationGroup[] = [
   ] },
 
   { id: "purchase", label: "采购管理", icon: ClipboardList, href: "/purchase/plans", items: [
+    { id: "purchase.approvals", href: "/purchase/approvals", label: "审批中心", icon: ClipboardList, moduleId: "operations" },
     { id: "purchase.plans", href: "/purchase/plans", label: "采购计划", icon: ClipboardList, moduleId: "operations" },
     { id: "purchase.orders", href: "/purchase/orders", label: "采购订单", icon: ClipboardList, moduleId: "operations" },
     { id: "purchase.invoices", href: "/purchase/invoices", label: "采购发票", icon: ReceiptText, moduleId: "operations" },

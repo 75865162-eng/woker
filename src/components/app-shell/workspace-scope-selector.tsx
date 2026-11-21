@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Globe2 } from "lucide-react";
 import { emitWorkspaceScopeChanged } from "@/lib/workspace/workspace-scope-events";
 import { fetchWorkspacesCached } from "@/lib/workspace/workspace-api-cache";
 import { readWorkspaceScope, workspaceScopeStorageKey as storageKey } from "@/lib/workspace/workspace-scope-store";
@@ -84,10 +85,12 @@ function patchFetchWithWorkspaceScope() {
 }
 
 export function WorkspaceScopeSelector() {
-  const [, setWorkspaces] = useState<WorkspaceScope[]>([]);
+  const [workspaces, setWorkspaces] = useState<WorkspaceScope[]>([]);
   const [selected, setSelected] = useState(() => readSelectedScope());
-  const [, setStorageError] = useState(false);
+  const [storageError, setStorageError] = useState(false);
+  const [ready, setReady] = useState(false);
   const selectedRef = useRef(selected);
+  const applyRef = useRef<(next: SelectedScope, source: "manual" | "auto") => void>(() => {});
 
   useEffect(() => {
     selectedRef.current = selected;
@@ -125,6 +128,7 @@ export function WorkspaceScopeSelector() {
 
         const nextWorkspaces = Array.isArray(data.workspaces) ? data.workspaces : [];
         setWorkspaces(nextWorkspaces);
+        setReady(true);
         const currentWorkspace = nextWorkspaces.find((workspace) => workspace.id === selectedRef.current.workspaceId);
 
         if (currentWorkspace) {
@@ -152,9 +156,13 @@ export function WorkspaceScopeSelector() {
           );
         }
       } catch {
-        if (!cancelled) setWorkspaces([]);
+        if (!cancelled) {
+          setWorkspaces([]);
+          setReady(true);
+        }
       }
     };
+    applyRef.current = applySelectedScope;
 
     const idleCallbackId: number = supportsIdleCallback
       ? window.requestIdleCallback(() => void loadWorkspaces(), { timeout: 1500 })
@@ -170,7 +178,37 @@ export function WorkspaceScopeSelector() {
     };
   }, []);
 
-  // UI 已移除：本组件仅保留工作区作用域的初始化/注入副作用（fetch 头、cookie、默认工作区自动选中）。
-  // 工作区切换入口改由其它界面提供；此处不再渲染任何可见控件。
-  return null;
+  // 全局工作区/店铺上下文切换器：切换走 applySelectedScope，
+  // 它会写存储、广播 scope-changed 事件，AppShell 据此强制重挂载内容，防止旧账号数据闪现。
+  // 副作用链（fetch 头注入、默认工作区选中）保持不变。
+  const options = workspaces.map((workspace) => ({
+    workspaceId: workspace.id,
+    accountId: workspace.accountId ?? "",
+    marketplace: workspace.marketplace ?? "",
+    label: workspace.marketplace ? `${workspace.name} · ${workspace.marketplace}` : workspace.name,
+  }));
+  const currentKey = `${selected.workspaceId}|${selected.accountId}|${selected.marketplace}`;
+
+  return (
+    <label className="flex min-w-0 items-center gap-1.5" title="全局工作区 / 店铺上下文，切换后全站生效">
+      <Globe2 className="h-3.5 w-3.5 shrink-0 text-muted" aria-hidden />
+      <select
+        aria-label="全局工作区切换"
+        value={ready ? currentKey : ""}
+        disabled={!ready || options.length === 0}
+        onChange={(event) => {
+          const target = options.find((option) => `${option.workspaceId}|${option.accountId}|${option.marketplace}` === event.target.value);
+          if (target) applyRef.current(target, "manual");
+        }}
+        className={`max-w-[220px] truncate rounded-md border bg-surface px-2 py-1 text-label text-foreground outline-none transition-colors hover:border-brand disabled:opacity-50 ${storageError ? "border-danger" : "border-border"}`}
+      >
+        {!ready || options.length === 0 ? <option value="">加载工作区…</option> : null}
+        {options.map((option) => {
+          const key = `${option.workspaceId}|${option.accountId}|${option.marketplace}`;
+          return <option key={key} value={key}>{option.label}</option>;
+        })}
+      </select>
+      {storageError ? <span className="text-label text-danger-ink" role="alert">切换失败</span> : null}
+    </label>
+  );
 }
