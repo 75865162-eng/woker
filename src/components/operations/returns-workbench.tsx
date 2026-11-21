@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { StandardDataTable } from "@/components/ui/table-variants";
 import { type DataTableColumn } from "@/components/ui/data-table";
+import { ReadinessNotice, readinessKindFromCode } from "@/components/operations/readiness-notice";
 
 type ReturnsResult = {
   rows: Array<{ id: string; amazonOrderId: string; asin: string; sellerSku: string; returnAt: string; quantity: number; disposition: string | null; rawStatus: string | null; marketplaceTimeZone: string; reason: { code: string } | null; orderMatched: boolean }>;
@@ -23,16 +24,16 @@ const returnColumns: DataTableColumn<ReturnsRow>[] = [
 ];
 export function ReturnsWorkbench({ sellerAccountId = "", marketplaceId = "", getHeaders }: { sellerAccountId?: string; marketplaceId?: string; getHeaders: () => Headers }) {
   const [sourceId, setSourceId] = useState(""), [reportId, setReportId] = useState(""), [orderId, setOrderId] = useState(""), [asin, setAsin] = useState(""), [reason, setReason] = useState(""), [rawStatus, setRawStatus] = useState(""), [from, setFrom] = useState(""), [to, setTo] = useState(""), [page, setPage] = useState(1);
-  const [result, setResult] = useState<ReturnsResult | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(""), [refresh, setRefresh] = useState(0);
+  const [result, setResult] = useState<ReturnsResult | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(""), [errorCode, setErrorCode] = useState(""), [refresh, setRefresh] = useState(0);
   useEffect(() => {
-    let active = true; setLoading(true); setResult(null); setError("");
+    let active = true; setLoading(true); setResult(null); setError(""); setErrorCode("");
     void (async () => {
       try {
         const params = new URLSearchParams({ section: "returns", sellerAccountId, marketplaceId, sourceId, reportId, orderId, asin, reason, rawStatus, from, to, page: String(page) });
         const response = await fetch(`/api/operations/sync-center?${params}`, { headers: getHeaders(), cache: "no-store" });
-        const value = await response.json(); if (!response.ok) throw new Error(value.error ?? "退货读取失败。");
+        const value = await response.json(); if (!response.ok) { const failure = new Error(value.error ?? "退货读取失败。") as Error & { code?: string }; failure.code = value.code; throw failure; }
         if (active) setResult(value);
-      } catch (e) { if (active) setError(e instanceof Error ? e.message : "退货读取失败。"); }
+      } catch (e) { if (active) { setError(e instanceof Error ? e.message : "退货读取失败。"); setErrorCode((e as Error & { code?: string }).code ?? ""); } }
       finally { if (active) setLoading(false); }
     })();
     return () => { active = false; };
@@ -51,7 +52,8 @@ export function ReturnsWorkbench({ sellerAccountId = "", marketplaceId = "", get
       <Button size="sm" variant="secondary" disabled={loading} onClick={() => setRefresh(v => v + 1)}>刷新退货</Button>
     </div>
     {loading && <p role="status" className="text-sm text-muted">读取已发布退货报告…</p>}
-    {error && <p role="alert" className="text-sm text-danger-ink">{error}</p>}
+    {error && errorCode && <ReadinessNotice kind={readinessKindFromCode(errorCode)} detail={error} />}
+    {error && !errorCode && <p role="alert" className="text-sm text-danger-ink">{error}</p>}
     {result && <>
       <p className="break-all text-xs text-muted">{result.reportId ? `当前报告：${result.reportId} · 单份报告已完整提交` : "尚无可访问的已发布报告"}</p>
       <StandardDataTable

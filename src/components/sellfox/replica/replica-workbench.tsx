@@ -7,7 +7,8 @@ import { ColumnResizeHandle } from "@/components/ui/column-resize-handle";
 import { useSessionColumnWidths } from "@/lib/hooks/use-session-column-widths";
 import { normalizeWorkspaceScope } from "@/lib/workspace/scope";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
-import { sellfoxSiteLabel, siteCodeOf } from "@/lib/sellfox/marketplace-site";
+import { sellfoxSiteLabel } from "@/lib/sellfox/marketplace-site";
+import { SfMultiSelect } from "@/components/sellfox/sf-multi-select";
 import {
   sellfoxAsinHref, sellfoxRowTrend, sellfoxTrendAverage, sellfoxTrendChange, sellfoxDrillHref,
 } from "@/lib/sellfox/row-actions";
@@ -70,27 +71,6 @@ const COLUMN_WIDTH_PX: Record<string, number> = {
  * 补全的是赛狐页面可见的选项；本地是否有对应币种数据取决于已同步快照，为空即显示“-”。
  */
 const CURRENCY_OPTIONS = ["CNY", "USD", "EUR", "JPY", "GBP", "AUD", "CAD", "MXN"];
-
-/**
- * 站点按大区分组来自规格 6.2.1。分组只作用于“全部站点”下拉的展示排序；
- * 实际筛选值仍是原始 Marketplace ID，不参与分组计算。
- */
-const SITE_REGIONS: { label: string; codes: string[] }[] = [
-  { label: "北美区", codes: ["US", "CA", "MX"] },
-  { label: "欧洲区", codes: ["UK", "DE", "FR", "IT", "ES", "NL", "SE", "PL", "BE", "IE"] },
-  { label: "日本", codes: ["JP"] },
-  { label: "新加坡", codes: ["SG"] },
-  { label: "澳大利亚", codes: ["AU"] },
-  { label: "印度", codes: ["IN"] },
-  { label: "阿联酋", codes: ["AE"] },
-  { label: "沙特阿拉伯", codes: ["SA"] },
-  { label: "土耳其", codes: ["TR"] },
-];
-
-function siteRegionOf(marketplace: string): string {
-  const code = siteCodeOf(marketplace);
-  return SITE_REGIONS.find((region) => region.codes.includes(code))?.label ?? "其他站点";
-}
 
 /** 数据不足项：控件可交互，但结果按缺失显示“-”，提示注明快照无此字段，不补 0、不造假。 */
 const MISSING_HINT = "本地快照没有对应字段，已接通控件但结果按缺失显示“-”，不补 0、不造假。";
@@ -678,36 +658,22 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
             {page.metrics.map((item) => <button key={item.id} type="button" aria-pressed={draft.metric === item.id} onClick={() => setMetric(item.id)}>{item.label}</button>)}
           </div>
         ) : null}
-        <select
-          aria-label="站点多选"
-          multiple
-          size={3}
-          title="按住 Ctrl/Cmd 可多选站点；不选即全部站点"
+        <SfMultiSelect
+          label="站点"
+          searchable
+          options={sites.map((site) => ({ value: site, label: sellfoxSiteLabel(site) }))}
           value={draft.sites}
-          onChange={(event) => patchDraft({ sites: Array.from(event.target.selectedOptions).map((option) => option.value) })}
-        >
-          {SITE_REGIONS.map((region) => {
-            const inRegion = sites.filter((site) => siteRegionOf(site) === region.label);
-            return inRegion.length ? (
-              <optgroup key={region.label} label={region.label}>
-                {inRegion.map((site) => <option key={site} value={site}>{sellfoxSiteLabel(site)}</option>)}
-              </optgroup>
-            ) : null;
-          })}
-          {sites.filter((site) => siteRegionOf(site) === "其他站点").map((site) => <option key={site} value={site}>{sellfoxSiteLabel(site)}</option>)}
-        </select>
-        <select
-          aria-label="店铺多选"
-          multiple
-          size={3}
-          title="按住 Ctrl/Cmd 可多选店铺；不选即全部店铺"
+          onChange={(next) => { setDraft((current) => ({ ...current, sites: next, shops: [] })); setApplied((current) => ({ ...current, sites: next, shops: [], page: 1 })); }}
+        />
+        <SfMultiSelect
+          label="店铺"
+          searchable
+          options={stores
+            .filter((store) => !applied.sites.length || applied.sites.includes(store.marketplace))
+            .map((store) => ({ value: store.externalId, label: store.name }))}
           value={draft.shops}
-          onChange={(event) => patchDraft({ shops: Array.from(event.target.selectedOptions).map((option) => option.value) })}
-        >
-          {stores
-            .filter((store) => !draft.sites.length || draft.sites.includes(store.marketplace))
-            .map((store) => <option key={store.externalId} value={store.externalId}>{store.name}</option>)}
-        </select>
+          onChange={(next) => { setDraft((current) => ({ ...current, shops: next })); setApplied((current) => ({ ...current, shops: next, page: 1 })); }}
+        />
         {page.fulfillment ? (
           <select aria-label="发货方式" value={draft.fulfillment} onChange={(event) => patchDraft({ fulfillment: event.target.value })}>
             <option value="">发货方式</option>
@@ -756,16 +722,13 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
           </select>
         ) : null}
         {page.salespersonFilter ? (
-          <select
-            aria-label="业务员多选"
-            multiple
-            size={3}
-            title="按住 Ctrl/Cmd 可多选业务员；不选即全部"
+          <SfMultiSelect
+            label="业务员"
+            searchable
+            options={people.map((name) => ({ value: name, label: name }))}
             value={draft.salespersons}
-            onChange={(event) => patchDraft({ salespersons: Array.from(event.target.selectedOptions).map((option) => option.value) })}
-          >
-            {people.map((name) => <option key={name} value={name}>{name}</option>)}
-          </select>
+            onChange={(next) => { setDraft((current) => ({ ...current, salespersons: next })); setApplied((current) => ({ ...current, salespersons: next, page: 1 })); }}
+          />
         ) : page.id === "sales" || page.id === "listings" ? (
           <select aria-label="业务员" className="sf-select-muted" title="销量日快照没有业务员字段，不从 Listing 伪造。" value={draft.salesperson} onChange={(event) => { patchDraft({ salesperson: event.target.value }); setNotice(`业务员：${MISSING_HINT}`); }}>
             <option value="">业务员</option>

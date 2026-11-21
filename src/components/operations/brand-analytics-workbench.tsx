@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { StandardDataTable } from "@/components/ui/table-variants";
 import { type DataTableColumn } from "@/components/ui/data-table";
+import { ReadinessNotice, readinessKindFromCode } from "@/components/operations/readiness-notice";
 import { brandReports, brandPeriodLabels, brandOfficialUrl, type BrandKind, type BrandPeriod } from "@/lib/amazon-sync/brand-reports";
 import { brandFieldCatalogue } from "@/lib/amazon-sync/brand-field-catalogue";
 import { brandColumns, brandFactValue, brandFieldLabel, brandValue } from "@/lib/amazon-sync/brand-fields";
@@ -30,7 +31,7 @@ export function BrandAnalyticsWorkbench({ sellerAccountId, marketplaceId, getHea
   sellerAccountId: string; marketplaceId: string; getHeaders: () => Headers; onTask: (id: string) => void; onCommand: (command: Record<string, unknown>) => Promise<boolean>; canConfigure: boolean; canCreate: boolean; busy: boolean; initialView?: "overview" | BrandKind;
 }) {
   const [view, setView] = useState<BrandView>(() => { if (typeof window === "undefined") return initialView; const report = new URLSearchParams(window.location.search).get("brandReport"); return report && (report === "asin" || Object.hasOwn(brandReports, report)) ? report as BrandView : initialView; }), [sourceId, setSourceId] = useState(() => initialBrandFilter("brandSource")), [runId, setRunId] = useState(() => initialBrandFilter("brandRun")), [period, setPeriod] = useState(() => initialBrandFilter("brandPeriod")), [from, setFrom] = useState(() => initialBrandFilter("brandFrom")), [to, setTo] = useState(() => initialBrandFilter("brandTo")), [asin, setAsin] = useState(() => typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("asin") ?? ""), [search, setSearch] = useState(""), [page, setPage] = useState(1), [coveragePage, setCoveragePage] = useState(1), [refresh, setRefresh] = useState(0);
-  const [result, setResult] = useState<Result | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState("");
+  const [result, setResult] = useState<Result | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(""), [errorCode, setErrorCode] = useState("");
   const kind = view === "overview" || view === "asin" ? "search_terms" : view;
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -41,9 +42,9 @@ export function BrandAnalyticsWorkbench({ sellerAccountId, marketplaceId, getHea
   }, [sourceId, runId, period, from, to]);
   useEffect(() => { const changed = () => { setResult(null); setSourceId(""); setRunId(""); setPage(1); setRefresh(v => v + 1); }; window.addEventListener(workspaceScopeChangedEventName, changed); return () => window.removeEventListener(workspaceScopeChangedEventName, changed); }, []);
   useEffect(() => {
-    const controller = new AbortController(); setLoading(true); setError(""); setResult(null);
+    const controller = new AbortController(); setLoading(true); setError(""); setErrorCode(""); setResult(null);
     const params = new URLSearchParams({ section: "brand-analytics", sellerAccountId, marketplaceId, sourceId, reportKind: kind, reportPeriod: period, from, to, asin, searchTerm: search, runId, page: String(page), coverage: view === "overview" ? "1" : "0" });
-    void fetch(`/api/operations/sync-center?${params}`, { headers: getHeaders(), cache: "no-store", signal: controller.signal }).then(async r => { const data = await r.json(); if (!r.ok) throw new Error(data.error ?? "品牌分析读取失败。"); if (!controller.signal.aborted) setResult(data); }).catch(e => { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : "读取失败。"); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    void fetch(`/api/operations/sync-center?${params}`, { headers: getHeaders(), cache: "no-store", signal: controller.signal }).then(async r => { const data = await r.json(); if (!r.ok) { const failure = new Error(data.error ?? "品牌分析读取失败。") as Error & { code?: string }; failure.code = data.code; throw failure; } if (!controller.signal.aborted) setResult(data); }).catch(e => { if (!controller.signal.aborted) { setError(e instanceof Error ? e.message : "读取失败。"); setErrorCode((e as Error & { code?: string }).code ?? ""); } }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [view, kind, sellerAccountId, marketplaceId, sourceId, period, from, to, asin, search, runId, page, refresh, getHeaders]);
   const changeView = (v: BrandView, selectedAsin = asin) => { const url = new URL(window.location.href); if (v === "overview") url.searchParams.delete("brandReport"); else url.searchParams.set("brandReport", v); if (selectedAsin) url.searchParams.set("asin", selectedAsin); else url.searchParams.delete("asin"); window.history.replaceState(null, "", url); setView(v); setPeriod(""); setRunId(""); setFrom(""); setTo(""); setAsin(selectedAsin); setSearch(""); setPage(1); };
@@ -68,7 +69,9 @@ export function BrandAnalyticsWorkbench({ sellerAccountId, marketplaceId, getHea
     <nav className="flex flex-wrap gap-2" aria-label="品牌分析子页"><Button size="sm" variant={view === "overview" ? "primary" : "secondary"} onClick={() => changeView("overview")}>覆盖与回补</Button><Button size="sm" variant={view === "asin" ? "primary" : "secondary"} onClick={() => changeView("asin")}>ASIN 品牌分析</Button>{Object.entries(brandReports).map(([key, report]) => <Button size="sm" key={key} variant={view === key ? "primary" : "secondary"} onClick={() => changeView(key as BrandKind)}>{report.label}</Button>)}</nav>
     <div className="flex flex-wrap items-end gap-2"><label className="grid gap-1 text-xs">品牌数据来源<select className={input} value={sourceId || result?.source?.id || ""} onChange={e => { setSourceId(e.target.value); setRunId(""); setPage(1); setCoveragePage(1); }}><option value="">首个可访问来源</option>{result?.sources.map(s => <option key={s.id} value={s.id}>{formatSiteStore(s.marketplaceId, s.seller.displayName)}</option>)}</select></label><Button size="sm" variant="secondary" disabled={loading} onClick={() => setRefresh(v => v + 1)}>刷新品牌数据</Button>{canCreate && result?.source && <Button size="sm" disabled={busy || loading || view === "overview" && requestBlocked} onClick={async () => { if (view !== "overview") { changeView("overview"); return; } if (await onCommand({ action: "run", sourceIds: [result.source!.id] })) setRefresh(v => v + 1); }}>{view === "overview" ? "申请采集下一份报告" : "管理报告采集"}</Button>}</div>
     {view === "overview" && requestHint && <p className="text-xs text-muted">{requestHint}</p>}
-    {loading && <p role="status">读取品牌报告与覆盖…</p>}{error && <p role="alert" className="text-sm text-danger-ink">{error}</p>}
+    {loading && <p role="status">读取品牌报告与覆盖…</p>}
+    {error && errorCode && <ReadinessNotice kind={readinessKindFromCode(errorCode)} detail={error} />}
+    {error && !errorCode && <p role="alert" className="text-sm text-danger-ink">{error}</p>}
     {result?.latestTask && <div className="space-y-1 rounded border border-border p-3 text-xs"><p>最近任务：{statusLabel(result.latestTask.status)} / {result.latestTask.stage}</p>{result.latestTask.error && <p className="text-danger-ink">{result.latestTask.error}</p>}<Button size="sm" variant="secondary" onClick={() => onTask(result.latestTask!.id)}>查看最近任务</Button></div>}
     {result && !result.source && <p role="status" className="text-sm text-muted">暂无可访问品牌来源。请在账号设置确认访问范围，并审批绑定已连接的品牌来源；当前没有已接入数据。</p>}
     {view === "overview" && result && <>

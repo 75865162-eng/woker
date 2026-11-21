@@ -130,7 +130,7 @@ export function HostWorkbench({ page }: { page: HostPage }) {
   const [dynamicColumns, setDynamicColumns] = useState<HostColumn[] | null>(null);
   const [total, setTotal] = useState(0);
   const [totals, setTotals] = useState<Totals>(emptyTotals);
-  const [coverage, setCoverage] = useState({ stores: 0, rows: 0 });
+  const [, setCoverage] = useState({ stores: 0, rows: 0 });
   const [legacyStores, setLegacyStores] = useState<Store[]>([]);
   const referenceStores = useStores();
   const referenceStatus = useSellfoxReferenceStore((s) => s.status);
@@ -266,19 +266,7 @@ export function HostWorkbench({ page }: { page: HostPage }) {
       <SellfoxTabs current={page.href} />
       <div className="sf-page">
         <div className="sf-page-head">
-          <div className="sf-page-title">
-            <span className="sf-badge">{page.source}</span>
-            {dataset ? <span className={dataset.status === "live" ? "sf-badge sf-badge-live" : "sf-badge sf-badge-plan"}>{hostStatusLabel(dataset.status)}</span> : null}
-            {dataset ? <span className="sf-badge">优先级 {dataset.priority}</span> : null}
-            {live ? <span className="sf-badge">本次读取 {coverage.rows.toLocaleString("zh-CN")} 行{coverage.stores ? ` / ${coverage.stores} 店铺` : ""}</span> : <span className="sf-badge">尚未同步，不展示任何行</span>}
-          </div>
           <p className="sf-page-sub">{page.subtitle}</p>
-          <div className="sf-page-meta">
-            {dataset ? <>
-              <span>时间口径：{dataset.grain}</span>
-              <span>落表：<code>{dataset.table}</code></span>
-            </> : null}
-          </div>
         </div>
 
         <div className="sf-ds" role="tablist" aria-label="数据集">
@@ -408,14 +396,8 @@ function PendingDataset({ dataset }: { dataset: HostDataset }) {
   return (
     <div className="sf-pending">
       <div className="sf-pending-body">
-        <h2>{dataset.label} 尚未同步</h2>
-        <p>本页不渲染任何数据行：该数据集还没有同步器与事实表，页面显示 {hostStatusLabel(dataset.status)}，不补 0、不补前值。</p>
-        <dl className="sf-pending-grid">
-          <div><dt>目标表</dt><dd><code>{dataset.table}</code></dd></div>
-          <div><dt>优先级</dt><dd>{dataset.priority}</dd></div>
-          <div><dt>时间口径</dt><dd>{dataset.grain}</dd></div>
-          <div><dt>接口</dt><dd>{dataset.api.map((item) => <code key={item}>{item}</code>)}</dd></div>
-        </dl>
+        <h2>{dataset.label} 尚未开通</h2>
+        <p>该数据的采集能力尚未接入，当前状态为{hostStatusLabel(dataset.status)}。为避免误读，本页不展示任何数据行，也不填 0、不用历史值代替。下方为开通后可用的字段样式预览。</p>
         {dataset.note ? <p className="sf-note">{dataset.note}</p> : null}
         <div className="sf-pending-actions">
           <Link className="sf-btn sf-btn-primary" href="/sellfox/sync">去同步控制台</Link>
@@ -430,7 +412,7 @@ function PendingDataset({ dataset }: { dataset: HostDataset }) {
             ))}</tr>
           </thead>
           <tbody>
-            <tr><td colSpan={Math.max(dataset.columns.length, 1)} className="sf-pending-cell">未接入：字段结构已按规划声明，同步落地后即可填充。</td></tr>
+            <tr><td colSpan={Math.max(dataset.columns.length, 1)} className="sf-pending-cell">尚未开通：此处仅为字段样式预览，不代表查询成功，也不代表数据为空。</td></tr>
           </tbody>
         </table>
       </div>

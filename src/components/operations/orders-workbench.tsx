@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ReadinessNotice, readinessKindFromCode } from "@/components/operations/readiness-notice";
 import { Section, SectionHeader } from "@/components/ui/section";
 import { StatStrip } from "@/components/ui/stat-strip";
 import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
@@ -58,7 +59,7 @@ export function OrdersWorkbench({ sellerAccountId = "", marketplaceId = "", getH
   const [detailsStatus, setDetailsStatus] = useState("");
   const [fulfilledBy, setFulfilledBy] = useState(""), [fulfillmentServiceLevel, setFulfillmentServiceLevel] = useState("");
   const [orderId, setOrderId] = useState(""), [dateField, setDateField] = useState<"createdTime" | "sourceUpdatedAt">("createdTime"), [from, setFrom] = useState(""), [to, setTo] = useState(""), [page, setPage] = useState(1);
-  const [result, setResult] = useState<OrderResult | null>(null), [error, setError] = useState(""), [loading, setLoading] = useState(true), [refresh, setRefresh] = useState(0);
+  const [result, setResult] = useState<OrderResult | null>(null), [error, setError] = useState(""), [errorCode, setErrorCode] = useState(""), [loading, setLoading] = useState(true), [refresh, setRefresh] = useState(0);
   useEffect(() => {
     const readLocation = () => { setOrderId(new URLSearchParams(window.location.search).get("amazonOrderId") ?? ""); setPage(1); setScopeReady(true); };
     readLocation(); window.addEventListener("popstate", readLocation); return () => window.removeEventListener("popstate", readLocation);
@@ -66,15 +67,15 @@ export function OrdersWorkbench({ sellerAccountId = "", marketplaceId = "", getH
   useEffect(() => {
     if (!scopeReady) return;
     let current = true;
-    setLoading(true); setResult(null); setSelectedOrder(null); setError("");
+    setLoading(true); setResult(null); setSelectedOrder(null); setError(""); setErrorCode("");
     const read = async () => {
       try {
         const params = new URLSearchParams({ section: "orders", sellerAccountId, marketplaceId, amazonOrderId: orderId, rawStatus, fulfilledBy, fulfillmentServiceLevel, detailsStatus, dateField, from, to, page: String(page) });
         const response = await fetch(`/api/operations/sync-center?${params}`, { headers: getHeaders(), cache: "no-store" });
         const value = await response.json();
-        if (!response.ok) throw new Error(value.error ?? "订单读取失败。");
+        if (!response.ok) { const failure = new Error(value.error ?? "订单读取失败。") as Error & { code?: string }; failure.code = value.code; throw failure; }
         if (current) setResult(value);
-      } catch (e) { if (current) setError(e instanceof Error ? e.message : "订单读取失败。"); }
+      } catch (e) { if (current) { setError(e instanceof Error ? e.message : "订单读取失败。"); setErrorCode((e as Error & { code?: string }).code ?? ""); } }
       finally { if (current) setLoading(false); }
     };
     void read();
@@ -153,7 +154,8 @@ export function OrdersWorkbench({ sellerAccountId = "", marketplaceId = "", getH
       </div>
     </div>
 
-    {error && <Alert tone="danger">{error}</Alert>}
+    {error && errorCode && <ReadinessNotice kind={readinessKindFromCode(errorCode)} detail={error} />}
+    {error && !errorCode && <Alert tone="danger">{error}</Alert>}
     {loading && !result && <p role="status" className="text-sm text-muted">读取已落库订单…</p>}
 
     {result && <>

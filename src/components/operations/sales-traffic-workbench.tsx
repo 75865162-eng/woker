@@ -5,6 +5,7 @@ import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
 import { Button } from "@/components/ui/button";
 import { StandardDataTable } from "@/components/ui/table-variants";
 import { type DataTableColumn } from "@/components/ui/data-table";
+import { ReadinessNotice, readinessKindFromCode } from "@/components/operations/readiness-notice";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
 import type { SyncSourceView } from "@/lib/amazon-sync/contracts";
 import type { SalesRow } from "@/lib/amazon-sync/sales-query";
@@ -20,15 +21,15 @@ type ExportState = { id: string; status: string; rowCount?: number; error?: stri
 export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onTask }: { sources: SyncSourceView[]; canSync: boolean; canExport: boolean; taskId?: string; onTask?: (id: string) => void }) {
   const [seller, setSeller] = useState(""), [site, setSite] = useState(""), [from, setFrom] = useState(""), [to, setTo] = useState(""), [keyword, setKeyword] = useState(""), [direction, setDirection] = useState("desc");
   const [source, setSource] = useState(""), [preset, setPreset] = useState("yesterday"), [syncFrom, setSyncFrom] = useState(""), [syncTo, setSyncTo] = useState("");
-  const [page, setPage] = useState(1), [reload, setReload] = useState(0), [result, setResult] = useState<Result | null>(null), [error, setError] = useState(""), [notice, setNotice] = useState(""), [busy, setBusy] = useState(false), [loading, setLoading] = useState(true), [job, setJob] = useState<ExportState | null>(null);
+  const [page, setPage] = useState(1), [reload, setReload] = useState(0), [result, setResult] = useState<Result | null>(null), [error, setError] = useState(""), [errorCode, setErrorCode] = useState(""), [notice, setNotice] = useState(""), [busy, setBusy] = useState(false), [loading, setLoading] = useState(true), [job, setJob] = useState<ExportState | null>(null);
   const sequence = useRef(0), mutation = useRef(0);
   const filters = { sellerAccountId: seller, marketplaceId: site, from, to, keyword, direction, ...(taskId ? { taskId } : {}) };
   const queryKey = JSON.stringify(filters);
-  useEffect(() => { const requests = sequence, mutations = mutation; const reset = () => { ++requests.current; ++mutations.current; setResult(null); setJob(null); setError(""); setNotice(""); setBusy(false); setPage(1); setSeller(""); setSite(""); setSource(""); setReload(v => v + 1); }; window.addEventListener(workspaceScopeChangedEventName, reset); return () => { ++requests.current; ++mutations.current; window.removeEventListener(workspaceScopeChangedEventName, reset); }; }, []);
+  useEffect(() => { const requests = sequence, mutations = mutation; const reset = () => { ++requests.current; ++mutations.current; setResult(null); setJob(null); setError(""); setErrorCode(""); setNotice(""); setBusy(false); setPage(1); setSeller(""); setSite(""); setSource(""); setReload(v => v + 1); }; window.addEventListener(workspaceScopeChangedEventName, reset); return () => { ++requests.current; ++mutations.current; window.removeEventListener(workspaceScopeChangedEventName, reset); }; }, []);
   useEffect(() => {
-    const n = ++sequence.current, controller = new AbortController(); setLoading(true); setResult(null); setError("");
+    const n = ++sequence.current, controller = new AbortController(); setLoading(true); setResult(null); setError(""); setErrorCode("");
     const params = new URLSearchParams({ section: "sales-traffic", page: String(page), ...JSON.parse(queryKey) });
-    void fetch(`${endpoint}?${params}`, { headers: scopeHeaders(), cache: "no-store", signal: controller.signal }).then(async response => { const payload = await response.json(); if (!response.ok) throw new Error(payload.error ?? "销售流量读取失败。"); if (n === sequence.current) setResult(payload); }).catch(e => { if (n === sequence.current && !controller.signal.aborted) setError(e instanceof Error ? e.message : "读取失败。"); }).finally(() => { if (n === sequence.current) setLoading(false); });
+    void fetch(`${endpoint}?${params}`, { headers: scopeHeaders(), cache: "no-store", signal: controller.signal }).then(async response => { const payload = await response.json(); if (!response.ok) { const failure = new Error(payload.error ?? "销售流量读取失败。") as Error & { code?: string }; failure.code = payload.code; throw failure; } if (n === sequence.current) setResult(payload); }).catch(e => { if (n === sequence.current && !controller.signal.aborted) { setError(e instanceof Error ? e.message : "读取失败。"); setErrorCode((e as Error & { code?: string }).code ?? ""); } }).finally(() => { if (n === sequence.current) setLoading(false); });
     return () => { controller.abort(); };
   }, [queryKey, page, reload]);
   useVisiblePolling({
@@ -104,7 +105,8 @@ export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onT
       <label className="grid gap-1 text-xs">业务日期排序<select aria-label="业务日期排序" className={input} value={direction} onChange={e => select(setDirection, e.target.value)}><option value="desc">最新在前</option><option value="asc">最早在前</option></select></label>
       <Button size="sm" variant="secondary" disabled={loading || busy} onClick={() => setReload(v => v + 1)}>刷新日报</Button><Button size="sm" disabled={!canExport || busy || loading || !result} onClick={() => void exportData()}>按当前条件异步导出</Button>
     </div>
-    {error && <p role="alert" className="text-sm text-danger-ink">{error}</p>}{notice && <p role="status" className="text-sm text-brand">{notice}</p>}
+    {error && errorCode && <ReadinessNotice kind={readinessKindFromCode(errorCode)} detail={error} />}
+    {error && !errorCode && <p role="alert" className="text-sm text-danger-ink">{error}</p>}{notice && <p role="status" className="text-sm text-brand">{notice}</p>}
     {job && <p className="text-xs">导出 {job.id} · {job.status} · {job.rowCount ?? "—"} 条 {job.error}{job.status === "SUCCEEDED" && <Button size="sm" variant="secondary" disabled={busy} onClick={() => void download()}>下载 JSONL（含来源与版本）</Button>}</p>}
     {loading && <p role="status">读取已发布日报…</p>}
     {result && <><StandardDataTable

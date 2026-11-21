@@ -3,6 +3,7 @@ import { formatSiteStore } from "@/lib/sellfox/marketplace-site";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { WorkbenchDialog } from "@/components/ui/workbench-dialog";
+import { ReadinessNotice, readinessKindFromCode } from "@/components/operations/readiness-notice";
 import { BusinessRecordFields } from "./business-record-fields";
 type Row = { id: string; sourceRunId: string; kind: string; asin: string | null; sellerSku: string | null; searchTerm: string | null; facts: Record<string, unknown>; capturedAt: string };
 type Result = { run?: { id: string; finishedAt: string; summary?: { coverage?: { complete?: boolean; unavailableObjectIds?: string[] } } } | null; latestTask?: { id: string; status: string; stage: string; processedCount: number; failedCount: number; updatedAt: string; error: string | null } | null; sources: Array<{ id: string; marketplaceId: string; seller: { displayName: string } }>; source: { id: string; lastSuccessAt: string | null } | null; versions: Array<{ id: string; finishedAt: string; summary?: { coverage?: { reportKind?: string; from?: string; to?: string } } }>; rows: Row[]; pagination: { total: number; pageCount: number } };
@@ -42,11 +43,11 @@ export function ObservationsWorkbench({ resource, sellerAccountId, marketplaceId
   const [kind, setKind] = useState(kinds[resource][0][0]), [sourceId, setSourceId] = useState(""), [runId, setRunId] = useState(""), [asin, setAsin] = useState(""), [sku, setSku] = useState(""), [page, setPage] = useState(1), [refresh, setRefresh] = useState(0);
   const [inboundPlanId, setInboundPlanId] = useState(""), [shipmentId, setShipmentId] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [result, setResult] = useState<Result | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState("");
+  const [result, setResult] = useState<Result | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(""), [errorCode, setErrorCode] = useState("");
   useEffect(() => {
-    const controller = new AbortController(); setResult(null); setSelectedId(null); setLoading(true); setError("");
+    const controller = new AbortController(); setResult(null); setSelectedId(null); setLoading(true); setError(""); setErrorCode("");
     const params = new URLSearchParams({ section: "observations", resource, sellerAccountId, marketplaceId, sourceId, runId, asin, sellerSku: sku, kind, ...(resource === "fulfillment" ? { inboundPlanId, shipmentId } : {}), page: String(page) });
-    void fetch(`/api/operations/sync-center?${params}`, { headers: getHeaders(), cache: "no-store", signal: controller.signal }).then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.error ?? "观察记录读取失败。"); if (!controller.signal.aborted) setResult(data); }).catch(e => { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : "读取失败。"); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    void fetch(`/api/operations/sync-center?${params}`, { headers: getHeaders(), cache: "no-store", signal: controller.signal }).then(async response => { const data = await response.json(); if (!response.ok) { const failure = new Error(data.error ?? "观察记录读取失败。") as Error & { code?: string }; failure.code = data.code; throw failure; } if (!controller.signal.aborted) setResult(data); }).catch(e => { if (!controller.signal.aborted) { setError(e instanceof Error ? e.message : "读取失败。"); setErrorCode((e as Error & { code?: string }).code ?? ""); } }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [resource, sellerAccountId, marketplaceId, sourceId, runId, asin, sku, kind, inboundPlanId, shipmentId, page, refresh, getHeaders]);
   const selected = result?.rows.find(row => row.id === selectedId);
@@ -67,7 +68,9 @@ export function ObservationsWorkbench({ resource, sellerAccountId, marketplaceId
     {resource === "fulfillment" && (inboundPlanId || shipmentId) && <div className="flex flex-wrap items-center gap-2 rounded border border-border bg-surface p-3 text-xs" aria-label="当前货件范围"><span>计划：{inboundPlanId || "全部"} · 货件：{shipmentId || "全部"}</span><Button size="sm" variant="secondary" onClick={() => { setInboundPlanId(""); setShipmentId(""); setAsin(""); setSku(""); setKind("INBOUND_PLAN"); setPage(1); }}>返回全部计划</Button></div>}
     {result?.run?.summary?.coverage?.complete === false && <p role="status" className="rounded border border-border p-3 text-xs">当前为已批准的部分发布，尚未取得的目录对象：{result.run.summary.coverage.unavailableObjectIds?.join("、") ?? "请查看来源任务"}。这些缺口不代表商品已删除，当前版本不代表全量目录。</p>}
     {result?.latestTask && <div role="status" className="space-y-1 rounded border border-border p-3 text-xs text-muted"><p>最近采集：{result.latestTask.status} / {result.latestTask.stage} · 已处理 {result.latestTask.processedCount} 个对象 · 失败 {result.latestTask.failedCount} 个</p><p>任务更新时间：{new Date(result.latestTask.updatedAt).toLocaleString()}；采集中结果完成后统一发布。</p>{result.latestTask.error && <p className="text-danger-ink">{result.latestTask.error}</p>}<Button size="sm" variant="secondary" onClick={() => onTask(result.latestTask!.id)}>查看采集进度</Button></div>}
-    {loading && <p role="status">读取已发布观察记录…</p>}{error && <p role="alert" className="text-danger-ink">{error}</p>}
+    {loading && <p role="status">读取已发布观察记录…</p>}
+    {error && errorCode && <ReadinessNotice kind={readinessKindFromCode(errorCode)} detail={error} />}
+    {error && !errorCode && <p role="alert" className="text-danger-ink">{error}</p>}
     {result && <>{result.run && <p className="break-all text-xs text-muted">当前已发布版本：{result.run.id} · {new Date(result.run.finishedAt).toLocaleString()}</p>}<div className="overflow-x-auto rounded border border-border"><table aria-label="已发布观察记录" className="w-full min-w-[800px] text-left text-xs"><thead className="bg-surface-muted"><tr>{[...titles, "采集时间 / 来源", "操作"].map(title => <th className="px-3 py-2 font-medium" key={title}>{title}</th>)}</tr></thead><tbody>{result.rows.map(row => <tr key={row.id} className="border-t border-border">{cells(row).map((v, i) => {
         const isFulfillmentStatus = resource === "fulfillment" && ["INBOUND_PLAN", "INBOUND_SHIPMENT"].includes(row.kind) && i === 2;
         return <td key={i} className="max-w-[260px] px-3 py-2">{isFulfillmentStatus ? <span data-amazon-status={v} className={`inline-flex rounded border px-2 py-0.5 text-label font-medium ${fulfillmentStatusStyles[v] ?? "border-border bg-surface-muted text-muted"}`}>{v}</span> : <span className="line-clamp-2 break-words" title={v}>{v}</span>}</td>;

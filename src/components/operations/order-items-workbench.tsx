@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { WorkbenchDialog } from "@/components/ui/workbench-dialog";
+import { ReadinessNotice, readinessKindFromCode } from "@/components/operations/readiness-notice";
 
 type Result = {
   sources: Array<{ id: string; marketplaceId: string; detailsEnabled: boolean; detailsComplete: boolean }>;
@@ -15,15 +16,15 @@ export function OrderItemsWorkbench({ sellerAccountId = "", marketplaceId = "", 
   const [scopeReady, setScopeReady] = useState(false);
   const [selected, setSelected] = useState<{ row: Result["rows"][number]; item: Result["rows"][number]["items"][number] } | null>(null);
   const [visible, setVisible] = useState<string[]>(columns.map(c => c[0]));
-  const [result, setResult] = useState<Result | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(""), [refresh, setRefresh] = useState(0);
+  const [result, setResult] = useState<Result | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(""), [errorCode, setErrorCode] = useState(""), [refresh, setRefresh] = useState(0);
   useEffect(() => { const read = () => { setOrderId(new URLSearchParams(window.location.search).get("amazonOrderId") ?? ""); setPage(1); setScopeReady(true); }; read(); window.addEventListener("popstate", read); return () => window.removeEventListener("popstate", read); }, []);
   useEffect(() => { try { const value = JSON.parse(localStorage.getItem("amazon-order-item-columns-v1") ?? "null"); if (Array.isArray(value)) setVisible(value.filter(v => columns.some(c => c[0] === v))); } catch { /* use defaults */ } }, []);
   const toggleColumn = (id: string) => setVisible(current => { const next = current.includes(id) ? current.filter(value => value !== id) : [...current, id]; localStorage.setItem("amazon-order-item-columns-v1", JSON.stringify(next)); return next; });
   useEffect(() => {
     if (!scopeReady) return;
-    const controller = new AbortController(); setSelected(null); setResult(null); setLoading(true); setError("");
+    const controller = new AbortController(); setSelected(null); setResult(null); setLoading(true); setError(""); setErrorCode("");
     const params = new URLSearchParams({ section: "orders", itemsOnly: "true", sellerAccountId, marketplaceId, amazonOrderId: orderId, sellerSku, asin, rawStatus: status, dateField, from, to, page: String(page) });
-    void fetch(`/api/operations/sync-center?${params}`, { headers: getHeaders(), cache: "no-store", signal: controller.signal }).then(async response => { const value = await response.json(); if (!response.ok) throw new Error(value.error ?? "订单商品读取失败。"); if (!controller.signal.aborted) setResult(value); }).catch(e => { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : "订单商品读取失败。"); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    void fetch(`/api/operations/sync-center?${params}`, { headers: getHeaders(), cache: "no-store", signal: controller.signal }).then(async response => { const value = await response.json(); if (!response.ok) { const failure = new Error(value.error ?? "订单商品读取失败。") as Error & { code?: string }; failure.code = value.code; throw failure; } if (!controller.signal.aborted) setResult(value); }).catch(e => { if (!controller.signal.aborted) { setError(e instanceof Error ? e.message : "订单商品读取失败。"); setErrorCode((e as Error & { code?: string }).code ?? ""); } }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [scopeReady, sellerAccountId, marketplaceId, orderId, sellerSku, asin, status, dateField, from, to, page, refresh, getHeaders]);
   const visibleSet = useMemo(() => new Set(visible), [visible]);
@@ -51,7 +52,9 @@ export function OrderItemsWorkbench({ sellerAccountId = "", marketplaceId = "", 
       <Button size="sm" variant="secondary" disabled={loading} onClick={() => { setOrderId(""); setSellerSku(""); setAsin(""); setStatus(""); setDateField("createdTime"); setFrom(""); setTo(""); setPage(1); }}>重置筛选</Button><Button size="sm" variant="secondary" disabled={loading} onClick={() => setRefresh(v => v + 1)}>刷新</Button>
     </div>
     <details className="text-xs"><summary className="cursor-pointer">列设置</summary><div className="mt-2 flex flex-wrap gap-3">{columns.map(([id, name]) => <label key={id} className="flex items-center gap-1"><input type="checkbox" checked={visibleSet.has(id)} onChange={() => toggleColumn(id)} />{name}</label>)}</div></details>
-    {loading && <p role="status" className="text-sm text-muted">读取订单与商品明细…</p>}{error && <p role="alert" className="text-sm text-danger-ink">{error}</p>}
+    {loading && <p role="status" className="text-sm text-muted">读取订单与商品明细…</p>}
+    {error && errorCode && <ReadinessNotice kind={readinessKindFromCode(errorCode)} detail={error} />}
+    {error && !errorCode && <p role="alert" className="text-sm text-danger-ink">{error}</p>}
     {result && <><div className="overflow-x-auto"><table aria-label="订单商品明细" className="w-full min-w-[900px] text-left text-xs"><thead><tr>{columns.filter(([id]) => visibleSet.has(id)).map(([, name]) => <th key={name} className="py-2 pr-3 font-medium">{name}</th>)}<th className="py-2 pr-3">操作</th></tr></thead><tbody>{result.rows.flatMap(row => row.items.map(item => <tr key={`${row.sourceId}:${row.amazonOrderId}:${item.orderItemId}`} className="border-t border-border">{columns.filter(([id]) => visibleSet.has(id)).map(([id]) => <td key={id} className="py-2 pr-3">{cell(id, row, item)}</td>)}<td><Button size="sm" variant="secondary" onClick={() => setSelected({ row, item })}>商品明细</Button></td></tr>))}</tbody></table></div>
       {!result.rows.some(row => row.items.length) && <p className="py-6 text-center text-sm text-muted">{result.sources.some(source => source.detailsEnabled) ? "当前页没有已补齐的订单商品；详情采集已启用，请查看订单任务进度或翻页。" : "订单商品详情采集尚未启用，当前仅同步基础订单；需要启用订单详情策略后补齐，无需上传订单文件。"}</p>}
       <div className="flex justify-end gap-3 text-xs text-muted"><span>{result.pagination.total} 个订单 · 第 {page} / {Math.max(1, result.pagination.pageCount)} 页</span><Button size="sm" variant="secondary" disabled={loading || page <= 1} onClick={() => setPage(v => v - 1)}>上一页</Button><Button size="sm" variant="secondary" disabled={loading || page >= result.pagination.pageCount} onClick={() => setPage(v => v + 1)}>下一页</Button></div></>}

@@ -262,11 +262,20 @@ export function OperationsSectionGuide({ view }: { view: string }) {
   const section = operationsSections.find(item => item.entries.some(entry => entry.view === view));
   if (!section) return null;
   const pending = section.entries.find(entry => entry.view === view)?.pending;
+  if (pending) {
+    return <section role="status" aria-label="能力开通说明" className="space-y-2 rounded-lg border border-dashed border-border bg-surface p-4 text-xs leading-relaxed">
+      <div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-foreground">{section.label}</p><span className="rounded border border-warning-ink/30 bg-warning-soft px-2 py-0.5 text-meta font-semibold text-warning-ink">规划中 · 暂不可查询</span></div>
+      <p className="text-muted">该能力尚未接入，当前没有可查询的数据。系统不会用其他来源的数据代替，也不会填充空值或零值。</p>
+      <p><span className="text-muted">规划能力：</span>{pending.fields}</p>
+      <p><span className="text-muted">数据来源：</span>{pending.source}</p>
+      <p className="rounded border border-border bg-surface-muted/40 p-2 text-muted"><span className="font-semibold text-foreground">开通条件：</span>{pending.requirement}</p>
+      <p className="text-muted">如需优先开通，请联系系统管理员登记需求；你也可以从左侧板块进入其他已上线的数据视图。</p>
+    </section>;
+  }
   return <section aria-label="板块字段与来源" className="space-y-2 rounded-lg border border-border bg-surface p-3 text-xs leading-relaxed">
     <p className="font-semibold">{section.label}</p>
-    <p><span className="text-muted">主要字段：</span>{pending?.fields ?? section.fields}</p>
-    <p><span className="text-muted">主要来源：</span>{pending?.source ?? section.source}</p>
-    <p className="text-muted">{pending ? "待接入 · 已提供能力说明入口，当前没有此能力的已接入查询或采集操作。" : section.boundary}</p>
-    {pending && <p role="status">{pending.requirement}</p>}
+    <p><span className="text-muted">主要字段：</span>{section.fields}</p>
+    <p><span className="text-muted">主要来源：</span>{section.source}</p>
+    <p className="text-muted">{section.boundary}</p>
   </section>;
 }

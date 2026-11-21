@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { WorkbenchDialog } from "@/components/ui/workbench-dialog";
 import { StandardDataTable } from "@/components/ui/table-variants";
 import { type DataTableColumn } from "@/components/ui/data-table";
+import { ReadinessNotice, readinessKindFromCode } from "@/components/operations/readiness-notice";
 import { BusinessRecordFields } from "./business-record-fields";
 
 type FinanceResult = {
@@ -29,16 +30,16 @@ export function FinanceWorkbench({ sellerAccountId = "", marketplaceId = "", get
     { key: "action", header: "操作", render: (r) => <Button size="sm" variant="secondary" onClick={() => setSelected(r)}>交易详情</Button> },
   ];
   const [rawStatus, setRawStatus] = useState("");
-  const [result, setResult] = useState<FinanceResult | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(""), [refresh, setRefresh] = useState(0);
+  const [result, setResult] = useState<FinanceResult | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(""), [errorCode, setErrorCode] = useState(""), [refresh, setRefresh] = useState(0);
   useEffect(() => {
-    const controller = new AbortController(); setSelected(null); setLoading(true); setResult(null); setError("");
+    const controller = new AbortController(); setSelected(null); setLoading(true); setResult(null); setError(""); setErrorCode("");
     void (async () => {
       try {
         const params = new URLSearchParams({ section: "finance", sellerAccountId, marketplaceId, currency, orderId, classification, rawStatus, sourceRunId, ...(dateMode === "day" ? { from, to } : { fromTimestamp, toTimestamp }), page: String(page) });
         const response = await fetch(`/api/operations/sync-center?${params}`, { headers: getHeaders(), cache: "no-store", signal: controller.signal });
-        const value = await response.json(); if (!response.ok) throw new Error(value.error ?? "财务读取失败。");
+        const value = await response.json(); if (!response.ok) { const failure = new Error(value.error ?? "财务读取失败。") as Error & { code?: string }; failure.code = value.code; throw failure; }
         if (!controller.signal.aborted) setResult(value);
-      } catch (e) { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : "财务读取失败。"); }
+      } catch (e) { if (!controller.signal.aborted) { setError(e instanceof Error ? e.message : "财务读取失败。"); setErrorCode((e as Error & { code?: string }).code ?? ""); } }
       finally { if (!controller.signal.aborted) setLoading(false); }
     })();
     return () => controller.abort();
@@ -61,7 +62,8 @@ export function FinanceWorkbench({ sellerAccountId = "", marketplaceId = "", get
       <Button size="sm" variant="secondary" disabled={loading} onClick={() => setRefresh(v => v + 1)}>刷新财务</Button>
     </div>
     {loading && <p role="status" className="text-sm text-muted">读取已落库交易…</p>}
-    {error && <p role="alert" className="text-sm text-danger-ink">{error}</p>}
+    {error && errorCode && <ReadinessNotice kind={readinessKindFromCode(errorCode)} detail={error} />}
+    {error && !errorCode && <p role="alert" className="text-sm text-danger-ink">{error}</p>}
     {result && <>
       <p className="text-xs text-muted">本范围未折算 {result.unconvertedCount} 条；所选采集源／卖家下待归属隔离 {result.quarantinedCount} 条（不按站点、币种过滤，不计入下表）。</p>
       {result.sources.map(s => <p key={s.id} className="break-all text-xs text-muted">{s.seller.displayName} · {s.resourceCursor ? `${s.resourceCursor.status} / ${s.resourceCursor.watermarkFrom} — ${s.resourceCursor.watermarkTo}` : "尚无窗口"}</p>)}
