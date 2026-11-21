@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { StandardDataTable } from "@/components/ui/table-variants";
+import type { DataTableColumn } from "@/components/ui/data-table";
 import { operationsEntries, OperationsSectionGuide } from "./operations-sections";
 
 // 布局参考 Wimoor 费用单（MIT）。此处只用于展示规划中的字段结构，不含任何业务数据。
@@ -24,6 +26,12 @@ export function UnconnectedBusinessWorkbench({ view }: { view: string }) {
   const [tab, setTab] = useState(0);
   const layout = layouts[view];
   const entry = operationsEntries.find(item => item.view === view);
+  // 字段排布预览：只渲染表头，无真实数据行；用设计系统表格原语避免原生表格范式回退。
+  const previewColumns: DataTableColumn<string>[] = (layout?.columns ?? []).map(label => ({
+    key: label,
+    header: label,
+    render: () => null,
+  }));
   if (!layout) return <OperationsSectionGuide view={view} />;
   return <section className="space-y-4 rounded-lg border border-border bg-surface p-4" aria-label={entry?.label}>
     <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-sm font-semibold">{entry?.label}</h2><span role="status" className="rounded border border-warning-ink/30 bg-warning-soft px-2 py-1 text-xs text-warning-ink">规划中 · 暂不可查询</span></div>
@@ -39,7 +47,13 @@ export function UnconnectedBusinessWorkbench({ view }: { view: string }) {
       <label className="grid gap-1 text-xs">结束日期<input aria-label="结束日期" type="date" className="h-9 rounded border border-border bg-surface px-2" /></label>
       <label className="grid gap-1 text-xs">单号搜索<input aria-label="单号搜索" placeholder="请款单号 / 关联单号" className="h-9 rounded border border-border bg-surface px-2" /></label>
     </fieldset>
-    <div className="overflow-auto rounded border border-border"><table className="w-full min-w-[760px] text-left text-xs"><thead className="bg-surface-muted"><tr>{layout.columns.map(label => <th key={label} className="px-3 py-3 font-medium">{label}</th>)}</tr></thead><tbody><tr><td colSpan={layout.columns.length} className="p-6 text-center text-muted">尚未开通查询；此处为字段样式预览，不代表查询成功，也不代表业务记录为空。</td></tr></tbody></table></div>
+    <StandardDataTable
+      columns={previewColumns}
+      rows={[]}
+      getRowKey={label => label}
+      ariaLabel="字段排布预览"
+      empty="尚未开通查询；此处为字段样式预览，不代表查询成功，也不代表业务记录为空。"
+    />
     <details className="rounded border border-border p-3 text-xs"><summary className="cursor-pointer font-medium">开通说明与可用的相邻功能</summary><ul className="mt-3 space-y-2">{layout.gaps.map(gap => <li key={gap}>{gap}</li>)}</ul><p className="mt-3 text-muted">如需优先开通此能力，请联系系统管理员登记需求。你也可以使用下方已上线功能处理相关业务。</p></details>
     <div className="flex flex-wrap gap-4">{layout.links.map(([href, label]) => <a key={href} href={href} className="text-xs font-medium text-brand hover:underline">{label} →</a>)}</div>
   </section>;
