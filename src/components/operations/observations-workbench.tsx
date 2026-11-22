@@ -10,6 +10,35 @@ type Result = { run?: { id: string; finishedAt: string; summary?: { coverage?: {
 const input = "min-h-9 rounded border border-border bg-background px-2 text-xs";
 const kinds: Record<string, Array<[string, string]>> = { listing_details: [["LISTING_DETAIL", "完整 Listing"]], catalog_items: [["CATALOG_DETAIL", "商品目录"]], fulfillment: [["INBOUND_PLAN", "入库计划"], ["INBOUND_SHIPMENT", "货件状态"], ["INBOUND_PLAN_ITEM", "计划商品"], ["INBOUND_SHIPMENT_ITEM", "货件商品"]], pricing: [["OWN_PRICE_ASIN", "自有商品价格"], ["COMPETITIVE_PRICE", "价格与 Featured Offer"]], brand_analytics: [["BRAND_SEARCH_TERMS", "搜索词分析"], ["BRAND_SEARCH_QUERY", "搜索查询绩效"], ["BRAND_SEARCH_CATALOG", "搜索目录绩效"], ["BRAND_MARKET_BASKET", "购买组合"]], buy_box_history: [["BUY_BOX_DAY", "历史日报"]], promotions: [["PROMOTION_SUMMARY", "促销摘要"], ["PROMOTION", "促销详情"], ["PROMOTION_SELECTION", "促销选品"], ["PROMOTION_ITEM", "促销商品"]], notifications: [["NOTIFICATION_SUBSCRIPTION", "通知订阅"]] };
 const text = (value: unknown) => value === undefined || value === null ? "—" : typeof value === "object" ? JSON.stringify(value) : String(value);
+// Amazon attributes are arrays of localized { value } objects; render the
+// human-readable values instead of the raw JSON structure.
+const attrValues = (value: unknown): string => {
+  if (value === undefined || value === null || value === "") return "—";
+  const arr = Array.isArray(value) ? value : [value];
+  const vals = arr.map(v => v && typeof v === "object" && "value" in (v as Record<string, unknown>) ? String((v as Record<string, unknown>).value) : typeof v === "object" ? JSON.stringify(v) : String(v)).filter(v => v.trim());
+  return vals.length ? vals.join(" · ") : "—";
+};
+// Variation relationships: flatten type / parent SKU / theme into readable text.
+const relationshipsText = (value: unknown): string => {
+  if (value === undefined || value === null || value === "") return "—";
+  const groups = Array.isArray(value) ? value : [value];
+  const parts: string[] = [];
+  for (const g of groups) {
+    if (!g || typeof g !== "object") { parts.push(String(g)); continue; }
+    const inner = (g as Record<string, unknown>).relationships;
+    const list = Array.isArray(inner) ? inner : [g];
+    for (const r of list) {
+      if (!r || typeof r !== "object") continue;
+      const rec = r as Record<string, unknown>;
+      const type = rec.type ? String(rec.type) : "变体";
+      const parents = Array.isArray(rec.parentSkus) && rec.parentSkus.length ? `父体 ${rec.parentSkus.join(" / ")}` : "";
+      const theme = rec.variationTheme && typeof rec.variationTheme === "object" ? String((rec.variationTheme as Record<string, unknown>).theme ?? "") : "";
+      const attrs = rec.variationTheme && typeof rec.variationTheme === "object" && Array.isArray((rec.variationTheme as Record<string, unknown>).attributes) ? `(${((rec.variationTheme as Record<string, unknown>).attributes as unknown[]).join(" / ")})` : "";
+      parts.push([type, parents, [theme, attrs].filter(Boolean).join(" ")].filter(Boolean).join(" · "));
+    }
+  }
+  return parts.length ? parts.join("；") : "—";
+};
 const fulfillmentStatusStyles: Record<string, string> = {
   ACTIVE: "border-success/30 bg-success-soft text-success-ink",
   WORKING: "border-warning-ink/30 bg-warning-soft text-warning-ink",
@@ -25,7 +54,7 @@ const fulfillmentStatusStyles: Record<string, string> = {
 };
 function cells(row: Row): string[] {
   const f = row.facts;
-  if (row.kind === "LISTING_DETAIL" || row.kind === "CATALOG_DETAIL") { const summary = (f.summaries as Array<Record<string, unknown>> | undefined)?.[0] ?? {}; const attrs = f.attributes as Record<string, unknown> | null; return [text(row.sellerSku ?? row.asin), text(summary.itemName), text(summary.brand ?? summary.productType ?? summary.itemClassification), text(attrs?.bullet_point ?? attrs?.product_description ?? attrs?.model_number), text(f.relationships)]; }
+  if (row.kind === "LISTING_DETAIL" || row.kind === "CATALOG_DETAIL") { const summary = (f.summaries as Array<Record<string, unknown>> | undefined)?.[0] ?? {}; const attrs = f.attributes as Record<string, unknown> | null; const bullets = [attrs?.bullet_point, attrs?.product_description, attrs?.model_number].map(attrValues).filter(v => v !== "—"); return [text(row.sellerSku ?? row.asin), text(summary.itemName), text(summary.brand ?? summary.productType ?? summary.itemClassification), bullets.join(" ｜ ") || "—", relationshipsText(f.relationships)]; }
   if (row.kind === "INBOUND_PLAN") return [text(f.inboundPlanId), text(f.name), text(f.sourceStatus), text(f.sourceCreatedAt), text(f.sourceUpdatedAt)];
   if (row.kind === "INBOUND_SHIPMENT") return [text(f.shipmentId), text(f.name), text(f.sourceStatus), text(f.destinationWarehouseId), text(f.inboundPlanId)];
   if (row.kind.startsWith("INBOUND_")) return [text(f.sellerSku), text(f.asin), text(f.fnsku), text(f.declaredQuantity), text(f.quantitySemantics)];

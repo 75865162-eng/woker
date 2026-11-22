@@ -19,7 +19,7 @@ export type BrandConfiguration = Source & { authorizationId: string; enabled: bo
 type Coverage = { reportKind: BrandKind; reportPeriod: BrandPeriod; from: string; to: string; asins: string[] };
 type BrandView = "overview" | "asin" | BrandKind;
 type Result = { products?: Record<string, BrandProductLink>; productWarnings?: string[]; sources: Source[]; source: Source | null; configuration: BrandConfiguration | null; plans: Array<{ id: string; enabled: boolean }>; collection: { definition: BrandCollection; total: number; completed: number; complete: boolean; items: Array<Coverage & { key: string; status: string; taskId: string | null; rows: number | null; error: string | null }> } | null;
-  rows: Array<{ id: string; sourceRunId: string; facts: Record<string, unknown>; capturedAt: string }>; versions: Array<{ id: string; finishedAt: string; coverage: Coverage }>; versionsTruncated: boolean; run: { id: string; coverage: Coverage } | null; batchCount: number;
+  rows: Array<{ id: string; sourceRunId: string; facts: Record<string, unknown>; capturedAt: string }>; resolvedKind?: BrandKind; versions: Array<{ id: string; finishedAt: string; coverage: Coverage }>; versionsTruncated: boolean; run: { id: string; coverage: Coverage } | null; batchCount: number;
   latestTask: { id: string; status: string; stage: string; error: string | null } | null; pagination: { total: number; pageCount: number } };
 const initialBrandFilter = (name: string) => typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get(name) ?? "";
 const input = "min-h-9 rounded border border-border bg-background px-2 text-xs";
@@ -48,7 +48,7 @@ export function BrandAnalyticsWorkbench({ sellerAccountId, marketplaceId, getHea
     return () => controller.abort();
   }, [view, kind, sellerAccountId, marketplaceId, sourceId, period, from, to, asin, search, runId, page, refresh, getHeaders]);
   const changeView = (v: BrandView, selectedAsin = asin) => { const url = new URL(window.location.href); if (v === "overview") url.searchParams.delete("brandReport"); else url.searchParams.set("brandReport", v); if (selectedAsin) url.searchParams.set("asin", selectedAsin); else url.searchParams.delete("asin"); window.history.replaceState(null, "", url); setView(v); setPeriod(""); setRunId(""); setFrom(""); setTo(""); setAsin(selectedAsin); setSearch(""); setPage(1); };
-  const coverage = result?.collection, columns = brandColumns[kind];
+  const coverage = result?.collection, displayedKind = result?.resolvedKind ?? kind, columns = brandColumns[displayedKind];
   const nextItem = coverage?.items.find(item => !["SUCCEEDED", "EMPTY"].includes(item.status));
   const taskPending = result?.latestTask && ["WAITING", "QUEUED", "RUNNING", "RETRY_WAIT", "PAUSED"].includes(result.latestTask.status);
   const requestBlocked = !!taskPending || !!coverage && (coverage.complete || !!nextItem && nextItem.status !== "MISSING");
@@ -63,6 +63,10 @@ export function BrandAnalyticsWorkbench({ sellerAccountId, marketplaceId, getHea
     { key: "scope", header: "对象范围", render: (item) => item.asins.length ? `${item.asins.length} 个 ASIN：${item.asins.join(" / ")}` : "报告可见全范围" },
     { key: "status", header: "状态 / 行数", render: (item) => `${statusLabel(item.status)} / ${item.rows ?? "未知"}` },
     { key: "source", header: "来源 / 原因", render: (item) => <>{item.taskId && <Button size="sm" variant="secondary" onClick={() => onTask(item.taskId!)}>来源任务</Button>}{item.error && <p className="max-w-72 break-words text-danger-ink">{item.error}</p>}</> },
+  ];
+  const previewColumns: DataTableColumn<Result["rows"][number]>[] = [
+    ...columns.map(([path, label]) => ({ key: path, header: label, render: (row: Result["rows"][number]) => brandValue(brandFactValue(row.facts, path)) })),
+    { key: "sourceRun", header: "来源任务", render: (row) => <Button size="sm" variant="ghost" onClick={() => onTask(row.sourceRunId)}>查看</Button> },
   ];
   return <div className="space-y-4" data-testid="amazon-brand_analytics-observations">
     <p className="text-xs leading-relaxed text-muted">五类官方品牌报告按店铺、站点、报告粒度和完整周期分别保存。需 Brand Analytics 角色及品牌资格；搜索词还需品牌代表资格。份额与比率保留上游原值，以各报告说明为准；排名不等于搜索量；复购销售额未扣退货。</p>
@@ -84,6 +88,7 @@ export function BrandAnalyticsWorkbench({ sellerAccountId, marketplaceId, getHea
         return <div key={key} className="space-y-2 rounded border border-border p-3 text-xs"><h4 className="font-semibold">{report.label}</h4><p>{items.length ? `${completed} / ${items.length} 份完成` : "未纳入当前清单"}</p>{!!items.length && <p className="text-muted">成功空报告 {empty} 份 · 需处理 {stopped} 份</p>}<Button size="sm" variant="secondary" onClick={() => changeView(key as BrandKind, "")}>打开{report.label}</Button></div>;
       })}</section>}
       {coverage && <><StandardDataTable ariaLabel="各类品牌报告同步进度" rows={coverage.items.slice((coveragePage - 1) * 30, coveragePage * 30)} getRowKey={(item) => item.key} columns={coverageColumns} empty="暂无覆盖项。" /><div className="flex justify-end gap-2 text-xs"><Button size="sm" variant="secondary" disabled={coveragePage <= 1} onClick={() => setCoveragePage(v => v - 1)}>上一组覆盖</Button><span>第 {coveragePage} / {Math.max(1, Math.ceil(coverage.total / 30))} 页</span><Button size="sm" variant="secondary" disabled={coveragePage * 30 >= coverage.total} onClick={() => setCoveragePage(v => v + 1)}>下一组覆盖</Button></div></>}
+      {result.rows.length > 0 && <section aria-label="最新已发布数据预览" className="rounded border border-border p-3"><div className="mb-2 flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">{brandReports[displayedKind].label} · 最新数据预览</h3><Button size="sm" variant="secondary" onClick={() => changeView(displayedKind, "")}>查看完整报告</Button></div><p className="mb-2 text-xs text-muted">{result.run ? `${result.run.coverage?.from} — ${result.run.coverage?.to} / ${result.run.coverage?.reportPeriod}` : "最近已发布窗口"}；展示 {result.pagination.total} 条。金额保留原币种，未返回值显示为空。</p><StandardDataTable ariaLabel="最新已发布数据预览" rows={result.rows.slice(0, 20)} getRowKey={(row) => row.id} columns={previewColumns} empty="暂无已发布数据。" />{result.pagination.total > 20 && <p className="mt-2 text-xs text-muted">仅预览前 20 条，完整数据请打开报告视图。</p>}</section>}
       {canConfigure && result.configuration && <BrandCollectionForm key={`${result.configuration.id}:${result.configuration.revision}`} configuration={result.configuration} plans={result.plans} busy={busy} getHeaders={getHeaders} onCommand={onCommand} />}
       <div className="space-y-1 rounded border border-border p-3 text-xs text-muted"><p>当前官方 Seller Brand Analytics 清单包含上述五类报告。人口统计、商品比较、替代购买未列入本次核验的当前报告清单；Vendor Retail Analytics 为另一业务范围。当前不将这些能力标为已接入。</p><p>搜索词报告官方存在约 1,200 万条上限；本系统每份报告另受审批请求数、行数、下载与解析容量限制，超限会失败并保留旧版本，不能宣称全量完成。自动回补只由管理员明确申请、批准并应用计划后启用。</p><a href={brandOfficialUrl} target="_blank" rel="noreferrer" className="text-brand">Amazon 官方报告清单与适用边界</a></div>
     </>}

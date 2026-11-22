@@ -311,7 +311,7 @@ export function AmazonSyncMatrix({ initialTab = "sp" }: { initialTab?: "sp" | "a
           if (tab === "sp") {
             const res = await fetch(spBase, { method: "POST", headers: h, body: JSON.stringify({ action: "run", sourceIds: failed.flatMap(r => r.sourceIds), idempotencyKey: crypto.randomUUID() }) });
             const d = await res.json(); if (!res.ok) throw new Error(d.error ?? "提交失败。");
-            setNotice("失败项同步申请已创建；请前往变更审批处理。");
+            setNotice("失败项已重新提交，系统正在自动同步。");
           } else {
             const planIds = [...new Set(failed.map(r => r.planId).filter(Boolean))] as string[];
             for (const planId of planIds) { const res = await fetch(`${adsBase}/sync`, { method: "POST", headers: h, body: JSON.stringify({ action: "retry", planId }) }); const d = await res.json(); if (!res.ok) throw new Error(d.error ?? "重试失败。"); }

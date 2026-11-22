@@ -30,23 +30,36 @@ export async function readBrandAnalytics(scope: SyncScope, params: URLSearchPara
   await amazonAccountReadAccess(scope, actor, params, prisma, "brand_analytics");
   return result;
 }
-async function readBrandReport(scope: SyncScope, params: URLSearchParams, context: Awaited<ReturnType<typeof resolveBrandSource>>, enrich = true) {
+async function readBrandReport(scope: SyncScope, params: URLSearchParams, context: Awaited<ReturnType<typeof resolveBrandSource>>, enrich = true, allowFallback = true) {
   const { source, sources, access } = context;
   const kind = params.get("reportKind") ?? "search_terms";
   if (!Object.hasOwn(brandReports, kind)) throw new SyncInputError("品牌报告类型无效。");
-  const definition = brandReports[kind as BrandKind], period = params.get("reportPeriod");
+  let definition = brandReports[kind as BrandKind];
+  const period = params.get("reportPeriod");
   if (period && !(definition.periods as readonly string[]).includes(period)) throw new SyncInputError("品牌报告周期无效。");
   const from = params.get("from") ? businessDate(params.get("from")) : undefined, to = params.get("to") ? businessDate(params.get("to")) : undefined;
   if (from && to && from > to) throw new SyncInputError("日期范围无效。");
-  const base: Prisma.AmazonSyncRunWhereInput = { ...scope, sourceId: source?.id ?? "__none__", resource: "brand_analytics", executionVersion: 2, status: "SUCCEEDED", stage: { not: "PURGED" }, finishedAt: { not: null }, AND: [
-    { frozenScope: { path: ["domainPolicy", "reportKind"], equals: kind } },
+  const buildBase = (k: string): Prisma.AmazonSyncRunWhereInput => ({ ...scope, sourceId: source?.id ?? "__none__", resource: "brand_analytics", executionVersion: 2, status: "SUCCEEDED", stage: { not: "PURGED" }, finishedAt: { not: null }, AND: [
+    { frozenScope: { path: ["domainPolicy", "reportKind"], equals: k } },
     ...(period ? [{ frozenScope: { path: ["domainPolicy", "reportPeriod"], equals: period } }] : []),
     ...(from ? [{ frozenScope: { path: ["domainPolicy", "from"], gte: from } }] : []),
     ...(to ? [{ frozenScope: { path: ["domainPolicy", "to"], lte: to } }] : []),
-  ] };
+  ] });
+  let base: Prisma.AmazonSyncRunWhereInput = buildBase(kind);
   const select = { id: true, finishedAt: true, summary: true, frozenScope: true } as const;
-  const versions = await prisma.amazonSyncRun.findMany({ where: base, select, orderBy: [{ finishedAt: "desc" }, { id: "desc" }], take: 101 });
+  let versions = await prisma.amazonSyncRun.findMany({ where: base, select, orderBy: [{ finishedAt: "desc" }, { id: "desc" }], take: 101 });
   const explicit = params.get("runId");
+  // The default view requests "search_terms", but an account may only have
+  // published SQP / catalog reports. Fall back to the most recent report kind
+  // that actually has published data for this source, so the page is not blank.
+  let resolvedKind: string = kind;
+  if (allowFallback && !explicit && versions.length === 0 && source) {
+    const candidates = (Object.keys(brandReports) as BrandKind[]).filter(k => k !== kind);
+    for (const candidate of candidates) {
+      const alt = await prisma.amazonSyncRun.findMany({ where: buildBase(candidate), select, orderBy: [{ finishedAt: "desc" }, { id: "desc" }], take: 101 });
+      if (alt.length) { versions = alt; resolvedKind = candidate; definition = brandReports[candidate]; base = buildBase(candidate); break; }
+    }
+  }
   const run = explicit ? await prisma.amazonSyncRun.findFirst({ where: { ...base, id: explicit }, select }) : versions[0];
   if (explicit && !run) throw new SyncInputError("该品牌报告版本不可访问或与筛选不符。", 403);
   let runIds: string[] = run ? [run.id] : [];
@@ -69,7 +82,7 @@ async function readBrandReport(scope: SyncScope, params: URLSearchParams, contex
     }
   }
   const page = Math.min(100000, Math.max(1, Math.floor(Number(params.get("page")) || 1))), pageSize = queryPageSize(params);
-  const where: Prisma.AmazonDomainObservationWhereInput = { ...scope, sourceId: source?.id ?? "__none__", sourceRunId: { in: runIds }, ...(asinVersions ? { OR: asinVersions } : {}), kind: `BRAND_${kind.toUpperCase()}`, ...(params.get("asin") ? { asin: params.get("asin")! } : {}), ...(params.get("searchTerm") ? { searchTerm: { contains: params.get("searchTerm")!, mode: "insensitive" } } : {}) };
+  const where: Prisma.AmazonDomainObservationWhereInput = { ...scope, sourceId: source?.id ?? "__none__", sourceRunId: { in: runIds }, ...(asinVersions ? { OR: asinVersions } : {}), kind: `BRAND_${resolvedKind.toUpperCase()}`, ...(params.get("asin") ? { asin: params.get("asin")! } : {}), ...(params.get("searchTerm") ? { searchTerm: { contains: params.get("searchTerm")!, mode: "insensitive" } } : {}) };
   const [rows, total, latestTask, collection, plans] = await Promise.all([
     prisma.amazonDomainObservation.findMany({ where, select: { id: true, sourceId: true, sourceRunId: true, asin: true, searchTerm: true, facts: true, capturedAt: true }, orderBy: [{ asin: "asc" }, { id: "asc" }], take: pageSize, skip: (page - 1) * pageSize }),
     prisma.amazonDomainObservation.count({ where }),
@@ -79,13 +92,13 @@ async function readBrandReport(scope: SyncScope, params: URLSearchParams, contex
   ]);
   const linked = source && enrich ? await readBrandProducts(scope, source, rows.flatMap(row => {
     const partner = (row.facts as { purchasedWithAsin?: unknown }).purchasedWithAsin;
-    return [...(row.asin ? [row.asin] : []), ...(kind === "market_basket" && typeof partner === "string" ? [partner] : [])];
+    return [...(row.asin ? [row.asin] : []), ...(resolvedKind === "market_basket" && typeof partner === "string" ? [partner] : [])];
   }), access) : { products: {}, warnings: [] };
   const publicSource = (s: typeof sources[number]) => ({ id: s.id, revision: s.revision, sellerAccountId: s.sellerAccountId, marketplaceId: s.marketplaceId, seller: s.seller });
   return { sources: sources.map(publicSource), source: source ? publicSource(source) : null,
     configuration: source && access.allSellers ? { ...publicSource(source), authorizationId: source.authorizationId, enabled: source.enabled, freshnessMinutes: source.freshnessMinutes, domainPolicy: source.domainPolicy } : null,
     products: linked.products, productWarnings: linked.warnings, plans, collection: collection ? { definition: collection.policy.collection, total: collection.total, completed: collection.completed, complete: collection.complete, items: collection.items } : null,
-    rows: await observationBusinessFields(scope, rows), numericEncoding: "JSON_NUMERIC_STRINGS", versions: versions.slice(0, 100).map(v => ({ id: v.id, finishedAt: v.finishedAt, coverage: (v.summary as { coverage?: BrandWindow } | null)?.coverage })), versionsTruncated: versions.length > 100,
+    rows: await observationBusinessFields(scope, rows), resolvedKind, numericEncoding: "JSON_NUMERIC_STRINGS", versions: versions.slice(0, 100).map(v => ({ id: v.id, finishedAt: v.finishedAt, coverage: (v.summary as { coverage?: BrandWindow } | null)?.coverage })), versionsTruncated: versions.length > 100,
     run: run ? { id: run.id, coverage: (run.summary as { coverage?: BrandWindow } | null)?.coverage } : null, batchCount: runIds.length, latestTask, pagination: { page, pageSize, total, pageCount: Math.ceil(total / pageSize) } };
 }
 
@@ -98,7 +111,7 @@ export async function readBrandAsinAnalysis(scope: SyncScope, params: URLSearchP
   const reports = await Promise.all((Object.keys(brandReports) as BrandKind[]).map(async reportKind => {
     if (!(brandReports[reportKind].periods as readonly string[]).includes(period)) return { reportKind, unavailable: true, result: null };
     const p = new URLSearchParams(params); p.set("reportKind", reportKind); p.set("reportPeriod", period); p.set("page", "1"); p.set("coverage", "0"); p.delete("runId");
-    const result = await readBrandReport(scope, p, context, false);
+    const result = await readBrandReport(scope, p, context, false, false);
     return { reportKind, unavailable: false, result: { rows: result.rows, run: result.run, batchCount: result.batchCount, pagination: result.pagination } };
   }));
   const partners = reports.filter(r => r.reportKind === "market_basket").flatMap(r => r.result?.rows.map(row => (row.facts as { purchasedWithAsin?: unknown }).purchasedWithAsin).filter((v): v is string => typeof v === "string") ?? []);

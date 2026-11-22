@@ -110,9 +110,13 @@ export function inventorySnapshotStatus(capturedAt: Date | null, now = new Date(
   return now.getTime() - capturedAt.getTime() <= freshnessMinutes * 60_000 ? "FRESH" : "STALE";
 }
 
+// FBA inventory is published by a daily (1440-minute) automatic plan. A 6-hour
+// freshness window can never be satisfied with a daily cadence and would mark
+// healthy snapshots as stale for ~18h each day. Default to the schedule period
+// plus a 2-hour retry margin so a completed daily sync reads as fresh.
 function configuredInventoryFreshnessMinutes() {
-  const value = Number(process.env.AMAZON_INVENTORY_FRESHNESS_MINUTES ?? 360);
-  return Number.isFinite(value) ? Math.min(Math.max(Math.floor(value), 15), 24 * 60) : 360;
+  const value = Number(process.env.AMAZON_INVENTORY_FRESHNESS_MINUTES ?? 1560);
+  return Number.isFinite(value) ? Math.min(Math.max(Math.floor(value), 15), 7 * 24 * 60) : 1560;
 }
 
 export function extractMarketplaceParticipations(value: unknown): AmazonMarketplaceParticipation[] {

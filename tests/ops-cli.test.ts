@@ -106,7 +106,7 @@ test("CLI authorization requires active membership, workspace and current module
 });
 test("PPC suggestions reuse real analytics and warn on stale inventory/unknown ads date without external calls", async (t) => {
   t.mock.method(globalThis, "fetch", async () => { assert.fail("PPC suggestion must not make HTTP requests"); });
-  const now = new Date("2026-10-25T00:00:00Z");
+  const now = new Date("2026-10-26T00:00:00Z");
   const result = await suggestPpc(readOnlyDb, identity, {
     id: "dataset", createdAt: new Date("2026-10-01"), marketplace: "US", campaignGroups: [],
     performanceRows: [{ id: "row", campaignGroupId: "group", campaignName: "Campaign", adGroupName: "Ad Group", keyword: "keyword", target: "keyword", matchType: "exact", currentBid: 1, spend: 15, sales: 0, clicks: 25, impressions: 100, orders: 0, topOfSearchShare: 12, advertisedProductOrders: 0, otherProductOrders: 0, viewableImpressions: 80, batchId: "batch" }] as never,
