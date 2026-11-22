@@ -289,7 +289,7 @@ export function AmazonSyncMatrix({ initialTab = "sp" }: { initialTab?: "sp" | "a
         }
         const res = await fetch(spBase, { method: "POST", headers: h, body: JSON.stringify(body) });
         const data = await res.json(); if (!res.ok) throw new Error(data.error ?? "提交失败。");
-        setNotice(res.status === 202 ? "同步申请已创建；请在变更审批中批准并应用后执行。" : "已提交。");
+        setNotice(res.status === 202 ? "同步申请已提交，等待系统处理。" : "已提交，正在后台同步。");
       } else {
         if (!r.planId) throw new Error("该数据域没有可执行的 Ads 计划。");
         const res = await fetch(`${adsBase}/sync`, { method: "POST", headers: h, body: JSON.stringify({ action: "run", planId: r.planId }) });
@@ -303,7 +303,7 @@ export function AmazonSyncMatrix({ initialTab = "sp" }: { initialTab?: "sp" | "a
   const bulkRetry = () => {
     const failed = rows.filter(r => ["FAILED", "BLOCKED"].includes(r.status));
     if (!failed.length) { setNotice("当前矩阵没有失败项。"); return; }
-    setConfirm({ title: `批量重试 ${failed.length} 项失败资源`, description: tab === "sp" ? "将为当前视图内的失败数据源创建同步申请，仍需变更审批批准并应用后执行。是否继续？" : "将重试当前视图内失败资源的 Ads 计划。是否继续？", run: () => {
+    setConfirm({ title: `批量重试 ${failed.length} 项失败资源`, description: tab === "sp" ? "将为当前视图内的失败数据源重新提交同步，系统自动执行。是否继续？" : "将重试当前视图内失败资源的 Ads 计划。是否继续？", run: () => {
       setBusy(true); setError("");
       const h = scopeHeaders(); h.set("content-type", "application/json");
       void (async () => {
@@ -366,7 +366,7 @@ export function AmazonSyncMatrix({ initialTab = "sp" }: { initialTab?: "sp" | "a
       <Button disabled={busy || (!syncTarget?.syncing && !access.canCreate)} onClick={() => void submitSync()}>{syncTarget?.syncing ? "确认取消" : "提交"}</Button>
     </>}>
       {syncTarget && (syncTarget.syncing ? <p className="text-sm text-muted">该资源正在同步。取消请求将在后台任务的检查点生效，已提交的分片与已发布数据保留。此操作需二次确认后执行。</p> : <>
-        <p className="mb-3 text-xs leading-relaxed text-muted">手动同步是授权后自动回填／增量同步的补救入口；提交后{tab === "sp" ? "进入变更审批，批准并应用后执行" : "由后台按计划窗口执行"}。页面不直接调用 Amazon 接口。</p>
+        <p className="mb-3 text-xs leading-relaxed text-muted">手动同步是授权后自动回填／增量同步的补救入口；提交后{tab === "sp" ? "系统立即自动执行，无需人工审批" : "由后台按计划窗口执行"}。页面不直接调用 Amazon 接口。</p>
         {tab === "sp" && timeBasedTarget && <div className="space-y-3">
           <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="同步方式">
             <label className="flex items-center gap-2 text-sm"><input type="radio" name="sync-mode" checked={syncMode === "incremental"} onChange={() => setSyncMode("incremental")} />增量更新</label>

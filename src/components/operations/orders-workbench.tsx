@@ -201,7 +201,7 @@ export function OrdersWorkbench({ sellerAccountId = "", marketplaceId = "", getH
                   {source.recoveryTask.operatorAction && <p className="text-muted">{source.recoveryTask.operatorAction}</p>}
                   <div className="flex flex-wrap items-center gap-2 pt-1">
                     <Button size="sm" variant="secondary" onClick={() => onTask(source.recoveryTask!.id)}>{source.recoveryTask.canRequestRetry ? "查看失败任务并申请重试" : "查看当前同步任务"}</Button>
-                    {source.recoveryTask.canRequestRetry && <span className="text-muted">此入口仅打开任务；重试须另行申请、批准并应用，不会自动执行。</span>}
+                    {source.recoveryTask.canRequestRetry && <span className="text-muted">此入口仅打开任务；重试提交后由系统自动执行，无需人工审批。</span>}
                   </div>
                 </div>}
                 {canConfigure && requestApproval && openApprovals && source.recoveryTask?.status === "SUCCEEDED" && source.detailsEnabled && <details className="xl:col-span-2"><summary className="cursor-pointer text-xs font-semibold text-brand">补齐本窗口历史履约字段</summary><div className="mt-2"><OrderFulfillmentRecoveryPanel key={`${source.id}:${source.recoveryTask.id}`} sourceId={source.id} taskId={source.recoveryTask.id} sellerName={source.seller.displayName} marketplaceId={source.marketplaceId} busy={busy} requestHeaders={getHeaders} requestApproval={requestApproval} openApprovals={openApprovals} /></div></details>}

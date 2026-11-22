@@ -45,7 +45,7 @@ export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onT
     try {
       const r = await fetch(endpoint, { method: "POST", headers: scopeHeaders(), body: JSON.stringify({ action: "run", sourceIds: [source], datePreset: preset, ...(preset === "custom" ? { dateFrom: syncFrom, dateTo: syncTo } : {}) }) });
       const p = await r.json(); if (!r.ok) throw new Error(p.error ?? "同步申请失败。");
-      if (n === mutation.current) setNotice("日期与站点范围已冻结，等待另一位有审批权限的用户批准并应用；尚未请求 Amazon。");
+      if (n === mutation.current) setNotice(p.approvalRequired ? "同步申请已提交，等待系统处理。" : "已提交，系统正在同步 Amazon 数据（无需人工审批）。");
     } catch (e) { if (n === mutation.current) setError(e instanceof Error ? e.message : "同步申请失败。"); }
     finally { if (n === mutation.current) setBusy(false); }
   };

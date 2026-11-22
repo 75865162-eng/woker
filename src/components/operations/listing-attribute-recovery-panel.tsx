@@ -113,8 +113,8 @@ export function ListingAttributeRecoveryPanel({ sourceId, taskId, sellerName, ma
     {preview && <div className="space-y-2 text-xs">
       <p>已核对 {preview.manifest.checkedRows} 行，拟补齐 {preview.manifest.changedRows} 行、{preview.manifest.addedFields} 个字段值。</p>
       <p className="text-muted">解析器 {preview.manifest.parserVersion} · 原件 {preview.manifest.archives.length} 页。采集时间、发布批次和同步游标保持不变。</p>
-      {preview.manifest.changedRows ? <Button size="sm" disabled={busy || working} onClick={() => void submit()}>提交属性补齐审批</Button> : <p role="status">所选原件页没有可补齐的缺失属性。</p>}
+      {preview.manifest.changedRows ? <Button size="sm" disabled={busy || working} onClick={() => void submit()}>提交属性补齐</Button> : <p role="status">所选原件页没有可补齐的缺失属性。</p>}
     </div>}
-    {submitted && <div className="space-y-2 text-xs"><p role="status">属性补齐申请已提交，尚未改写数据；批准并应用后才会生效。</p><Button size="sm" variant="secondary" onClick={openApprovals}>前往变更审批</Button></div>}
+    {submitted && <div className="space-y-2 text-xs"><p role="status">属性补齐已提交，系统正在自动执行，无需人工审批。</p><Button size="sm" variant="secondary" onClick={openApprovals}>查看变更记录</Button></div>}
   </section>;
 }
