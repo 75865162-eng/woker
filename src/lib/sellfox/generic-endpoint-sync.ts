@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { assertSellfoxReadonlyEndpoint } from "./endpoint-safety";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { sellfoxPost } from "./client";
+import { sellfoxPost, SellfoxRequestError } from "./client";
 import { fenceSellfoxRun, type SellfoxRunLease } from "./run-lease";
 import { nextSellfoxPage, SellfoxSyncInputError } from "./sync-contract";
 import { isSellfoxChunkTooWide } from "./sync-rules";
@@ -103,6 +103,17 @@ export function sellfoxEndpointUsesCursor(params: string): boolean {
   return /\$\{nextToken\}/.test(params);
 }
 
+/**
+ * 断点游标失效判定：游标模式 + 携带非空 token + 上游 code -1（服务异常）时，
+ * 该 token 已被上游拒绝，需从头重采该店铺。只判定，不产生副作用；重采次数上限由调用方控制。
+ */
+export function shouldRestartSellfoxCursor(args: {
+  usesCursor: boolean; cursor: string; error: unknown;
+}): boolean {
+  return args.usesCursor && args.cursor.length > 0
+    && args.error instanceof SellfoxRequestError && args.error.code === -1;
+}
+
 /** 按端点配置的 dateFormat 把 yyyy-MM-dd 重格式化为接口需要的形态（财务类 yyyyMM / yyyyMMdd）。 */
 function formatSellfoxEndpointDate(date: string, format: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
@@ -173,6 +184,9 @@ export async function syncSellfoxGenericEndpoint(input: GenericEndpointInput) {
     const seenTokens = new Set<string>();
     if (cursor) seenTokens.add(cursor);
     let rowsWritten = Number(prior?.rows ?? 0) || 0;
+    // 本店铺进入时的记账基线：断点 token 失效需从头重采时回退到这里重新计数（落库按主键 upsert 幂等）。
+    const storeRowsBaseline = rowsWritten;
+    let cursorRestarts = 0;
     let done = false;
     while (!done) {
       const startDateRaw = input.startDate ?? "";
@@ -191,6 +205,18 @@ export async function syncSellfoxGenericEndpoint(input: GenericEndpointInput) {
       try { payload = await sellfoxPost<unknown>(endpoint.path, params); }
       catch (error) {
         if (isSellfoxChunkTooWide(error)) throw new SellfoxChunkTooWideError(error instanceof Error ? error.message : "端点响应超过行数上限。");
+        // 游标断点会过期：赛狐对失效 nextToken 返回 HTTP 200 / code -1。
+        // 此时从头重采该店铺（落库按真实主键 upsert，不产生重复）；每店铺最多降级 2 次，避免死循环。
+        if (shouldRestartSellfoxCursor({ usesCursor, cursor, error }) && cursorRestarts < 2) {
+          cursorRestarts += 1;
+          cursor = "";
+          pageNo = 1;
+          rowsWritten = storeRowsBaseline;
+          seenTokens.clear();
+          units[unitKey] = { store: store.externalId, status: "running", rows: rowsWritten, pageNo, nextToken: "", cursorRestart: cursorRestarts };
+          await input.onProgress({ units, count: total + rowsWritten }, undefined);
+          continue;
+        }
         throw error;
       }
       const rows = sellfoxEndpointRows(payload, endpoint.rowsPath);

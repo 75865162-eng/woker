@@ -5,8 +5,9 @@ import {
 } from "../src/lib/sellfox/sync-orchestrator";
 import {
   renderSellfoxEndpointParams, sellfoxEndpointRows, sellfoxEndpointRecordId, sellfoxEndpointPageCount,
-  sellfoxEndpointNextCursor, sellfoxEndpointUsesCursor,
+  sellfoxEndpointNextCursor, sellfoxEndpointUsesCursor, shouldRestartSellfoxCursor,
 } from "../src/lib/sellfox/generic-endpoint-sync";
+import { SellfoxRequestError } from "../src/lib/sellfox/client";
 import { sellfoxKnownEndpoints } from "../src/lib/sellfox/known-endpoints";
 import { assertSellfoxReadonlyEndpoint } from "../src/lib/sellfox/endpoint-safety";
 import { sellfoxSyncResources } from "../src/lib/sellfox/sync-contract";
@@ -104,6 +105,13 @@ test("游标分页：nextToken 提取、空值判末页、模板渲染与白名�
   // 模板含 ${nextToken} 才走游标模式，避免影响现有 pageNo 端点。
   assert.equal(sellfoxEndpointUsesCursor('{"shopId":"${shopId}","nextToken":"${nextToken}"}'), true);
   assert.equal(sellfoxEndpointUsesCursor('{"pageNo":"${pageNo}"}'), false);
+  // 游标失效降级判定：仅游标模式 + 非空 token + 上游 code -1 时从头重采。
+  const expired = new SellfoxRequestError("服务异常", true, -1);
+  const rateLimited = new SellfoxRequestError("限流", true, 40019);
+  assert.equal(shouldRestartSellfoxCursor({ usesCursor: true, cursor: "abc", error: expired }), true);
+  assert.equal(shouldRestartSellfoxCursor({ usesCursor: true, cursor: "", error: expired }), false, "首页无 token 不适用降级");
+  assert.equal(shouldRestartSellfoxCursor({ usesCursor: false, cursor: "abc", error: expired }), false, "pageNo 模式不适用");
+  assert.equal(shouldRestartSellfoxCursor({ usesCursor: true, cursor: "abc", error: rateLimited }), false, "限流不是游标失效");
   const rendered = renderSellfoxEndpointParams('{"shopId":"${shopId}","pageSize":"${pageSize}","nextToken":"${nextToken}"}', {
     shopId: "116424", pageSize: "100", nextToken: "",
   });
