@@ -22,7 +22,9 @@ test("backfill handles leap days and fully covered windows without requesting th
   assert.equal(unit.days, 3);
   assert.deepEqual(planSellfoxSalesBackfill({ ...scope, coverage: ["2024-02-28", "2024-02-29", "2024-03-01"].map((reportDate) => ({ shopExternalId: "a", reportDate })) }), []);
 });
-test("backfill refuses invalid dates, unbounded windows, duplicate shops and unsupported chunks", () => {
+test("backfill refuses invalid dates, beyond full-history cap, duplicate shops and unsupported chunks", () => {
   const input = { startDate: "2025-11-01", endDate: "2025-11-07", chunkDays: 7, shopExternalIds: ["a"], coverage: [] };
-  for (const patch of [{ startDate: "2025-02-30" }, { endDate: "2025-10-31" }, { startDate: "2020-01-01" }, { chunkDays: 91 }, { chunkDays: 0 }, { shopExternalIds: ["a", "a"] }]) assert.throws(() => planSellfoxSalesBackfill({ ...input, ...patch }));
+  // 系统自设的三年上限已放开：2020 起点与 chunkDays:91 现在合法。
+  for (const patch of [{ startDate: "2025-02-30" }, { endDate: "2025-10-31" }, { chunkDays: 3651 }, { chunkDays: 0 }, { shopExternalIds: ["a", "a"] }]) assert.throws(() => planSellfoxSalesBackfill({ ...input, ...patch }));
+  assert.ok(planSellfoxSalesBackfill({ ...input, startDate: "2020-01-01" }).length > 0, "全量历史起点合法");
 });

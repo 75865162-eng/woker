@@ -106,11 +106,14 @@ export function sellfoxSpanDays(from: string, to: string) {
   return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1;
 }
 
-/** 把 [from,to] 按 chunkDays 切成互不重叠的日期块；每块 ≤90 天（现有日期校验上限）。 */
+/** 把 [from,to] 按 chunkDays 切成互不重叠的日期块。
+ * 分块是"把全量历史切成官方可接受的单次请求"的手段，必须保留；
+ * 但每块上限与原总跨度 3650 天均为系统自设天花板，按"能拉尽拉"放开到全量历史量级。
+ * 各 dataset 真正的官方单次跨度（31 天 fin_profit_order 等）在其 contract 中独立校验。 */
 export function sellfoxDateChunks(from: string, to: string, chunkDays: number) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from > to) throw new Error("日期范围无效。");
-  if (!Number.isInteger(chunkDays) || chunkDays < 1 || chunkDays > 90) throw new Error("分块天数必须在 1~90 之间。");
-  if (sellfoxSpanDays(from, to) > 3650) throw new Error("日期范围不得超过 3650 天。");
+  if (!Number.isInteger(chunkDays) || chunkDays < 1 || chunkDays > 3650) throw new Error("分块天数必须在 1~3650 之间。");
+  if (sellfoxSpanDays(from, to) > 100 * 365) throw new Error("日期范围不得超过全量历史上限。");
   const chunks: { startDate: string; endDate: string }[] = [];
   for (let cursor = from; cursor <= to;) {
     const endDate = addSellfoxDays(cursor, chunkDays - 1);

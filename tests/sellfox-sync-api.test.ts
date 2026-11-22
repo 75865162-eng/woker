@@ -53,11 +53,14 @@ test("Sellfox permissions, configuration and response-contract gates reject befo
     process.env.SELLFOX_CLIENT_SECRET = "fixture-secret";
     assert.equal((await sync(await request("owner", { resource: "invalid" }))).status, 400);
     for (const body of [
-      { resource: "performance", startDate: "2026-01-01", endDate: "2026-04-01" },
+      // 系统自设 90 天上限已放开：跨月范围不再被拒；仅超全量历史上限才拒绝。
+      { resource: "performance", startDate: "1900-01-01", endDate: "2026-04-01" },
       { resource: "performance", dateRange: { from: "2026-10-24", to: "2026-10-23" } },
       { resource: "inventory", reportDate: "2000-01-01" },
-      { resource: "hourly", reportDate: "2000-01-01" },
+      { resource: "hourly", reportDate: "1900-01-01" },
     ]) assert.equal((await sync(await request("owner", body))).status, 400);
+    // 放开后的跨月范围现在合法通过前置校验（进入后续流程而非 400 拒绝）。
+    assert.notEqual((await sync(await request("owner", { resource: "performance", startDate: "2026-01-01", endDate: "2026-04-01" }))).status, 400);
     for (const resource of ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"]) for (const adTypes of [[], ["invalid"], "sp"]) assert.equal((await sync(await request("owner", { resource, adTypes }))).status, 400);
     assert.equal(runWrites, 0);
     await assert.rejects(() => processSellfoxSyncRun("old-run"), /有效的赛狐同步资源/);

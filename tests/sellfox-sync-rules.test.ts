@@ -45,7 +45,8 @@ test("日期分块互不重叠、完整覆盖、每块不超过 90 天", () => {
   assert.deepEqual(sellfoxDateChunks("2026-11-14", "2026-11-14", 7), [{ startDate: "2026-11-14", endDate: "2026-11-14" }]);
   assert.throws(() => sellfoxDateChunks("2026-11-14", "2026-08-17", 7));
   assert.throws(() => sellfoxDateChunks("2026-08-17", "2026-11-14", 0));
-  assert.throws(() => sellfoxDateChunks("2026-08-17", "2026-11-14", 91));
+  // 系统自设的 90 天 chunkDays 上限已放开到 3650；超上限/非法值仍拒绝。
+  assert.throws(() => sellfoxDateChunks("2026-08-17", "2026-11-14", 3651));
 });
 
 test("超限失败可自动对半拆，1 天块不再拆", () => {

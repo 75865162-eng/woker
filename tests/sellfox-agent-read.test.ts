@@ -63,13 +63,25 @@ test("agent CSV has stable narrow headers, escapes formulas, and never emits pay
   assert.match(csv, /'=formula/); assert.doesNotMatch(csv, /payload|secret/);
   assert.ok(sellfoxAgentColumns.sales.includes("complete"));
 });
-test("winter backfill is bounded and persistent, while all new daily plans share Shanghai 06:30", () => {
-  assert.equal(defaultSellfoxBackfillStart(new Date("2026-10-25T00:00:00Z")), "2025-11-01");
-  assert.equal(defaultSellfoxBackfillStart(new Date("2026-01-10T00:00:00Z")), "2024-11-01");
-  assert.deepEqual(sellfoxBackfillWindow("2025-11-01", "2026-10-24"), { backfillFrom: "2025-11-01", backfillTo: "2025-11-07" });
-  assert.deepEqual(sellfoxBackfillWindow("2026-10-23", "2026-10-24", 90), { backfillFrom: "2026-10-23", backfillTo: "2026-10-24" });
-  assert.deepEqual(sellfoxBackfillWindow("2026-10-25", "2026-10-24"), {});
-  assert.throws(() => sellfoxBackfillWindow("2025-11-01", "2026-10-24", 91));
+test("backfill start is full-history (not the old one-winter cap), windows chunk by 365 days, daily plans share Shanghai 06:30", () => {
+  const saved = process.env.SELLFOX_FULL_HISTORY_START;
+  try {
+    delete process.env.SELLFOX_FULL_HISTORY_START;
+    // 系统自设的"上一个冬季 11-01"起点已去掉，默认放开到 20 年前的全量历史。
+    assert.ok(defaultSellfoxBackfillStart(new Date("2026-10-25T00:00:00Z")) < "2010-01-01");
+    // env 可覆盖起点。
+    process.env.SELLFOX_FULL_HISTORY_START = "2018-01-01";
+    assert.equal(defaultSellfoxBackfillStart(new Date("2026-10-25T00:00:00Z")), "2018-01-01");
+    delete process.env.SELLFOX_FULL_HISTORY_START;
+    // 每轮默认 365 天一块；起点晚于昨天则无窗口。
+    assert.deepEqual(sellfoxBackfillWindow("2025-11-01", "2026-10-24"), { backfillFrom: "2025-11-01", backfillTo: "2026-10-24" });
+    assert.deepEqual(sellfoxBackfillWindow("2026-10-24", "2026-10-24", 90), { backfillFrom: "2026-10-24", backfillTo: "2026-10-24" });
+    assert.deepEqual(sellfoxBackfillWindow("2026-10-25", "2026-10-24"), {});
+    // chunkDays 上限从系统自设 90 放开到 3650，但仍拒绝非法值。
+    assert.throws(() => sellfoxBackfillWindow("2025-11-01", "2026-10-24", 0));
+  } finally {
+    if (saved === undefined) delete process.env.SELLFOX_FULL_HISTORY_START; else process.env.SELLFOX_FULL_HISTORY_START = saved;
+  }
   for (const resource of ["listings", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"]) assert.equal(nextSellfoxScheduleAt({ resource, intervalMinutes: 1440, lastEnqueuedAt: null }, new Date("2026-10-24T22:29:00Z")).toISOString(), "2026-10-24T22:30:00.000Z");
 });
 test("listing transaction failure cannot publish current; retry reuses capture and complete empty capture clears current", async () => {

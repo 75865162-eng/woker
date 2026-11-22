@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { getIntegrationCatalog, getMcpDatasetCatalog } from "@/lib/integration-catalog";
+import { SELLFOX_FULL_HISTORY_DAYS } from "@/lib/sellfox/window-config";
 
 test("integration catalog aggregates all three providers", () => {
   const { resources } = getIntegrationCatalog();
@@ -9,12 +10,12 @@ test("integration catalog aggregates all three providers", () => {
   assert.ok(resources.length > 50);
 });
 
-test("catalog exposes sellfox official windows truthfully", () => {
+test("catalog exposes sellfox full-history windows truthfully", () => {
   const { sellfoxWindows } = getIntegrationCatalog();
-  assert.equal(sellfoxWindows.maxReportDays, 90);
-  assert.equal(sellfoxWindows.hourlyLookbackDays, 60);
-  assert.equal(sellfoxWindows.backfillDaysPerRun, 7);
-  assert.equal(sellfoxWindows.maxPages, 10_000);
+  assert.equal(sellfoxWindows.maxReportDays, SELLFOX_FULL_HISTORY_DAYS);
+  assert.equal(sellfoxWindows.hourlyLookbackDays, SELLFOX_FULL_HISTORY_DAYS);
+  assert.equal(sellfoxWindows.backfillDaysPerRun, 365);
+  assert.equal(sellfoxWindows.maxPages, 100_000);
 });
 
 test("SB/SD reports stay not_implemented with role blockers; SP reports available-needs-role", () => {

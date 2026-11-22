@@ -21,7 +21,7 @@ test("page checkpoints stop only at a complete end and reject truncated response
   assert.equal(nextSellfoxPage(100, 1, 4), 2);
   assert.equal(nextSellfoxPage(100, 4, 4), null);
   assert.equal(nextSellfoxPage(99, 1, null), null);
-  assert.throws(() => nextSellfoxPage(100, 10_000, null), /安全上限/);
+  assert.throws(() => nextSellfoxPage(100, 100_000, null), /安全上限/);
   assert.throws(() => nextSellfoxPage(0, 1, 4), /响应不完整/);
 });
 
@@ -51,23 +51,25 @@ test("verified listing and product report contracts enable the stable read-only 
 });
 
 
-test("report dates normalize once in Shanghai and reject conflicting or oversized ranges", () => {
+test("report dates normalize once in Shanghai and reject conflicting or beyond-full-history ranges", () => {
   const beforeMidnight = new Date("2026-10-24T15:59:59Z");
   const frozen = normalizeSellfoxDates("performance", {}, beforeMidnight);
   assert.deepEqual(frozen, { startDate: "2026-10-23", endDate: "2026-10-23" });
   assert.deepEqual(normalizeSellfoxDates("performance", frozen, new Date("2026-10-26T00:00:00Z")), frozen);
   assert.deepEqual(normalizeSellfoxDates("sales", { endDate: "2024-02-29" }), { startDate: "2024-02-29", endDate: "2024-02-29" });
   assert.equal(sellfoxReportDates("2026-01-01", "2026-03-31").length, 90);
-  assert.throws(() => normalizeSellfoxDates("sales", { dateRange: { from: "2026-01-01", to: "2026-04-01" } }), /90/);
-  assert.throws(() => sellfoxReportDates("2026-01-01", "2026-04-01"), /90/);
+  // 系统自设的 90 天上限已放开：数月跨度现在合法，只有超出全量历史上限才拒绝。
+  assert.deepEqual(normalizeSellfoxDates("sales", { dateRange: { from: "2026-01-01", to: "2026-04-01" } }), { startDate: "2026-01-01", endDate: "2026-04-01" });
+  assert.equal(sellfoxReportDates("2026-01-01", "2026-04-01").length, 91);
+  assert.throws(() => normalizeSellfoxDates("sales", { dateRange: { from: "1900-01-01", to: "2026-04-01" } }), /日期范围最多/);
   assert.throws(() => normalizeSellfoxDates("sales", { reportDate: "2026-02-29" }), /有效/);
   assert.throws(() => normalizeSellfoxDates("performance", { reportDate: "2026-10-24", startDate: "2026-10-24" }), /不能/);
   assert.throws(() => normalizeSellfoxDates("sales", { dateRange: {}, startDate: "2026-10-24" }), /dateRange/);
   assert.throws(() => normalizeSellfoxDates("sales", { dateRange: {} }), /不能为空/);
-  assert.throws(() => sellfoxReportDates("2026-10-25", "2026-10-24"), /90/);
+  assert.throws(() => sellfoxReportDates("2026-10-25", "2026-10-24"), /日期范围最多/);
 });
 
-test("current-state capture forbids backdating and hourly samples enforce the 60-day window", () => {
+test("current-state capture forbids backdating and hourly samples allow full-history single days", () => {
   const now = new Date("2026-10-24T16:01:00Z");
   assert.deepEqual(normalizeSellfoxDates("inventory", {}, now), { reportDate: "2026-10-25" });
   for (const resource of ["inventory", "listings"] as const) {
@@ -75,5 +77,7 @@ test("current-state capture forbids backdating and hourly samples enforce the 60
     assert.throws(() => normalizeSellfoxDates(resource, { startDate: "2026-10-25" }, now), /当前状态/);
   }
   assert.deepEqual(normalizeSellfoxDates("hourly", { reportDate: "2026-08-27" }, now), { reportDate: "2026-08-27" });
-  for (const reportDate of ["2026-08-26", "2026-10-26"]) assert.throws(() => normalizeSellfoxDates("hourly", { reportDate }, now), /60/);
+  // 系统自设的 60 天小时样本窗口已放开：过去的单日合法，只有未来日期拒绝。
+  assert.deepEqual(normalizeSellfoxDates("hourly", { reportDate: "2026-08-26" }, now), { reportDate: "2026-08-26" });
+  assert.throws(() => normalizeSellfoxDates("hourly", { reportDate: "2026-10-26" }, now), /单日/);
 });

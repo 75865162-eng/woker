@@ -30,14 +30,15 @@ export function sellfoxSyncScopeLock(organizationId: string, workspaceId: string
   return JSON.stringify(["sellfox-sync", organizationId, workspaceId, resource]);
 }
 
-/** Previous completed northern winter starts Nov 1; retained forever, one bounded chunk per day. */
+/** 销量回填起点。原默认"上一个完整北方冬季 11-01"是系统自设节流；按"能拉尽拉"
+ * 放开到 20 年前（覆盖任何现实卖家的经营历史）。可用 env 覆盖为更早/更晚。 */
 export function defaultSellfoxBackfillStart(now = new Date()) {
-  const local = new Date(now.getTime() + SHANGHAI_OFFSET);
-  const year = local.getUTCFullYear() - (local.getUTCMonth() < 3 ? 2 : 1);
-  return `${year}-11-01`;
+  const configured = process.env.SELLFOX_FULL_HISTORY_START;
+  if (configured && /^\d{4}-\d{2}-\d{2}$/.test(configured)) return configured;
+  return new Date(now.getTime() - 20 * 365 * DAY).toISOString().slice(0, 10);
 }
-export function sellfoxBackfillWindow(start: string, yesterday: string, chunkDays = 7) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(yesterday) || !Number.isInteger(chunkDays) || chunkDays < 1 || chunkDays > 90) throw new Error("销量补数窗口无效。");
+export function sellfoxBackfillWindow(start: string, yesterday: string, chunkDays = 365) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(yesterday) || !Number.isInteger(chunkDays) || chunkDays < 1 || chunkDays > 3650) throw new Error("销量补数窗口无效。");
   if (start > yesterday) return {};
   const to = new Date(Math.min(Date.parse(`${start}T00:00:00Z`) + (chunkDays - 1) * DAY, Date.parse(`${yesterday}T00:00:00Z`))).toISOString().slice(0, 10);
   return { backfillFrom: start, backfillTo: to };

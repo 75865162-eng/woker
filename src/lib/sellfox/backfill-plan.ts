@@ -10,9 +10,10 @@ export function planSellfoxSalesBackfill(input: {
   startDate: string; endDate: string; chunkDays: number; shopExternalIds: string[];
   coverage: { shopExternalId: string; reportDate: string }[];
 }): SalesBackfillUnit[] {
-  if (!isSellfoxDate(input.startDate) || !isSellfoxDate(input.endDate) || input.startDate > input.endDate || !Number.isInteger(input.chunkDays) || input.chunkDays < 1 || input.chunkDays > 90) throw new Error("补数日期或分段大小无效。");
+  if (!isSellfoxDate(input.startDate) || !isSellfoxDate(input.endDate) || input.startDate > input.endDate || !Number.isInteger(input.chunkDays) || input.chunkDays < 1 || input.chunkDays > 3650) throw new Error("补数日期或分段大小无效。");
   const start = Date.parse(`${input.startDate}T00:00:00Z`), end = Date.parse(`${input.endDate}T00:00:00Z`);
-  if ((end - start) / DAY > 1095) throw new Error("单批补数范围不得超过三年。");
+  // 原"三年"上限是系统自设节流，按"能拉尽拉"放开到全量历史量级。
+  if ((end - start) / DAY > 100 * 365) throw new Error("单批补数范围不得超过全量历史上限。");
   if (!input.shopExternalIds.length || input.shopExternalIds.some((id) => !id.trim()) || new Set(input.shopExternalIds).size !== input.shopExternalIds.length) throw new Error("补数店铺范围无效。");
   const covered = new Set(input.coverage.map((row) => JSON.stringify([row.shopExternalId, row.reportDate])));
   const units: SalesBackfillUnit[] = [];

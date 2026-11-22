@@ -6,6 +6,7 @@ import { enqueueSellfoxSyncRun } from "@/lib/queue";
 import { getSellfoxCredentialStatus } from "./credential-store";
 import { canExecuteSellfoxSync } from "./sync-authorization";
 import { sellfoxDateAt, sellfoxEndpointResource } from "./sync-contract";
+import { SELLFOX_FULL_HISTORY_DAYS } from "./window-config";
 import { WAITING_DEPENDENCY, asJsonObject } from "./sync-dependency";
 import {
   builtinSyncRules, sellfoxDateChunks, sellfoxSpanDays, splitSellfoxDateChunk,
@@ -124,7 +125,8 @@ export async function planSellfoxFullSync(scope: SyncScope, options: {
   from?: string; to?: string; resources?: string[]; endpointCodes?: string[]; trigger?: string;
 } = {}) {
   const to = options.to ?? sellfoxDateAt(new Date(), -1);
-  const from = options.from ?? addSellfoxDays(to, -89);
+  // 原系统自设的 90 天 bootstrap 起点，按"能拉尽拉"放开到全量历史。
+  const from = options.from ?? addSellfoxDays(to, -(SELLFOX_FULL_HISTORY_DAYS - 1));
   // 凭据查询的 unique where 只接受组织/工作区，userId 属于权限校验参数，不能混进 scope。
   if (!(await getSellfoxCredentialStatus({ organizationId: scope.organizationId, workspaceId: scope.workspaceId })).configured) throw new Error("服务端赛狐凭据未配置。");
   if (scope.userId && !(await canExecuteSellfoxSync({ organizationId: scope.organizationId, workspaceId: scope.workspaceId, userId: scope.userId }))) throw new Error("当前用户没有赛狐同步权限。");
@@ -266,7 +268,7 @@ export async function planSellfoxEndpointAuto(now = new Date()) {
         where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, resource, status: "done" },
         orderBy: { finishedAt: "desc" }, select: { summary: true },
       });
-      const historyFrom = endpoint.historyFrom ?? addSellfoxDays(yesterday, -89);
+      const historyFrom = endpoint.historyFrom ?? addSellfoxDays(yesterday, -(SELLFOX_FULL_HISTORY_DAYS - 1));
       const start = sellfoxNextUncoveredDate(historyFrom, doneRuns.map(row => bag(row.summary)));
       const item: FullSyncPlanItem = start <= yesterday
         ? { resource, label: endpoint.label, trigger: "endpoint_auto", endpointCode: endpoint.code,
