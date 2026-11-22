@@ -43,6 +43,8 @@ import { syncDomains, syncCenterEnabled, SyncInputError, requireSyncCenter, requ
 import { readTaskSnapshot } from "@/lib/amazon-sync/snapshots";
 import { listSources, readOverview, readTasks, taskSummary } from "@/lib/amazon-sync/read";
 import { listAuthorizations } from "@/lib/amazon-sync/service";
+import { saveAndActivateAuthorizationDirect, disableAuthorizationDirect, enableAndActivateAuthorizationDirect } from "@/lib/amazon-sync/direct-activation";
+import { normalizeCommand } from "@/lib/amazon-sync/approval-policy";
 import { requestChange, decideChange, applyChange, approvalSelect } from "@/lib/amazon-sync/change-approval";
 import { logUnexpectedSyncCenterError } from "@/lib/amazon-sync/log-unexpected";
 export const runtime = "nodejs";
@@ -172,6 +174,22 @@ export async function POST(request: Request) {
     requireSyncCenter(scope);
     if (!process.env.DATABASE_URL) return json({ error: "数据库未配置。" }, 503);
     const actor = permission.user.id;
+    // 亚马逊授权生命周期（保存/验证/启用/停用）：全部直接执行，无审批、无手动验证步骤；
+    // 保存与重新启用会自动验证站点并建立数据源/调度、入队全量同步。
+    // 其余 operation（数据源/计划/运行/恢复等）仍走既有变更审批链，不在此削弱其安全边界。
+    if (action === "save-authorization" || action === "validate-authorization") {
+      const command = normalizeCommand(body);
+      const result = await saveAndActivateAuthorizationDirect(scope, actor, command);
+      return json({ approvalRequired: false, applied: true, autoActivated: true, result }, 200);
+    }
+    if (action === "disable-authorization") {
+      const result = await disableAuthorizationDirect(scope, actor, requiredText(body.id, "授权 ID"), body.revision);
+      return json({ approvalRequired: false, applied: true, autoActivated: true, result }, 200);
+    }
+    if (action === "enable-authorization") {
+      const result = await enableAndActivateAuthorizationDirect(scope, actor, requiredText(body.id, "授权 ID"), body.revision);
+      return json({ approvalRequired: false, applied: true, autoActivated: true, result }, 200);
+    }
     const change = await requestChange(scope, actor, body);
     // 免审批：提交后立即自动批准并应用，配置与同步随即生效。
     // 仍完整复用 decideChange/applyChange 的权限校验、完整性校验、幂等锁与审计。

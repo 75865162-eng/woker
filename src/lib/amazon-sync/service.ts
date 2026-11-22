@@ -584,7 +584,7 @@ export async function enableAuthorization(scope: SyncScope, actorUserId: string,
   })(db);
 }
 
-async function stopOrderSourceTasks(tx: Prisma.TransactionClient, scope: SyncScope, sourceIds: string[]) {
+export async function stopOrderSourceTasks(tx: Prisma.TransactionClient, scope: SyncScope, sourceIds: string[]) {
   // Fence queued and running orders immediately; stale Redis deliveries become no-ops.
   await tx.amazonSyncRun.updateMany({ where: { ...scope, sourceId: { in: sourceIds }, resource: { in: ["orders", "finance", "returns", "settlements", "reimbursements", "inventory_age", "long_term_storage_fees", "removal_shipment_report", "fba_shipments", "fba_customer_sales", "mfn_returns", "fba_inventory_by_country", "removal_order_report", "storage_fees", "fba_overage_fees", "fee_preview", "fba_fulfilled_inventory", "fba_inventory_report", "reserved_inventory", "stranded_inventory", "recommended_removals", "inventory_events", "fulfillment", "pricing", "brand_analytics", "buy_box_history", "notifications", "listing_details", "catalog_items", "promotions"] }, status: { in: activeTaskStatuses } }, data: { status: "CANCELLED", stage: "BINDING_DISABLED", finishedAt: new Date(), leaseOwner: null, leaseExpiresAt: null, dispatchVersion: { increment: 1 }, fenceVersion: { increment: 1 }, error: "数据绑定或授权已停用，任务已取消；保留游标。" } });
   await tx.amazonSyncResourceCursor.updateMany({ where: { ...scope, sourceId: { in: sourceIds }, status: { not: "SUCCEEDED" } }, data: { status: "CANCELLED" } });

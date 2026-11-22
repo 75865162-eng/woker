@@ -72,7 +72,7 @@ export function AmazonConnections() {
       const h = scopeHeaders(); h.set("content-type", "application/json");
       const res = await fetch(url, { method: "POST", headers: h, body: JSON.stringify(body) });
       const data = await res.json(); if (!res.ok) throw new Error(data.error ?? "操作失败。");
-      setNotice(data.approvalRequired ? `${success}申请已提交，需由具备审批权限的管理员在变更审批中批准。` : `${success}已生效。`);
+      setNotice(`${success}已生效，正在后台验证并同步。`);
       await load();
     } catch (e) { setNotice(e instanceof Error ? e.message : "操作失败。"); }
     finally { setBusy(false); }
@@ -104,9 +104,8 @@ export function AmazonConnections() {
         actions={[
           { label: "编辑凭据", variant: "secondary", disabled: !spAccess.canConfigure || busy || g.auth.status === "DISABLED", title: "在店铺与授权中编辑", onClick: () => window.location.assign("/operations?view=connections") },
           ...(g.auth.status === "DISABLED" ? [
-            { label: "重新启用连接", variant: "secondary" as const, disabled: !spAccess.canConfigure || busy, onClick: () => setConfirm({ title: `重新启用 ${g.auth.name}`, description: "启用后立即生效，授权恢复为待验证状态；需再次验证参与站点才会恢复同步。是否继续？", run: () => void post(spBase, { action: "enable-authorization", id: g.auth.id, revision: g.auth.revision }, "重新启用") }) },
+            { label: "重新启用连接", variant: "secondary" as const, disabled: !spAccess.canConfigure || busy, onClick: () => setConfirm({ title: `重新启用 ${g.auth.name}`, description: "启用后立即生效，并自动验证参与站点、恢复全量同步。是否继续？", run: () => void post(spBase, { action: "enable-authorization", id: g.auth.id, revision: g.auth.revision }, "重新启用") }) },
           ] : [
-            { label: "验证参与站点", disabled: !spAccess.canConfigure || busy, onClick: () => setConfirm({ title: "验证参与站点", description: "将立即请求 Amazon 验证授权与参与站点，无需另行审批。是否继续？", run: () => void post(spBase, { action: "validate-authorization", id: g.auth.id }, "验证") }) },
             { label: "停用连接", variant: "ghost" as const, disabled: !spAccess.canConfigure || busy, onClick: () => setConfirm({ title: `停用 ${g.auth.name}`, description: "停用后立即生效，该授权不再生成同步任务；已落库业务数据保留。是否继续？", run: () => void post(spBase, { action: "disable-authorization", id: g.auth.id, revision: g.auth.revision }, "停用") }) },
           ]),
           { label: "查看同步矩阵", variant: "ghost", onClick: () => window.location.assign("/operations?view=amazon-sync") },
