@@ -70,9 +70,22 @@ test("Amazon 同步数据只在一处收录：财务无结算报告/FBA 赔偿�
 
   const amazon = navigationGroups.find(g => g.id === "amazon")!;
   const amazonHrefs = new Set(amazon.items.map(i => i.href));
-  for (const slug of ["settlements", "reimbursements", "inventory", "inventory-age", "inventory-events", "replenishment", "fulfillment", "fba-boxing"]) {
+  for (const slug of ["settlements", "inventory", "inventory-age", "replenishment", "fulfillment", "fba-boxing"]) {
     assert.ok(amazonHrefs.has(`/amazon/${slug}`), `Amazon 板块应收录 /amazon/${slug}`);
   }
+});
+
+test("无站点归属证据的赔偿/库存事件报告不设可见页面入口", () => {
+  // 上游 FBA 赔偿报告与 Ledger 库存事件报告的标准列不含 marketplace/store 归属字段，
+  // 明细无法安全归因到具体站点（安全边界隔离、verifiedRows=0）。按产品决策不展示这两个页面，
+  // 数据仍在服务端加密归档，不删除数据契约、同步能力与只读 API。
+  const amazon = navigationGroups.find(g => g.id === "amazon")!;
+  const hrefs = new Set(amazon.items.map(i => i.href));
+  assert.equal(hrefs.has("/amazon/reimbursements"), false, "赔偿页不应有导航入口");
+  assert.equal(hrefs.has("/amazon/inventory-events"), false, "库存事件页不应有导航入口");
+  const rewriteSources = new Set(amazonSlugRewrites().map(r => r.source));
+  assert.equal(rewriteSources.has("/amazon/reimbursements"), false, "赔偿页不应有 URL 直达别名");
+  assert.equal(rewriteSources.has("/amazon/inventory-events"), false, "库存事件页不应有 URL 直达别名");
 });
 
 test("所有赛狐页面归入赛狐数据板块", () => {

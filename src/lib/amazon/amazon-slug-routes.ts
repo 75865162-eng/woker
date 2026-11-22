@@ -35,7 +35,6 @@ export const amazonSlugRoutes: Record<string, string> = {
   // 故 /amazon/inventory 实际命中真实 page，不会落到通用 view 表格。
   inventory: "view:inventory",
   "inventory-age": "view:inventory_age",
-  "inventory-events": "view:inventory_events",
   replenishment: "view:replenishment",
   fulfillment: "view:fulfillment",
   "fba-boxing": "view:fba-boxing",
@@ -43,7 +42,6 @@ export const amazonSlugRoutes: Record<string, string> = {
   // 财务
   finance: "view:finance",
   settlements: "view:settlements",
-  reimbursements: "view:reimbursements",
   // 报告与观察中心（15 个 report 域 + 促销 / 通知订阅，均为 Amazon 数据源，与赛狐隔离）
   "fba-customer-sales": "view:fba_customer_sales",
   "mfn-returns": "view:mfn_returns",
