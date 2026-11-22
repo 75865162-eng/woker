@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronDown, Copy, Play, Sparkles } from "lucide-react";
+import { ChevronDown, Copy, MessageSquare, Play, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Locale } from "@/lib/lili/tx";
 import { tx } from "@/lib/lili/tx";
@@ -140,6 +140,13 @@ export function SkillGrid({ locale, items }: { locale: Locale; items: SkillCard[
                   title={tx(locale, "调用系统大模型运行此技能，生成表格或 Word 报告", "Run this skill with the configured model")}
                 >
                   <Play className="h-3.5 w-3.5" /> {tx(locale, "运行", "Run")}
+                </Link>
+                <Link
+                  className="lili-btn-ghost"
+                  href={`/ai/chat?skill=${encodeURIComponent(item.slug)}`}
+                  title={tx(locale, "在 AI 对话中使用此技能", "Use this skill in chat")}
+                >
+                  <MessageSquare className="h-3.5 w-3.5" /> {tx(locale, "对话使用", "Use in chat")}
                 </Link>
                 <button
                   className="lili-btn-ghost"

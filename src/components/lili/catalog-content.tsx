@@ -50,6 +50,9 @@ export async function CatalogContent({ kind, slug, locale, quotaScopeKey }: { ki
         <Link className="lili-btn-orange inline-flex items-center gap-1" href={`/skills/${encodeURIComponent(skill.slug)}`}>
           运行此技能（生成表格 / Word 报告）
         </Link>
+        <Link className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-2 text-sm hover:bg-surface-muted" href={`/ai/chat?skill=${encodeURIComponent(skill.slug)}`}>
+          {tx(locale, "在对话中使用", "Use in chat")}
+        </Link>
         <CopyButton locale={locale} text={tx(locale, skill.promptZh, skill.promptEn)} />
       </div>
       <h2 className="font-semibold">{tx(locale, "完整技能说明", "Full skill procedure")}</h2>

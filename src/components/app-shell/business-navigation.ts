@@ -1,4 +1,4 @@
-import { Activity, Banknote, BookMarked, Bot, Boxes, Calculator, ChartNoAxesCombined, CircleHelp, ClipboardList, Handshake, History, Landmark, ListChecks, PackageSearch, ReceiptText, RefreshCw, SearchCheck, Settings, Sparkles, Star, Store, Tags, Target, Truck, UsersRound, Warehouse } from "lucide-react";
+import { Activity, Banknote, BookMarked, Bot, Boxes, Calculator, ChartNoAxesCombined, CircleHelp, ClipboardList, Handshake, History, Landmark, ListChecks, MessageSquare, PackageSearch, ReceiptText, RefreshCw, SearchCheck, Settings, Sparkles, Star, Store, Tags, Target, Truck, UsersRound, Warehouse } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 /**
@@ -169,6 +169,7 @@ export const navigationGroups: NavigationGroup[] = [
   // redirect 跳板会让 tab 身份分裂成「/ai/lili 幽灵 tab + /lili 实际 tab」，且延迟落地
   // 会覆盖用户紧随其后的导航（表现为点了别的菜单却停在 /lili），侧栏高亮也会失效。
   { id: "ai", label: "AI 与工具", icon: Bot, href: "/ai/lili", items: [
+    { id: "ai.chat", href: "/ai/chat", label: "AI 对话", icon: MessageSquare, moduleId: "agents" },
     { id: "ai.lili", href: "/ai/lili", label: "粒粒 Lili 技能中心", icon: Sparkles, moduleId: "agents" },
     { id: "ai.agent", href: "/ai/agent", label: "Amazon AI Agent", icon: Bot, moduleId: "agents" },
     { id: "ai.skills", href: "/ai/skills", label: "Skill 智能工作台", icon: Sparkles, moduleId: "agents" },

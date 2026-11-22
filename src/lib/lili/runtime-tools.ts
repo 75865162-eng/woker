@@ -4,7 +4,7 @@ import { runCatalogTool } from "./tool-execution";
 import { rejectCredentials, validate, stableJson } from "@/lib/selection-research/schema";
 import { ToolNotDispatchedError, type Json, type ObjectJson, type ToolDefinition, type Transport } from "@/lib/selection-research/types";
 
-export type ProviderId = "erp" | "sellersprite" | "xiyou";
+export type ProviderId = "erp" | "sellfox" | "sellersprite" | "xiyou";
 export type RuntimeTool = ToolDefinition & { provider: ProviderId | "skills"; remoteName: string; permission: "read" | "approval_required"; availability: "available" | "blocked" };
 export type ProviderStatus = { provider: ProviderId; status: "connected" | "not_connected" | "unavailable"; toolCount: number; reason?: string };
 export type RuntimeProvider = { id: ProviderId; transport?: Transport; reason?: string; isReadOnly(tool: ToolDefinition): boolean };

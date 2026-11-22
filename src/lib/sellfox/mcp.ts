@@ -66,6 +66,47 @@ export async function auditSellfoxMcpProtocol(identity: SellfoxMcpIdentity, meth
   await audit(identity, "protocol", { credentialId: identity.id, requestId, method: ["initialize", "notifications/initialized", "ping", "tools/list"].includes(method) ? method : "UNKNOWN" });
 }
 
+/**
+ * Server-only: build a Sellfox identity from the current ERP session for the
+ * in-app AI chat. The bearer `sfmcp_` credential is never sent to the browser;
+ * we resolve the caller's own ACTIVE credential row and re-check workspace and
+ * store-level data access at creation time. The live store scope is the
+ * intersection of the credential grant and the user's current data-access grant.
+ */
+export async function createErpSessionSellfoxMcpIdentity(scope: { organizationId: string; workspaceId: string; userId: string }): Promise<SellfoxMcpIdentity> {
+  const { assertWorkspaceAccess } = await import("@/lib/workspace/access");
+  if (!await assertWorkspaceAccess(scope.organizationId, scope.workspaceId, scope.userId)) {
+    await audit(null, "authentication.denied", { requestId: randomUUID(), reason: "ERP_SESSION_WORKSPACE_DENIED" });
+    throw new McpIsolationError("认证失败。", "PROVIDER_MISMATCH", 401, "sellfox");
+  }
+  const row = await prisma.sellfoxMcpCredential.findFirst({
+    where: { ...scope, status: "ACTIVE", expiresAt: { gt: new Date() } },
+    select: credentialSelect,
+    orderBy: { createdAt: "desc" },
+  });
+  if (!row) {
+    await audit(null, "authentication.denied", { requestId: randomUUID(), reason: "ERP_SESSION_NO_CREDENTIAL" });
+    throw new McpIsolationError("当前工作区没有可用的赛狐只读 MCP 凭证。", "PROVIDER_MISMATCH", 401, "sellfox");
+  }
+  // resolveSellfoxVisibleStoreIds needs the actor role; load it for an accurate intersection.
+  const membership = await prisma.organizationMember.findUnique({
+    where: { organizationId_userId: { organizationId: scope.organizationId, userId: scope.userId } },
+    select: { role: true, user: { select: { status: true } } },
+  });
+  if (!membership || membership.user.status !== "active") {
+    await audit(null, "authentication.denied", { requestId: randomUUID(), reason: "ERP_SESSION_MEMBER_INACTIVE" });
+    throw new McpIsolationError("认证失败。", "PROVIDER_MISMATCH", 401, "sellfox");
+  }
+  const visible = await resolveSellfoxVisibleStoreIds({ id: scope.userId, role: membership.role }, scope);
+  const credentialStores = row.storeIds.length ? row.storeIds : ["*"];
+  // Credential grant ∩ live data-access grant. `undefined` visible = no extra data-access restriction.
+  let storeScope: string[];
+  if (visible === undefined) storeScope = credentialStores;
+  else if (credentialStores.includes("*")) storeScope = visible;
+  else storeScope = credentialStores.filter(id => visible.includes(id));
+  return { ...row, kind: "credential", storeScope };
+}
+
 export async function authenticateSellfoxMcp(authorization: string | null, resource = "/api/mcp/sellfox"): Promise<SellfoxMcpIdentity> {
   const token = bearerToken(authorization);
   const provider = providerOfToken(token);

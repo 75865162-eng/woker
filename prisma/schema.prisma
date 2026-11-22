@@ -7816,3 +7816,97 @@ model AmazonSettlementAllocationLine {
   @@index([organizationId, workspaceId, dedupeKey], map: "AmazonSettlementAllocationLine_dedupe_idx")
   @@index([organizationId, workspaceId, overlapKey], map: "AmazonSettlementAllocationLine_overlap_idx")
 }
+
+/// AI 对话：会话。所有读写入口必须带 organizationId/workspaceId/userId 三元组隔离。
+model AiChatConversation {
+  id             String   @id @default(cuid())
+  organizationId String
+  workspaceId    String   @default("default")
+  userId         String
+  title          String   @default("新对话")
+  status         String   @default("ACTIVE")
+  revision       Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  messages AiChatMessage[]
+
+  @@index([organizationId, workspaceId, userId, updatedAt])
+  @@index([organizationId, workspaceId, status])
+}
+
+/// AI 对话：消息。role=user/assistant；skillSlug/hash 记录当时绑定的技能版本。
+model AiChatMessage {
+  id             String   @id @default(cuid())
+  organizationId String
+  workspaceId    String   @default("default")
+  userId         String
+  conversationId String
+  role           String
+  content        String
+  clientKey      String?
+  skillSlug      String?
+  skillHash      String?
+  status         String   @default("COMPLETE")
+  revision       Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  conversation AiChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  runs         AiChatRun[]
+
+  @@unique([conversationId, clientKey])
+  @@index([organizationId, workspaceId, userId, createdAt])
+  @@index([conversationId, createdAt])
+}
+
+/// AI 对话：一次助手回答对应的执行 run，承载幂等、状态与取消。
+model AiChatRun {
+  id             String    @id @default(cuid())
+  organizationId String
+  workspaceId    String    @default("default")
+  userId         String
+  conversationId String
+  messageId      String
+  requestKey     String    @unique
+  status         String    @default("RUNNING")
+  model          String?
+  skillSlug      String?
+  skillHash      String?
+  answerPreview  String?
+  errorCode      String?
+  finishedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  message   AiChatMessage     @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  toolCalls AiChatToolCall[]
+
+  @@index([conversationId, createdAt])
+  @@index([organizationId, workspaceId, userId, createdAt])
+}
+
+/// AI 对话：工具调用证据。仅存脱敏参数摘要、来源与 hash，不存完整数据或密钥。
+model AiChatToolCall {
+  id            String   @id @default(cuid())
+  organizationId String
+  workspaceId   String   @default("default")
+  userId        String
+  runId         String
+  seq           Int
+  provider      String
+  tool          String
+  argsSummary   String
+  resultSource  String?
+  resultHash    String?
+  rowCount      Int?
+  status        String
+  errorCode     String?
+  durationMs    Int
+  createdAt     DateTime @default(now())
+
+  run AiChatRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, seq])
+  @@index([organizationId, workspaceId, userId, createdAt])
+}

@@ -56,6 +56,7 @@ export const namespaceEntries: NamespaceEntry[] = [
 
   // ── AI 与工具 /ai ──────────────────────────────────
   { href: "/ai", moduleId: "agents" }, // 命名空间落地页（已有的真实 redirect）
+  { href: "/ai/chat", moduleId: "agents" }, // AI 对话，真实 page.tsx（无 destination）
   { href: "/ai/agent", moduleId: "agents", destination: "/agents" },
   { href: "/ai/skills", moduleId: "agents", destination: "/skills" },
   { href: "/ai/listing", moduleId: "listingAi", destination: "/listing-ai" },

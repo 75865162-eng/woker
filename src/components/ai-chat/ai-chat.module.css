@@ -1,0 +1,151 @@
+.workspace {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr) 300px;
+  gap: 0;
+  height: calc(100vh - 150px);
+  min-height: 520px;
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.workspace.noRight { grid-template-columns: 240px minmax(0, 1fr); }
+.left { grid-column: 1; }
+.center { grid-column: 2; }
+.right { grid-column: 3; }
+
+.left, .right {
+  min-width: 0;
+  background: var(--surface-muted);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.left { border-right: 1px solid var(--border); }
+.right { border-left: 1px solid var(--border); }
+
+.leftHead { padding: 12px; border-bottom: 1px solid var(--border); }
+.leftHead button { width: 100%; justify-content: center; }
+.search {
+  display: flex; align-items: center; gap: 6px; margin: 10px 12px; padding: 6px 10px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--muted);
+}
+.search input { border: 0; outline: 0; background: transparent; width: 100%; font-size: 13px; color: var(--foreground); }
+.convList { flex: 1; overflow-y: auto; padding: 0 8px 12px; }
+.convItem { display: flex; align-items: center; gap: 2px; border-radius: 6px; margin-bottom: 2px; }
+.convItem:hover { background: var(--surface); }
+.convActive { background: var(--surface) !important; box-shadow: inset 2px 0 var(--brand); }
+.convMain {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  border: 0; background: transparent; padding: 8px; cursor: pointer; text-align: left; color: inherit;
+}
+.convTitle { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.convTime { font-size: 11px; color: var(--muted); }
+.iconBtn {
+  display: inline-flex; align-items: center; justify-content: center; border: 0; background: transparent;
+  color: var(--muted); cursor: pointer; padding: 6px; border-radius: 5px;
+}
+.iconBtn:hover { background: var(--surface-muted); color: var(--foreground); }
+
+.center { display: flex; flex-direction: column; min-width: 0; background: var(--surface); }
+.centerHead {
+  display: flex; align-items: center; justify-content: space-between; padding: 10px 16px;
+  border-bottom: 1px solid var(--border); min-height: 44px;
+}
+.centerTitle { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; }
+.skillBar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 16px;
+  background: var(--surface-muted); border-bottom: 1px solid var(--border); font-size: 12px;
+}
+.skillSummary { color: var(--muted); flex: 1; min-width: 120px; }
+.linkBtn { border: 0; background: transparent; color: var(--brand); cursor: pointer; font-size: 12px; }
+
+.messages { flex: 1; overflow-y: auto; padding: 18px 20px; display: flex; flex-direction: column; gap: 16px; }
+.welcome { margin: auto; max-width: 520px; text-align: center; color: var(--muted); }
+.welcomeIcon {
+  width: 56px; height: 56px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface-muted); color: var(--brand); margin-bottom: 12px;
+}
+.welcome h2 { font-size: 18px; color: var(--foreground); margin: 0 0 6px; }
+.welcome p { font-size: 13px; margin: 0 0 18px; }
+.examples { display: flex; flex-direction: column; gap: 8px; }
+.examples button {
+  border: 1px solid var(--border); background: var(--surface); color: var(--foreground);
+  border-radius: 8px; padding: 10px 14px; font-size: 13px; cursor: pointer; text-align: left;
+}
+.examples button:hover { border-color: var(--brand); }
+
+.msg { display: flex; gap: 10px; max-width: 88%; }
+.msgUser { align-self: flex-end; flex-direction: row-reverse; }
+.msgAssistant { align-self: flex-start; }
+.msgRole {
+  flex: 0 0 28px; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; background: var(--surface-muted); color: var(--muted);
+}
+.msgUser .msgRole { background: var(--brand); color: #fff; }
+.msgBody { min-width: 0; }
+.msgText {
+  font-size: 14px; line-height: 1.7; padding: 10px 14px; border-radius: 10px; white-space: pre-wrap; word-break: break-word;
+  background: var(--surface-muted); border: 1px solid var(--border);
+}
+.msgUser .msgText { background: var(--brand); color: #fff; border-color: transparent; }
+.msgMeta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; align-items: center; }
+.coverageTag { font-size: 11px; color: var(--muted); }
+.loading { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); padding: 10px 14px; }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.error { font-size: 13px; color: var(--danger, #c0392b); background: var(--surface-muted); border-radius: 8px; padding: 10px 14px; }
+
+.composer { border-top: 1px solid var(--border); padding: 10px 16px 14px; background: var(--surface); }
+.composerTop { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.skillPicker { position: relative; display: inline-flex; align-items: center; }
+.skillPicker select {
+  appearance: none; border: 1px solid var(--border); background: var(--surface); color: var(--foreground);
+  border-radius: 6px; padding: 5px 26px 5px 10px; font-size: 12px; outline: 0;
+}
+.selectChevron { position: absolute; right: 8px; pointer-events: none; color: var(--muted); }
+.hint { font-size: 11px; color: var(--muted); }
+.inputRow { display: flex; gap: 8px; align-items: flex-end; }
+.inputRow textarea {
+  flex: 1; resize: none; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+  font-size: 14px; font-family: inherit; color: var(--foreground); background: var(--surface); outline: 0; line-height: 1.5;
+}
+.inputRow textarea:focus { border-color: var(--brand); }
+
+.rightHead {
+  display: flex; align-items: center; justify-content: space-between; padding: 10px 14px;
+  border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 700;
+}
+.rightBody { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 18px; }
+.rightBody h4 { font-size: 12px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.kv { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; margin-bottom: 6px; }
+.kv code { font-size: 10px; color: var(--muted); }
+.muted { color: var(--muted); font-size: 12px; margin: 2px 0; }
+.note { font-size: 12px; line-height: 1.5; margin: 0 0 6px; }
+.emptyHint { padding: 16px 14px; font-size: 12px; color: var(--muted); line-height: 1.6; }
+.toolCard { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; background: var(--surface); }
+.toolHead { display: flex; align-items: center; gap: 6px; }
+.toolName { font-size: 12px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toolArgs { font-family: ui-monospace, monospace; font-size: 10px; color: var(--muted); margin: 6px 0; word-break: break-all; }
+.toolFoot { display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; color: var(--muted); }
+.errText { color: var(--danger, #c0392b); }
+.skillFilterBox input {
+  width: 100%; border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 12px;
+  color: var(--foreground); background: var(--surface); outline: 0;
+}
+.quickSkills { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.quickSkills button {
+  border: 1px solid var(--border); background: var(--surface); color: var(--foreground);
+  border-radius: 12px; padding: 3px 9px; font-size: 11px; cursor: pointer;
+}
+.quickActive { border-color: var(--brand) !important; color: var(--brand) !important; }
+
+@media (max-width: 1100px) {
+  .workspace { grid-template-columns: 200px minmax(0, 1fr); }
+  .right { display: none; }
+}
+@media (max-width: 760px) {
+  .workspace { grid-template-columns: minmax(0, 1fr); }
+  .left { display: none; }
+}
