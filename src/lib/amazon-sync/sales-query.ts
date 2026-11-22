@@ -141,3 +141,77 @@ export async function readSalesTraffic(scope: SyncScope, p: URLSearchParams, opt
     return { ...row, metrics: metrics as SalesMetrics };
   }) };
 }
+
+/** 商品日查询参数：在店铺日基础上放开商品身份筛选。 */
+export type ProductSalesQuery = SalesQuery & { asin?: string; parentAsin?: string; sellerSku?: string; granularity?: "CHILD" | "SKU" };
+export function parseProductSalesQuery(p: URLSearchParams): ProductSalesQuery {
+  const baseParams = new URLSearchParams();
+  for (const key of ["from", "to", "sellerAccountId", "marketplaceId", "taskId", "keyword", "sort", "quality", "status", "direction", "page", "pageSize"]) {
+    for (const value of p.getAll(key)) baseParams.append(key, value);
+  }
+  const base = parseSalesQuery(baseParams);
+  const text = (key: string) => { const v = p.get(key)?.trim(); if (v && v.length > 100) throw new SyncInputError("商品筛选条件过长。"); return v || undefined; };
+  const asin = text("asin"), parentAsin = text("parentAsin"), sellerSku = text("sellerSku");
+  if (asin && !/^[A-Z0-9]{10}$/.test(asin)) throw new SyncInputError("ASIN 格式无效。");
+  if (parentAsin && !/^[A-Z0-9]{10}$/.test(parentAsin)) throw new SyncInputError("父 ASIN 格式无效。");
+  const granularity = p.get("granularity");
+  if (granularity && granularity !== "CHILD" && granularity !== "SKU") throw new SyncInputError("商品日粒度无效。");
+  return { ...base, asin, parentAsin, sellerSku, granularity: granularity as "CHILD" | "SKU" | undefined };
+}
+export type ProductSalesRow = {
+  id: string; organizationId: string; workspaceId: string; sourceId: string; syncRunId: string;
+  sellerAccountId: string; marketplaceId: string; businessDate: string; granularity: string;
+  childAsin: string; parentAsin: string | null; sellerSku: string | null; reportId: string; documentId: string;
+  metrics: SalesMetrics; quality: string; capturedAt: Date; sellerName: string; amazonSellerId: string; publishedAt: Date;
+};
+/** 商品日版本 SQL：每 (sourceId, businessDate, granularity, 身份) 取最新成功完整版本；权限与店铺日完全一致。 */
+function productVersionSql(scope: SyncScope, query: ProductSalesQuery, cutoff: Date, access?: AmazonDataAccess, sourceFence?: string[]) {
+  return Prisma.sql`WITH versions AS (
+    SELECT DISTINCT ON (r."sourceId", r."businessDate", r."granularity", r."childAsin", COALESCE(r."sellerSku", '')) r.*, t."finishedAt" AS "publishedAt",
+      a."amazonSellerId", seller."displayName" AS "sellerName"
+    FROM "AmazonSalesTrafficProductSnapshot" r
+    JOIN "AmazonSyncRun" t ON t.id = r."syncRunId" AND t."organizationId" = r."organizationId" AND t."workspaceId" = r."workspaceId" AND t."sourceId" = r."sourceId"
+    JOIN "AmazonSyncDataSource" s ON s.id = r."sourceId" AND s."organizationId" = r."organizationId" AND s."workspaceId" = r."workspaceId"
+    JOIN "AmazonSpApiAuthorization" a ON a.id = s."authorizationId" AND a."organizationId" = r."organizationId" AND a."workspaceId" = r."workspaceId"
+    JOIN "SellerAccount" seller ON seller.id = r."sellerAccountId" AND seller."organizationId" = r."organizationId" AND seller."workspaceId" = r."workspaceId"
+    WHERE r."organizationId" = ${scope.organizationId} AND r."workspaceId" = ${scope.workspaceId}
+      AND r."sellerAccountId" = s."sellerAccountId" AND r."marketplaceId" = s."marketplaceId"
+      ${access && !access.allSellers ? (access.sellerIds.length ? Prisma.sql`AND r."sellerAccountId" IN (${Prisma.join(access.sellerIds)})` : Prisma.sql`AND FALSE`) : Prisma.empty}
+      ${access?.scopes ? access.scopes.length ? Prisma.sql`AND (${Prisma.join(access.scopes.map(s => Prisma.sql`(r."sellerAccountId" = ${s.sellerAccountId} ${s.marketplaceIds.length ? Prisma.sql`AND r."marketplaceId" IN (${Prisma.join(s.marketplaceIds)})` : Prisma.empty})`), " OR ")})` : Prisma.sql`AND FALSE` : Prisma.empty}
+      ${sourceFence !== undefined ? sourceFence.length ? Prisma.sql`AND r."sourceId" IN (${Prisma.join(sourceFence)})` : Prisma.sql`AND FALSE` : Prisma.empty}
+      AND s.resource = 'sales_traffic' AND t.status = 'SUCCEEDED' AND t."executionVersion" = 2 AND t.resource = 'sales_traffic' AND t.stage <> 'PURGED' AND r.quality = 'VALID' AND t."finishedAt" <= ${cutoff}
+      ${query.from ? Prisma.sql`AND r."businessDate" >= ${query.from}` : Prisma.empty}
+      ${query.to ? Prisma.sql`AND r."businessDate" <= ${query.to}` : Prisma.empty}
+      ${query.sellerAccountId ? Prisma.sql`AND r."sellerAccountId" = ${query.sellerAccountId}` : Prisma.empty}
+      ${query.marketplaceId ? Prisma.sql`AND r."marketplaceId" = ${query.marketplaceId}` : Prisma.empty}
+      ${query.taskId ? Prisma.sql`AND r."syncRunId" = ${query.taskId}` : Prisma.empty}
+      ${query.asin ? Prisma.sql`AND r."childAsin" = ${query.asin}` : Prisma.empty}
+      ${query.parentAsin ? Prisma.sql`AND r."parentAsin" = ${query.parentAsin}` : Prisma.empty}
+      ${query.sellerSku ? Prisma.sql`AND r."sellerSku" = ${query.sellerSku}` : Prisma.empty}
+      ${query.granularity ? Prisma.sql`AND r."granularity" = ${query.granularity}` : Prisma.empty}
+    ORDER BY r."sourceId", r."businessDate", r."granularity", r."childAsin", COALESCE(r."sellerSku", ''), t."finishedAt" DESC, t."startedAt" DESC, t.id DESC
+  ), filtered AS (
+    SELECT * FROM versions
+    ${query.keyword ? Prisma.sql`WHERE position(lower(${query.keyword}) in lower("childAsin" || ' ' || COALESCE("parentAsin", '') || ' ' || COALESCE("sellerSku", ''))) > 0` : Prisma.empty}
+  )`;
+}
+const PRODUCT_MAX_PAGE_SIZE = 1000;
+/** 商品日查询：权限、版本 cutoff、口径与 readSalesTraffic 完全一致，仅作用于商品事实表。 */
+export async function readSalesProducts(scope: SyncScope, p: URLSearchParams, options: { cutoff?: Date; actor?: string } = {}) {
+  p = new URLSearchParams(p);
+  const access = await amazonAccountReadAccess(scope, options.actor, p, prisma, "sales_traffic");
+  p.set("sellerAccountId", access.sellerIds[0]);
+  const query = parseProductSalesQuery(p), cutoff = options.cutoff ?? new Date(), cte = productVersionSql(scope, query, cutoff, access);
+  const page = Math.min(10000, Math.max(1, Math.floor(Number(p.get("page")) || 1))), pageSize = Math.min(PRODUCT_MAX_PAGE_SIZE, Math.max(1, Math.floor(Number(p.get("pageSize")) || 100)));
+  const result = await prisma.$transaction(async tx => {
+    const total = await tx.$queryRaw<Array<{ count: bigint }>>`${cte} SELECT count(*) FROM filtered`;
+    const rows = await tx.$queryRaw<Array<Omit<ProductSalesRow, "metrics"> & { metricsText: string }>>`${cte} SELECT filtered.*, metrics::text AS "metricsText" FROM filtered ORDER BY "businessDate" ${query.direction === "asc" ? Prisma.sql`ASC` : Prisma.sql`DESC`}, "childAsin", "sourceId" OFFSET ${(page - 1) * pageSize} LIMIT ${pageSize}`;
+    return { rows, pagination: { page, pageSize, total: Number(total[0].count), pageCount: Math.ceil(Number(total[0].count) / pageSize) }, query, asOf: cutoff.toISOString(), granularity: query.granularity ?? "ALL", versionPolicy: "latest_successful_per_source_day_identity" };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  await amazonAccountReadAccess(scope, options.actor, p, prisma, "sales_traffic");
+  return { ...result, numericEncoding: "JSON_NUMERIC_STRINGS", rows: result.rows.map(({ metricsText, ...row }) => {
+    const metrics = parseAmazonBusinessJson(metricsText);
+    if (!metrics || typeof metrics !== "object" || Array.isArray(metrics)) throw new SyncInputError("商品销售指标不是有效的 JSON 对象。", 409);
+    return { ...row, metrics: metrics as SalesMetrics };
+  }) };
+}

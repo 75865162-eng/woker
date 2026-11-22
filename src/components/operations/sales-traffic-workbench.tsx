@@ -8,10 +8,10 @@ import { type DataTableColumn } from "@/components/ui/data-table";
 import { ReadinessNotice, readinessKindFromCode } from "@/components/operations/readiness-notice";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
 import type { SyncSourceView } from "@/lib/amazon-sync/contracts";
-import type { SalesRow, SalesMatrix, SalesMatrixCell, SalesMatrixDimension } from "@/lib/amazon-sync/sales-query";
+import type { SalesRow, SalesMatrix, SalesMatrixCell, SalesMatrixDimension, ProductSalesRow } from "@/lib/amazon-sync/sales-query";
 const endpoint = "/api/operations/sync-center";
 const input = "min-h-9 rounded border border-border bg-background px-2 text-sm";
-const PENDING_DIMENSIONS = ["ASIN", "父ASIN", "MSKU", "SKU", "SPU", "开发员", "业务员"] as const;
+const PENDING_DIMENSIONS = ["MSKU", "SKU", "SPU", "开发员", "业务员"] as const;
 const METRICS = [{ key: "units", label: "销量" }, { key: "orders", label: "订单商品项数" }, { key: "revenue", label: "销售额" }, { key: "sessions", label: "Sessions" }] as const;
 type MetricKey = typeof METRICS[number]["key"];
 function scopeHeaders() {
@@ -20,6 +20,7 @@ function scopeHeaders() {
   return headers;
 }
 type Result = { rows: SalesRow[]; pagination: { pageCount: number; total: number }; asOf: string };
+type ProductResult = { rows: ProductSalesRow[]; pagination: { pageCount: number; total: number }; asOf: string; granularity: string };
 type ExportState = { id: string; status: string; rowCount?: number; error?: string };
 function cellValue(cell: SalesMatrixCell | undefined, metric: MetricKey): string {
   if (!cell) return "—";
@@ -31,17 +32,18 @@ function cellValue(cell: SalesMatrixCell | undefined, metric: MetricKey): string
 export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onTask }: { sources: SyncSourceView[]; canSync: boolean; canExport: boolean; taskId?: string; onTask?: (id: string) => void }) {
   const [seller, setSeller] = useState(""), [site, setSite] = useState(""), [from, setFrom] = useState(""), [to, setTo] = useState(""), [keyword, setKeyword] = useState(""), [direction, setDirection] = useState("desc");
   const [source, setSource] = useState(""), [preset, setPreset] = useState("yesterday"), [syncFrom, setSyncFrom] = useState(""), [syncTo, setSyncTo] = useState("");
-  const [page, setPage] = useState(1), [reload, setReload] = useState(0), [result, setResult] = useState<Result | null>(null), [matrix, setMatrix] = useState<SalesMatrix | null>(null), [error, setError] = useState(""), [errorCode, setErrorCode] = useState(""), [notice, setNotice] = useState(""), [busy, setBusy] = useState(false), [loading, setLoading] = useState(true), [job, setJob] = useState<ExportState | null>(null);
-  const [view, setView] = useState<"rows" | "matrix">("rows"), [metric, setMetric] = useState<MetricKey>("units");
+  const [page, setPage] = useState(1), [reload, setReload] = useState(0), [result, setResult] = useState<Result | null>(null), [matrix, setMatrix] = useState<SalesMatrix | null>(null), [productResult, setProductResult] = useState<ProductResult | null>(null), [error, setError] = useState(""), [errorCode, setErrorCode] = useState(""), [notice, setNotice] = useState(""), [busy, setBusy] = useState(false), [loading, setLoading] = useState(true), [job, setJob] = useState<ExportState | null>(null);
+  const [view, setView] = useState<"rows" | "matrix" | "products">("rows"), [metric, setMetric] = useState<MetricKey>("units");
+  const [productDim, setProductDim] = useState<"ASIN" | "父ASIN">("ASIN"), [syncGranularity, setSyncGranularity] = useState<"CHILD" | "SKU">("CHILD");
   const sequence = useRef(0), mutation = useRef(0);
   const filters = { sellerAccountId: seller, marketplaceId: site, from, to, keyword, direction, ...(taskId ? { taskId } : {}) };
   const queryKey = JSON.stringify(filters);
-  useEffect(() => { const requests = sequence, mutations = mutation; const reset = () => { ++requests.current; ++mutations.current; setResult(null); setMatrix(null); setJob(null); setError(""); setErrorCode(""); setNotice(""); setBusy(false); setPage(1); setSeller(""); setSite(""); setSource(""); setReload(v => v + 1); }; window.addEventListener(workspaceScopeChangedEventName, reset); return () => { ++requests.current; ++mutations.current; window.removeEventListener(workspaceScopeChangedEventName, reset); }; }, []);
+  useEffect(() => { const requests = sequence, mutations = mutation; const reset = () => { ++requests.current; ++mutations.current; setResult(null); setMatrix(null); setProductResult(null); setJob(null); setError(""); setErrorCode(""); setNotice(""); setBusy(false); setPage(1); setSeller(""); setSite(""); setSource(""); setReload(v => v + 1); }; window.addEventListener(workspaceScopeChangedEventName, reset); return () => { ++requests.current; ++mutations.current; window.removeEventListener(workspaceScopeChangedEventName, reset); }; }, []);
   useEffect(() => {
-    const n = ++sequence.current, controller = new AbortController(); setLoading(true); setResult(null); setMatrix(null); setError(""); setErrorCode("");
-    const section = view === "matrix" ? "sales-traffic-matrix" : "sales-traffic";
-    const params = new URLSearchParams({ section, ...(view === "rows" ? { page: String(page) } : {}), ...JSON.parse(queryKey) });
-    void fetch(`${endpoint}?${params}`, { headers: scopeHeaders(), cache: "no-store", signal: controller.signal }).then(async response => { const payload = await response.json(); if (!response.ok) { const failure = new Error(payload.error ?? "销售流量读取失败。") as Error & { code?: string }; failure.code = payload.code; throw failure; } if (n === sequence.current) { if (view === "matrix") setMatrix(payload as SalesMatrix); else setResult(payload as Result); } }).catch(e => { if (n === sequence.current && !controller.signal.aborted) { setError(e instanceof Error ? e.message : "读取失败。"); setErrorCode((e as Error & { code?: string }).code ?? ""); } }).finally(() => { if (n === sequence.current) setLoading(false); });
+    const n = ++sequence.current, controller = new AbortController(); setLoading(true); setResult(null); setMatrix(null); setProductResult(null); setError(""); setErrorCode("");
+    const section = view === "matrix" ? "sales-traffic-matrix" : view === "products" ? "sales-traffic-products" : "sales-traffic";
+    const params = new URLSearchParams({ section, ...(view === "rows" || view === "products" ? { page: String(page) } : {}), ...JSON.parse(queryKey), ...(view === "products" ? { granularity: "CHILD" } : {}) });
+    void fetch(`${endpoint}?${params}`, { headers: scopeHeaders(), cache: "no-store", signal: controller.signal }).then(async response => { const payload = await response.json(); if (!response.ok) { const failure = new Error(payload.error ?? "销售流量读取失败。") as Error & { code?: string }; failure.code = payload.code; throw failure; } if (n === sequence.current) { if (view === "matrix") setMatrix(payload as SalesMatrix); else if (view === "products") setProductResult(payload as ProductResult); else setResult(payload as Result); } }).catch(e => { if (n === sequence.current && !controller.signal.aborted) { setError(e instanceof Error ? e.message : "读取失败。"); setErrorCode((e as Error & { code?: string }).code ?? ""); } }).finally(() => { if (n === sequence.current) setLoading(false); });
     return () => { controller.abort(); };
   }, [queryKey, page, reload, view]);
   useVisiblePolling({
@@ -55,7 +57,8 @@ export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onT
   const requestSync = async () => {
     const n = ++mutation.current; setBusy(true); setError(""); setNotice("");
     try {
-      const r = await fetch(endpoint, { method: "POST", headers: scopeHeaders(), body: JSON.stringify({ action: "run", sourceIds: [source], datePreset: preset, ...(preset === "custom" ? { dateFrom: syncFrom, dateTo: syncTo } : {}) }) });
+      const granularityField = preset === "yesterday" || preset === "today" || preset === "custom" ? { asinGranularity: syncGranularity } : {};
+      const r = await fetch(endpoint, { method: "POST", headers: scopeHeaders(), body: JSON.stringify({ action: "run", sourceIds: [source], datePreset: preset, ...granularityField, ...(preset === "custom" ? { dateFrom: syncFrom, dateTo: syncTo } : {}) }) });
       const p = await r.json(); if (!r.ok) throw new Error(p.error ?? "同步申请失败。");
       if (n === mutation.current) setNotice(p.approvalRequired ? "同步申请已提交，等待系统处理。" : "已提交，系统正在同步 Amazon 数据（无需人工审批）。");
     } catch (e) { if (n === mutation.current) setError(e instanceof Error ? e.message : "同步申请失败。"); }
@@ -109,16 +112,19 @@ export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onT
   ] : [];
   return <div className="space-y-4" data-testid="sales-traffic-workbench">
     <div className="flex flex-wrap gap-2" role="tablist" aria-label="销量统计维度">
-      <Button size="sm" variant="primary" role="tab" aria-selected={true} data-testid="dim-store" title="现有真实数据：店铺 × 业务日逐日汇总">店铺 × 业务日</Button>
-      {PENDING_DIMENSIONS.map(d => <Button key={d} size="sm" variant="secondary" role="tab" aria-selected={false} aria-disabled disabled data-testid={`dim-pending-${d}`} title={`${d} 维度需要单日商品级报告（CHILD/SKU）的实际返回与授权后才能提供；当前无商品日事实，不会用店铺日报拆分或平均替代。`}>{d}<span className="ml-1 text-muted">· 待验证</span></Button>)}
+      <Button size="sm" variant={view === "products" ? "secondary" : "primary"} role="tab" aria-selected={view !== "products"} data-testid="dim-store" onClick={() => setView("rows")} title="店铺 × 业务日逐日汇总">店铺 × 业务日</Button>
+      <Button size="sm" variant={view === "products" && productDim === "ASIN" ? "primary" : "secondary"} role="tab" aria-selected={view === "products" && productDim === "ASIN"} data-testid="dim-asin" onClick={() => { setProductDim("ASIN"); setView("products"); }} title="来自单日 CHILD 报告的 childAsin 商品日事实">ASIN<span className="ml-1 text-muted">· 商品日</span></Button>
+      <Button size="sm" variant={view === "products" && productDim === "父ASIN" ? "primary" : "secondary"} role="tab" aria-selected={view === "products" && productDim === "父ASIN"} data-testid="dim-parent-asin" onClick={() => { setProductDim("父ASIN"); setView("products"); }} title="来自单日 CHILD 报告的 parentAsin 商品日事实">父ASIN<span className="ml-1 text-muted">· 商品日</span></Button>
+      {PENDING_DIMENSIONS.map(d => <Button key={d} size="sm" variant="secondary" role="tab" aria-selected={false} aria-disabled disabled data-testid={`dim-pending-${d}`} title={`${d} 维度需要已验证的真实映射或 SKU 粒度报告；当前不可用，不会用店铺日报或 ASIN 数据拆分、平均、猜测替代。`}>{d}<span className="ml-1 text-muted">· 待验证</span></Button>)}
     </div>
-    <p className="text-xs leading-relaxed text-muted">当前真实数据粒度为<strong>店铺 × 业务日逐日汇总</strong>（SELLER_DAY，来自已发布的 GET_SALES_AND_TRAFFIC_REPORT）。ASIN / 父ASIN / MSKU / SKU / SPU / 开发员 / 业务员维度需先验证单日商品级报告的实际返回与授权，再建设商品日报；在此之前这些维度不可用，不会把店铺日报拆分或平均成商品日数据。</p>
+    <p className="text-xs leading-relaxed text-muted">店铺维度为<strong>店铺 × 业务日</strong>汇总；ASIN / 父ASIN 维度来自<strong>单日 CHILD 报告</strong>的 <code>salesAndTrafficByAsin</code> 商品日事实（仅已闭合单日、不拆分多日汇总）。MSKU / SKU 需先取得真实 SKU 粒度报告，SPU / 开发员 / 业务员需正式映射来源，各维度在无来源时保持禁用，绝不拆分或平均店铺日报。</p>
     {!taskId && <form className="flex flex-wrap items-end gap-2 rounded border border-border p-3" onSubmit={e => { e.preventDefault(); void requestSync(); }}>
       <label className="grid gap-1 text-xs">同步来源<select aria-label="报告同步来源" className={input} value={source} onChange={e => setSource(e.target.value)} required><option value="">选择 Seller / Marketplace</option>{sources.filter(s => s.resource === "sales_traffic" && s.enabled).map(s => <option key={s.id} value={s.id}>{formatSiteStore(s.marketplaceId, s.seller.displayName || "未命名店铺")}</option>)}</select></label>
       <label className="grid gap-1 text-xs">同步日期<select aria-label="同步日期" className={input} value={preset} onChange={e => setPreset(e.target.value)}>{[["today", "今天"], ["yesterday", "昨天"], ["last7", "最近 7 天"], ["last30", "最近 30 天"], ["thisMonth", "本月"], ["lastMonth", "上月"], ["custom", "自定义"]].map(([v, label]) => <option value={v} key={v}>{label}</option>)}</select></label>
+      <label className="grid gap-1 text-xs">商品粒度<select aria-label="商品粒度" className={input} value={syncGranularity} onChange={e => setSyncGranularity(e.target.value as "CHILD" | "SKU")}><option value="CHILD">CHILD（子 ASIN，已验证）</option><option value="SKU">SKU（验证中）</option></select></label>
       {preset === "custom" && <><label className="grid gap-1 text-xs">同步开始日期<input type="date" className={input} value={syncFrom} onChange={e => setSyncFrom(e.target.value)} required /></label><label className="grid gap-1 text-xs">同步结束日期<input type="date" className={input} value={syncTo} onChange={e => setSyncTo(e.target.value)} required /></label></>}
       <Button type="submit" size="sm" disabled={!canSync || busy || !source}>申请报告同步</Button>
-      <p className="w-full text-xs text-muted">每次最多 31 天、历史最多 730 天。站点时区由后端确定；含今天的范围属于未闭合周期，仅保留质量证据，不发布为完整数据。</p>
+      <p className="w-full text-xs text-muted">每次最多 31 天、历史最多 730 天。商品日事实仅对<strong>单日已闭合</strong>窗口生成（多日 ASIN 汇总不会拆日）；选“昨天”或自定义单日可生成商品日。站点时区由后端确定；含今天的范围仅保留质量证据，不发布为完整数据。</p>
     </form>}
     <div className="flex flex-wrap items-end gap-2">
       <label className="grid gap-1 text-xs">Seller<select aria-label="日报 Seller" className={input} value={seller} onChange={e => select(setSeller, e.target.value)}><option value="">全部 Seller</option>{[...new Map(sources.filter(s => s.resource === "sales_traffic").map(s => [s.sellerAccountId, s.seller.displayName || "未命名店铺"])).entries()].map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
@@ -126,12 +132,13 @@ export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onT
       <label className="grid gap-1 text-xs">业务开始日期<input className={input} type="date" value={from} onChange={e => select(setFrom, e.target.value)} /></label><label className="grid gap-1 text-xs">业务结束日期<input className={input} type="date" value={to} onChange={e => select(setTo, e.target.value)} /></label>
       <label className="grid gap-1 text-xs">店铺 / Seller / 站点搜索<input className={input} value={keyword} maxLength={200} onChange={e => select(setKeyword, e.target.value)} /></label>
       <label className="grid gap-1 text-xs">业务日期排序<select aria-label="业务日期排序" className={input} value={direction} onChange={e => select(setDirection, e.target.value)}><option value="desc">最新在前</option><option value="asc">最早在前</option></select></label>
-      <Button size="sm" variant="secondary" disabled={loading || busy} onClick={() => setReload(v => v + 1)}>刷新日报</Button><Button size="sm" disabled={!canExport || busy || loading || !result && !matrix} onClick={() => void exportData()}>按当前条件异步导出</Button>
+      <Button size="sm" variant="secondary" disabled={loading || busy} onClick={() => setReload(v => v + 1)}>刷新</Button><Button size="sm" disabled={!canExport || busy || loading || !result && !matrix && !productResult} onClick={() => void exportData()}>按当前条件异步导出</Button>
     </div>
     <div className="flex flex-wrap items-center gap-2 rounded border border-border p-2 text-xs">
       <span className="text-muted">视图</span>
-      <Button size="sm" variant={view === "rows" ? "primary" : "secondary"} onClick={() => setView("rows")} data-testid="view-rows">逐日明细</Button>
-      <Button size="sm" variant={view === "matrix" ? "primary" : "secondary"} onClick={() => setView("matrix")} data-testid="view-matrix">× 业务日矩阵</Button>
+      <Button size="sm" variant={view === "rows" ? "primary" : "secondary"} onClick={() => setView("rows")} data-testid="view-rows">店铺逐日</Button>
+      <Button size="sm" variant={view === "matrix" ? "primary" : "secondary"} onClick={() => setView("matrix")} data-testid="view-matrix">店铺 × 日矩阵</Button>
+      <Button size="sm" variant={view === "products" ? "primary" : "secondary"} onClick={() => setView("products")} data-testid="view-products">商品日</Button>
       <span className="ml-2 text-muted">指标</span>
       {METRICS.map(m => <Button key={m.key} size="sm" variant={metric === m.key ? "primary" : "secondary"} onClick={() => setMetric(m.key)} data-testid={`metric-${m.key}`}>{m.label}</Button>)}
     </div>
@@ -161,6 +168,30 @@ export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onT
         empty="没有符合条件的已发布店铺日数据；“—”表示缺失，不代表 0。"
       />
       <p className="text-xs text-muted">“—”表示该店铺该业务日没有完整发布数据，不作为 0 处理；数值 0 仅代表已确认的完整空结果。矩阵仅重排已发布的真实店铺日行，不新增、不拆分、不平均任何数据。</p>
+    </>}
+    {view === "products" && productResult && <>
+      <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted" data-testid="product-coverage">
+        <span>数据粒度：商品日（{productResult.granularity === "SKU" ? "SKU" : "子 ASIN CHILD"}）</span>
+        <span>共 {productResult.pagination.total} 条 · 单日已闭合事实</span>
+        <span>发布时刻 asOf：{productResult.asOf}</span>
+      </div>
+      {productDim === "父ASIN" && <p className="text-xs text-muted">每行显示其报告的 <code>parentAsin</code>（缺失显示“—”）；当前按商品行展示，<strong>未按父体合并销量</strong>——父子体合并口径需先与源站对账，在此之前不编造父体小计、不用子 ASIN 冒充父体。</p>}
+      <StandardDataTable
+        ariaLabel="商品日销量"
+        rows={productResult.rows}
+        getRowKey={(row) => row.id}
+        columns={[
+          { key: "asin", header: "商品身份", render: (row) => (<>{productDim === "父ASIN" ? (row.parentAsin ?? "—") : row.childAsin}<span className="block text-muted">{formatSiteStore(row.marketplaceId, row.sellerName)}{row.sellerSku ? ` · ${row.sellerSku}` : ""}</span></>) },
+          { key: "date", header: "业务日", render: (row) => row.businessDate },
+          { key: "sales", header: "销售额", numeric: true, render: (row) => row.metrics.orderedProductSales ? `${row.metrics.orderedProductSales.amount} ${row.metrics.orderedProductSales.currencyCode}` : "—" },
+          { key: "units", header: "销量 / 订单商品项数", render: (row) => `${row.metrics.unitsOrdered ?? "—"} / ${row.metrics.totalOrderItems ?? "—"}` },
+          { key: "traffic", header: "Sessions / Page views", render: (row) => `${row.metrics.sessions ?? "—"} / ${row.metrics.pageViews ?? "—"}` },
+          { key: "quality", header: "质量 / 版本", render: (row) => (<>{row.quality}<details><summary className="cursor-pointer text-brand">来源与版本</summary><p className="max-w-sm break-all">Reports 2021-06-30 · GET_SALES_AND_TRAFFIC_REPORT<br />报告 {row.reportId} · 文档 {row.documentId}<br />任务 / 版本 {row.syncRunId}<br />获取 {String(row.capturedAt)} · 发布 {String(row.publishedAt)}</p>{onTask && <Button size="sm" variant="secondary" onClick={() => onTask(row.syncRunId)}>查看来源任务</Button>}</details></>) },
+        ] as DataTableColumn<ProductSalesRow>[]}
+        empty="没有符合条件的已发布商品日事实；请确认已对单日申请过商品报告同步。这不代表销量为 0。"
+      />
+      <div className="flex items-center justify-end gap-3 text-xs"><span>{productResult.pagination.total} 条 · {page} / {Math.max(1, productResult.pagination.pageCount)}</span><Button size="sm" variant="secondary" disabled={page <= 1 || loading} onClick={() => setPage(v => v - 1)}>上一页</Button><Button size="sm" variant="secondary" disabled={page >= productResult.pagination.pageCount || loading} onClick={() => setPage(v => v + 1)}>下一页</Button></div>
+      <p className="text-xs text-muted">商品日事实来自单日 CHILD/SKU 报告的 <code>salesAndTrafficByAsin</code>；一个 ASIN 的销量不会拆分或摊给多个 SKU。订单商品项数不等于去重订单数；缺失显示“—”，不补零。</p>
     </>}
     <details className="rounded border border-border p-3 text-xs" data-testid="metric-definitions">
       <summary className="cursor-pointer text-brand">指标口径与数据边界说明</summary>

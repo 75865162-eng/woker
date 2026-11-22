@@ -61,7 +61,7 @@ const allowed: Record<ChangeOperation, string[]> = {
   "recover-report": ["id", "revision", "recoveryDigest", "reportWindow", "settlementPolicy", "attributionOnly", "currencyOnly", "reportDocumentIds", "fieldScanOnly", "listingAttributesOnly", "orderFulfillmentOnly", "inboundItemsOnly", "archiveOnly", "productAccessOnly", "reportDocumentId", "taskId", "rawPages", "abandonBrokenCheckpoint"],
   "save-source": ["id", "proposedId", "revision", "authorizationId", "sellerAccountId", "marketplaceId", "resource", "freshnessMinutes", "enabled", "orderPolicy", "financePolicy", "returnsPolicy", "domainPolicy", "settlementPolicy"],
   "save-plan": ["id", "proposedId", "revision", "name", "resource", "enabled", "mode", "intervalMinutes", "priority", "maxAttempts", "retentionDays", "sourceIds"],
-  "run": ["sourceIds", "planId", "datePreset", "dateFrom", "dateTo", "eventType", "reportWindows"], "control-task": ["id", "control", "quarantineOutsideFinanceScope"],
+  "run": ["sourceIds", "planId", "datePreset", "dateFrom", "dateTo", "asinGranularity", "eventType", "reportWindows"], "control-task": ["id", "control", "quarantineOutsideFinanceScope"],
 };
 export function normalizeCommand(body: Record<string, unknown>) {
   const action = operation(body.action);
@@ -78,6 +78,7 @@ export function normalizeCommand(body: Record<string, unknown>) {
     command.rawPages = [...pages as number[]].sort((a, b) => a - b);
   }
   if (command.sameWindowReplay !== undefined && typeof command.sameWindowReplay !== "boolean") throw new SyncInputError("财务重放标识无效。");
+  if (command.asinGranularity !== undefined && command.asinGranularity !== "CHILD" && command.asinGranularity !== "SKU") throw new SyncInputError("商品报告粒度必须为 CHILD 或 SKU。");
   if (command.attributionOnly !== undefined && (typeof command.attributionOnly !== "boolean" || command.attributionOnly && (command.reportWindow !== undefined || command.settlementPolicy !== undefined))) throw new SyncInputError("归属复核不得同时改写报告窗口或结算策略。");
   if (command.settlementPolicy !== undefined) { if (command.resource !== "settlements" && action !== "recover-report") throw new SyncInputError("结算采集策略仅适用于结算域。"); command.settlementPolicy = parseSettlementPolicy(command.settlementPolicy); }
   if (command.domainPolicy !== undefined) command.domainPolicy = sellerArchivePolicy(String(command.resource), command.domainPolicy) ?? parseObservationPolicy(command.domainPolicy, typeof command.resource === "string" ? command.resource : undefined);

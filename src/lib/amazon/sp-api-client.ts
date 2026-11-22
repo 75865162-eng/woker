@@ -279,13 +279,15 @@ export class AmazonSpApiClient {
     return this.request("GET", `/fba/inventory/v1/summaries?${query.toString()}`, undefined, captureRaw);
   }
 
-  async createSalesTrafficReport(input: { marketplaceId: string; startAt: string; endExclusive: string; reportEndAt?: string; from?: string; to?: string }): Promise<unknown> {
+  async createSalesTrafficReport(input: { marketplaceId: string; startAt: string; endExclusive: string; reportEndAt?: string; from?: string; to?: string; asinGranularity?: "CHILD" | "SKU" }): Promise<unknown> {
+    const asinGranularity = input.asinGranularity ?? "CHILD";
+    if (!["CHILD", "SKU"].includes(asinGranularity)) throw new AmazonSpApiError("销售流量报告 ASIN 粒度无效。");
     return this.request("POST", "/reports/2021-06-30/reports", {
       reportType: "GET_SALES_AND_TRAFFIC_REPORT", marketplaceIds: [input.marketplaceId],
       // DAY reports normalize timestamps to UTC calendar dates.
       dataStartTime: input.from ? `${input.from}T00:00:00Z` : input.startAt,
       dataEndTime: input.to ? `${input.to}T23:59:59Z` : input.reportEndAt ?? new Date(Date.parse(input.endExclusive) - 1000).toISOString(),
-      reportOptions: { dateGranularity: "DAY", asinGranularity: "CHILD" },
+      reportOptions: { dateGranularity: "DAY", asinGranularity },
     });
   }
   /** Reports v2021-06-30 createReport, registered non-restricted type only.

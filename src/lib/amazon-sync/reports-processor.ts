@@ -9,7 +9,7 @@ import { rawReportEnvelope } from "./raw-fields";
 import { allListingsReportType, parseAllListingsReport } from "./catalog-report";
 import { parseGetReportsPage } from "./domain-reports";
 import { rangeFromFrozen } from "./date-range";
-import { parseSalesTraffic, salesTrafficReportType } from "./sales-traffic";
+import { parseSalesTraffic, parseSalesTrafficProducts, salesTrafficReportType } from "./sales-traffic";
 import { decryptCheckpoint, encryptCheckpoint } from "./checkpoint";
 import { digest, seal, unseal } from "./approval-policy";
 import { SyncInputError, type SyncScope } from "./policy";
@@ -91,7 +91,7 @@ export function createReportProcessor(runtime: ReportProcessorRuntime) {
       let response: unknown;
       if (!state.reportId) {
         state.creating = true; state.requestedAt = new Date().toISOString(); await saveState("REPORT_CREATING");
-        try { response = listing ? await client.createAllListingsReport(marketplaceId) : await client.createSalesTrafficReport({ marketplaceId, ...range! }); }
+        try { response = listing ? await client.createAllListingsReport(marketplaceId) : await client.createSalesTrafficReport({ marketplaceId, ...range!, asinGranularity: range!.productGranularity ?? "CHILD" }); }
         catch (error) {
           await persistRequests(run, events, budgetKey, error);
           // 明确拒绝可重试；其余错误可能已创建远端报告，先核对而非再次申请。
@@ -146,6 +146,12 @@ export function createReportProcessor(runtime: ReportProcessorRuntime) {
     try { reportBody = JSON.parse(rawText); }
     catch { throw new SyncInputError("销售流量报告 JSON 无效；加密原件已保留，等待解析修复。", 422); }
     const result = parseSalesTraffic(reportBody, range!, marketplaceId), capturedAt = new Date();
+    // 商品日事实：仅单日已闭合窗口可解析；多日窗口或无 ASIN 数据时跳过，绝不影响店铺日发布。
+    let productResult: ReturnType<typeof parseSalesTrafficProducts> | null = null;
+    if (range!.from === range!.to && range!.periodClosed && Array.isArray((reportBody as { salesAndTrafficByAsin?: unknown }).salesAndTrafficByAsin)) {
+      try { productResult = parseSalesTrafficProducts(reportBody, range!, marketplaceId, range!.productGranularity ?? "CHILD"); }
+      catch { productResult = null; }
+    }
     await assertActor(run);
     await prisma.$transaction(async tx => {
       await scopeLock(tx, scope); await assertFence(tx, run); const source = await assertLiveSource(tx, run);
@@ -157,14 +163,19 @@ export function createReportProcessor(runtime: ReportProcessorRuntime) {
       const headObservedAt = head?.rawPages[0]?.capturedAt ?? head?.finishedAt ?? head?.startedAt;
       const advanceHead = !headObservedAt || rawEvidence.capturedAt > headObservedAt || (rawEvidence.capturedAt.getTime() === headObservedAt.getTime() && run.startedAt >= head!.startedAt);
       await tx.amazonSalesTrafficSnapshot.createMany({ data: result.rows.map(row => ({ id: createHash("sha256").update(JSON.stringify([run.id, row.businessDate])).digest("hex"), ...scope, sourceId: source.id, syncRunId: run.id, sellerAccountId, marketplaceId, reportId: state.reportId!, documentId: state.documentId!, ...row, capturedAt: rawEvidence.capturedAt })) });
-      const qualityEvidence = { status: result.complete ? "PASSED" : "PARTIAL", code: result.complete ? "REPORT_WINDOW_COMPLETE" : "REPORT_WINDOW_INCOMPLETE", rawArchived: true, rawPage, rawSha256: bodySha256, parsedRows: result.rows.length, missingDates: result.missingDates, periodClosed: range!.periodClosed, published: result.complete };
+      // 商品日与店铺日分层：同一 run/原件/版本，仅在单日完整解析成功时写入，不覆盖店铺日。
+      if (productResult && result.complete) {
+        await tx.amazonSalesTrafficProductSnapshot.createMany({ data: productResult.rows.map(row => ({ id: createHash("sha256").update(JSON.stringify([run.id, row.businessDate, row.granularity, row.childAsin, row.sellerSku])).digest("hex"), ...scope, sourceId: source.id, syncRunId: run.id, sellerAccountId, marketplaceId, reportId: state.reportId!, documentId: state.documentId!, ...row, capturedAt: rawEvidence.capturedAt })) });
+      }
+      const qualityEvidence = { status: result.complete ? "PASSED" : "PARTIAL", code: result.complete ? "REPORT_WINDOW_COMPLETE" : "REPORT_WINDOW_INCOMPLETE", rawArchived: true, rawPage, rawSha256: bodySha256, parsedRows: result.rows.length, productRows: productResult?.rowCount ?? null, productGranularity: productResult?.granularity ?? null, missingDates: result.missingDates, periodClosed: range!.periodClosed, published: result.complete };
       await recordReportQualityIssue(tx, scope, run.requestedByUserId, { sourceId: source.id, taskId: run.id, reportId: state.reportId!, code: "DATE_COVERAGE_INCOMPLETE", affectedRows: result.missingDates.length + result.rows.filter(row => row.quality !== "VALID").length + (range!.periodClosed ? 0 : 1), affectedFields: ["businessDate", "metrics"], from: range!.from, to: range!.to, rawSha256: bodySha256, checkedAt: capturedAt });
       await recordReportParseEvidence(tx, run, { rawTaskId: run.id, rawPage, phase: result.complete ? "PUBLISHED" : "ROWS_COMMITTED", rowsCommitted: result.rows.length, totalRows: result.rows.length, checkedAt: capturedAt });
-      const coverage = { type: "report_business_dates", requestedRange: range, actualFrom: result.rows.map(r => r.businessDate).sort()[0] ?? null, actualTo: result.rows.map(r => r.businessDate).sort().at(-1) ?? null, missingDates: result.missingDates, complete: result.complete, periodClosed: range!.periodClosed, quality: result.complete ? "VALID" : "INCOMPLETE", qualityEvidence, rawPage, rawSha256: bodySha256, sourceApi: "Reports 2021-06-30", reportType: salesTrafficReportType, reportId: state.reportId!, documentId: state.documentId!, fetchedAt: rawEvidence.capturedAt.toISOString(), transformed: true, granularity: "SELLER_DAY", rowCount: result.rows.length };
+      const coverage = { type: "report_business_dates", requestedRange: range, actualFrom: result.rows.map(r => r.businessDate).sort()[0] ?? null, actualTo: result.rows.map(r => r.businessDate).sort().at(-1) ?? null, missingDates: result.missingDates, complete: result.complete, periodClosed: range!.periodClosed, quality: result.complete ? "VALID" : "INCOMPLETE", qualityEvidence, rawPage, rawSha256: bodySha256, sourceApi: "Reports 2021-06-30", reportType: salesTrafficReportType, reportId: state.reportId!, documentId: state.documentId!, fetchedAt: rawEvidence.capturedAt.toISOString(), transformed: true, granularity: "SELLER_DAY", rowCount: result.rows.length, product: productResult ? { granularity: productResult.granularity, rowCount: productResult.rowCount, complete: productResult.complete } : null };
       // 部分报告只保存质量证据，不能替换原有完整发布版本。
       if (result.complete && advanceHead) await tx.amazonSyncDataSource.update({ where: { id: source.id }, data: { activeRunId: run.id, lastSuccessAt: capturedAt, rowCount: result.rows.length, coverage } });
       else if (!result.complete) await tx.amazonSyncDataSource.updateMany({ where: { ...scope, id: source.id, activeRunId: source.activeRunId }, data: { coverage: { ...((source.coverage && typeof source.coverage === "object" && !Array.isArray(source.coverage)) ? source.coverage as Prisma.JsonObject : {}), latestQualityAttempt: qualityEvidence } } });
-      await tx.amazonSyncRun.update({ where: { id: run.id }, data: { status: result.complete ? "SUCCEEDED" : "PARTIAL_SUCCESS", stage: result.complete ? "COMPLETED" : "QUALITY_FAILED", pagesCompleted: 1, paginationComplete: true, processedCount: result.rows.length, insertedCount: result.rows.length, finishedAt: capturedAt, leaseOwner: null, leaseExpiresAt: null, checkpointCiphertext: result.complete ? null : encryptCheckpoint(JSON.stringify(state), scope, run.id), summary: { provider: "amazon_sp_api", executionVersion: 2, quality: qualityEvidence, coverage, publishedAt: result.complete ? capturedAt.toISOString() : null, publication: { observedAt: rawEvidence.capturedAt.toISOString(), headAdvanced: result.complete && advanceHead } }, error: result.complete ? null : !range!.periodClosed ? "业务日期尚未闭合；保留报告证据，未发布为完整数据。" : "报告缺日或缺少字段；保留当前有效版本，未发布本次结果。" } });
+      const publishedProductRows = productResult && result.complete ? productResult.rowCount : 0;
+      await tx.amazonSyncRun.update({ where: { id: run.id }, data: { status: result.complete ? "SUCCEEDED" : "PARTIAL_SUCCESS", stage: result.complete ? "COMPLETED" : "QUALITY_FAILED", pagesCompleted: 1, paginationComplete: true, processedCount: result.rows.length + publishedProductRows, insertedCount: result.rows.length + publishedProductRows, finishedAt: capturedAt, leaseOwner: null, leaseExpiresAt: null, checkpointCiphertext: result.complete ? null : encryptCheckpoint(JSON.stringify(state), scope, run.id), summary: { provider: "amazon_sp_api", executionVersion: 2, quality: qualityEvidence, coverage, publishedAt: result.complete ? capturedAt.toISOString() : null, publication: { observedAt: rawEvidence.capturedAt.toISOString(), headAdvanced: result.complete && advanceHead, productRows: publishedProductRows } }, error: result.complete ? null : !range!.periodClosed ? "业务日期尚未闭合；保留报告证据，未发布为完整数据。" : "报告缺日或缺少字段；保留当前有效版本，未发布本次结果。" } });
       await persistWindowCheckpoints(tx, run, capturedAt);
       await log(tx, run, result.complete ? "PUBLISHED" : "QUALITY_REJECTED");
     });

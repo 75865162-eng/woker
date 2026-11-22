@@ -10,7 +10,7 @@ const zones: Record<string, string> = {
 };
 export const reportingMarketplaceIds = Object.freeze(Object.keys(zones));
 export function reportTimeZone(marketplaceId: string): string { const zone = zones[marketplaceId]; if (!zone) throw new SyncInputError("该站点业务时区尚未核验。"); return zone; }
-export type RequestedRange = { from: string; to: string; timeZone: string; startAt: string; endExclusive: string; dateField: "report_business_date"; endInclusive: true; reportEndAt: string; periodClosed: boolean };
+export type RequestedRange = { from: string; to: string; timeZone: string; startAt: string; endExclusive: string; dateField: "report_business_date"; endInclusive: true; reportEndAt: string; periodClosed: boolean; productGranularity?: "CHILD" | "SKU" };
 export function businessDate(value: unknown): string {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().slice(0, 10) !== value) throw new SyncInputError("业务日期无效。");
   return value;
@@ -49,7 +49,8 @@ export function resolveRequestedRange(marketplaceId: string, input: Record<strin
   // Conservative first rollout: 31 days per report, within the documented two-year history.
   if (from < shiftDate(today, -730) || Date.parse(to) - Date.parse(from) > 30 * 86400000) throw new SyncInputError("销售流量每次最多 31 天，历史范围最多 730 天。");
   const endExclusive = zonedMidnight(shiftDate(to, 1), timeZone);
-  return { reportEndAt: new Date(Math.min(now.getTime(), Date.parse(endExclusive) - 1000)).toISOString(), periodClosed: to < today, from, to, timeZone, startAt: zonedMidnight(from, timeZone), endExclusive, dateField: "report_business_date", endInclusive: true };
+  const productGranularity = input.asinGranularity === "SKU" || input.asinGranularity === "CHILD" ? input.asinGranularity : undefined;
+  return { reportEndAt: new Date(Math.min(now.getTime(), Date.parse(endExclusive) - 1000)).toISOString(), periodClosed: to < today, from, to, timeZone, startAt: zonedMidnight(from, timeZone), endExclusive, dateField: "report_business_date", endInclusive: true, ...(productGranularity ? { productGranularity } : {}) };
 }
 export function rangeFromFrozen(value: unknown): RequestedRange {
   const range = (value as { requestedRange?: RequestedRange } | null)?.requestedRange;

@@ -2574,6 +2574,7 @@ model AmazonSyncRun {
   updatedCount          Int                            @default(0)
   skippedCount          Int                            @default(0)
   salesTrafficRows      AmazonSalesTrafficSnapshot[]
+  salesTrafficProductRows AmazonSalesTrafficProductSnapshot[]
   orderRows             AmazonOrderRecord[]
   financeRows           AmazonFinanceRecord[]
   returnRows            AmazonReturnRecord[]
@@ -3534,6 +3535,7 @@ model AmazonSyncDataSource {
   createdAt        DateTime                     @default(now())
   updatedAt        DateTime                     @updatedAt
   salesTrafficRows AmazonSalesTrafficSnapshot[]
+  salesTrafficProductRows AmazonSalesTrafficProductSnapshot[]
   orderPolicy      Json?
   financePolicy    Json?
   returnsPolicy    Json?
@@ -3810,6 +3812,34 @@ model AmazonSalesTrafficSnapshot {
 
   @@unique([organizationId, workspaceId, syncRunId, businessDate], map: "AmazonSalesTraffic_run_date_key")
   @@index([organizationId, workspaceId, sourceId, businessDate], map: "AmazonSalesTraffic_scope_date_idx")
+}
+
+/// 商品日事实：来自单日 GET_SALES_AND_TRAFFIC_REPORT 的 salesAndTrafficByAsin。
+/// 与店铺日 AmazonSalesTrafficSnapshot 分层，互不覆盖；共享同一 run/原件/版本/权限。
+model AmazonSalesTrafficProductSnapshot {
+  id              String               @id
+  organizationId  String
+  workspaceId     String
+  sourceId        String
+  source          AmazonSyncDataSource @relation(fields: [organizationId, workspaceId, sourceId], references: [organizationId, workspaceId, id], onDelete: Restrict, map: "AmazonSalesTrafficProduct_source_fkey")
+  syncRunId       String
+  task            AmazonSyncRun        @relation(fields: [syncRunId, organizationId, workspaceId, sourceId], references: [id, organizationId, workspaceId, sourceId], onDelete: Restrict, map: "AmazonSalesTrafficProduct_task_fkey")
+  sellerAccountId String
+  marketplaceId   String
+  businessDate    String               @db.VarChar(10)
+  granularity     String               @db.VarChar(10)
+  childAsin       String               @db.VarChar(20)
+  parentAsin      String?              @db.VarChar(20)
+  sellerSku       String?              @db.VarChar(100)
+  reportId        String
+  documentId      String
+  metrics         Json
+  quality         String
+  capturedAt      DateTime
+
+  @@unique([organizationId, workspaceId, syncRunId, businessDate, granularity, childAsin], map: "AmazonSalesTrafficProduct_run_day_identity_key")
+  @@index([organizationId, workspaceId, sourceId, businessDate, granularity], map: "AmazonSalesTrafficProduct_scope_day_idx")
+  @@index([organizationId, workspaceId, sourceId, granularity, childAsin, businessDate], map: "AmazonSalesTrafficProduct_asin_idx")
 }
 
 model AmazonDataExport {

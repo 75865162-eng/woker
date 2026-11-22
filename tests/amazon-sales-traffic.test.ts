@@ -96,3 +96,40 @@ test("business queries retain tenant predicates and parameterize search/date/ver
   assert.ok(!sql.text.includes("' OR true --")); assert.match(sql.text, /DISTINCT ON/); assert.match(sql.text, /t.status = 'SUCCEEDED'/);
   for (const input of ([{ sku: "SKU" }, { asin: "ASIN" }, { from: "2026-02-30" }, { direction: "DESC; DROP" }, { status: "FAILED" }, { quality: "INCOMPLETE" }] as Array<Record<string, string>>)) assert.throws(() => parseSalesQuery(new URLSearchParams(input)));
 });
+
+test("single-day product facts parse CHILD/SKU identities, keep genuine values and never split multi-day ASIN totals", async () => {
+  const { parseSalesTrafficProducts } = await import("@/lib/amazon-sync/sales-traffic");
+  const day = resolveRequestedRange(site, { dateFrom: "2026-11-01", dateTo: "2026-11-01" }, now);
+  const asinRow = (asin: string, parent: string, units: number, sessions: number) => ({ childAsin: asin, parentAsin: parent, salesByAsin: { unitsOrdered: units, totalOrderItems: units, orderedProductSales: { amount: units * 10, currencyCode: "USD" } }, trafficByAsin: { sessions, pageViews: sessions + 1 } });
+  const childDoc = () => ({ reportSpecification: { reportType: salesTrafficReportType, marketplaceIds: [site], dataStartTime: day.startAt, dataEndTime: day.reportEndAt, reportOptions: { dateGranularity: "DAY", asinGranularity: "CHILD" } }, salesAndTrafficByDate: [{ date: "2026-11-01", salesByDate: {}, trafficByDate: {} }], salesAndTrafficByAsin: [asinRow("B0AAAAAAAA", "B0PPPPPPPP", 3, 11), asinRow("B0BBBBBBBB", "B0PPPPPPPP", 4, 12)] });
+  const parsed = parseSalesTrafficProducts(childDoc(), day, site, "CHILD");
+  assert.equal(parsed.granularity, "CHILD"); assert.equal(parsed.complete, true); assert.equal(parsed.rows.length, 2);
+  assert.equal(parsed.rows[0].childAsin, "B0AAAAAAAA"); assert.equal(parsed.rows[0].parentAsin, "B0PPPPPPPP");
+  assert.equal(parsed.rows[0].metrics.unitsOrdered, 3); assert.equal(parsed.rows[0].sellerSku, null);
+  // CHILD 报告无 sellerSku，绝不从库存/Listing 猜测。
+  assert.ok(!JSON.stringify(parsed).includes("SKU_GUESS"));
+  // 多日窗口、未闭合、期望粒度不符、重复身份、缺 sku 均拒绝。
+  assert.throws(() => parseSalesTrafficProducts(childDoc(), range, site), /单日/);
+  assert.throws(() => parseSalesTrafficProducts(childDoc(), { ...day, periodClosed: false }, site), /闭合/);
+  assert.throws(() => parseSalesTrafficProducts(childDoc(), day, site, "SKU"), /不一致/);
+  const dup = childDoc(); dup.salesAndTrafficByAsin.push(dup.salesAndTrafficByAsin[0]);
+  assert.throws(() => parseSalesTrafficProducts(dup, day, site), /重复/);
+  const skuDoc = () => ({ reportSpecification: { ...childDoc().reportSpecification, reportOptions: { dateGranularity: "DAY", asinGranularity: "SKU" } }, salesAndTrafficByAsin: [{ ...asinRow("B0AAAAAAAA", "B0PPPPPPPP", 2, 5), sku: "SKU-A" }, { ...asinRow("B0AAAAAAAA", "B0PPPPPPPP", 3, 6), sku: "SKU-B" }] });
+  const sku = parseSalesTrafficProducts(skuDoc(), day, site, "SKU");
+  assert.equal(sku.granularity, "SKU"); assert.equal(sku.rows.length, 2);
+  assert.equal(sku.rows[0].sellerSku, "SKU-A"); assert.equal(sku.rows[1].sellerSku, "SKU-B");
+  // 一个 ASIN 两个 SKU 分行保存，不复制、不平均 ASIN 销量。
+  assert.equal(sku.rows[0].metrics.unitsOrdered, 2); assert.equal(sku.rows[1].metrics.unitsOrdered, 3);
+  const noSku = skuDoc(); delete (noSku.salesAndTrafficByAsin[0] as Partial<{ sku: string }>).sku;
+  assert.throws(() => parseSalesTrafficProducts(noSku, day, site, "SKU"), /sellerSku/);
+});
+
+test("product-day query allows verified ASIN/parent/sku/granularity filters and still parameterizes tenant predicates", async () => {
+  const { parseProductSalesQuery, readSalesProducts } = await import("@/lib/amazon-sync/sales-query");
+  const q = parseProductSalesQuery(new URLSearchParams({ from: "2026-11-01", to: "2026-11-01", asin: "B0AAAAAAAA", parentAsin: "B0PPPPPPPP", sellerSku: "SKU-A", granularity: "SKU" }));
+  assert.equal(q.asin, "B0AAAAAAAA"); assert.equal(q.parentAsin, "B0PPPPPPPP"); assert.equal(q.sellerSku, "SKU-A"); assert.equal(q.granularity, "SKU");
+  assert.throws(() => parseProductSalesQuery(new URLSearchParams({ asin: "bad" })), /ASIN 格式/);
+  assert.throws(() => parseProductSalesQuery(new URLSearchParams({ granularity: "PARENT" })), /粒度无效/);
+  assert.throws(() => parseProductSalesQuery(new URLSearchParams({ keyword: "x".repeat(201) })), /过长/);
+  assert.equal(typeof readSalesProducts, "function");
+});
