@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { getStorageDriver } from "@/lib/storage";
 import { sellfoxPost } from "./client";
-import { parseSellfoxAdProductReport, sellfoxReportDownloadUrl } from "./ads-report-contract";
+import { MAX_REPORT_BYTES, parseSellfoxAdProductReport, sellfoxReportDownloadUrl } from "./ads-report-contract";
 import { parseSellfoxAdTargetingReport } from "./ads-targeting-contract";
 import { parseSellfoxAdSearchTermReport } from "./ads-search-term-contract";
 import { parseSellfoxAdCampaignReport } from "./ads-campaign-contract";
@@ -12,29 +12,66 @@ import { parseSellfoxAdPlacementReport } from "./ads-placement-contract";
 import { sellfoxReportDates, SellfoxSyncInputError } from "./sync-contract";
 import { sellfoxCreateTaskAmbiguous, sellfoxStoreFailure, SellfoxStoreSyncError } from "./sync-errors";
 async function download(url: URL) {
+  const maxBytes = MAX_REPORT_BYTES();
   const response = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(60000), cache: "no-store" });
-  if (!response.ok || !response.body || Number(response.headers.get("content-length")) > 25 * 1024 * 1024) throw new SellfoxSyncInputError("广告报告下载失败或文件超限。");
+  if (!response.ok || !response.body || Number(response.headers.get("content-length")) > maxBytes) throw new SellfoxSyncInputError("广告报告下载失败或文件超限。");
   const chunks: Uint8Array[] = []; let size = 0;
   const reader = response.body.getReader();
   try {
     while (true) {
       const part = await reader.read(); if (part.done) break;
       size += part.value.length;
-      if (size > 25 * 1024 * 1024) throw new SellfoxSyncInputError("广告报告下载超过 25MB。");
+      if (size > maxBytes) throw new SellfoxSyncInputError("广告报告下载超过大小上限。");
       chunks.push(part.value);
     }
   } finally { await reader.cancel(); }
   return Buffer.concat(chunks);
 }
 export type SellfoxCpcReportType = "adProductReport" | "adTargeringReport" | "adSearchTermReport" | "adCampaignReport" | "adGroupReport" | "adSpaceReport";
-export async function parseSellfoxCpcReport(code: SellfoxCpcReportType, buffer: Buffer, scope: { storeName: string; startDate: string; endDate: string }) {
-  if (code === "adTargeringReport") return { kind: "targeting" as const, rows: await parseSellfoxAdTargetingReport(buffer, scope) };
-  if (code === "adSearchTermReport") return { kind: "searchTerm" as const, rows: await parseSellfoxAdSearchTermReport(buffer, scope) };
-  if (code === "adCampaignReport") return { kind: "campaign" as const, rows: await parseSellfoxAdCampaignReport(buffer, scope) };
-  if (code === "adGroupReport") return { kind: "adGroup" as const, rows: await parseSellfoxAdGroupReport(buffer, scope) };
-  if (code === "adSpaceReport") return { kind: "placement" as const, rows: await parseSellfoxAdPlacementReport(buffer, scope) };
-  return { kind: "product" as const, rows: await parseSellfoxAdProductReport(buffer, scope) };
+type ParsedCpcReport = { kind: "targeting"; rows: Awaited<ReturnType<typeof parseSellfoxAdTargetingReport>> }
+  | { kind: "searchTerm"; rows: Awaited<ReturnType<typeof parseSellfoxAdSearchTermReport>> }
+  | { kind: "campaign"; rows: Awaited<ReturnType<typeof parseSellfoxAdCampaignReport>> }
+  | { kind: "adGroup"; rows: Awaited<ReturnType<typeof parseSellfoxAdGroupReport>> }
+  | { kind: "placement"; rows: Awaited<ReturnType<typeof parseSellfoxAdPlacementReport>> }
+  | { kind: "product"; rows: Awaited<ReturnType<typeof parseSellfoxAdProductReport>> };
+async function parseSellfoxCpcShard(code: SellfoxCpcReportType, buffer: Buffer, scope: { storeName: string; startDate: string; endDate: string }): Promise<ParsedCpcReport> {
+  if (code === "adTargeringReport") return { kind: "targeting", rows: await parseSellfoxAdTargetingReport(buffer, scope) };
+  if (code === "adSearchTermReport") return { kind: "searchTerm", rows: await parseSellfoxAdSearchTermReport(buffer, scope) };
+  if (code === "adCampaignReport") return { kind: "campaign", rows: await parseSellfoxAdCampaignReport(buffer, scope) };
+  if (code === "adGroupReport") return { kind: "adGroup", rows: await parseSellfoxAdGroupReport(buffer, scope) };
+  if (code === "adSpaceReport") return { kind: "placement", rows: await parseSellfoxAdPlacementReport(buffer, scope) };
+  return { kind: "product", rows: await parseSellfoxAdProductReport(buffer, scope) };
 }
+/**
+ * 赛狐对大报告按行拆成多个 XLSX 分片（真实投放报告实测 downloadUrl 为 2 个分片）。
+ * 逐分片按同一严格契约解析后合并行，并用与 commitSellfoxAdsReportWindow 相同的身份哈希去重，
+ * 保证跨分片边界不产生重复行；单分片仍是同一逻辑的一个特例。
+ */
+export async function parseSellfoxCpcReport(code: SellfoxCpcReportType, buffers: Buffer | Buffer[], scope: { storeName: string; startDate: string; endDate: string }): Promise<ParsedCpcReport> {
+  const shards = Array.isArray(buffers) ? buffers : [buffers];
+  const parsed: ParsedCpcReport[] = [];
+  for (const buffer of shards) parsed.push(await parseSellfoxCpcShard(code, buffer, scope));
+  if (parsed.length === 1) return parsed[0];
+  const kind = parsed[0].kind;
+  if (parsed.some((item) => item.kind !== kind)) throw new SellfoxSyncInputError("广告报告分片类型不一致。");
+  const seen = new Set<string>();
+  const rows: unknown[] = [];
+  for (const item of parsed) {
+    for (const row of item.rows as Record<string, unknown>[]) {
+      const r = row as { reportDate?: unknown; campaignId?: unknown; adGroupId?: unknown; productId?: unknown; searchTerm?: unknown; targetingId?: unknown; placement?: unknown };
+      const identity = "placement" in r && r.placement !== undefined ? [r.placement]
+        : "adGroupId" in r && r.adGroupId !== undefined ? [r.adGroupId, ...("productId" in r ? [r.productId] : "searchTerm" in r ? [r.searchTerm, r.targetingId] : "targetingId" in r ? [r.targetingId] : [])] : [];
+      const key = JSON.stringify([r.reportDate, r.campaignId, ...identity]);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push(row);
+    }
+  }
+  return { kind, rows } as ParsedCpcReport;
+}
+
+/** 赛狐大报告按行拆分的分片数安全上限（实测为 2，留出余量并 fail-closed）。 */
+const MAX_REPORT_SHARDS = 20;
 
 export type SellfoxAdsReportWindow = {
   organizationId: string; workspaceId: string; storeId: string; adType: string; startDate: string; endDate: string;
@@ -124,30 +161,46 @@ export async function syncSellfoxAdsReports(input: {
       }
       if (!task) throw new SellfoxSyncInputError("广告任务缺失。");
       if (!task.externalTaskId) throw new SellfoxSyncInputError("广告任务创建结果不明，需人工关联上游 taskId；未重复创建。");
-      let buffer: Buffer | undefined;
-      if (task.fileKey) buffer = await dependencies.storage().getBuffer(task.fileKey);
-      for (let attempt = 0; !buffer && attempt < 20; attempt++) {
+      // 主分片沿用 <id>.xlsx（兼容缓存重解析的租户校验），额外分片为 <id>.partN.xlsx（N 从 2 起）。
+      const primaryKey = `sellfox-reports/${input.organizationId}/${input.workspaceId}/${id}.xlsx`;
+      const shardKey = (part: number) => part === 0 ? primaryKey : `sellfox-reports/${input.organizationId}/${input.workspaceId}/${id}.part${part + 1}.xlsx`;
+      const loadCachedShards = async (): Promise<Buffer[]> => {
+        if (!task.fileKey || task.fileKey !== primaryKey) return task.fileKey ? [await dependencies.storage().getBuffer(task.fileKey)] : [];
+        const out: Buffer[] = [];
+        for (let part = 0; part < MAX_REPORT_SHARDS; part++) {
+          try { out.push(await dependencies.storage().getBuffer(shardKey(part))); }
+          catch { if (part === 0) return []; break; }
+        }
+        return out;
+      };
+      let buffers: Buffer[] = task.fileKey ? await loadCachedShards() : [];
+      for (let attempt = 0; !buffers.length && attempt < 20; attempt++) {
         await input.onProgress({ units, cursor: { shopExternalId: store.externalId, adType, reportTypeCode, taskId: task.externalTaskId, poll: attempt } });
         const page: { rows?: Record<string, unknown>[] } = await dependencies.post<{ rows?: Record<string, unknown>[] }>("/api/cpc/download/pageList.json", { taskIds: [task.externalTaskId], pageNo: "1", pageSize: "20" });
         if (!Array.isArray(page?.rows) || page.rows.length !== 1) throw new SellfoxSyncInputError("广告任务进度结构无效。");
         const row: Record<string, unknown> = page.rows[0];
         if (typeof row.reportState !== "string" || row.id !== task.externalTaskId || !Array.isArray(row.shopId) || row.shopId.length !== 1 || row.shopId[0] !== store.externalId || row.adTypeCode !== adType || row.reportTypeCode !== reportTypeCode || row.timeUnit !== "daily") throw new SellfoxSyncInputError("广告任务归属或报告口径不一致。");
         if (row.reportState === "已生成") {
-          if (!Array.isArray(row.downloadUrl) || row.downloadUrl.length !== 1) throw new SellfoxSyncInputError("广告报告下载分片契约未验证。");
-          buffer = await dependencies.download(sellfoxReportDownloadUrl(row.downloadUrl[0]));
-          const fileKey = `sellfox-reports/${input.organizationId}/${input.workspaceId}/${id}.xlsx`;
-          await dependencies.storage().putBuffer({ key: fileKey, buffer, contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+          // 赛狐按行把大报告拆成多个 XLSX 分片；全部下载、持久化后合并解析。
+          if (!Array.isArray(row.downloadUrl) || row.downloadUrl.length < 1 || row.downloadUrl.length > MAX_REPORT_SHARDS) throw new SellfoxSyncInputError("广告报告下载分片契约未验证。");
+          const downloaded: Buffer[] = [];
+          for (let part = 0; part < row.downloadUrl.length; part++) {
+            const shard = await dependencies.download(sellfoxReportDownloadUrl(row.downloadUrl[part]));
+            downloaded.push(shard);
+            await dependencies.storage().putBuffer({ key: shardKey(part), buffer: shard, contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+          }
+          buffers = downloaded;
           await dependencies.db.$transaction(async (tx) => {
-            await input.onProgress({ units, cursor: { shopExternalId: store.externalId, adType, reportTypeCode, status: "downloaded" } }, tx);
-            await tx.sellfoxReportTask.update({ where: { id }, data: { fileKey, status: "downloaded" } });
+            await input.onProgress({ units, cursor: { shopExternalId: store.externalId, adType, reportTypeCode, status: "downloaded", shards: buffers.length } }, tx);
+            await tx.sellfoxReportTask.update({ where: { id }, data: { fileKey: primaryKey, status: "downloaded" } });
           });
         } else {
           if (String(row.reportState).includes("失败")) throw new SellfoxSyncInputError("赛狐广告报告生成失败。");
           await dependencies.sleep(15000);
         }
       }
-      if (!buffer) throw new SellfoxStoreSyncError("广告报告仍在生成，已保存 taskId，重试只查询进度。", true);
-      const report = await parseSellfoxCpcReport(reportTypeCode, buffer, { storeName: store.name, startDate: input.startDate, endDate: input.endDate });
+      if (!buffers.length) throw new SellfoxStoreSyncError("广告报告仍在生成，已保存 taskId，重试只查询进度。", true);
+      const report = await parseSellfoxCpcReport(reportTypeCode, buffers, { storeName: store.name, startDate: input.startDate, endDate: input.endDate });
       // Validate whole file before replacing the requested store/type/date window atomically.
       await commitSellfoxAdsReportWindow(dependencies.db, { ...input, storeId: store.id, adType, taskId: id }, report, {
         before: async (tx) => { await input.onProgress({ units, cursor: { shopExternalId: store.externalId, adType, reportTypeCode, status: "committing" } }, tx); },
