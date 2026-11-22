@@ -1,5 +1,6 @@
 
 import { type HostPage, type HostDataset, type HostColumn, storeColumn, adsMetrics } from "./host-page-schema";
+import { advancedMetricPreviewColumns, advancedMetricsSummary } from "./ads-advanced-metrics";
 
 /**
  * 阶段2「实体全量拉回」拉入 21 类 CPC 管理实体当前状态（SellfoxApiRecord, endpointCode=ads_ent_*）。
@@ -236,6 +237,22 @@ export const adsHostPage: HostPage = {
         ],
         searchable: true,
         dateRange: true,
+      },
+      {
+        id: "ads_advanced_metrics",
+        label: "高级指标（待接）",
+        status: "blocked",
+        priority: "P2",
+        table: "—（未落表，仅登记字段合同）",
+        api: ["/api/cpc/download/createTask.json"],
+        grain: "不适用（尚未接入，无数据行）",
+        note: (() => {
+          const s = advancedMetricsSummary();
+          return `赛狐活动列设置实见的高级指标共 ${s.total} 项（待验证 ${s.pending}、未决 ${s.unresolved}、已启用 ${s.enabled}）。这些指标需来源字段、样本、适用广告类型、归因窗口与聚合口径核实后才能启用；ACoTS/ASoTS/ACoAS/ASoAS 的分子、分母、广告范围与名称不凭缩写猜测。当前一律不产出数值、不填 0、不用相似指标冒充；下方仅为字段样式预览。`;
+        })(),
+        columns: advancedMetricPreviewColumns(),
+        searchable: false,
+        dateRange: false,
       },
     ],
   };
