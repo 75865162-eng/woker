@@ -255,6 +255,55 @@ export function sellfoxKnownEndpoints(): SellfoxKnownEndpointSeed[] {
     });
   }
 
+  // CPC 广告管理实体（当前状态快照，游标分页）。
+  // 契约来源：2026-11-22 生产只读实测（shopId=116424, pageSize=100）：
+  // 响应顶层 { nextToken, itemList }，nextToken 非空字符串表示还有下一页；
+  // 传回 nextToken 得到完全不同的记录（实测两页 campaignId 无重叠）。
+  // 每个接口的主键字段来自实测响应首行真实字段，绝不猜字段；行身份按店铺 scope 隔离。
+  // 这些是「实体当前配置」而非按日报表，dateMode=none，不与六类广告日报相加。
+  const ADS_ENTITY_ENDPOINTS: Array<{ code: string; label: string; path: string; idFields: string }> = [
+    { code: "ads_ent_sp_campaign", label: "SP广告·活动(实体)", path: "spCampaign", idFields: "campaignId" },
+    { code: "ads_ent_sp_group", label: "SP广告·广告组(实体)", path: "spGroup", idFields: "campaignId,groupId" },
+    { code: "ads_ent_sp_ad_product", label: "SP广告·广告产品(实体)", path: "spAdProduct", idFields: "campaignId,groupId,adId" },
+    { code: "ads_ent_sp_keyword", label: "SP广告·关键词投放(实体)", path: "spKeyword", idFields: "campaignId,groupId,keywordId" },
+    { code: "ads_ent_sp_target", label: "SP广告·商品投放(实体)", path: "spTarget", idFields: "campaignId,groupId,targetId" },
+    { code: "ads_ent_sp_ne_keyword", label: "SP广告·否定关键词(实体)", path: "spNeKeyword", idFields: "campaignId,groupId,keywordId" },
+    { code: "ads_ent_sp_ne_target", label: "SP广告·否定商品(实体)", path: "spNeTarget", idFields: "campaignId,groupId,targetId" },
+    { code: "ads_ent_portfolio", label: "广告组合(实体)", path: "portfolio", idFields: "portfolioId" },
+    { code: "ads_ent_sb_campaign", label: "SB广告·活动(实体)", path: "sbCampaign", idFields: "campaignId" },
+    { code: "ads_ent_sb_group", label: "SB广告·广告组(实体)", path: "sbGroup", idFields: "campaignId,groupId" },
+    { code: "ads_ent_sb_ad_product", label: "SB广告·广告产品(实体)", path: "sbAdProduct", idFields: "campaignId,groupId,adId" },
+    { code: "ads_ent_sb_target", label: "SB广告·商品投放(实体)", path: "sbTarget", idFields: "campaignId,groupId,targetId" },
+    { code: "ads_ent_sb_keyword", label: "SB广告·关键词投放(实体)", path: "sbKeyword", idFields: "campaignId,groupId,keywordId" },
+    { code: "ads_ent_sb_ne_keyword", label: "SB广告·否定关键词(实体)", path: "sbNeKeyword", idFields: "campaignId,groupId,keywordId" },
+    { code: "ads_ent_sb_ne_target", label: "SB广告·否定商品(实体)", path: "sbNeTarget", idFields: "campaignId,groupId,targetId" },
+    { code: "ads_ent_sd_campaign", label: "SD广告·活动(实体)", path: "sdCampaign", idFields: "campaignId" },
+    { code: "ads_ent_sd_group", label: "SD广告·广告组(实体)", path: "sdGroup", idFields: "campaignId,groupId" },
+    { code: "ads_ent_sd_ad_product", label: "SD广告·广告产品(实体)", path: "sdAdProduct", idFields: "campaignId,groupId,adId" },
+    { code: "ads_ent_sd_creative", label: "SD广告·创意(实体)", path: "sdCreative", idFields: "creativeId" },
+    { code: "ads_ent_sd_target", label: "SD广告·商品投放(实体)", path: "sdTarget", idFields: "campaignId,groupId,targetId" },
+    { code: "ads_ent_sd_ne_target", label: "SD广告·否定商品(实体)", path: "sdNeTarget", idFields: "campaignId,groupId,targetId" },
+  ];
+  for (const ep of ADS_ENTITY_ENDPOINTS) {
+    seeds.push({
+      code: ep.code,
+      label: ep.label,
+      path: `/api/cpc/manageData/${ep.path}.json`,
+      dateMode: "none",
+      scopeMode: "store",
+      chunkDays: 1, // 实体当前状态，period 固定 "-"，与日期块无关
+      pageSize: 100, // 实测合法范围 100~1000；用 100 降低单页上限风险
+      rowsPath: "itemList",
+      idFields: ep.idFields,
+      // nextToken 首次为空串（实测被 API 接受）；采集器检测响应 nextToken 自动续页。
+      params: JSON.stringify({ shopId: "${shopId}", pageSize: "${pageSize}", nextToken: "${nextToken}" }),
+      dateFormat: "yyyy-MM-dd",
+      maxRows: 50_000,
+      historyFrom: null,
+      note: "CPC 广告管理实体当前状态（非按日报表），游标分页全量拉回，按真实主键幂等；不与广告日报相加。契约见阶段0实测 2026-11-22。",
+    });
+  }
+
   return seeds;
 }
 

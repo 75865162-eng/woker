@@ -5,7 +5,10 @@ import {
 } from "../src/lib/sellfox/sync-orchestrator";
 import {
   renderSellfoxEndpointParams, sellfoxEndpointRows, sellfoxEndpointRecordId, sellfoxEndpointPageCount,
+  sellfoxEndpointNextCursor, sellfoxEndpointUsesCursor,
 } from "../src/lib/sellfox/generic-endpoint-sync";
+import { sellfoxKnownEndpoints } from "../src/lib/sellfox/known-endpoints";
+import { assertSellfoxReadonlyEndpoint } from "../src/lib/sellfox/endpoint-safety";
 import { sellfoxSyncResources } from "../src/lib/sellfox/sync-contract";
 import { sellfoxDateChunks } from "../src/lib/sellfox/sync-rules";
 
@@ -88,6 +91,43 @@ test("响应行解析、行身份与分页页数", () => {
   assert.equal(sellfoxEndpointPageCount({ data: { totalSize: 250 } }), 3);
   assert.equal(sellfoxEndpointPageCount({ data: { totalSize: 250 } }, 50), 5, "分页页数按配置 pageSize 计算");
   assert.equal(sellfoxEndpointPageCount({ rows: [] }), null);
+});
+
+test("游标分页：nextToken 提取、空值判末页、模板渲染与白名单契约", () => {
+  // 响应顶层 { nextToken, itemList }：非空 token 继续，空/缺失/非字符串判末页。
+  assert.equal(sellfoxEndpointNextCursor({ nextToken: "c1c480178d7942d78a94c1e7561fc441", itemList: [] }), "c1c480178d7942d78a94c1e7561fc441");
+  assert.equal(sellfoxEndpointNextCursor({ nextToken: "  abc  ", itemList: [] }), "abc");
+  assert.equal(sellfoxEndpointNextCursor({ nextToken: "", itemList: [] }), null);
+  assert.equal(sellfoxEndpointNextCursor({ itemList: [] }), null);
+  assert.equal(sellfoxEndpointNextCursor({ nextToken: 123 }), null);
+  assert.equal(sellfoxEndpointNextCursor(null), null);
+  // 模板含 ${nextToken} 才走游标模式，避免影响现有 pageNo 端点。
+  assert.equal(sellfoxEndpointUsesCursor('{"shopId":"${shopId}","nextToken":"${nextToken}"}'), true);
+  assert.equal(sellfoxEndpointUsesCursor('{"pageNo":"${pageNo}"}'), false);
+  const rendered = renderSellfoxEndpointParams('{"shopId":"${shopId}","pageSize":"${pageSize}","nextToken":"${nextToken}"}', {
+    shopId: "116424", pageSize: "100", nextToken: "",
+  });
+  assert.deepEqual(rendered, { shopId: "116424", pageSize: "100", nextToken: "" });
+
+  // 21 个广告管理实体端点在只读白名单内，参数契约经校验不被拒绝，主键为实测真实字段。
+  const adsEntities = sellfoxKnownEndpoints().filter((item) => item.code.startsWith("ads_ent_"));
+  assert.equal(adsEntities.length, 21, "21 个 manageData 实体接口全部登记");
+  for (const ep of adsEntities) {
+    assert.equal(ep.dateMode, "none");
+    assert.equal(ep.rowsPath, "itemList");
+    assert.ok(ep.idFields.length > 0, `${ep.code} 必须有真实主键避免内容哈希漂移`);
+    assert.doesNotThrow(() => assertSellfoxReadonlyEndpoint({
+      path: ep.path, params: ep.params, scopeMode: ep.scopeMode, dateMode: ep.dateMode,
+      dateFormat: ep.dateFormat, pageSize: ep.pageSize, chunkDays: ep.chunkDays,
+    }), `${ep.code} 必须白名单校验通过`);
+    const params = JSON.parse(ep.params) as Record<string, unknown>;
+    assert.equal(params.nextToken, "${nextToken}");
+    assert.equal(params.shopId, "${shopId}");
+  }
+  const campaign = adsEntities.find((ep) => ep.code === "ads_ent_sp_campaign");
+  assert.equal(campaign?.idFields, "campaignId");
+  const target = adsEntities.find((ep) => ep.code === "ads_ent_sp_target");
+  assert.equal(target?.idFields, "campaignId,groupId,targetId");
 });
 
 test("连续覆盖游标在乱序、嵌套、相邻窗口及失败洞下不跳步", async () => {

@@ -83,6 +83,26 @@ export function sellfoxEndpointPageCount(payload: unknown, pageSize = 100) {
   return null;
 }
 
+/**
+ * 游标分页：赛狐 /api/cpc/manageData/* 等接口返回顶层 { nextToken, itemList }，
+ * 不返回 totalPage/totalSize。nextToken 为非空字符串表示还有下一页，空/缺失表示末页。
+ * 只做类型校验与原值透传，不猜字段、不改 token。
+ */
+export function sellfoxEndpointNextCursor(payload: unknown): string | null {
+  const bag = asBag(payload);
+  if (!bag) return null;
+  const nested = asBag(bag.data) ?? {};
+  const raw = bag.nextToken ?? nested.nextToken;
+  if (typeof raw !== "string") return null;
+  const token = raw.trim();
+  return token ? token : null;
+}
+
+/** params 模板引用 ${nextToken} 即启用游标模式；否则沿用 pageNo 数字分页。 */
+export function sellfoxEndpointUsesCursor(params: string): boolean {
+  return /\$\{nextToken\}/.test(params);
+}
+
 /** 按端点配置的 dateFormat 把 yyyy-MM-dd 重格式化为接口需要的形态（财务类 yyyyMM / yyyyMMdd）。 */
 function formatSellfoxEndpointDate(date: string, format: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
@@ -136,6 +156,8 @@ export async function syncSellfoxGenericEndpoint(input: GenericEndpointInput) {
 
   const period = input.startDate ? (input.endDate && input.endDate !== input.startDate ? `${input.startDate}..${input.endDate}` : input.startDate) : "-";
   const units = asBag(input.progress?.units) ?? {};
+  const usesCursor = sellfoxEndpointUsesCursor(endpoint.params);
+  const MAX_PAGES = 10_000;
   let total = 0;
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" });
 
@@ -145,20 +167,26 @@ export async function syncSellfoxGenericEndpoint(input: GenericEndpointInput) {
     const prior = asBag(units[unitKey]);
     if (prior?.done === true) { total += Number(prior.rows ?? 0) || 0; continue; }
     let pageNo = Number(prior?.pageNo ?? 1);
-    if (!Number.isInteger(pageNo) || pageNo < 1 || pageNo > 10_000) throw new SellfoxSyncInputError("端点同步断点页码无效。");
+    if (!Number.isInteger(pageNo) || pageNo < 1 || pageNo > MAX_PAGES) throw new SellfoxSyncInputError("端点同步断点页码无效。");
+    // 游标模式下从断点恢复 nextToken；空字符串代表从第一页开始。
+    let cursor = typeof prior?.nextToken === "string" ? prior.nextToken : "";
+    const seenTokens = new Set<string>();
+    if (cursor) seenTokens.add(cursor);
     let rowsWritten = Number(prior?.rows ?? 0) || 0;
     let done = false;
     while (!done) {
       const startDateRaw = input.startDate ?? "";
       const endDateRaw = input.endDate ?? "";
       const shopIdNumeric = store.id ? String((store.payload as Record<string, unknown> | null)?.id ?? store.externalId) : "";
-      const params = renderSellfoxEndpointParams(endpoint.params, {
+      const pageVars: Record<string, string> = {
         shopId: store.externalId, shopIdNumeric,
         startDate: formatSellfoxEndpointDate(startDateRaw, endpoint.dateFormat),
         endDate: formatSellfoxEndpointDate(endDateRaw, endpoint.dateFormat),
         startDateRaw, endDateRaw,
         pageNo: String(pageNo), pageSize: String(endpoint.pageSize), today,
-      });
+      };
+      if (usesCursor) pageVars.nextToken = cursor;
+      const params = renderSellfoxEndpointParams(endpoint.params, pageVars);
       let payload: unknown;
       try { payload = await sellfoxPost<unknown>(endpoint.path, params); }
       catch (error) {
@@ -181,13 +209,31 @@ export async function syncSellfoxGenericEndpoint(input: GenericEndpointInput) {
             update: data,
           });
         }
-        units[unitKey] = { store: store.externalId, status: "running", rows: rowsWritten + rows.length, pageNo };
+        units[unitKey] = usesCursor
+          ? { store: store.externalId, status: "running", rows: rowsWritten + rows.length, pageNo, nextToken: cursor }
+          : { store: store.externalId, status: "running", rows: rowsWritten + rows.length, pageNo };
         await input.onProgress({ units, count: total + rowsWritten + rows.length }, tx);
       });
       rowsWritten += rows.length;
-      const next = nextSellfoxPage(rows.length, pageNo, sellfoxEndpointPageCount(payload, endpoint.pageSize), endpoint.pageSize, 10_000);
-      if (next === null) { done = true; units[unitKey] = { store: store.externalId, status: "done", rows: rowsWritten, pageNo, done: true }; }
-      else pageNo = next;
+      if (usesCursor) {
+        const nextToken = sellfoxEndpointNextCursor(payload);
+        if (!nextToken) {
+          done = true;
+          units[unitKey] = { store: store.externalId, status: "done", rows: rowsWritten, pageNo, done: true };
+        } else {
+          // 死循环防护：同一 token 重复出现说明上游游标异常，必须报错而非静默跳过。
+          if (seenTokens.has(nextToken)) throw new SellfoxSyncInputError(`端点 ${endpoint.code} 游标重复，分页未推进，已停止以免死循环。`);
+          seenTokens.add(nextToken);
+          if (pageNo >= MAX_PAGES) throw new SellfoxSyncInputError(`端点 ${endpoint.code} 游标分页达到安全上限 ${MAX_PAGES} 页，任务未完整同步。`);
+          cursor = nextToken;
+          pageNo += 1;
+          units[unitKey] = { store: store.externalId, status: "running", rows: rowsWritten, pageNo, nextToken: cursor };
+        }
+      } else {
+        const next = nextSellfoxPage(rows.length, pageNo, sellfoxEndpointPageCount(payload, endpoint.pageSize), endpoint.pageSize, MAX_PAGES);
+        if (next === null) { done = true; units[unitKey] = { store: store.externalId, status: "done", rows: rowsWritten, pageNo, done: true }; }
+        else pageNo = next;
+      }
     }
     total += rowsWritten;
     await input.onProgress({ units, count: total });
