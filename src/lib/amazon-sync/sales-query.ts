@@ -52,6 +52,76 @@ export type SalesMetrics = Prisma.JsonObject & {
   orderedProductSales?: { amount?: string | null; currencyCode?: string | null } | null;
 };
 export type SalesRow = { id: string; organizationId: string; workspaceId: string; sourceId: string; syncRunId: string; sellerAccountId: string; marketplaceId: string; businessDate: string; reportId: string; documentId: string; metrics: SalesMetrics; quality: string; capturedAt: Date; publishedAt: Date; amazonSellerId: string; sellerName: string; frozenScope: unknown; summary: unknown };
+
+/** 店铺×业务日矩阵单元格。数值保持原始 JSON 字符串；缺失为 null，绝不补零。 */
+export type SalesMatrixCell = {
+  unitsOrdered: string | null; totalOrderItems: string | null;
+  orderedProductSales: { amount: string; currencyCode: string } | null;
+  sessions: string | null; pageViews: string | null;
+  quality: string; syncRunId: string; capturedAt: string;
+};
+export type SalesMatrixDimension = { key: string; sellerAccountId: string; marketplaceId: string; sellerName: string; sourceId: string };
+export type SalesMatrix = {
+  granularity: "SELLER_DAY";
+  dimensions: SalesMatrixDimension[];
+  dates: string[];
+  cells: Record<string, Record<string, SalesMatrixCell>>;
+  coverage: { days: number; storeDays: number; coveredStoreDays: number };
+  rowCount: number; truncated: boolean; asOf: string;
+};
+export const SALES_MATRIX_MAX_ROWS = 5000;
+export const dimensionKey = (row: Pick<SalesRow, "sellerAccountId" | "marketplaceId" | "sourceId">) => `${row.sellerAccountId}|${row.marketplaceId}|${row.sourceId}`;
+/**
+ * 纯函数：把已发布的店铺×业务日行透视成矩阵。只用真实行，缺日为 null（不补 0）。
+ * granularity 固定 SELLER_DAY；不接收 ASIN/SKU 行，因此不会伪造商品日事实。
+ */
+export function pivotSalesMatrix(rows: SalesRow[], asOf: string, rowLimit = SALES_MATRIX_MAX_ROWS): SalesMatrix {
+  const dimensions = new Map<string, SalesMatrixDimension>();
+  const dates = new Set<string>();
+  const cells: Record<string, Record<string, SalesMatrixCell>> = {};
+  let rowCount = 0, truncated = false;
+  for (const row of rows) {
+    if (rowCount >= rowLimit) { truncated = true; break; }
+    rowCount++;
+    const key = dimensionKey(row);
+    if (!dimensions.has(key)) dimensions.set(key, { key, sellerAccountId: row.sellerAccountId, marketplaceId: row.marketplaceId, sellerName: row.sellerName, sourceId: row.sourceId });
+    dates.add(row.businessDate);
+    const m = row.metrics ?? {};
+    const sale = m.orderedProductSales;
+    const cell: SalesMatrixCell = {
+      unitsOrdered: typeof m.unitsOrdered === "string" ? m.unitsOrdered : null,
+      totalOrderItems: typeof m.totalOrderItems === "string" ? m.totalOrderItems : null,
+      orderedProductSales: sale && typeof sale.amount === "string" && typeof sale.currencyCode === "string" ? { amount: sale.amount, currencyCode: sale.currencyCode } : null,
+      sessions: typeof m.sessions === "string" ? m.sessions : null,
+      pageViews: typeof m.pageViews === "string" ? m.pageViews : null,
+      quality: row.quality, syncRunId: row.syncRunId, capturedAt: String(row.capturedAt),
+    };
+    if (!cells[key]) cells[key] = {};
+    cells[key][row.businessDate] = cell;
+  }
+  const dims = [...dimensions.values()].sort((a, b) => a.key.localeCompare(b.key));
+  const dateList = [...dates].sort();
+  let coveredStoreDays = 0;
+  for (const dim of dims) coveredStoreDays += Object.keys(cells[dim.key] ?? {}).length;
+  return {
+    granularity: "SELLER_DAY", dimensions: dims, dates: dateList, cells,
+    coverage: { days: dateList.length, storeDays: dims.length * dateList.length, coveredStoreDays },
+    rowCount, truncated, asOf,
+  };
+}
+/** 有界读取全部已发布店铺日行并透视；权限、版本 cutoff、口径均复用 readSalesTraffic。 */
+export async function readSalesMatrix(scope: SyncScope, p: URLSearchParams, options: { cutoff?: Date; actor?: string } = {}) {
+  const all: SalesRow[] = [];
+  const pageSize = 1000;
+  for (let page = 1; page <= Math.ceil(SALES_MATRIX_MAX_ROWS / pageSize); page++) {
+    const pageParams = new URLSearchParams(p);
+    pageParams.set("page", String(page));
+    const result = await readSalesTraffic(scope, pageParams, { ...options, pageSize, action: "view" });
+    all.push(...result.rows);
+    if (all.length >= SALES_MATRIX_MAX_ROWS || page >= result.pagination.pageCount) break;
+  }
+  return pivotSalesMatrix(all, (options.cutoff ?? new Date()).toISOString());
+}
 export async function readSalesTraffic(scope: SyncScope, p: URLSearchParams, options: { cutoff?: Date; pageSize?: number; actor?: string; sellerFence?: string[]; sourceFence?: string[]; action?: "view" | "export" } = {}) {
   p = new URLSearchParams(p);
   let access = await amazonAccountReadAccess(scope, options.actor, p, prisma, "sales_traffic");

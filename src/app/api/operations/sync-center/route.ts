@@ -27,7 +27,7 @@ import { readReturns } from "@/lib/amazon-sync/returns-query";
 import { readFinance } from "@/lib/amazon-sync/finance-query";
 import { auditAmazonDataRead } from "@/lib/amazon-sync/read-audit";
 import { amazonDataAccess, sourceAccessWhere, assertAmazonScopeAdmin } from "@/lib/amazon-sync/data-access";
-import { readSalesTraffic } from "@/lib/amazon-sync/sales-query";
+import { readSalesMatrix, readSalesTraffic } from "@/lib/amazon-sync/sales-query";
 import { readOrders } from "@/lib/amazon-sync/orders-query";
 import { readDomainReports } from "@/lib/amazon-sync/domain-reports-query";
 import { readSellerReportEvidence } from "@/lib/amazon-sync/seller-report-evidence";
@@ -79,6 +79,7 @@ export async function GET(request: Request) {
     const permissions = await getOrganizationRolePermissions(scope.organizationId);
     const access = { canExport: true, canApprove: roleCanPerformAction(permission.user.role, "operations", "approve", permissions), canEdit: roleCanPerformAction(permission.user.role, "operations", "edit", permissions), canCreate: roleCanPerformAction(permission.user.role, "operations", "create", permissions), canConfigure: ["owner", "database_admin"].includes(permission.user.role) && roleCanPerformAction(permission.user.role, "settings", "edit", permissions) };
     if (section === "sales-traffic") return json({ ...await readSalesTraffic(scope, p, { actor }), access });
+    if (section === "sales-traffic-matrix") return json({ ...await readSalesMatrix(scope, p, { actor }), access });
     if (section === "data") return json({ ...await readDataset(scope, p, actor), access });
     if (section === "datasets") return json({ datasets: mcpDatasets.filter(d => d.module === "amazon_sync").map(describeMcpDataset), access });
     if (section === "listing-attributes-history") return json({ ...await readListingAttributeRecoveryHistory(scope, actor, p), access });
