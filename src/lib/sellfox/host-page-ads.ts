@@ -1,10 +1,61 @@
 
-import { type HostPage, storeColumn, adsMetrics } from "./host-page-schema";
+import { type HostPage, type HostDataset, type HostColumn, storeColumn, adsMetrics } from "./host-page-schema";
+
+/**
+ * 阶段2「实体全量拉回」拉入 21 类 CPC 管理实体当前状态（SellfoxApiRecord, endpointCode=ads_ent_*）。
+ * 阶段3统一查询：走既有 rawCode 动态列通道读取真实 payload，字段按真实键派生、不猜字段、不补零。
+ * 实体是「当前状态快照」，无日期维度、不与六类广告日报相加；sp/sb/sd 是各自独立端点，不需 adType 筛选。
+ * 这里只声明数据合同与端点映射；真实列由后端 deriveRawColumns 按 payload 键动态返回（columns 仅供预览兜底）。
+ */
+const ADS_ENTITY_SPECS: Array<{ code: string; label: string; path: string; note: string }> = [
+  { code: "ads_ent_portfolio", label: "广告组合", path: "portfolio", note: "广告组合当前实体：组合 ID、名称、状态、预算类型/金额与时间范围。组合预算不与活动花费相加。" },
+  { code: "ads_ent_sp_campaign", label: "SP 活动", path: "spCampaign", note: "SP 活动当前实体：活动 ID、名称、状态、服务状态、竞价策略、预算、日期。实体当前配置非历史每日值。" },
+  { code: "ads_ent_sp_group", label: "SP 广告组", path: "spGroup", note: "SP 广告组当前实体：组 ID、父活动、状态、默认竞价。一个组只属于其真实父级。" },
+  { code: "ads_ent_sp_ad_product", label: "SP 广告产品", path: "spAdProduct", note: "SP 广告产品当前实体：产品广告 ID、父活动/组、ASIN/SKU、状态。" },
+  { code: "ads_ent_sp_target", label: "SP 投放", path: "spTarget", note: "SP 商品投放当前实体：投放 ID、表达式、匹配类型、竞价、状态、父级关系。" },
+  { code: "ads_ent_sp_keyword", label: "SP 关键词投放", path: "spKeyword", note: "SP 关键词投放当前实体：关键词 ID、词、匹配类型、竞价、状态、父级关系。" },
+  { code: "ads_ent_sp_ne_keyword", label: "SP 否定关键词", path: "spNeKeyword", note: "SP 否定关键词当前实体：否定词 ID、词、匹配方式、层级、父级。真实空集合时显示暂无数据，不伪造。" },
+  { code: "ads_ent_sp_ne_target", label: "SP 否定商品投放", path: "spNeTarget", note: "SP 否定商品投放当前实体：否定投放 ID、表达式、层级、父级。真实空集合时显示暂无数据，不伪造。" },
+  { code: "ads_ent_sb_campaign", label: "SB 活动", path: "sbCampaign", note: "SB 活动当前实体：活动 ID、名称、状态、预算、日期。" },
+  { code: "ads_ent_sb_group", label: "SB 广告组", path: "sbGroup", note: "SB 广告组当前实体：组 ID、父活动、状态、默认竞价。" },
+  { code: "ads_ent_sb_ad_product", label: "SB 广告产品", path: "sbAdProduct", note: "SB 广告产品当前实体：产品广告 ID、父活动/组、状态。" },
+  { code: "ads_ent_sb_target", label: "SB 投放", path: "sbTarget", note: "SB 投放当前实体：投放 ID、表达式、匹配类型、竞价、状态。" },
+  { code: "ads_ent_sb_keyword", label: "SB 关键词投放", path: "sbKeyword", note: "SB 关键词投放当前实体：关键词 ID、词、匹配类型、竞价、状态。" },
+  { code: "ads_ent_sb_ne_keyword", label: "SB 否定关键词", path: "sbNeKeyword", note: "SB 否定关键词当前实体。真实空集合时显示暂无数据，不伪造。" },
+  { code: "ads_ent_sb_ne_target", label: "SB 否定商品投放", path: "sbNeTarget", note: "SB 否定商品投放当前实体。实测真实空集合，显示暂无数据属正确结果。" },
+  { code: "ads_ent_sd_campaign", label: "SD 活动", path: "sdCampaign", note: "SD 活动当前实体：活动 ID、名称、状态、预算、日期。" },
+  { code: "ads_ent_sd_group", label: "SD 广告组", path: "sdGroup", note: "SD 广告组当前实体：组 ID、父活动、状态、默认竞价。" },
+  { code: "ads_ent_sd_ad_product", label: "SD 广告产品", path: "sdAdProduct", note: "SD 广告产品当前实体：产品广告 ID、父活动/组、状态。" },
+  { code: "ads_ent_sd_creative", label: "SD 创意", path: "sdCreative", note: "SD 创意当前实体：创意 ID、关联广告、状态。" },
+  { code: "ads_ent_sd_target", label: "SD 投放", path: "sdTarget", note: "SD 商品投放当前实体：投放 ID、表达式、竞价、状态。" },
+  { code: "ads_ent_sd_ne_target", label: "SD 否定商品投放", path: "sdNeTarget", note: "SD 否定商品投放当前实体。实测真实空集合，显示暂无数据属正确结果。" },
+];
+
+function adsEntityDataset(spec: { code: string; label: string; path: string; note: string }): HostDataset {
+  const previewColumns: HostColumn[] = [storeColumn, { key: "state", label: "状态" }, { key: "name", label: "名称" }, { key: "_syncedAt", label: "同步时间", kind: "date" }];
+  return {
+    id: spec.code,
+    label: spec.label,
+    status: "live",
+    priority: "P1",
+    table: "SellfoxApiRecord",
+    rawCode: spec.code,
+    api: [`/api/cpc/manageData/${spec.path}.json`],
+    grain: "当前状态全量快照（实体当前配置，非按日报表）",
+    note: spec.note,
+    columns: previewColumns,
+    searchable: true,
+    dateRange: false,
+  };
+}
+
+const ADS_ENTITY_DATASETS: HostDataset[] = ADS_ENTITY_SPECS.map(adsEntityDataset);
+
 export const adsHostPage: HostPage = {
     id: "ads",
     href: "/sellfox/ads",
     title: "广告报表",
-    subtitle: "赛狐 CPC 六类日报 + 管理实体 + 小时曲线 + ABA 搜索词。只读快照，不在浏览器里拉广告接口。",
+    subtitle: "赛狐 CPC 六类日报 + 21 类管理实体当前状态 + 小时曲线 + ABA 搜索词。只读快照，不在浏览器里拉广告接口。",
     source: "赛狐广告快照",
     datasets: [
       {
@@ -139,29 +190,10 @@ export const adsHostPage: HostPage = {
         dateRange: true,
         adType: true,
       },
-      {
-        id: "ads_entity",
-        label: "管理实体树",
-        status: "planned",
-        priority: "P1",
-        table: "SellfoxAdsEntity",
-        api: ["/api/cpc/manageData/spCampaign.json", "/api/cpc/manageData/spGroup.json", "/api/cpc/manageData/spKeyword.json"],
-        grain: "当前状态全量",
-        note: "报表只说花了多少，实体才说明活动叫什么、预算多少、是否开启。没有实体就无法回答「为什么花超了」。",
-        columns: [
-          storeColumn,
-          { key: "adType", label: "类型" },
-          { key: "level", label: "层级" },
-          { key: "entityName", label: "名称" },
-          { key: "state", label: "状态" },
-          { key: "budget", label: "预算", kind: "money" },
-          { key: "bid", label: "出价", kind: "money" },
-          { key: "updatedAt", label: "更新时间", kind: "date" },
-        ],
-        searchable: true,
-        dateRange: false,
-        adType: true,
-      },
+      // 阶段2「实体全量拉回」已把 21 类管理实体拉入 SellfoxApiRecord（endpointCode=ads_ent_*），
+      // 阶段3统一查询走既有 rawCode 动态列通道读取真实 payload：按店铺授权收窄、字段按真实键派生、
+      // 不猜字段、不补零、不与六类广告日报相加。实体是「当前状态快照」，无日期维度，故 dateRange=false。
+      ...ADS_ENTITY_DATASETS,
       {
         id: "hourly",
         label: "小时曲线",
