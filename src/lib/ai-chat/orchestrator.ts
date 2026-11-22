@@ -7,6 +7,7 @@ import type { AiModelSettings } from "@/lib/ai-settings";
 import type { ChatAnswer, ChatSkillRef, ChatScope, ChatToolEvidence } from "./types";
 import { CHAT_LIMITS } from "./types";
 import { buildChatRuntime, type ChatRuntime } from "./runtime";
+import type { ChatDataProvider } from "./data-sources";
 import { getRunStatus, recordToolCall } from "./repository";
 
 const SYSTEM_PROTOCOL = `你是一个电商经营分析助手，只能通过受控只读工具查询数据，不能编造数字。
@@ -78,13 +79,14 @@ export type OrchestrateInput = ChatScope & {
   settings: AiModelSettings;
   runId: string;
   sessionGuard?: () => Promise<void>;
+  enabledProviders: ChatDataProvider[];
 };
 
 /** 受控多轮工具循环：模型请求工具 → 服务端校验并执行 → 结果回灌 → 最终答案。 */
 export async function orchestrateAnswer(input: OrchestrateInput): Promise<ChatAnswer> {
   const scope: ChatScope = { organizationId: input.organizationId, workspaceId: input.workspaceId, userId: input.userId };
   const settings = input.settings;
-  const runtime: ChatRuntime = await buildChatRuntime(scope, input.sessionGuard);
+  const runtime: ChatRuntime = await buildChatRuntime(scope, input.sessionGuard, input.enabledProviders);
   const discovered = await runtime.tools.discover();
   const providers = discovered.providers;
   const availableTools = discovered.tools.filter(t => t.availability === "available");

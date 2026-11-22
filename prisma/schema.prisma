@@ -7818,6 +7818,22 @@ model AmazonSettlementAllocationLine {
 }
 
 /// AI 对话：会话。所有读写入口必须带 organizationId/workspaceId/userId 三元组隔离。
+/// AI 对话：当前账号显式确认启用的只读 MCP 数据源（amazon / sellfox）。
+/// 未建立记录或 enabledProviders 为空时，对话禁止调用任何数据源。
+model AiChatDataSourceConfig {
+  id                String   @id @default(cuid())
+  organizationId    String
+  workspaceId       String   @default("default")
+  userId            String
+  enabledProviders  String[] @default([])
+  confirmedAt       DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([organizationId, workspaceId, userId])
+  @@index([organizationId, workspaceId, userId])
+}
+
 model AiChatConversation {
   id             String   @id @default(cuid())
   organizationId String

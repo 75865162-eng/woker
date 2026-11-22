@@ -10,6 +10,7 @@ import {
   markMessageComplete, markOrphanPendingFailed, loadAnswer, ChatAccessError,
 } from "@/lib/ai-chat/repository";
 import { orchestrateAnswer, describeOrchestratorError } from "@/lib/ai-chat/orchestrator";
+import { requireEnabledChatDataSources, type ChatDataProvider } from "@/lib/ai-chat/data-sources";
 import { CHAT_LIMITS, type ChatAnswer, type ChatScope } from "@/lib/ai-chat/types";
 
 export const runtime = "nodejs";
@@ -43,6 +44,18 @@ export async function POST(request: Request, { params }: Ctx) {
   };
 
   try {
+    // 数据源门禁：必须在用户显式确认启用至少一个可用 MCP 数据源后才允许调用数据。
+    let enabledProviders: ChatDataProvider[];
+    try {
+      enabledProviders = await requireEnabledChatDataSources(scope);
+    } catch (error) {
+      const err = error as Error & { code?: string };
+      if (err.code === "MCP_NOT_CONFIGURED") {
+        return NextResponse.json({ error: err.message, code: "MCP_NOT_CONFIGURED" }, { status: 409, headers: { "Cache-Control": "no-store" } });
+      }
+      throw error;
+    }
+
     // 技能：URL/表单的 slug 只用于查目录，不进入正文或授权判断。
     if (skillSlug && !findSkill(skillSlug)) skillSlug = undefined;
 
@@ -56,7 +69,7 @@ export async function POST(request: Request, { params }: Ctx) {
 
     let answer: ChatAnswer;
     try {
-      answer = await orchestrateAnswer({ ...scope, question: content, skillSlug, settings, runId: run.id, sessionGuard });
+      answer = await orchestrateAnswer({ ...scope, question: content, skillSlug, settings, runId: run.id, sessionGuard, enabledProviders });
       await saveAssistantMessage(scope, conversationId, run.id, prepared.requestKey, answer);
       await markMessageComplete(scope, prepared.messageId);
       await finishRun(scope, run.id, {

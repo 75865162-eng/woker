@@ -295,6 +295,21 @@ export async function createErpSessionAmazonMcpIdentity(scope: SyncScope & { use
   sessionIdentities.add(identity);
   return identity;
 }
+/**
+ * 供 AI 对话使用：按当前账号下第一条 ACTIVE 的 Amazon 只读 MCP 凭证构造身份。
+ * 与 ERP session 不同，此身份非全量：liveMcpCredential 会按 id 复核库中的 tools/scopes/revision，
+ * 因此大模型只能看到该凭证明确授权的工具与账号/站点范围。
+ */
+export async function createChatAmazonMcpIdentity(scope: SyncScope & { userId: string }): Promise<McpIdentity> {
+  const row = await prisma.amazonMcpCredential.findFirst({
+    where: { ...scope, userId: scope.userId, status: "ACTIVE", expiresAt: { gt: new Date() } },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!row) throw new SyncInputError("当前工作区没有可用的 Amazon 只读 MCP 凭证。", 401);
+  const validated = await validateAmazonMcpCredential(row);
+  return { ...validated, tools: await accountToolsForLili(validated) };
+}
+
 async function liveMcpCredential(identity: McpIdentity) {
   if (sessionIdentities.has(identity)) {
     await explicitAmazonDataAccess(identity, identity.userId, prisma);

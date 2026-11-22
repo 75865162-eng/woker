@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bot, ChevronDown, ChevronRight, Loader2, MessageSquarePlus, PanelRightClose, PanelRightOpen, Search, Send, Sparkles, Square, Trash2 } from "lucide-react";
+import { Bot, ChevronDown, ChevronRight, Database, Loader2, MessageSquarePlus, PanelRightClose, PanelRightOpen, Search, Send, Settings2, ShieldCheck, Sparkles, Square, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { workspaceScopeHeaders } from "@/lib/workspace/workspace-scope-store";
@@ -13,6 +13,8 @@ type Conv = { id: string; title: string; revision: number; updatedAt: string };
 type Msg = { id: string; role: "user" | "assistant"; content: string; skillSlug?: string; createdAt: string; answer?: ChatAnswerData };
 type ToolEvidence = { seq: number; provider: string; tool: string; argsSummary: string; resultSource?: string; rowCount?: number; status: "ok" | "error"; errorCode?: string; durationMs: number };
 type ProviderStatus = { provider: string; status: string; toolCount: number; reason?: string };
+type DataSourceStatus = { provider: string; label: string; configured: boolean; credentialName: string | null; toolCount: number; scopeSummary: string; readOnly: boolean };
+type DataSourceSnapshot = { sources: DataSourceStatus[]; enabledProviders: string[]; confirmedAt: string | null; ready: boolean };
 type ChatAnswerData = {
   text: string; runId: string; model: string;
   tools: ToolEvidence[]; providers: ProviderStatus[]; coverage: string[]; skipped: string[];
@@ -38,6 +40,12 @@ export function AiChatWorkspace({ initialSkillSlug, skills, canCreate, locale }:
   const [search, setSearch] = useState("");
   const [rightOpen, setRightOpen] = useState(true);
   const [lastAnswer, setLastAnswer] = useState<ChatAnswerData | null>(null);
+  const [dataSources, setDataSources] = useState<DataSourceSnapshot | null>(null);
+  const [dsSelected, setDsSelected] = useState<string[]>([]);
+  const [dsOpen, setDsOpen] = useState(true);
+  const [dsLoading, setDsLoading] = useState(false);
+  const [dsSaving, setDsSaving] = useState(false);
+  const [dsError, setDsError] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const activeRunRef = useRef<string>("");
@@ -53,6 +61,46 @@ export function AiChatWorkspace({ initialSkillSlug, skills, canCreate, locale }:
       setConversations(Array.isArray(data.conversations) ? data.conversations : []);
     } catch { /* 忽略，保留空列表 */ }
   }, [headers]);
+
+  const loadDataSources = useCallback(async () => {
+    setDsLoading(true);
+    setDsError("");
+    try {
+      const res = await fetch("/api/ai/chat/data-sources", { headers: headers(), cache: "no-store" });
+      if (!res.ok) throw new Error("读取数据源失败。");
+      const data = await res.json() as DataSourceSnapshot;
+      setDataSources(data);
+      setDsSelected(data.enabledProviders ?? []);
+    } catch {
+      setDsError("读取数据源配置失败，请刷新重试。");
+    } finally {
+      setDsLoading(false);
+    }
+  }, [headers]);
+
+  const saveDataSources = useCallback(async () => {
+    if (!dataSources) return;
+    setDsSaving(true);
+    setDsError("");
+    try {
+      const res = await fetch("/api/ai/chat/data-sources", {
+        method: "PUT", headers: { ...headers(), "Content-Type": "application/json" },
+        body: JSON.stringify({ enabledProviders: dsSelected }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(data.error || "保存失败。");
+      }
+      const data = await res.json() as DataSourceSnapshot;
+      setDataSources(data);
+      setDsSelected(data.enabledProviders ?? []);
+      if (data.ready) setDsOpen(false);
+    } catch (error) {
+      setDsError(error instanceof Error ? error.message : "保存失败。");
+    } finally {
+      setDsSaving(false);
+    }
+  }, [dataSources, dsSelected, headers]);
 
   const loadConversation = useCallback(async (id: string) => {
     setActiveId(id);
@@ -72,9 +120,10 @@ export function AiChatWorkspace({ initialSkillSlug, skills, canCreate, locale }:
   useEffect(() => {
     mountedRef.current = true;
     void loadConversations();
+    void loadDataSources();
     if (initialSkillSlug) setSkillSlug(initialSkillSlug);
     return () => { mountedRef.current = false; };
-  }, [loadConversations, initialSkillSlug]);
+  }, [loadConversations, loadDataSources, initialSkillSlug]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, statusText]);
 
@@ -104,6 +153,11 @@ export function AiChatWorkspace({ initialSkillSlug, skills, canCreate, locale }:
   const send = useCallback(async () => {
     const question = draft.trim();
     if (!question || loading || !canCreate) return;
+    if (!dataSources?.ready) {
+      setDsOpen(true);
+      setError("请先确认启用至少一个可用的 MCP 数据源，再开始分析。");
+      return;
+    }
     let convId = activeId;
     if (!convId) {
       const res = await fetch("/api/ai/chat/conversations", { method: "POST", headers: headers(), body: JSON.stringify({ title: question.slice(0, 24) }) });
@@ -145,7 +199,7 @@ export function AiChatWorkspace({ initialSkillSlug, skills, canCreate, locale }:
       setLoading(false);
       setStatusText("");
     }
-  }, [draft, loading, canCreate, activeId, headers, skillSlug, loadConversations]);
+  }, [draft, loading, canCreate, activeId, headers, skillSlug, loadConversations, dataSources]);
 
   const cancel = useCallback(async () => {
     if (!activeRunRef.current || !activeId) return;
@@ -162,7 +216,8 @@ export function AiChatWorkspace({ initialSkillSlug, skills, canCreate, locale }:
     setActiveId("");
     setError("");
     void loadConversations();
-  }, [loading, cancel, loadConversations]);
+    void loadDataSources();
+  }, [loading, cancel, loadConversations, loadDataSources]);
 
   useEffect(() => {
     window.addEventListener(workspaceScopeChangedEventName, onWorkspaceChanged as EventListener);
@@ -213,6 +268,61 @@ export function AiChatWorkspace({ initialSkillSlug, skills, canCreate, locale }:
           </button>
         </div>
 
+        <div className={styles.dsPanel}>
+          <button className={styles.dsHead} onClick={() => setDsOpen(v => !v)} aria-expanded={dsOpen}>
+            <span className={styles.dsHeadTitle}>
+              <Database size={15} />
+              数据源 / MCP 配置
+              {dataSources?.ready ? (
+                <Badge tone="success">已启用 {dataSources.enabledProviders.length} 个</Badge>
+              ) : (
+                <Badge tone="warning">未配置</Badge>
+              )}
+            </span>
+            <span className={styles.dsHeadHint}>先确认可读取的数据源，模型才能基于其返回的数据分析</span>
+            {dsOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+          </button>
+          {dsOpen && (
+            <div className={styles.dsBody}>
+              {dsLoading && <p className={styles.muted}>正在检查当前账号的 MCP 凭证…</p>}
+              {!dsLoading && dataSources && (
+                <>
+                  {dataSources.sources.map(src => {
+                    const checked = dsSelected.includes(src.provider);
+                    return (
+                      <label key={src.provider} className={`${styles.dsSource} ${!src.configured ? styles.dsSourceDisabled : ""}`}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={!src.configured || dsSaving}
+                          onChange={() => setDsSelected(prev => checked ? prev.filter(p => p !== src.provider) : [...prev, src.provider])}
+                        />
+                        <span className={styles.dsSourceMain}>
+                          <span className={styles.dsSourceTop}>
+                            <strong>{src.label}</strong>
+                            {src.configured ? <Badge tone="success"><ShieldCheck size={11} /> 只读已授权</Badge> : <Badge tone="danger">未配置</Badge>}
+                          </span>
+                          <span className={styles.dsSourceMeta}>
+                            {src.configured ? `${src.credentialName ?? "MCP 凭证"} · ${src.toolCount} 个只读工具 · ${src.scopeSummary}` : "请先在「MCP 接入」创建只读凭证"}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                  {dsError && <p className={styles.errText}>{dsError}</p>}
+                  <div className={styles.dsActions}>
+                    <Button size="sm" onClick={() => void saveDataSources()} disabled={dsSaving || dsLoading}>
+                      {dsSaving ? <Loader2 size={14} className={styles.spin} /> : <ShieldCheck size={14} />}
+                      保存并启用
+                    </Button>
+                    <a className={styles.dsLink} href="/settings?tab=mcp" target="_blank" rel="noreferrer"><Settings2 size={13} /> 管理 MCP 凭证</a>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
         {selectedSkill && (
           <div className={styles.skillBar}>
             <Badge tone="info">技能：{selectedSkill.name}</Badge>
@@ -226,7 +336,7 @@ export function AiChatWorkspace({ initialSkillSlug, skills, canCreate, locale }:
             <div className={styles.welcome}>
               <div className={styles.welcomeIcon}><Bot size={30} /></div>
               <h2>用自然语言分析你的经营数据</h2>
-              <p>系统只通过当前授权的只读数据源查询，每条回答都附带来源与覆盖范围。</p>
+              <p>模型只能读取你在「数据源 / MCP 配置」中确认启用的只读数据；每条回答都附带来源与覆盖范围。</p>
               <div className={styles.examples}>
                 {["对比最近一个完整周的销售额与订单量，并说明数据范围", "查看赛狐店铺近 7 天销售趋势，列出来源与缺口", "当前的销售数据覆盖了哪些店铺和日期？"].map(ex => (
                   <button key={ex} onClick={() => { setDraft(ex); textareaRef.current?.focus(); }}>{ex}</button>
@@ -280,14 +390,15 @@ export function AiChatWorkspace({ initialSkillSlug, skills, canCreate, locale }:
               onKeyDown={e => {
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); }
               }}
-              placeholder="例如：对比最近一个完整周的销售额，并说明数据来自哪里"
+              placeholder={dataSources?.ready ? "例如：对比最近一个完整周的销售额，并说明数据来自哪里" : "请先在上方「数据源 / MCP 配置」确认启用至少一个数据源"}
               rows={2}
               aria-label="问题输入"
+              disabled={!dataSources?.ready}
             />
             {loading ? (
               <Button size="icon" variant="secondary" onClick={() => void cancel()} aria-label="停止生成" title="停止生成"><Square size={16} /></Button>
             ) : (
-              <Button size="icon" onClick={() => void send()} disabled={!draft.trim() || !canCreate} aria-label="发送" title="发送"><Send size={16} /></Button>
+              <Button size="icon" onClick={() => void send()} disabled={!draft.trim() || !canCreate || !dataSources?.ready} aria-label="发送" title="发送"><Send size={16} /></Button>
             )}
           </div>
         </div>

@@ -149,3 +149,30 @@
   .workspace { grid-template-columns: minmax(0, 1fr); }
   .left { display: none; }
 }
+
+/* 数据源 / MCP 配置面板 */
+.dsPanel { border-bottom: 1px solid var(--border); background: var(--surface); }
+.dsHead {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 16px;
+  border: 0; background: transparent; cursor: pointer; text-align: left; color: var(--foreground);
+}
+.dsHead:hover { background: var(--surface-muted); }
+.dsHeadTitle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; }
+.dsHeadHint { flex: 1; font-size: 11px; color: var(--muted); }
+.dsBody { display: flex; flex-direction: column; gap: 8px; padding: 4px 16px 12px; }
+.dsSource {
+  display: flex; align-items: flex-start; gap: 10px; padding: 9px 10px;
+  border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
+}
+.dsSource:hover { background: var(--surface-muted); }
+.dsSourceDisabled { opacity: 0.6; cursor: not-allowed; }
+.dsSource input { margin-top: 3px; accent-color: var(--brand); }
+.dsSourceMain { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.dsSourceTop { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.dsSourceMeta { font-size: 11px; color: var(--muted); line-height: 1.5; }
+.dsActions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.dsLink {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 12px;
+  color: var(--brand); text-decoration: none;
+}
+.dsLink:hover { text-decoration: underline; }
