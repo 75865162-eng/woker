@@ -75,9 +75,45 @@ for (const [name, parse, identity] of [["targeting", parseSellfoxAdTargetingRepo
     await assert.rejects(async () => parse(await xlsx([raw], [...Object.keys(raw), "asin", "ASIN"]), scope), /重复列/);
     await assert.rejects(async () => parse(await xlsx([raw], Object.keys(raw), true), scope), /工作表/);
     await assert.rejects(() => parse(Buffer.from("not xlsx"), scope), /XLSX/);
-    await assert.rejects(() => parse(Buffer.alloc(25 * 1024 * 1024 + 1), scope), /25MB/);
-    const oversized = await xlsx([raw]);
-    oversized.writeUInt32LE(101 * 1024 * 1024, oversized.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02])) + 24);
-    await assert.rejects(() => parse(oversized, scope), /解压/);
+    // 防护上限可通过环境变量下调（fail-closed 钳制）；用小阈值验证超限拒绝，避免分配大内存。
+    const prevBytes = process.env.SELLFOX_AD_REPORT_MAX_BYTES;
+    const prevExpanded = process.env.SELLFOX_AD_REPORT_MAX_EXPANDED_BYTES;
+    try {
+      // 阈值受 fail-closed 下限钳制：大小下限 25MB、解压下限 100MB。
+      process.env.SELLFOX_AD_REPORT_MAX_BYTES = String(25 * 1024 * 1024);
+      await assert.rejects(() => parse(Buffer.alloc(25 * 1024 * 1024 + 1), scope), /大小上限/);
+      delete process.env.SELLFOX_AD_REPORT_MAX_BYTES;
+      const oversized = await xlsx([raw]);
+      process.env.SELLFOX_AD_REPORT_MAX_EXPANDED_BYTES = String(100 * 1024 * 1024);
+      oversized.writeUInt32LE(100 * 1024 * 1024 + 1, oversized.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02])) + 24);
+      await assert.rejects(() => parse(oversized, scope), /解压/);
+    } finally {
+      if (prevBytes === undefined) delete process.env.SELLFOX_AD_REPORT_MAX_BYTES; else process.env.SELLFOX_AD_REPORT_MAX_BYTES = prevBytes;
+      if (prevExpanded === undefined) delete process.env.SELLFOX_AD_REPORT_MAX_EXPANDED_BYTES; else process.env.SELLFOX_AD_REPORT_MAX_EXPANDED_BYTES = prevExpanded;
+    }
   });
 }
+
+test("SB placement report dates in yyyyMMdd are normalized to yyyy-MM-dd before validation", async () => {
+  const { parseSellfoxAdPlacementReport } = await import("@/lib/sellfox/ads-placement-contract");
+  const raw = { 店铺: "Fixture", 日期: 20261024, 广告活动ID: "campaign", 广告曝光量: 10, 广告点击量: 2, 广告花费: 1.5, 广告订单量: 0, 广告销售额: 0, 广告位: "topOfSearch" };
+  const rows = await parseSellfoxAdPlacementReport(await xlsx([raw]), scope);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].reportDate, "2026-10-24");
+  assert.equal((rows[0].payload as Record<string, unknown>)["日期"], "2026-10-24");
+});
+
+test("multi-shard reports merge rows and de-duplicate across shard boundaries", async () => {
+  const { parseSellfoxCpcReport } = await import("@/lib/sellfox/ads-report-sync");
+  const raw = { ...base, 投放ID: "t1" };
+  const shardA = await xlsx([raw]);
+  // 分片 B 含一条重复(与 A 相同身份)和一条新行。
+  const shardB = await xlsx([raw, { ...raw, 投放ID: "t2" }]);
+  const report = await parseSellfoxCpcReport("adTargeringReport", [shardA, shardB], scope);
+  assert.equal(report.kind, "targeting");
+  assert.equal(report.rows.length, 2);
+  const ids = (report.rows as { targetingId: string }[]).map((row) => row.targetingId).sort();
+  assert.deepEqual(ids, ["t1", "t2"]);
+  // 单分片仍是同一逻辑的特例。
+  assert.equal((await parseSellfoxCpcReport("adTargeringReport", shardA, scope)).rows.length, 1);
+});
