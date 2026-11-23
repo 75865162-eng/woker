@@ -2,6 +2,7 @@
 import { siteCodeForDisplay } from "@/lib/sellfox/marketplace-site";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useMainImagesByAsin, AsinThumbByAsin } from "@/components/amazon/asin-thumb";
 import { WorkbenchDialog } from "@/components/ui/workbench-dialog";
 import { ReadinessNotice, readinessKindFromCode } from "@/components/operations/readiness-notice";
 
@@ -11,7 +12,7 @@ type Result = {
   pagination: { total: number; pageCount: number };
 };
 const input = "min-h-9 rounded border border-border bg-background px-2 text-sm";
-const columns = [["order", "订单"], ["marketplace", "Marketplace"], ["sku", "SKU"], ["asin", "ASIN"], ["quantity", "数量"], ["price", "商品金额"], ["status", "订单状态"], ["created", "订单创建"], ["updated", "订单更新时间"], ["source", "来源 / 同步"]] as const;
+const columns = [["order", "订单"], ["marketplace", "Marketplace"], ["sku", "SKU"], ["asin", "ASIN"], ["image", "主图"], ["quantity", "数量"], ["price", "商品金额"], ["status", "订单状态"], ["created", "订单创建"], ["updated", "订单更新时间"], ["source", "来源 / 同步"]] as const;
 export function OrderItemsWorkbench({ sellerAccountId = "", marketplaceId = "", getHeaders, onTask }: { sellerAccountId?: string; marketplaceId?: string; getHeaders: () => Headers; onTask: (id: string) => void }) {
   const [orderId, setOrderId] = useState(""), [sellerSku, setSellerSku] = useState(""), [asin, setAsin] = useState(""), [status, setStatus] = useState(""), [dateField, setDateField] = useState("createdTime"), [from, setFrom] = useState(""), [to, setTo] = useState(""), [page, setPage] = useState(1);
   const [scopeReady, setScopeReady] = useState(false);
@@ -19,7 +20,7 @@ export function OrderItemsWorkbench({ sellerAccountId = "", marketplaceId = "", 
   const [visible, setVisible] = useState<string[]>(columns.map(c => c[0]));
   const [result, setResult] = useState<Result | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(""), [errorCode, setErrorCode] = useState(""), [refresh, setRefresh] = useState(0);
   useEffect(() => { const read = () => { setOrderId(new URLSearchParams(window.location.search).get("amazonOrderId") ?? ""); setPage(1); setScopeReady(true); }; read(); window.addEventListener("popstate", read); return () => window.removeEventListener("popstate", read); }, []);
-  useEffect(() => { try { const value = JSON.parse(localStorage.getItem("amazon-order-item-columns-v1") ?? "null"); if (Array.isArray(value)) setVisible(value.filter(v => columns.some(c => c[0] === v))); } catch { /* use defaults */ } }, []);
+  useEffect(() => { try { const value = JSON.parse(localStorage.getItem("amazon-order-item-columns-v1") ?? "null"); if (Array.isArray(value)) { const kept = value.filter(v => columns.some(c => c[0] === v)); if (!kept.includes("image")) kept.splice(Math.min(4, kept.length), 0, "image"); setVisible(kept); } } catch { /* use defaults */ } }, []);
   const toggleColumn = (id: string) => setVisible(current => { const next = current.includes(id) ? current.filter(value => value !== id) : [...current, id]; localStorage.setItem("amazon-order-item-columns-v1", JSON.stringify(next)); return next; });
   useEffect(() => {
     if (!scopeReady) return;
@@ -29,11 +30,14 @@ export function OrderItemsWorkbench({ sellerAccountId = "", marketplaceId = "", 
     return () => controller.abort();
   }, [scopeReady, sellerAccountId, marketplaceId, orderId, sellerSku, asin, status, dateField, from, to, page, refresh, getHeaders]);
   const visibleSet = useMemo(() => new Set(visible), [visible]);
+  const orderAsins = useMemo(() => (result?.rows ?? []).flatMap(r => r.items.map(i => i.asin)).filter((a): a is string => !!a), [result]);
+  const orderImages = useMainImagesByAsin(orderAsins);
   const cell = (id: string, row: Result["rows"][number], item: Result["rows"][number]["items"][number]) => {
     if (id === "order") return row.amazonOrderId;
     if (id === "marketplace") return siteCodeForDisplay(row.marketplaceId);
     if (id === "sku") return item.sellerSku ? <a className="text-brand hover:underline" href={`/operations?${new URLSearchParams({ view: "catalog", sku: item.sellerSku, sellerAccountId: row.sellerAccountId, marketplaceId: row.marketplaceId })}`}>{item.sellerSku}</a> : "—";
     if (id === "asin") return item.asin ?? "—";
+    if (id === "image") return item.asin ? <AsinThumbByAsin asin={item.asin} images={orderImages} className="h-12 w-12" /> : "—";
     if (id === "quantity") return String(item.quantityOrdered);
     if (id === "price") return item.proceedsOriginal == null ? "—" : `${item.proceedsOriginal} ${item.currencyCode ?? ""}`;
     if (id === "status") return row.rawStatus ?? "未返回";

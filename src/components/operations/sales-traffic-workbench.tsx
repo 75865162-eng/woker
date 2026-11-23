@@ -1,12 +1,13 @@
 "use client";
 import { formatSiteStore, siteCodeForDisplay } from "@/lib/sellfox/marketplace-site";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
 import { Button } from "@/components/ui/button";
 import { StandardDataTable } from "@/components/ui/table-variants";
 import { type DataTableColumn } from "@/components/ui/data-table";
 import { ReadinessNotice, readinessKindFromCode } from "@/components/operations/readiness-notice";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
+import { useMainImages, AsinThumb, type ImageProduct } from "@/components/amazon/asin-thumb";
 import type { SyncSourceView } from "@/lib/amazon-sync/contracts";
 import type { SalesRow, SalesMatrix, SalesMatrixCell, SalesMatrixDimension, ProductSalesRow } from "@/lib/amazon-sync/sales-query";
 const endpoint = "/api/operations/sync-center";
@@ -37,6 +38,8 @@ export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onT
   const [productDim, setProductDim] = useState<"ASIN" | "父ASIN" | "SKU">("ASIN"), [syncGranularity, setSyncGranularity] = useState<"CHILD" | "SKU">("CHILD");
   const [productKeyword, setProductKeyword] = useState("");
   const sequence = useRef(0), mutation = useRef(0);
+  const mainImageProducts = useMemo<ImageProduct[]>(() => (productResult?.rows ?? []).map(r => ({ sellerAccountId: r.sellerAccountId, marketplaceId: r.marketplaceId, asin: r.childAsin })), [productResult]);
+  const mainImages = useMainImages(mainImageProducts);
   const filters = { sellerAccountId: seller, marketplaceId: site, from, to, keyword, direction, ...(taskId ? { taskId } : {}) };
   const queryKey = JSON.stringify(filters);
   useEffect(() => { const requests = sequence, mutations = mutation; const reset = () => { ++requests.current; ++mutations.current; setResult(null); setMatrix(null); setProductResult(null); setJob(null); setError(""); setErrorCode(""); setNotice(""); setBusy(false); setPage(1); setSeller(""); setSite(""); setSource(""); setReload(v => v + 1); }; window.addEventListener(workspaceScopeChangedEventName, reset); return () => { ++requests.current; ++mutations.current; window.removeEventListener(workspaceScopeChangedEventName, reset); }; }, []);
@@ -186,6 +189,7 @@ export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onT
         getRowKey={(row) => row.id}
         columns={[
           { key: "asin", header: "商品身份", render: (row) => (<>{productDim === "SKU" ? (row.sellerSku ?? "—") : productDim === "父ASIN" ? (row.parentAsin ?? "—") : row.childAsin}<span className="block text-muted">{formatSiteStore(row.marketplaceId, row.sellerName)}{productDim !== "SKU" && row.sellerSku ? ` · ${row.sellerSku}` : ""}{productDim === "SKU" && row.childAsin ? ` · ASIN ${row.childAsin}` : ""}</span></>) },
+          { key: "image", header: "主图", render: (row) => <AsinThumb sellerAccountId={row.sellerAccountId} marketplaceId={row.marketplaceId} asin={row.childAsin} images={mainImages} className="h-14 w-14" /> },
           { key: "date", header: "业务日", render: (row) => row.businessDate },
           { key: "sales", header: "销售额", numeric: true, render: (row) => row.metrics.orderedProductSales ? `${row.metrics.orderedProductSales.amount} ${row.metrics.orderedProductSales.currencyCode}` : "—" },
           { key: "units", header: "销量 / 订单商品项数", render: (row) => `${row.metrics.unitsOrdered ?? "—"} / ${row.metrics.totalOrderItems ?? "—"}` },

@@ -1,8 +1,9 @@
 "use client";
 import { siteCodeForDisplay } from "@/lib/sellfox/marketplace-site";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
+import { useMainImagesByAsin, AsinThumbByAsin } from "@/components/amazon/asin-thumb";
 import { AlertCircle, ArrowUpRight, ChevronLeft, ChevronRight, CloudCog, LockKeyhole, PackageSearch, RefreshCw, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -151,6 +152,10 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true, se
   const [metricTo, setMetricTo] = useState(() => initialDate());
   const [metricPage, setMetricPage] = useState(1);
   const [scopeRevision, setScopeRevision] = useState(0);
+  const inventoryAsins = useMemo(() => (inventory?.rows ?? []).map(r => r.asin).filter(Boolean), [inventory]);
+  const inventoryImages = useMainImagesByAsin(inventoryAsins);
+  const metricAsinsAll = useMemo(() => (metrics?.rows ?? []).map(r => r.asin).filter(Boolean), [metrics]);
+  const metricImages = useMainImagesByAsin(metricAsinsAll);
 
   const loadReadiness = useCallback(async () => {
     const sequence = ++requests.current.readiness;
@@ -291,6 +296,7 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true, se
   const inventoryColumns: DataTableColumn<InventorySnapshot>[] = [
     { key: "sellerSku", header: "Seller SKU", render: (row) => <span className="font-medium text-foreground">{row.sellerSku}</span> },
     { key: "asin", header: "ASIN / FNSKU", render: (row) => <>{row.asin || "—"}<span className="block text-xs text-muted">{row.fnSku || row.condition || ""}</span></> },
+    { key: "image", header: "主图", render: (row) => row.asin ? <AsinThumbByAsin asin={row.asin} images={inventoryImages} className="h-12 w-12" /> : <span className="text-muted">—</span> },
     { key: "fulfillable", header: "可售", numeric: true, render: (row) => row.fulfillableQuantity.toLocaleString("zh-CN") },
     { key: "inbound", header: "入库合计", numeric: true, render: (row) => (row.inboundWorkingQuantity + row.inboundShippedQuantity + row.inboundReceivingQuantity).toLocaleString("zh-CN") },
     { key: "reserved", header: "预留", numeric: true, render: (row) => row.reservedQuantity.toLocaleString("zh-CN") },
@@ -301,6 +307,7 @@ export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true, se
   const metricsColumns: DataTableColumn<OperationsDailyMetric>[] = [
     { key: "date", header: "日期", render: (row) => <span className="text-muted">{row.date}</span> },
     { key: "sku", header: "SKU / ASIN", render: (row) => <>{row.sku || "—"}<span className="block text-xs text-muted">{row.asin || ""}</span></> },
+    { key: "image", header: "主图", render: (row) => row.asin ? <AsinThumbByAsin asin={row.asin} images={metricImages} className="h-12 w-12" /> : <span className="text-muted">—</span> },
     { key: "sales", header: "销售额", numeric: true, cellAttributes: (row) => ({ title: row.fieldNotes.sales ?? undefined }), render: (row) => money(row.sales, row.currency) },
     { key: "adSpend", header: "广告花费", numeric: true, cellAttributes: (row) => ({ title: row.fieldNotes.adSpend ?? undefined }), render: (row) => money(row.adSpend, row.currency) },
     { key: "tacos", header: "TACOS", numeric: true, cellAttributes: (row) => ({ title: row.fieldNotes.tacos ?? undefined }), render: (row) => row.tacos === null ? "—" : `${row.tacos.toFixed(2)}%` },
