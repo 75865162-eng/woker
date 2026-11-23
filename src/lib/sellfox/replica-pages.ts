@@ -398,7 +398,7 @@ export function replicaPage(id: string) {
   return replicaPages.find((item) => item.id === id);
 }
 
-export type DatePreset = "today" | "yesterday" | "d7" | "d14" | "d30" | "d90" | "thisMonth" | "lastMonth" | "custom";
+export type DatePreset = "today" | "yesterday" | "d7" | "d14" | "d30" | "m2" | "m3" | "d90" | "thisMonth" | "lastMonth" | "custom";
 
 export function shanghaiToday(now = new Date()) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
@@ -409,19 +409,33 @@ export function addCalendarDays(iso: string, days: number) {
   return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
 }
 
-export function rangeForPreset(preset: DatePreset, today = shanghaiToday()) {
-  if (preset === "today") return { from: today, to: today };
+/**
+ * 计算快捷区间的日期范围。
+ * `days`：数据延迟天数（T+N）。亚马逊销量/广告快照有 T+1 延迟，传 1 时整段区间
+ * 相对"今天"整体后移一天，避免打开页面就落在"今天全空"上（看起来像掉数）。
+ * 默认 0 保持原有语义不变，既有测试与调用方不受影响。
+ */
+export function rangeForPreset(preset: DatePreset, today = shanghaiToday(), days = 0) {
+  const anchor = days > 0 ? addCalendarDays(today, -days) : today;
+  if (preset === "today") return { from: anchor, to: anchor };
   if (preset === "yesterday") {
-    const day = addCalendarDays(today, -1);
+    const day = addCalendarDays(anchor, -1);
     return { from: day, to: day };
   }
-  if (preset === "d7") return { from: addCalendarDays(today, -6), to: today };
-  if (preset === "d14") return { from: addCalendarDays(today, -13), to: today };
-  if (preset === "d30") return { from: addCalendarDays(today, -29), to: today };
-  if (preset === "d90") return { from: addCalendarDays(today, -89), to: today };
-  if (preset === "thisMonth") return { from: `${today.slice(0, 8)}01`, to: today };
+  if (preset === "d7") return { from: addCalendarDays(anchor, -6), to: anchor };
+  if (preset === "d14") return { from: addCalendarDays(anchor, -13), to: anchor };
+  if (preset === "d30") return { from: addCalendarDays(anchor, -29), to: anchor };
+  // 近2/近3个月：按自然月回溯（与"上月"同口径），到 anchor 为止；覆盖月度复盘习惯。
+  if (preset === "m2" || preset === "m3") {
+    const months = preset === "m2" ? 2 : 3;
+    const [year, month] = anchor.split("-").map(Number);
+    const start = new Date(Date.UTC(year, month - months, 1));
+    return { from: start.toISOString().slice(0, 10), to: anchor };
+  }
+  if (preset === "d90") return { from: addCalendarDays(anchor, -89), to: anchor };
+  if (preset === "thisMonth") return { from: `${anchor.slice(0, 8)}01`, to: anchor };
   if (preset === "lastMonth") {
-    const [year, month] = today.split("-").map(Number);
+    const [year, month] = anchor.split("-").map(Number);
     const start = new Date(Date.UTC(year, month - 2, 1));
     const end = new Date(Date.UTC(year, month - 1, 0));
     return { from: start.toISOString().slice(0, 10), to: end.toISOString().slice(0, 10) };
@@ -435,6 +449,8 @@ export const datePresets: { id: DatePreset; label: string }[] = [
   { id: "d7", label: "近7天" },
   { id: "d14", label: "近14天" },
   { id: "d30", label: "近30天" },
+  { id: "m2", label: "近2个月" },
+  { id: "m3", label: "近3个月" },
   { id: "d90", label: "近90天" },
   { id: "thisMonth", label: "本月" },
   { id: "lastMonth", label: "上月" },

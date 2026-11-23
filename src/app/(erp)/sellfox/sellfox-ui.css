@@ -159,6 +159,23 @@
   width: 220px;
 }
 
+/* 搜索框前置字段下拉：一个控件搞定多字段，字段下拉与输入无缝拼接。 */
+.sellfox-ui .sf-search-combo {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.sellfox-ui .sf-search-combo .sf-search-prepend {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: 0;
+}
+
+.sellfox-ui .sf-search-combo .sf-search {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
 .sellfox-ui .sf-btn {
   display: inline-flex;
   align-items: center;
@@ -225,12 +242,57 @@
   background: var(--warning-soft);
 }
 
+/* 读取失败提示条：保留上一屏数据的同时给出明确反馈与重试入口。 */
+.sellfox-ui .sf-error-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-meta);
+  color: var(--danger-ink);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-md);
+}
+
 /* 数据表：主应用白底、细边框表头 */
 .sellfox-ui .sf-table-wrap {
+  position: relative;
   overflow: auto;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+/* 加载遮罩：等待有明确反馈，不把空 tbody 误读成"没有数据"。 */
+.sellfox-ui .sf-loading-mask {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font-size: var(--text-meta);
+  color: var(--muted);
+  background: var(--surface-muted);
+  opacity: 0.85;
+}
+
+.sellfox-ui .sf-loading-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: sf-spin 0.8s linear infinite;
+}
+
+@keyframes sf-spin {
+  to { transform: rotate(360deg); }
 }
 
 .sellfox-ui table {
@@ -288,6 +350,58 @@
   background: var(--surface-muted);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+}
+
+/* 行内主图轻预览：hover/focus 显示卡片，无需离开表格即可确认"这是什么货"。 */
+.sellfox-ui .sf-thumb-preview {
+  position: relative;
+  display: inline-block;
+}
+
+.sellfox-ui .sf-thumb-card {
+  position: absolute;
+  top: 0;
+  left: calc(100% + var(--space-2));
+  z-index: 8;
+  display: none;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 260px;
+  padding: var(--space-2);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+  color: var(--foreground);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md, var(--shadow, none));
+}
+
+.sellfox-ui .sf-thumb-preview:hover .sf-thumb-card,
+.sellfox-ui .sf-thumb-preview:focus-within .sf-thumb-card {
+  display: flex;
+}
+
+.sellfox-ui .sf-thumb-card-img {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  background: var(--surface-muted);
+  border-radius: var(--radius-md);
+}
+
+.sellfox-ui .sf-thumb-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sellfox-ui .sf-thumb-card-body strong {
+  font-weight: 600;
+}
+
+.sellfox-ui .sf-thumb-card-body > span {
+  color: var(--muted);
 }
 
 .sellfox-ui .sf-stack {
@@ -457,19 +571,32 @@
 
 .sellfox-ui thead th.sf-day .sf-th-main { font-size: var(--text-meta); }
 
-.sellfox-ui .sf-matrix thead th:first-child,
-.sellfox-ui .sf-matrix tbody td:first-child {
+/* 左侧标识列成组冻结（主图/品名/汇总）；left 偏移由组件按会话列宽累加内联给出，兼容拖拽与变宽。 */
+.sellfox-ui .sf-matrix thead th.sf-freeze,
+.sellfox-ui .sf-matrix tbody td.sf-freeze,
+.sellfox-ui .sf-matrix tfoot td.sf-freeze {
   position: sticky;
-  left: 0;
   z-index: 2;
-  max-width: 260px;
   overflow: hidden;
   background: var(--surface);
 }
 
-.sellfox-ui .sf-matrix thead th:first-child {
+.sellfox-ui .sf-matrix thead th.sf-freeze {
+  z-index: 4;
+  background: var(--surface-muted);
+}
+
+.sellfox-ui .sf-matrix tfoot td.sf-freeze {
   z-index: 3;
   background: var(--surface-muted);
+}
+
+/* 列配置标记为可冻结的标识列；<<"识别行"用，不在数据契约层产生新列。 */
+.sellfox-ui .sf-column-chip.sf-pinnable::after {
+  content: "·固定";
+  margin-left: var(--space-1);
+  font-size: var(--text-meta);
+  color: var(--muted);
 }
 
 .sellfox-ui .sf-matrix tbody td:first-child .sf-stack > * {

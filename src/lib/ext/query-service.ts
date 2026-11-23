@@ -78,15 +78,50 @@ export async function queryExt(scope: WmsScope, kind: string, params: URLSearchP
       case 'reviews': {
         const sentiment = params.get('sentiment') ?? '';
         const status = params.get('status') ?? '';
-        const items = await tx.reviewRecord.findMany({
-          where: { ...where, ...(sentiment ? { sentiment } : {}), ...(status ? { status } : {}) },
-          orderBy: [{ reviewedAt: 'desc' }, { createdAt: 'desc' }],
-          take: listLimit,
-        });
-        const agg = await tx.reviewRecord.groupBy({ by: ['sentiment'], where, _count: { _all: true } });
+        // 增量筛选字段：站点 / 星级 / 评论日期区间 / 关键词（命中标题、正文、ASIN）。
+        const site = params.get('site') ?? '';
+        const ratingRaw = params.get('rating') ?? '';
+        const rating = /^[1-5]$/.test(ratingRaw) ? Number(ratingRaw) : null;
+        const from = params.get('from') ?? '';
+        const to = params.get('to') ?? '';
+        const keyword = (params.get('keyword') ?? '').trim().slice(0, 120);
+        // 服务端分页：page 从 1 起，pageSize 上限 200；未传时沿用原 take 上限（兼容旧调用）。
+        const pageRaw = Number(params.get('page') ?? '0');
+        const pageSizeRaw = Number(params.get('pageSize') ?? '0');
+        const paginated = Number.isInteger(pageRaw) && pageRaw > 0 && Number.isInteger(pageSizeRaw) && pageSizeRaw > 0;
+        const page = paginated ? Math.min(pageRaw, 10_000) : 1;
+        const pageSize = paginated ? Math.min(pageSizeRaw, 200) : listLimit;
+        const dateFilter: Prisma.ReviewRecordWhereInput['reviewedAt'] = (from || to)
+          ? { ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}), ...(to ? { lte: new Date(`${to}T23:59:59.999Z`) } : {}) }
+          : undefined;
+        const reviewWhere: Prisma.ReviewRecordWhereInput = {
+          ...where,
+          ...(sentiment ? { sentiment } : {}),
+          ...(status ? { status } : {}),
+          ...(site ? { marketplace: site } : {}),
+          ...(rating ? { rating } : {}),
+          ...(dateFilter ? { reviewedAt: dateFilter } : {}),
+          ...(keyword ? { OR: [{ title: { contains: keyword } }, { content: { contains: keyword } }, { asin: { contains: keyword } }, { sellerSku: { contains: keyword } }] } : {}),
+        };
+        const [items, agg, replied, matched, byDay, byDayNegative] = await Promise.all([
+          tx.reviewRecord.findMany({
+            where: reviewWhere,
+            orderBy: [{ reviewedAt: 'desc' }, { createdAt: 'desc' }],
+            skip: paginated ? (page - 1) * pageSize : 0,
+            take: pageSize,
+          }),
+          // KPI 与列表同口径：groupBy 用同一份筛选条件，不再取全量。
+          tx.reviewRecord.groupBy({ by: ['sentiment'], where: reviewWhere, _count: { _all: true } }),
+          tx.reviewRecord.count({ where: { ...reviewWhere, status: 'REPLIED' } }),
+          tx.reviewRecord.count({ where: reviewWhere }),
+          // KPI 迷你趋势：按日聚合（同一筛选口径），前端画 sparkline 与环比。
+          tx.reviewRecord.groupBy({ by: ['reviewedAt'], where: reviewWhere, _count: { _all: true }, orderBy: { reviewedAt: 'asc' } }),
+          tx.reviewRecord.groupBy({ by: ['reviewedAt'], where: { ...reviewWhere, sentiment: 'NEGATIVE' }, _count: { _all: true }, orderBy: { reviewedAt: 'asc' } }),
+        ]);
         const counts = Object.fromEntries(agg.map(row => [row.sentiment, row._count._all]));
         const total = agg.reduce((sum, row) => sum + row._count._all, 0);
-        const replied = await tx.reviewRecord.count({ where: { ...where, status: 'REPLIED' } });
+        const negativeByDay = Object.fromEntries(byDayNegative.map(row => [dayKey(row.reviewedAt), row._count._all]));
+        const trend = byDay.map(row => ({ date: dayKey(row.reviewedAt), total: row._count._all, negative: negativeByDay[dayKey(row.reviewedAt)] ?? 0 }));
         return {
           items: items.map(row => ({ ...row, reviewedAt: dayKey(row.reviewedAt) })),
           summary: {
@@ -98,6 +133,8 @@ export async function queryExt(scope: WmsScope, kind: string, params: URLSearchP
             negativeRateBp: total > 0 ? Math.round(((counts.NEGATIVE ?? 0) / total) * 10_000) : 0,
             replyRateBp: total > 0 ? Math.round((replied / total) * 10_000) : 0,
           },
+          trend,
+          pagination: { page, pageSize, total: matched, pageCount: Math.max(1, Math.ceil(matched / pageSize)) },
         };
       }
       case 'reviews-by-asin': {

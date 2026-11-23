@@ -112,11 +112,22 @@ const ROW_CHUNK = 80;
 /** 行数不超过这个值的表格在标签转后台时保留 DOM：重建它的开销比省下的节点更贵。 */
 const KEEP_DOM_ROWS = 300;
 
-export function Table<T extends { id?: string }>(props: { columns: Array<Column<T>>; rows: T[]; empty: string; rowKey?: (row: T, index: number) => string }) {
+export function Table<T extends { id?: string }>(props: {
+  columns: Array<Column<T>>;
+  rows: T[];
+  empty: string;
+  rowKey?: (row: T, index: number) => string;
+  /** 可选首列复选框：不传则不渲染，其他调用方零影响。 */
+  selectable?: boolean;
+  selectedIds?: Set<string>;
+  onToggle?: (id: string, checked: boolean) => void;
+  onToggleAll?: (ids: string[], checked: boolean) => void;
+}) {
   const [visibleCount, setVisibleCount] = useState(ROW_CHUNK);
   const sentinelRef = useRef<HTMLTableRowElement>(null);
   const active = useTabActive();
   const total = props.rows.length;
+  const rowId = (row: T, index: number) => props.rowKey ? props.rowKey(row, index) : String(row.id ?? index);
 
   useEffect(() => { setVisibleCount(ROW_CHUNK); }, [total]);
 
@@ -140,27 +151,39 @@ export function Table<T extends { id?: string }>(props: { columns: Array<Column<
   if (!active && total > KEEP_DOM_ROWS) return null;
   const shown = total > visibleCount ? props.rows.slice(0, visibleCount) : props.rows;
 
+  const colCount = props.columns.length + (props.selectable ? 1 : 0);
+  const shownIds = shown.map((row, index) => rowId(row, index));
+  const selected = props.selectedIds ?? new Set<string>();
+  const allShownSelected = shownIds.length > 0 && shownIds.every(id => selected.has(id));
+  const someShownSelected = shownIds.some(id => selected.has(id));
   return <div className="overflow-x-auto">
     <table className="w-full min-w-[680px] text-left text-xs">
-      <thead className="text-muted"><tr>{props.columns.map(column => <th key={column.key} className={`pb-1 font-medium ${column.align === "right" ? "text-right" : ""}`}>{column.label}</th>)}</tr></thead>
-      <tbody>{shown.map((row, index) => <tr key={props.rowKey ? props.rowKey(row, index) : (row.id ?? index)} className="border-t border-border align-top">
-        {props.columns.map(column => <td key={column.key} className={`py-1.5 ${column.align === "right" ? "text-right tabular-nums" : ""} ${column.className ?? ""}`}>
-          {column.render ? column.render(row) : String((row as Record<string, unknown>)[column.key] ?? "—")}
-        </td>)}
-      </tr>)}
+      <thead className="text-muted"><tr>
+        {props.selectable ? <th className="w-8 pb-1"><input type="checkbox" aria-label="全选当前页" checked={allShownSelected} ref={node => { if (node) node.indeterminate = !allShownSelected && someShownSelected; }} onChange={event => props.onToggleAll?.(shownIds, event.target.checked)} /></th> : null}
+        {props.columns.map(column => <th key={column.key} className={`pb-1 font-medium ${column.align === "right" ? "text-right" : ""}`}>{column.label}</th>)}
+      </tr></thead>
+      <tbody>{shown.map((row, index) => {
+        const id = rowId(row, index);
+        return <tr key={id} className="border-t border-border align-top">
+          {props.selectable ? <td className="py-1.5"><input type="checkbox" aria-label={`选择评论 ${id}`} checked={selected.has(id)} onChange={event => props.onToggle?.(id, event.target.checked)} /></td> : null}
+          {props.columns.map(column => <td key={column.key} className={`py-1.5 ${column.align === "right" ? "text-right tabular-nums" : ""} ${column.className ?? ""}`}>
+            {column.render ? column.render(row) : String((row as Record<string, unknown>)[column.key] ?? "—")}
+          </td>)}
+        </tr>;
+      })}
       {total > visibleCount ? <tr ref={sentinelRef}>
-        <td colSpan={props.columns.length} className="py-2 text-center text-label text-muted">已显示 {shown.length} / {total} 行，继续滚动加载</td>
+        <td colSpan={colCount} className="py-2 text-center text-label text-muted">已显示 {shown.length} / {total} 行，继续滚动加载</td>
       </tr> : null}</tbody>
     </table>
   </div>;
 }
 
-export function Kpis({ items }: { items: Array<{ label: string; value: string; hint?: string; tone?: "warn" | "good" | "muted" }> }) {
+export function Kpis({ items }: { items: Array<{ label: string; value: string; hint?: React.ReactNode; tone?: "warn" | "good" | "muted" }> }) {
   return <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
     {items.map(item => <article key={item.label} className="rounded border border-border bg-surface px-3 py-2">
       <p className="text-label text-muted">{item.label}</p>
       <p className={`mt-0.5 text-lg font-semibold tabular-nums ${item.tone === "warn" ? "text-danger-ink" : item.tone === "good" ? "text-success-ink" : item.tone === "muted" ? "text-muted" : ""}`}>{item.value}</p>
-      {item.hint && <p className="text-label text-muted">{item.hint}</p>}
+      {item.hint && <div className="flex flex-wrap items-center gap-2 text-label text-muted">{item.hint}</div>}
     </article>)}
   </div>;
 }
