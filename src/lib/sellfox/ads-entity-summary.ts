@@ -58,8 +58,8 @@ const SORTABLE: Record<string, Prisma.Sql> = {
   acos: Prisma.sql`cost / NULLIF("adSales", 0)`,
   roas: Prisma.sql`"adSales" / NULLIF(cost, 0)`,
   reportDates: Prisma.sql`"reportDates"`,
-  state: Prisma.sql`entityPayload->>'state'`,
-  name: Prisma.sql`COALESCE(entityPayload->>'name', entityPayload->>'keywordText', entityPayload->>'expression', "fallbackName")`,
+  state: Prisma.sql`"entityPayload"->>'state'`,
+  name: Prisma.sql`COALESCE("entityPayload"->>'name', "entityPayload"->>'keywordText', "entityPayload"->>'expression', "fallbackName")`,
 };
 
 function entCte(spec: SummarySpec, scope: { organizationId: string; workspaceId: string }) {
@@ -176,7 +176,7 @@ export async function readAdsEntitySummary(
   )`;
 
   const filters: Prisma.Sql[] = [Prisma.sql`true`];
-  if (state) filters.push(Prisma.sql`entityPayload->>'state' = ${state}`);
+  if (state) filters.push(Prisma.sql`"entityPayload"->>'state' = ${state}`);
   if (bucket) filters.push(Prisma.sql`${BUCKET_SQL} = ${bucket}`);
   filters.push(...metricClauses(query));
 
@@ -209,7 +209,7 @@ export async function readAdsEntitySummary(
         FROM scoped GROUP BY 1
       ) t) AS "totals",
       (SELECT COALESCE(jsonb_agg(jsonb_build_object('value', v, 'count', c) ORDER BY v), '[]'::jsonb) FROM (
-        SELECT COALESCE(entityPayload->>'state', '') AS v, count(*)::int AS c FROM base GROUP BY 1
+        SELECT COALESCE("entityPayload"->>'state', '') AS v, count(*)::int AS c FROM base GROUP BY 1
       ) s) AS "states",
       (SELECT COALESCE(jsonb_agg(jsonb_build_object('value', v, 'count', c) ORDER BY v), '[]'::jsonb) FROM (
         SELECT ${BUCKET_SQL} AS v, count(*)::int AS c FROM base GROUP BY 1
@@ -221,8 +221,8 @@ export async function readAdsEntitySummary(
           CASE WHEN "clicks" > 0 THEN "cost" / "clicks" END AS cpc,
           CASE WHEN "adSales" <> 0 THEN "cost" / "adSales" END AS acos,
           CASE WHEN "cost" > 0 THEN "adSales" / "cost" END AS roas,
-          CASE WHEN entityPayload IS NOT NULL THEN true ELSE false END AS "entityKnown",
-          entityPayload
+          CASE WHEN "entityPayload" IS NOT NULL THEN true ELSE false END AS "entityKnown",
+          "entityPayload"
         FROM scoped ORDER BY ${order} LIMIT ${limit} OFFSET ${offset}
       ) p), '[]'::jsonb) AS "rows"
   `;

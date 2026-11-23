@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import { hostDataset, hostPage } from "../src/lib/sellfox/host-pages";
 import { ADS_SUMMARY_SPECS, ADS_BUCKETS } from "../src/lib/sellfox/ads-summary-spec";
 import { adsSummaryCsv } from "../src/lib/sellfox/ads-entity-summary";
@@ -68,4 +69,23 @@ test("导出：CSV 按列输出，空值与引号/换行安全转义", () => {
   assert.equal(lines[0], "名称,花费,ACOS");
   assert.equal(lines[1], '"A,""B""\nC",12.34,0.2');
   assert.equal(lines[2], "空值,,");
+});
+
+test("回归：实体汇总 SQL 中 entityPayload 列引用必须加双引号（Postgres 大小写敏感）", () => {
+  // base CTE 以 "entityPayload"（大小写敏感）定义列别名；未加引号的引用会被
+  // PostgreSQL 小写化为 entitypayload 并触发 42703（生产曾因此 500）。
+  // 这里在源码层锁定：Prisma.sql 模板内不允许出现未带引号的列引用。
+  const source = readFileSync(new URL("../src/lib/sellfox/ads-entity-summary.ts", import.meta.url), "utf8");
+  const sqlLines = source.split("\n").filter(line => line.includes("Prisma.sql`") || line.includes("entityPayload"));
+  for (const line of sqlLines) {
+    // JS 侧对象访问/键、以及带引号定义/引用是合法的。
+    const stripped = line
+      .replace(/row\.entityPayload/g, "")       // JS 对象读取
+      .replace(/entityPayload:\s*undefined/g, "") // JS 对象键
+      .replace(/"entityPayload"/g, "");          // 带引号的 SQL 引用/别名
+    assert.ok(
+      !/\bentityPayload\b/.test(stripped),
+      `发现未加引号的 entityPayload SQL 引用（会被小写化导致 42703）: ${line.trim()}`,
+    );
+  }
 });
