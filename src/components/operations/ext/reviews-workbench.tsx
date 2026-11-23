@@ -177,7 +177,7 @@ export function ReviewsWorkbench() {
               { key: "reviewedAt", label: "日期" },
               { key: "rating", label: "星级", align: "right", render: row => `${row.rating} ★` },
               { key: "sentiment", label: "情绪", render: row => <Badge text={statusLabel(row.sentiment)} tone={row.sentiment === "NEGATIVE" ? "warn" : row.sentiment === "POSITIVE" ? "good" : "muted"} /> },
-              { key: "vp", label: "VP", render: row => row.vp ? <Badge text="VP" tone="good" /> : <span className="text-muted-foreground">—</span> },
+              { key: "vp", label: "VP", render: row => row.vp ? <Badge text="VP" tone="good" /> : <span className="text-muted">—</span> },
               { key: "title", label: "标题 / 内容", render: row => <span className="block max-w-[320px] truncate" title={row.content}>{row.title || row.content || "—"}</span> },
             ]}
           />
