@@ -50,11 +50,18 @@ export type HostResult = {
     quantity?: number | null;
     totalInventory?: number | null;
     unfulfillable?: number | null;
+    /** 汇总视图：先汇总分子分母再计算的派生合计（按币种），与行内比率为同一口径。 */
+    derivedByCurrency?: { currency: string; values: Record<string, number | null> }[];
   };
   coverage: { stores: number; rows: number };
   grain: string;
   /** 原始行数据集：列由真实 payload 键动态派生，前端据此渲染，不套用规划列。 */
   columns?: HostColumn[];
+  /** 汇总视图的候选值计数（候选值不受自身筛选影响，标注各自 scope）。 */
+  facets?: {
+    states?: { value: string; count: number }[];
+    buckets?: { value: string; count: number }[];
+  };
 };
 
 type Scope = { organizationId: string; workspaceId: string; userId?: string };
@@ -115,6 +122,11 @@ function sumField(rows: HostRow[], field: string) {
     total += Number(sum[field] ?? 0);
   }
   return total;
+}
+
+/** 店铺授权收窄：供其它只读 reader（实体汇总）复用同一授权口径，避免第二套权限逻辑。 */
+export async function resolveStoreIds(scope: Scope, query: Pick<HostQuery, "site" | "shop">) {
+  return storeFilter(scope, query);
 }
 
 async function storeFilter(scope: Scope, query: Pick<HostQuery, "site" | "shop">) {

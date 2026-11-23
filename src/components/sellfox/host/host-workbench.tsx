@@ -22,8 +22,11 @@ type Totals = {
   quantity?: number | null;
   totalInventory?: number | null;
   unfulfillable?: number | null;
+  /** 汇总视图：先汇总分子分母再计算的比率合计（按币种），与行内同一口径。 */
+  derivedByCurrency?: { currency: string; values: Record<string, number | null> }[];
 };
-type Payload = { rows?: Row[]; total?: number; totals?: Totals; coverage?: { stores: number; rows: number }; error?: string; columns?: HostColumn[] | null };
+type Facets = { states?: { value: string; count: number }[]; buckets?: { value: string; count: number }[] };
+type Payload = { rows?: Row[]; total?: number; totals?: Totals; coverage?: { stores: number; rows: number }; error?: string; columns?: HostColumn[] | null; facets?: Facets };
 
 const emptyTotals: Totals = { impressions: null, clicks: null, adOrders: null, byCurrency: [] };
 const presets: { id: Exclude<DatePreset, "today" | "yesterday" | "thisMonth" | "lastMonth">; label: string }[] = [
@@ -101,6 +104,17 @@ function Cell({ column, row }: { column: HostColumn; row: Row }) {
   return <>{cellText(column, row)}</>;
 }
 
+const SUMMARY_SORTABLE = new Set(["impressions", "clicks", "cost", "adOrders", "adSales", "ctr", "cpc", "acos", "roas", "reportDates", "state", "name"]);
+
+const STATE_LABELS: Record<string, string> = { enabled: "启用", paused: "暂停", archived: "归档" };
+const BUCKET_LABELS: Record<string, string> = {
+  orders: "有订单",
+  clicksNoOrders: "有点击无订单",
+  impressionsNoClicks: "有曝光无点击",
+  noPerformance: "无表现",
+  insufficient: "数据不足",
+};
+
 function isNumeric(column: HostColumn) {
   return column.kind === "qty" || column.kind === "decimal" || column.kind === "money" || column.kind === "rate";
 }
@@ -136,12 +150,15 @@ export function HostWorkbench({ page }: { page: HostPage }) {
   const [preset, setPreset] = useState<"d7" | "d14" | "d30" | "d90" | "custom">("d30");
   const [from, setFrom] = useState(() => rangeForPreset("d30", today).from);
   const [to, setTo] = useState(() => rangeForPreset("d30", today).to);
-  const [applied, setApplied] = useState({ from: rangeForPreset("d30", today).from, to: rangeForPreset("d30", today).to, site: "", shop: "", adType: "", search: "", state: "" });
-  const [draft, setDraft] = useState({ site: "", shop: "", adType: "", search: "", state: "" });
+  const [applied, setApplied] = useState({ from: rangeForPreset("d30", today).from, to: rangeForPreset("d30", today).to, site: "", shop: "", adType: "", search: "", state: "", bucket: "" });
+  const [draft, setDraft] = useState({ site: "", shop: "", adType: "", search: "", state: "", bucket: "" });
+  // 汇总视图服务端排序：点击表头切换；非汇总数据集忽略（后端会回退默认列）。
+  const [sort, setSort] = useState<{ by: string; order: "asc" | "desc" }>({ by: "", order: "desc" });
   const [rows, setRows] = useState<Row[]>([]);
   const [dynamicColumns, setDynamicColumns] = useState<HostColumn[] | null>(null);
   const [total, setTotal] = useState(0);
   const [totals, setTotals] = useState<Totals>(emptyTotals);
+  const [facets, setFacets] = useState<Facets>({});
   const [, setCoverage] = useState({ stores: 0, rows: 0 });
   const [legacyStores, setLegacyStores] = useState<Store[]>([]);
   const referenceStores = useStores();
@@ -182,7 +199,9 @@ export function HostWorkbench({ page }: { page: HostPage }) {
     if (applied.shop) params.set("shop", applied.shop);
     if (applied.adType) params.set("adType", applied.adType);
     if (applied.state) params.set("state", applied.state);
+    if (applied.bucket) params.set("bucket", applied.bucket);
     if (applied.search) params.set("search", applied.search);
+    if (sort.by) { params.set("sortBy", sort.by); params.set("sortOrder", sort.order); }
     setLoading(true);
     setError("");
     fetch(`/api/sellfox/dataset?${params}`, { cache: "no-store", signal: controller.signal })
@@ -197,6 +216,7 @@ export function HostWorkbench({ page }: { page: HostPage }) {
         setDynamicColumns(Array.isArray(body.columns) && body.columns.length ? body.columns : null);
         setTotal(body.total ?? 0);
         setTotals(body.totals ?? emptyTotals);
+        setFacets(body.facets ?? {});
         setCoverage(body.coverage ?? { stores: 0, rows: 0 });
       })
       .catch((reason: unknown) => {
@@ -205,11 +225,12 @@ export function HostWorkbench({ page }: { page: HostPage }) {
         setDynamicColumns(null);
         setTotal(0);
         setTotals(emptyTotals);
+        setFacets({});
         setError(reason instanceof Error ? reason.message : "读取失败");
       })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [applied, dataset, live, pageNo, pageSize, refreshNonce]);
+  }, [applied, dataset, live, pageNo, pageSize, refreshNonce, sort]);
 
   const sites = useMemo(() => [...new Set(stores.map((store) => store.marketplace).filter(Boolean))], [stores]);
   const pages = Math.max(1, Math.ceil(total / pageSize));
@@ -241,8 +262,8 @@ export function HostWorkbench({ page }: { page: HostPage }) {
     setPreset("d30");
     setFrom(range.from);
     setTo(range.to);
-    setDraft({ site: "", shop: "", adType: "", search: "", state: "" });
-    setApplied({ from: range.from, to: range.to, site: "", shop: "", adType: "", search: "", state: "" });
+    setDraft({ site: "", shop: "", adType: "", search: "", state: "", bucket: "" });
+    setApplied({ from: range.from, to: range.to, site: "", shop: "", adType: "", search: "", state: "", bucket: "" });
     setPageNo(1);
   }
 
@@ -255,9 +276,41 @@ export function HostWorkbench({ page }: { page: HostPage }) {
     // state 筛选只适用于实体当前态数据集，切到日报或别的实体时清空，避免残留筛选。
     const first = page.datasets.find((item) => item.id === next.datasetIds[0]);
     if (!first?.stateFilter) {
-      setDraft((current) => ({ ...current, state: "" }));
-      setApplied((current) => ({ ...current, state: "" }));
+      setDraft((current) => ({ ...current, state: "", bucket: "" }));
+      setApplied((current) => ({ ...current, state: "", bucket: "" }));
     }
+  }
+
+  /** 汇总视图：服务端按同一筛选与聚合口径导出全量；超过上限显式报错，不静默截断。 */
+  async function exportSummary() {
+    const params = new URLSearchParams({ dataset: dataset!.id, export: "1", format: "csv", page: "1", pageSize: String(pageSize) });
+    if (dataset!.dateRange) { params.set("from", applied.from); params.set("to", applied.to); }
+    if (applied.site) params.set("site", applied.site);
+    if (applied.shop) params.set("shop", applied.shop);
+    if (applied.adType) params.set("adType", applied.adType);
+    if (applied.state) params.set("state", applied.state);
+    if (applied.bucket) params.set("bucket", applied.bucket);
+    if (applied.search) params.set("search", applied.search);
+    if (sort.by) { params.set("sortBy", sort.by); params.set("sortOrder", sort.order); }
+    setNotice("正在导出全部筛选结果…");
+    const response = await fetch(`/api/sellfox/dataset?${params}`, { cache: "no-store" });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      setNotice(body.error ?? "导出失败，请缩小筛选范围后重试。");
+      return;
+    }
+    const blob = await response.blob();
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `${dataset!.id}-${applied.from}-${applied.to}.csv`;
+    link.click();
+    setNotice(`已导出当前筛选的全部 ${total} 行（服务端同口径，未写入数据库）。`);
+  }
+
+  function toggleSort(key: string) {
+    if (!SUMMARY_SORTABLE.has(key)) return;
+    setSort((current) => current.by === key ? { by: key, order: current.order === "asc" ? "desc" : "asc" } : { by: key, order: "desc" });
+    setPageNo(1);
   }
 
   function exportCsv() {
@@ -281,6 +334,13 @@ export function HostWorkbench({ page }: { page: HostPage }) {
         .map((item) => ({ currency: item.currency, value: item.values[column.key] ?? null }))
         .filter((item) => item.value != null);
       return list.length ? list.map((item) => money(item.value, item.currency)).join(" / ") : "";
+    }
+    if (column.key === "ctr" || column.key === "cpc" || column.key === "acos" || column.key === "roas") {
+      const list = (totals.derivedByCurrency ?? [])
+        .map((item) => ({ currency: item.currency, value: item.values[column.key] ?? null }))
+        .filter((item) => item.value != null);
+      if (!list.length) return "";
+      return list.map((item) => column.key === "cpc" ? money(item.value, item.currency) : column.key === "roas" ? Number(item.value).toFixed(2) : rate(item.value)).join(" / ");
     }
     if (column.key === "quantity") return qty(totals.quantity);
     if (column.key === "totalInventory") return qty(totals.totalInventory);
@@ -352,9 +412,10 @@ export function HostWorkbench({ page }: { page: HostPage }) {
                 setPageNo(1);
                 // state 筛选只在实体当前态有意义。
                 if (!item.stateFilter) {
-                  setDraft((current) => ({ ...current, state: "" }));
-                  setApplied((current) => ({ ...current, state: "" }));
+                  setDraft((current) => ({ ...current, state: "", bucket: "" }));
+                  setApplied((current) => ({ ...current, state: "", bucket: "" }));
                 }
+                setSort({ by: "", order: "desc" });
               }}
             >
               <span className={item.status === "live" ? "sf-dot sf-dot-live" : "sf-dot"} aria-hidden="true" />
@@ -419,17 +480,58 @@ export function HostWorkbench({ page }: { page: HostPage }) {
             <div className="sf-actions">
               <span className="sf-spacer" />
               <Link className="sf-btn" href="/sellfox/sync">同步</Link>
-              <button type="button" className="sf-btn" onClick={exportCsv}>导出</button>
+              <button type="button" className="sf-btn" onClick={dataset.summaryKind ? exportSummary : exportCsv}>{dataset.summaryKind ? "导出全部" : "导出"}</button>
               <button type="button" className="sf-btn" onClick={() => setRefreshNonce((value) => value + 1)}>刷新</button>
               <button type="button" className="sf-btn" onClick={() => setNotice(`口径：${dataset.grain}。${dataset.note ?? ""}`)}>帮助</button>
             </div>
+            {dataset.summaryKind && ((facets.states?.length ?? 0) || (facets.buckets?.length ?? 0)) ? (
+              <div className="sf-facets" aria-label="候选值筛选">
+                {facets.states?.length ? <span className="sf-facet-label">状态</span> : null}
+                {facets.states?.map((item) => (
+                  <button
+                    key={`state-${item.value}`}
+                    type="button"
+                    className={applied.state === item.value ? "sf-chip sf-chip-on" : "sf-chip"}
+                    onClick={() => {
+                      const next = applied.state === item.value ? "" : item.value;
+                      setDraft((current) => ({ ...current, state: next }));
+                      setApplied((current) => ({ ...current, state: next }));
+                      setPageNo(1);
+                    }}
+                  >
+                    {STATE_LABELS[item.value] ?? (item.value || "未知")} {item.count}
+                  </button>
+                ))}
+                {facets.buckets?.length ? <span className="sf-facet-label">表现</span> : null}
+                {facets.buckets?.map((item) => (
+                  <button
+                    key={`bucket-${item.value}`}
+                    type="button"
+                    className={applied.bucket === item.value ? "sf-chip sf-chip-on" : "sf-chip"}
+                    onClick={() => {
+                      const next = applied.bucket === item.value ? "" : item.value;
+                      setDraft((current) => ({ ...current, bucket: next }));
+                      setApplied((current) => ({ ...current, bucket: next }));
+                      setPageNo(1);
+                    }}
+                  >
+                    {BUCKET_LABELS[item.value] ?? item.value} {item.count}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             {dataset.note ? <p className="sf-note">{dataset.note}</p> : null}
             {notice ? <p className="sf-notice" role="status">{notice}</p> : null}
             <div className="sf-table-wrap">
               <table>
                 <thead>
                   <tr>{columns.map((column) => (
-                    <th key={column.key} scope="col" className={isNumeric(column) ? "sf-num" : undefined} title={column.hint} style={hostWidthStyle(getWidth(column.key))}>{column.label}<ColumnResizeHandle label={column.label} onPointerDown={(event) => startResize(event, column.key)} onReset={() => resetWidths(column.key)} /></th>
+                    <th key={column.key} scope="col" className={isNumeric(column) ? "sf-num" : undefined} title={column.hint} aria-sort={sort.by === column.key ? (sort.order === "asc" ? "ascending" : "descending") : undefined} style={hostWidthStyle(getWidth(column.key))}>
+                      <span className={dataset.summaryKind && SUMMARY_SORTABLE.has(column.key) ? "sf-sortable" : undefined} onClick={dataset.summaryKind ? () => toggleSort(column.key) : undefined}>
+                        {column.label}{sort.by === column.key ? (sort.order === "asc" ? " ▲" : " ▼") : ""}
+                      </span>
+                      <ColumnResizeHandle label={column.label} onPointerDown={(event) => startResize(event, column.key)} onReset={() => resetWidths(column.key)} />
+                    </th>
                   ))}</tr>
                 </thead>
                 <tbody>

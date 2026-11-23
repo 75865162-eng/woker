@@ -1,6 +1,7 @@
 
 import { type HostPage, type HostDataset, type HostColumn, type HostTabGroup, storeColumn, adsMetrics } from "./host-page-schema";
 import { advancedMetricPreviewColumns, advancedMetricsSummary } from "./ads-advanced-metrics";
+import { ADS_SUMMARY_SPECS } from "./ads-summary-spec";
 
 /**
  * 阶段2「实体全量拉回」拉入 21 类 CPC 管理实体当前状态（SellfoxApiRecord, endpointCode=ads_ent_*）。
@@ -56,16 +57,58 @@ function adsEntityDataset(spec: { code: string; label: string; path: string; not
 const ADS_ENTITY_DATASETS: HostDataset[] = ADS_ENTITY_SPECS.map(adsEntityDataset);
 
 /**
+ * 实体 × 区间汇总（方案 §1.1 目标粒度）：一行一实体、区间指标先求和后算比率，
+ * 并叠加实体当前态（状态/预算/竞价/日期/组合）。当前态只展示当前配置，不当作历史每日值。
+ * 与日报、实体当前态三类视图并存，互不相加；URL dataset id 保持稳定。
+ */
+function adsSummaryDataset(
+  kind: "campaign" | "adgroup" | "adproduct" | "targeting",
+  id: string,
+  label: string,
+  note: string,
+  priority: "P0" | "P1",
+): HostDataset {
+  const spec = ADS_SUMMARY_SPECS[kind];
+  return {
+    id,
+    label,
+    status: "live",
+    priority,
+    table: spec.dailyTable,
+    api: ["/api/cpc/download/createTask.json", `/api/cpc/manageData/*.json`],
+    grain: spec.grain,
+    note,
+    columns: spec.columns,
+    searchable: true,
+    dateRange: true,
+    adType: true,
+    stateFilter: true,
+    summaryKind: kind,
+  };
+}
+
+const ADS_SUMMARY_DATASETS: HostDataset[] = [
+  adsSummaryDataset("campaign", "ads_campaign_summary", "活动汇总",
+    "一行一活动：区间花费/订单/销售额先汇总再算 CTR/CPC/ACOS/ROAS，并附当前状态、预算、竞价策略与起止日期。日报里的多日多行在这里合成一行。", "P0"),
+  adsSummaryDataset("adgroup", "ads_ad_group_summary", "广告组汇总",
+    "一行一广告组：区间表现 + 当前组状态/默认竞价/父活动。组只属于其真实父活动。", "P1"),
+  adsSummaryDataset("adproduct", "ads_product_summary", "广告产品汇总",
+    "一行一产品广告：区间表现 + 当前产品广告状态/父级/ASIN/SKU。Listing 属性与广告事实分开。", "P1"),
+  adsSummaryDataset("targeting", "ads_targeting_summary", "投放汇总",
+    "一行一投放（关键词/商品投放，含 SB/SD）：区间表现 + 当前竞价/匹配方式/状态。关键词与商品投放分属不同实体端点，按真实 ID 关联。", "P1"),
+];
+
+/**
  * 一级分组：对齐赛狐广告页可见的 10 个管理标签，并保留小时曲线、ABA 与高级指标入口。
  * 每个分组只引用既有 dataset id，不改变读取路径、落表或 URL 参数（向后兼容）。
  * 标签说明来自冻结合同（/workspace/赛狐广告页对标-冻结合同-2026-11-23.md）与完整方案 §1-§13。
  */
 const ADS_TAB_GROUPS: HostTabGroup[] = [
   { id: "portfolio", label: "广告组合", datasetIds: ["ads_ent_portfolio"], status: "live", evidence: "实见", note: "组合当前态：ID/名称/预算策略/金额/起止日期/状态。组合预算不与活动花费相加。" },
-  { id: "campaign", label: "广告活动", datasetIds: ["ads_ent_sp_campaign", "ads_ent_sb_campaign", "ads_ent_sd_campaign", "ads_campaign"], status: "live", evidence: "实见", note: "上排三个为活动当前配置（无日期），下排为活动按日日报；两者不相加。" },
-  { id: "adgroup", label: "广告组", datasetIds: ["ads_ent_sp_group", "ads_ent_sb_group", "ads_ent_sd_group", "ads_ad_group"], status: "live", evidence: "实见", note: "组当前态含父活动与默认竞价；日报为按日表现。" },
-  { id: "adproduct", label: "广告产品", datasetIds: ["ads_ent_sp_ad_product", "ads_ent_sb_ad_product", "ads_ent_sd_ad_product", "ads_product"], status: "live", evidence: "实见", note: "广告产品当前态 + 按日商品日报。" },
-  { id: "targeting", label: "投放", datasetIds: ["ads_ent_sp_target", "ads_ent_sp_keyword", "ads_ent_sb_target", "ads_ent_sb_keyword", "ads_ent_sd_target", "ads_targeting"], status: "live", evidence: "实见", note: "商品投放/关键词当前竞价、表达式与状态 + 投放日报；SD 投放仅商品投放。" },
+  { id: "campaign", label: "广告活动", datasetIds: ["ads_campaign_summary", "ads_ent_sp_campaign", "ads_ent_sb_campaign", "ads_ent_sd_campaign", "ads_campaign"], status: "live", evidence: "实见", note: "上排三个为活动当前配置（无日期），下排为活动按日日报；两者不相加。" },
+  { id: "adgroup", label: "广告组", datasetIds: ["ads_ad_group_summary", "ads_ent_sp_group", "ads_ent_sb_group", "ads_ent_sd_group", "ads_ad_group"], status: "live", evidence: "实见", note: "组当前态含父活动与默认竞价；日报为按日表现。" },
+  { id: "adproduct", label: "广告产品", datasetIds: ["ads_product_summary", "ads_ent_sp_ad_product", "ads_ent_sb_ad_product", "ads_ent_sd_ad_product", "ads_product"], status: "live", evidence: "实见", note: "广告产品当前态 + 按日商品日报。" },
+  { id: "targeting", label: "投放", datasetIds: ["ads_targeting_summary", "ads_ent_sp_target", "ads_ent_sp_keyword", "ads_ent_sb_target", "ads_ent_sb_keyword", "ads_ent_sd_target", "ads_targeting"], status: "live", evidence: "实见", note: "商品投放/关键词当前竞价、表达式与状态 + 投放日报；SD 投放仅商品投放。" },
   { id: "searchterm", label: "搜索词", datasetIds: ["ads_search_term"], status: "live", evidence: "实见", note: "仅区间日报聚合；搜索词不是投放实体，不同来源投放可共存。" },
   { id: "negative", label: "否定投放", datasetIds: ["ads_ent_sp_ne_keyword", "ads_ent_sp_ne_target", "ads_ent_sb_ne_keyword", "ads_ent_sb_ne_target", "ads_ent_sd_ne_target"], status: "live", evidence: "实见", note: "否定关键词/否定商品投放当前态；sb_ne_target 与 sd_ne_target 为真实空集合，显示暂无数据属正确结果。" },
   { id: "placement", label: "广告位", datasetIds: ["ads_placement"], status: "live", evidence: "实见", note: "广告位表现日报，当前仅 SP 有数据；无广告位调整配置端点，SB/SD 覆盖待验证。" },
@@ -220,6 +263,7 @@ export const adsHostPage: HostPage = {
       // 阶段2「实体全量拉回」已把 21 类管理实体拉入 SellfoxApiRecord（endpointCode=ads_ent_*），
       // 阶段3统一查询走既有 rawCode 动态列通道读取真实 payload：按店铺授权收窄、字段按真实键派生、
       // 不猜字段、不补零、不与六类广告日报相加。实体是「当前状态快照」，无日期维度，故 dateRange=false。
+      ...ADS_SUMMARY_DATASETS,
       ...ADS_ENTITY_DATASETS,
       {
         id: "hourly",

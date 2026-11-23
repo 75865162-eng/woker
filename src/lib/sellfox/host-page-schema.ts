@@ -40,6 +40,8 @@ export type HostDataset = {
   adType?: boolean;
   /** 实体当前态数据集支持 state（enabled/paused/archived）本地筛选；键名来自实见 payload。 */
   stateFilter?: boolean;
+  /** 实体 × 区间表现汇总：值决定日报表与实体端点，由 ads-entity-summary 统一查询。 */
+  summaryKind?: "campaign" | "adgroup" | "adproduct" | "targeting";
 };
 
 /**
