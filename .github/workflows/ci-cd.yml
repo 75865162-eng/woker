@@ -254,7 +254,7 @@ jobs:
     needs: [build, performance-regression, runtime-integration]
     if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.deploy_production && needs.build.result == 'success' && needs.runtime-integration.result == 'success' && needs.build.outputs.release == 'true' && (needs.performance-regression.result == 'success' || (inputs.initial_deployment && needs.performance-regression.result == 'skipped')) }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 50
     environment: production
     steps:
       - name: Checkout
@@ -281,7 +281,7 @@ jobs:
           SERVER_HOST: ${{ inputs.target_host || secrets.PRODUCTION_SERVER_HOST }}
           SERVER_USER: ${{ secrets.PRODUCTION_SERVER_USER }}
           SERVER_DIR: ${{ secrets.PRODUCTION_SERVER_DIR }}
-          SSH_OPTS: -o StrictHostKeyChecking=yes
+          SSH_OPTS: -o StrictHostKeyChecking=yes -o ConnectTimeout=60 -o ServerAliveInterval=30 -o ServerAliveCountMax=6
           INSTALL_DEPS_ON_SERVER: ${{ inputs.install_dependencies && 'true' || 'false' }}
           INITIAL_DEPLOYMENT: ${{ inputs.initial_deployment && 'true' || 'false' }}
           RUN_BOOTSTRAP_SEED: "false"
