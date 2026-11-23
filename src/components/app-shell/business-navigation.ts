@@ -56,7 +56,8 @@ export const navigationGroups: NavigationGroup[] = [
   ] },
 
   { id: "sellfox", label: "赛狐数据", icon: Store, href: "/sellfox/profit", items: [
-    { id: "sellfox.profit", href: "/sellfox/profit", label: "利润报表", icon: Banknote, moduleId: "sellfox" },
+    { id: "sellfox.profit", href: "/sellfox/profit", label: "销量统计", icon: ChartNoAxesCombined, moduleId: "sellfox" },
+    { id: "sellfox.profitReport", href: "/sellfox/profit?view=report", label: "利润报表", icon: Banknote, moduleId: "sellfox" },
     { id: "sellfox.sales", href: "/sellfox/sales", label: "销量统计", icon: ChartNoAxesCombined, moduleId: "sellfox" },
     { id: "sellfox.orders", href: "/sellfox/orders", label: "订单快照", icon: ClipboardList, moduleId: "sellfox" },
     { id: "sellfox.orderDetail", href: "/sellfox/order-detail", label: "订单详情", icon: ClipboardList, moduleId: "sellfox" },
