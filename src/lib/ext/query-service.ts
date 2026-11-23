@@ -47,6 +47,70 @@ export async function queryExt(scope: WmsScope, kind: string, params: URLSearchP
           },
         };
       }
+      case 'reviews-by-asin': {
+        // 全部口径都来自真实的 ReviewRecord 分组聚合，不补零、不造数据。
+        const [groups, bySentiment, replied, details] = await Promise.all([
+          tx.reviewRecord.groupBy({
+            by: ['marketplace', 'asin'], where,
+            _count: { _all: true }, _avg: { rating: true }, _max: { reviewedAt: true },
+          }),
+          tx.reviewRecord.groupBy({
+            by: ['marketplace', 'asin', 'sentiment'], where,
+            _count: { _all: true },
+          }),
+          tx.reviewRecord.groupBy({
+            by: ['marketplace', 'asin'], where: { ...where, status: 'REPLIED' },
+            _count: { _all: true },
+          }),
+          tx.reviewRecord.findMany({
+            where, orderBy: [{ reviewedAt: 'desc' }, { createdAt: 'desc' }], take: 1000,
+            select: { id: true, marketplace: true, asin: true, rating: true, sentiment: true, title: true, content: true, status: true, reviewedAt: true },
+          }),
+        ]);
+        // 用分隔符合成复合键，避免 ASIN 含空格时与站点串拼接碰撞。
+        const key = (m: string, a: string) => `${m}\u0000${a}`;
+        const sentimentMap = new Map<string, Record<string, number>>();
+        for (const row of bySentiment) {
+          const k = key(row.marketplace, row.asin);
+          const entry = sentimentMap.get(k) ?? { POSITIVE: 0, NEUTRAL: 0, NEGATIVE: 0 };
+          entry[row.sentiment] = row._count._all;
+          sentimentMap.set(k, entry);
+        }
+        const repliedMap = new Map(replied.map(row => [key(row.marketplace, row.asin), row._count._all]));
+        type AsinDetail = { id: string; marketplace: string; asin: string; rating: number; sentiment: string; title: string; content: string; status: string; reviewedAt: string };
+        const detailsMap = new Map<string, AsinDetail[]>();
+        for (const row of details) {
+          const k = key(row.marketplace, row.asin);
+          const list = detailsMap.get(k) ?? [];
+          if (list.length < 50) list.push({ ...row, reviewedAt: dayKey(row.reviewedAt) });
+          detailsMap.set(k, list);
+        }
+        const items = groups.map(row => {
+          const k = key(row.marketplace, row.asin);
+          const dist = sentimentMap.get(k) ?? { POSITIVE: 0, NEUTRAL: 0, NEGATIVE: 0 };
+          const total = row._count._all;
+          const negative = dist.NEGATIVE ?? 0;
+          const repliedCount = repliedMap.get(k) ?? 0;
+          return {
+            id: k,
+            marketplace: row.marketplace,
+            asin: row.asin,
+            total,
+            avgRating: row._avg.rating === null ? null : Math.round(row._avg.rating * 100) / 100,
+            positive: dist.POSITIVE ?? 0,
+            neutral: dist.NEUTRAL ?? 0,
+            negative,
+            replied: repliedCount,
+            negativeRateBp: total > 0 ? Math.round((negative / total) * 10_000) : 0,
+            replyRateBp: total > 0 ? Math.round((repliedCount / total) * 10_000) : 0,
+            latestReviewedAt: row._max.reviewedAt ? dayKey(row._max.reviewedAt) : '',
+            details: detailsMap.get(k) ?? [],
+          };
+        });
+        // 差评率优先、其次评论量，便于运营先处理问题 ASIN。
+        items.sort((a, b) => b.negativeRateBp - a.negativeRateBp || b.total - a.total || b.latestReviewedAt.localeCompare(a.latestReviewedAt));
+        return { items, total: items.length };
+      }
       case 'performance': {
         const items = await tx.storePerformanceSnapshot.findMany({ where, orderBy: [{ periodStart: 'desc' }], take: 60 });
         return {

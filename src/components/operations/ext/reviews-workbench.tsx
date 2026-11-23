@@ -11,6 +11,12 @@ type Review = {
   replyText: string; revision: number;
 };
 type Summary = { total: number; positive: number; neutral: number; negative: number; replied: number; negativeRateBp: number; replyRateBp: number };
+type AsinDetail = { id: string; marketplace: string; asin: string; rating: number; sentiment: string; title: string; content: string; status: string; reviewedAt: string };
+type AsinGroup = {
+  id: string; marketplace: string; asin: string; total: number; avgRating: number | null;
+  positive: number; neutral: number; negative: number; replied: number;
+  negativeRateBp: number; replyRateBp: number; latestReviewedAt: string; details: AsinDetail[];
+};
 type Performance = {
   id: string; marketplace: string; periodStart: string; periodEnd: string; totalOrders: number;
   orderDefectRateBp: number; lateShipmentRateBp: number; cancellationRateBp: number;
@@ -26,7 +32,8 @@ const blankPerf = {
 };
 
 export function ReviewsWorkbench() {
-  const [tab, setTab] = useState<"REVIEW" | "PERF">("REVIEW");
+  const [tab, setTab] = useState<"REVIEW" | "ASIN" | "PERF">("REVIEW");
+  const [expandedAsin, setExpandedAsin] = useState("");
   const [filter, setFilter] = useState({ sentiment: "", status: "" });
   const [form, setForm] = useState({ ...blankReview });
   const [editId, setEditId] = useState("");
@@ -37,6 +44,7 @@ export function ReviewsWorkbench() {
   const [busy, setBusy] = useState(false);
 
   const reviews = useExt<{ items: Review[]; summary: Summary }>("reviews", filter);
+  const byAsin = useExt<{ items: AsinGroup[]; total: number }>("reviews-by-asin", {}, tab === "ASIN");
   const performance = useExt<{ items: Performance[] }>("performance");
 
   async function run(action: string, body: Record<string, unknown>, message: string, after: () => Promise<void> | void) {
@@ -50,7 +58,7 @@ export function ReviewsWorkbench() {
   const summary = reviews.data?.summary;
 
   return <WorkbenchPageTemplate context={<Notice error={error || reviews.error || performance.error || ""} notice={notice} />} main={<div className="space-y-5">
-    <Tabs value={tab} onChange={value => setTab(value as "REVIEW" | "PERF")} tabs={[{ id: "REVIEW", label: "评论与差评", count: summary?.total }, { id: "PERF", label: "店铺绩效", count: performance.data?.items.length }]} />
+    <Tabs value={tab} onChange={value => { setTab(value as "REVIEW" | "ASIN" | "PERF"); setExpandedAsin(""); }} tabs={[{ id: "REVIEW", label: "评论与差评", count: summary?.total }, { id: "ASIN", label: "ASIN 聚合", count: byAsin.data?.total }, { id: "PERF", label: "店铺绩效", count: performance.data?.items.length }]} />
 
     {tab === "REVIEW" && <>
       <Kpis items={[
@@ -124,6 +132,56 @@ export function ReviewsWorkbench() {
           <Button size="sm" variant="ghost" onClick={() => setReply({ id: "", text: "" })}>取消</Button>
         </div>
       </Section>}
+    </>}
+
+    {tab === "ASIN" && <>
+      <Kpis items={[
+        { label: "覆盖 ASIN 数", value: String(byAsin.data?.total ?? 0), hint: "按站点 + ASIN 去重" },
+        { label: "评论总数", value: String((byAsin.data?.items ?? []).reduce((sum, row) => sum + row.total, 0)) },
+        { label: "有差评 ASIN", value: String((byAsin.data?.items ?? []).filter(row => row.negative > 0).length), tone: (byAsin.data?.items ?? []).some(row => row.negative > 0) ? "warn" : undefined, hint: "存在中差评，建议优先处理" },
+        { label: "平均星级", value: (() => {
+          const rows = byAsin.data?.items ?? [];
+          const weighted = rows.reduce((sum, row) => sum + (row.avgRating ?? 0) * row.total, 0);
+          const count = rows.reduce((sum, row) => sum + row.total, 0);
+          return count > 0 ? (weighted / count).toFixed(2) : "—";
+        })() },
+      ]} />
+
+      <Section title="按 ASIN 聚合" description="对每条真实评论按站点 + ASIN 归集；差评率高的排前面。点击 ASIN 展开该 ASIN 下的评论明细。当前评论为手工录入数据源，录入后自动聚合，不补零、不造数据。">
+        <Table
+          rows={byAsin.data?.items ?? []}
+          empty="还没有评论记录，暂无可聚合的 ASIN。可在「评论与差评」录入，接入合规评论报告后批量导入，再回到此页查看按 ASIN 聚合的口径。"
+          rowKey={row => row.id}
+          columns={[
+            { key: "asin", label: "ASIN", render: row => <button type="button" className="text-left font-mono underline decoration-dotted hover:text-brand" onClick={() => setExpandedAsin(current => current === row.id ? "" : row.id)}>{row.asin || "(未填 ASIN)"}</button> },
+            { key: "marketplace", label: "站点" },
+            { key: "total", label: "评论数", align: "right" },
+            { key: "avgRating", label: "平均星级", align: "right", render: row => row.avgRating === null ? "—" : `${row.avgRating.toFixed(2)} ★` },
+            { key: "sentiment", label: "好评/中评/差评", render: row => <span className="tabular-nums">{row.positive} / {row.neutral} / <span className={row.negative > 0 ? "text-danger-ink" : ""}>{row.negative}</span></span> },
+            { key: "negativeRateBp", label: "差评率", align: "right", render: row => <span className={row.negative > 0 ? "text-danger-ink" : ""}>{bp(row.negativeRateBp)}</span> },
+            { key: "replyRateBp", label: "回复率", align: "right", render: row => bp(row.replyRateBp) },
+            { key: "latestReviewedAt", label: "最新评论日", render: row => row.latestReviewedAt || "—" },
+          ]}
+        />
+      </Section>
+
+      {expandedAsin && (() => {
+        const group = (byAsin.data?.items ?? []).find(row => row.id === expandedAsin);
+        if (!group) return null;
+        return <Section title={`ASIN 明细 · ${group.asin || "(未填 ASIN)"}`} description={`${group.marketplace} 站点，共 ${group.total} 条评论（明细最多展示 50 条）。`}>
+          <Table
+            rows={group.details}
+            empty="该 ASIN 暂无可展示的评论明细。"
+            columns={[
+              { key: "reviewedAt", label: "日期" },
+              { key: "rating", label: "星级", align: "right", render: row => `${row.rating} ★` },
+              { key: "sentiment", label: "情绪", render: row => <Badge text={statusLabel(row.sentiment)} tone={row.sentiment === "NEGATIVE" ? "warn" : row.sentiment === "POSITIVE" ? "good" : "muted"} /> },
+              { key: "title", label: "标题 / 内容", render: row => <span className="block max-w-[320px] truncate" title={row.content}>{row.title || row.content || "—"}</span> },
+              { key: "status", label: "状态", render: row => <Badge text={statusLabel(row.status)} tone={row.status === "NEW" ? "info" : "muted"} /> },
+            ]}
+          />
+        </Section>;
+      })()}
     </>}
 
     {tab === "PERF" && <>
