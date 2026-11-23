@@ -2574,6 +2574,7 @@ model AmazonSyncRun {
   updatedCount          Int                            @default(0)
   skippedCount          Int                            @default(0)
   salesTrafficRows      AmazonSalesTrafficSnapshot[]
+  sellerFeedbackRows    AmazonSellerFeedbackSnapshot[]
   salesTrafficProductRows AmazonSalesTrafficProductSnapshot[]
   orderRows             AmazonOrderRecord[]
   financeRows           AmazonFinanceRecord[]
@@ -3535,6 +3536,7 @@ model AmazonSyncDataSource {
   createdAt        DateTime                     @default(now())
   updatedAt        DateTime                     @updatedAt
   salesTrafficRows AmazonSalesTrafficSnapshot[]
+  sellerFeedbackRows AmazonSellerFeedbackSnapshot[]
   salesTrafficProductRows AmazonSalesTrafficProductSnapshot[]
   orderPolicy      Json?
   financePolicy    Json?
@@ -3840,6 +3842,32 @@ model AmazonSalesTrafficProductSnapshot {
   @@unique([organizationId, workspaceId, syncRunId, businessDate, granularity, childAsin], map: "AmazonSalesTrafficProduct_run_day_identity_key")
   @@index([organizationId, workspaceId, sourceId, businessDate, granularity], map: "AmazonSalesTrafficProduct_scope_day_idx")
   @@index([organizationId, workspaceId, sourceId, granularity, childAsin, businessDate], map: "AmazonSalesTrafficProduct_asin_idx")
+}
+
+/// 卖家反馈（GET_SELLER_FEEDBACK_DATA TSV 明细）：订单级 Feedback 事实，追加式快照。
+/// id 为内容幂等（sourceId+日期+星级+内容摘要），跨 run 去重；买家邮箱属 PII 不落结构化列。
+model AmazonSellerFeedbackSnapshot {
+  id              String               @id
+  organizationId  String
+  workspaceId     String
+  sourceId        String
+  source          AmazonSyncDataSource @relation(fields: [organizationId, workspaceId, sourceId], references: [organizationId, workspaceId, id], onDelete: Restrict, map: "AmazonSellerFeedback_source_fkey")
+  syncRunId       String
+  task            AmazonSyncRun        @relation(fields: [syncRunId, organizationId, workspaceId, sourceId], references: [id, organizationId, workspaceId, sourceId], onDelete: Restrict, map: "AmazonSellerFeedback_task_fkey")
+  sellerAccountId String
+  marketplaceId   String
+  reportId        String
+  documentId      String
+  feedbackDate    String               @db.VarChar(10)
+  rating          Int
+  comments        String
+  response        String
+  amazonOrderId   String?              @db.VarChar(30)
+  capturedAt      DateTime
+
+  @@index([organizationId, workspaceId, sourceId, feedbackDate], map: "AmazonSellerFeedback_scope_date_idx")
+  @@index([organizationId, workspaceId, amazonOrderId], map: "AmazonSellerFeedback_order_idx")
+  @@index([organizationId, workspaceId, rating, feedbackDate], map: "AmazonSellerFeedback_rating_idx")
 }
 
 model AmazonDataExport {

@@ -302,6 +302,13 @@ export class AmazonSpApiClient {
   async createAllListingsReport(marketplaceId: string): Promise<unknown> {
     return this.request("POST", "/reports/2021-06-30/reports", { reportType: "GET_MERCHANT_LISTINGS_ALL_DATA", marketplaceIds: [marketplaceId], reportOptions: { preferredReportDocumentLocale: "en_US" } });
   }
+  /** Seller Feedback Report: TSV 明细（Date/Rating/Comments/Response/OrderID/Email），无数据窗口。
+   * timeRange 取值受 Amazon 限制；缺省由后端填 month。https://developer-docs.amazon.com/sp-api/docs/report-type-values-reports */
+  async createSellerFeedbackReport(input: { marketplaceId: string; timeRange?: "today" | "yesterday" | "week" | "month" }): Promise<unknown> {
+    const timeRange = input.timeRange ?? "month";
+    if (!["today", "yesterday", "week", "month"].includes(timeRange)) throw new AmazonSpApiError("卖家反馈报告时间范围无效。");
+    return this.request("POST", "/reports/2021-06-30/reports", { reportType: "GET_SELLER_FEEDBACK_DATA", marketplaceIds: [input.marketplaceId], reportOptions: { timeRange } });
+  }
   async createSnapshotReport(input: { reportType: string; marketplaceId: string }): Promise<unknown> {
     return this.request("POST", "/reports/2021-06-30/reports", { reportType: input.reportType, marketplaceIds: [input.marketplaceId] });
   }

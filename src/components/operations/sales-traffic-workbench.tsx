@@ -8,7 +8,7 @@ import { type DataTableColumn } from "@/components/ui/data-table";
 import { ReadinessNotice, readinessKindFromCode } from "@/components/operations/readiness-notice";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
 import type { SyncSourceView } from "@/lib/amazon-sync/contracts";
-import type { SalesRow, SalesMatrix, SalesMatrixCell, SalesMatrixDimension, ProductSalesRow } from "@/lib/amazon-sync/sales-query";
+import type { SalesRow, SalesMatrix, SalesMatrixCell, SalesMatrixDimension, ProductSalesRow, SalesPeriodSummary, SalesPeriodAgg, SalesTopResult } from "@/lib/amazon-sync/sales-query";
 const endpoint = "/api/operations/sync-center";
 const input = "min-h-9 rounded border border-border bg-background px-2 text-sm";
 const PENDING_DIMENSIONS = ["MSKU", "SPU", "开发员", "业务员"] as const;
@@ -29,24 +29,66 @@ function cellValue(cell: SalesMatrixCell | undefined, metric: MetricKey): string
   if (metric === "revenue") return cell.orderedProductSales ? `${cell.orderedProductSales.amount} ${cell.orderedProductSales.currencyCode}` : "—";
   return cell.sessions ?? "—";
 }
+function deltaText(previous: string | null | undefined, current: string | null | undefined): string {
+  if (previous === null || previous === undefined || current === null || current === undefined) return "—";
+  const p = Number(previous), c = Number(current);
+  if (!Number.isFinite(p) || !Number.isFinite(c) || p === 0) return c - p >= 0 ? `+${(c - p).toFixed(2)}` : (c - p).toFixed(2);
+  const pct = ((c - p) / p) * 100;
+  return `${c - p >= 0 ? "+" : ""}${(c - p).toFixed(2)}（${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%）`;
+}
+function TrendChart({ periods }: { periods: SalesPeriodAgg[] }) {
+  const W = 720, H = 210, P = 30;
+  const series = (key: "unitsOrdered" | "totalOrderItems") => periods.map(p => { const raw = p[key]; if (raw == null) return null; const n = Number(raw); return Number.isFinite(n) ? n : null; });
+  const units = series("unitsOrdered"), items = series("totalOrderItems");
+  const known = [...units, ...items].filter((v): v is number => v !== null);
+  const max = Math.max(1, ...known);
+  const x = (i: number) => (periods.length <= 1 ? W / 2 : P + (i * (W - 2 * P)) / (periods.length - 1));
+  const y = (v: number) => H - P - (v / max) * (H - 2 * P);
+  const segments = (vals: Array<number | null>) => { const segs: string[] = []; let cur: string[] = []; vals.forEach((v, i) => { if (v === null) { if (cur.length) segs.push(cur.join(" ")); cur = []; } else cur.push(`${x(i).toFixed(1)},${y(v).toFixed(1)}`); }); if (cur.length) segs.push(cur.join(" ")); return segs; };
+  const labelEvery = Math.max(1, Math.ceil(periods.length / 8));
+  return <svg viewBox={`0 0 ${W} ${H}`} className="w-full rounded border border-border bg-background" role="img" aria-label="销量与订单商品项数趋势（缺日断线）" data-testid="sales-trend">
+    <line x1={P} y1={H - P} x2={W - P} y2={H - P} stroke="var(--border)" /><line x1={P} y1={P} x2={P} y2={H - P} stroke="var(--border)" />
+    <text x={P} y={16} fontSize="11" fill="var(--muted)">max {max}</text>
+    {segments(units).map((pts, i) => <polyline key={`u${i}`} points={pts} fill="none" stroke="var(--brand)" strokeWidth="2" />)}
+    {segments(items).map((pts, i) => <polyline key={`o${i}`} points={pts} fill="none" stroke="var(--warning-ink)" strokeWidth="2" strokeDasharray="4 3" />)}
+    {periods.map((p, i) => i % labelEvery === 0 ? <text key={p.period} x={x(i)} y={H - 8} fontSize="10" textAnchor="middle" fill="var(--muted)">{p.period.slice(-7)}</text> : null)}
+    <text x={W - P} y={16} fontSize="11" textAnchor="end" fill="var(--brand)">销量</text>
+    <text x={W - P} y={30} fontSize="11" textAnchor="end" fill="var(--warning-ink)">订单商品项数</text>
+  </svg>;
+}
 export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onTask }: { sources: SyncSourceView[]; canSync: boolean; canExport: boolean; taskId?: string; onTask?: (id: string) => void }) {
   const [seller, setSeller] = useState(""), [site, setSite] = useState(""), [from, setFrom] = useState(""), [to, setTo] = useState(""), [keyword, setKeyword] = useState(""), [direction, setDirection] = useState("desc");
   const [source, setSource] = useState(""), [preset, setPreset] = useState("yesterday"), [syncFrom, setSyncFrom] = useState(""), [syncTo, setSyncTo] = useState("");
   const [page, setPage] = useState(1), [reload, setReload] = useState(0), [result, setResult] = useState<Result | null>(null), [matrix, setMatrix] = useState<SalesMatrix | null>(null), [productResult, setProductResult] = useState<ProductResult | null>(null), [error, setError] = useState(""), [errorCode, setErrorCode] = useState(""), [notice, setNotice] = useState(""), [busy, setBusy] = useState(false), [loading, setLoading] = useState(true), [job, setJob] = useState<ExportState | null>(null);
-  const [view, setView] = useState<"rows" | "matrix" | "products">("rows"), [metric, setMetric] = useState<MetricKey>("units");
+  const [view, setView] = useState<"rows" | "matrix" | "products" | "period">("rows"), [metric, setMetric] = useState<MetricKey>("units");
+  const [periodBucket, setPeriodBucket] = useState<"day" | "week" | "month">("day"), [topDim, setTopDim] = useState<"child" | "parent" | "sku">("child");
+  const [periodData, setPeriodData] = useState<SalesPeriodSummary | null>(null), [topData, setTopData] = useState<SalesTopResult | null>(null);
   const [productDim, setProductDim] = useState<"ASIN" | "父ASIN" | "SKU">("ASIN"), [syncGranularity, setSyncGranularity] = useState<"CHILD" | "SKU">("CHILD");
   const [productKeyword, setProductKeyword] = useState("");
   const sequence = useRef(0), mutation = useRef(0);
   const filters = { sellerAccountId: seller, marketplaceId: site, from, to, keyword, direction, ...(taskId ? { taskId } : {}) };
   const queryKey = JSON.stringify(filters);
-  useEffect(() => { const requests = sequence, mutations = mutation; const reset = () => { ++requests.current; ++mutations.current; setResult(null); setMatrix(null); setProductResult(null); setJob(null); setError(""); setErrorCode(""); setNotice(""); setBusy(false); setPage(1); setSeller(""); setSite(""); setSource(""); setReload(v => v + 1); }; window.addEventListener(workspaceScopeChangedEventName, reset); return () => { ++requests.current; ++mutations.current; window.removeEventListener(workspaceScopeChangedEventName, reset); }; }, []);
+  useEffect(() => { const requests = sequence, mutations = mutation; const reset = () => { ++requests.current; ++mutations.current; setResult(null); setMatrix(null); setProductResult(null); setPeriodData(null); setTopData(null); setJob(null); setError(""); setErrorCode(""); setNotice(""); setBusy(false); setPage(1); setSeller(""); setSite(""); setSource(""); setReload(v => v + 1); }; window.addEventListener(workspaceScopeChangedEventName, reset); return () => { ++requests.current; ++mutations.current; window.removeEventListener(workspaceScopeChangedEventName, reset); }; }, []);
   useEffect(() => {
-    const n = ++sequence.current, controller = new AbortController(); setLoading(true); setResult(null); setMatrix(null); setProductResult(null); setError(""); setErrorCode("");
-    const section = view === "matrix" ? "sales-traffic-matrix" : view === "products" ? "sales-traffic-products" : "sales-traffic";
-    const params = new URLSearchParams({ section, ...(view === "rows" || view === "products" ? { page: String(page) } : {}), ...JSON.parse(queryKey), ...(view === "products" ? { granularity: productDim === "SKU" ? "SKU" : "CHILD", ...(productDim === "SKU" && productKeyword.trim() ? { sellerSku: productKeyword.trim() } : {}) } : {}) });
-    void fetch(`${endpoint}?${params}`, { headers: scopeHeaders(), cache: "no-store", signal: controller.signal }).then(async response => { const payload = await response.json(); if (!response.ok) { const failure = new Error(payload.error ?? "销售流量读取失败。") as Error & { code?: string }; failure.code = payload.code; throw failure; } if (n === sequence.current) { if (view === "matrix") setMatrix(payload as SalesMatrix); else if (view === "products") setProductResult(payload as ProductResult); else setResult(payload as Result); } }).catch(e => { if (n === sequence.current && !controller.signal.aborted) { setError(e instanceof Error ? e.message : "读取失败。"); setErrorCode((e as Error & { code?: string }).code ?? ""); } }).finally(() => { if (n === sequence.current) setLoading(false); });
+    const n = ++sequence.current, controller = new AbortController(); setLoading(true); setResult(null); setMatrix(null); setProductResult(null); setPeriodData(null); setTopData(null); setError(""); setErrorCode("");
+    const base = JSON.parse(queryKey) as Record<string, string>;
+    const go = async (params: URLSearchParams, assign: (payload: unknown) => void) => {
+      const response = await fetch(`${endpoint}?${params}`, { headers: scopeHeaders(), cache: "no-store", signal: controller.signal });
+      const payload = await response.json();
+      if (!response.ok) { const failure = new Error(payload.error ?? "销售流量读取失败。") as Error & { code?: string }; failure.code = payload.code; throw failure; }
+      if (n === sequence.current) assign(payload);
+    };
+    if (view === "period") {
+      const periodParams = new URLSearchParams({ ...base, section: "sales-traffic-period", bucket: periodBucket });
+      const topParams = new URLSearchParams({ ...base, section: "sales-traffic-top", dimension: topDim, limit: "10" });
+      void Promise.all([go(periodParams, p => setPeriodData(p as SalesPeriodSummary)), go(topParams, p => setTopData(p as SalesTopResult))]).catch(e => { if (n === sequence.current && !controller.signal.aborted) { setError(e instanceof Error ? e.message : "读取失败。"); setErrorCode((e as Error & { code?: string }).code ?? ""); } }).finally(() => { if (n === sequence.current) setLoading(false); });
+    } else {
+      const section = view === "matrix" ? "sales-traffic-matrix" : view === "products" ? "sales-traffic-products" : "sales-traffic";
+      const params = new URLSearchParams({ section, ...(view === "rows" || view === "products" ? { page: String(page) } : {}), ...base, ...(view === "products" ? { granularity: productDim === "SKU" ? "SKU" : "CHILD", ...(productDim === "SKU" && productKeyword.trim() ? { sellerSku: productKeyword.trim() } : {}) } : {}) });
+      void go(params, p => { if (view === "matrix") setMatrix(p as SalesMatrix); else if (view === "products") setProductResult(p as ProductResult); else setResult(p as Result); }).catch(e => { if (n === sequence.current && !controller.signal.aborted) { setError(e instanceof Error ? e.message : "读取失败。"); setErrorCode((e as Error & { code?: string }).code ?? ""); } }).finally(() => { if (n === sequence.current) setLoading(false); });
+    }
     return () => { controller.abort(); };
-  }, [queryKey, page, reload, view, productDim, productKeyword]);
+  }, [queryKey, page, reload, view, productDim, productKeyword, periodBucket, topDim]);
   useVisiblePolling({
     intervalMs: 3000,
     enabled: Boolean(job && ["QUEUED", "RUNNING"].includes(job.status)),
@@ -114,6 +156,7 @@ export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onT
   return <div className="space-y-4" data-testid="sales-traffic-workbench">
     <div className="flex flex-wrap gap-2" role="tablist" aria-label="销量统计维度">
       <Button size="sm" variant={view === "products" ? "secondary" : "primary"} role="tab" aria-selected={view !== "products"} data-testid="dim-store" onClick={() => setView("rows")} title="店铺 × 业务日逐日汇总">店铺 × 业务日</Button>
+      <Button size="sm" variant={view === "period" ? "primary" : "secondary"} role="tab" aria-selected={view === "period"} data-testid="dim-period" onClick={() => setView("period")} title="周期汇总（日/周/月）、区间合计与环比、销量排行">汇总 / 排行</Button>
       <Button size="sm" variant={view === "products" && productDim === "ASIN" ? "primary" : "secondary"} role="tab" aria-selected={view === "products" && productDim === "ASIN"} data-testid="dim-asin" onClick={() => { setProductDim("ASIN"); setView("products"); }} title="来自单日 CHILD 报告的 childAsin 商品日事实">ASIN<span className="ml-1 text-muted">· 商品日</span></Button>
       <Button size="sm" variant={view === "products" && productDim === "父ASIN" ? "primary" : "secondary"} role="tab" aria-selected={view === "products" && productDim === "父ASIN"} data-testid="dim-parent-asin" onClick={() => { setProductDim("父ASIN"); setView("products"); }} title="来自单日 CHILD 报告的 parentAsin 商品日事实">父ASIN<span className="ml-1 text-muted">· 商品日</span></Button>
       <Button size="sm" variant={view === "products" && productDim === "SKU" ? "primary" : "secondary"} role="tab" aria-selected={view === "products" && productDim === "SKU"} data-testid="dim-sku" onClick={() => { setProductDim("SKU"); setView("products"); }} title="来自单日 SKU 报告的 sellerSku 商品日事实（一个 ASIN 的多个 SKU 分行保存，不复制、不平均）">SKU<span className="ml-1 text-muted">· 商品日</span></Button>
@@ -185,7 +228,7 @@ export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onT
         rows={productResult.rows}
         getRowKey={(row) => row.id}
         columns={[
-          { key: "asin", header: "商品身份", render: (row) => (<>{productDim === "SKU" ? (row.sellerSku ?? "—") : productDim === "父ASIN" ? (row.parentAsin ?? "—") : row.childAsin}<span className="block text-muted">{formatSiteStore(row.marketplaceId, row.sellerName)}{productDim !== "SKU" && row.sellerSku ? ` · ${row.sellerSku}` : ""}{productDim === "SKU" && row.childAsin ? ` · ASIN ${row.childAsin}` : ""}</span></>) },
+          { key: "asin", header: "商品身份", render: (row) => (<div className="flex items-start gap-2">{row.imageUrl && <span aria-hidden className="h-8 w-8 shrink-0 rounded border border-border bg-cover bg-center" style={{ backgroundImage: `url(${row.imageUrl})` }} />}<div>{productDim === "SKU" ? (row.sellerSku ?? "—") : productDim === "父ASIN" ? (row.parentAsin ?? "—") : row.childAsin}{row.productTitle && <span className="block max-w-[220px] truncate text-muted" title={row.productTitle}>{row.productTitle}</span>}<span className="block text-muted">{formatSiteStore(row.marketplaceId, row.sellerName)}{productDim !== "SKU" && row.sellerSku ? ` · ${row.sellerSku}` : ""}{productDim === "SKU" && row.childAsin ? ` · ASIN ${row.childAsin}` : ""}</span></div></div>) },
           { key: "date", header: "业务日", render: (row) => row.businessDate },
           { key: "sales", header: "销售额", numeric: true, render: (row) => row.metrics.orderedProductSales ? `${row.metrics.orderedProductSales.amount} ${row.metrics.orderedProductSales.currencyCode}` : "—" },
           { key: "units", header: "销量 / 订单商品项数", render: (row) => `${row.metrics.unitsOrdered ?? "—"} / ${row.metrics.totalOrderItems ?? "—"}` },
@@ -196,6 +239,63 @@ export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onT
       />
       <div className="flex items-center justify-end gap-3 text-xs"><span>{productResult.pagination.total} 条 · {page} / {Math.max(1, productResult.pagination.pageCount)}</span><Button size="sm" variant="secondary" disabled={page <= 1 || loading} onClick={() => setPage(v => v - 1)}>上一页</Button><Button size="sm" variant="secondary" disabled={page >= productResult.pagination.pageCount || loading} onClick={() => setPage(v => v + 1)}>下一页</Button></div>
       <p className="text-xs text-muted">商品日事实来自单日 CHILD/SKU 报告的 <code>salesAndTrafficByAsin</code>；一个 ASIN 的销量不会拆分或摊给多个 SKU。订单商品项数不等于去重订单数；缺失显示“—”，不补零。</p>
+    </>}
+    {view === "period" && <>
+      <div className="flex flex-wrap items-center gap-2 rounded border border-border p-2 text-xs">
+        <span className="text-muted">聚合粒度</span>
+        {([["day", "按日"], ["week", "按周"], ["month", "按月"]] as const).map(([v, label]) => <Button key={v} size="sm" variant={periodBucket === v ? "primary" : "secondary"} onClick={() => setPeriodBucket(v)} data-testid={`period-${v}`}>{label}</Button>)}
+        <span className="ml-2 text-muted">排行维度</span>
+        {([["child", "ASIN"], ["parent", "父ASIN"], ["sku", "SKU"]] as const).map(([v, label]) => <Button key={v} size="sm" variant={topDim === v ? "primary" : "secondary"} onClick={() => setTopDim(v)} data-testid={`top-${v}`}>{label}</Button>)}
+      </div>
+      <p className="text-xs text-muted">周期汇总仅聚合<strong>已发布的真实店铺日行</strong>；某指标在期内任一日缺失则该期显示“—”，不做拆分、平均或补零。环比仅当本期与上一等长区间均为完整覆盖时计算，否则显示“—”。</p>
+      {periodData && <>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5" data-testid="period-totals">
+          {([
+            ["销量", periodData.totals.unitsOrdered ?? "—", null],
+            ["订单商品项数", periodData.totals.totalOrderItems ?? "—", "≠去重订单数"],
+            ["销售额", periodData.totals.sales.length ? periodData.totals.sales.map(s => `${s.amount} ${s.currency}`).join(" · ") : "—", "按币种分列"],
+            ["Sessions", periodData.totals.sessions ?? "—", null],
+            ["覆盖店铺日", `${periodData.totals.coveredStoreDays} / ${periodData.totals.totalStoreDays}`, periodData.totals.complete ? "本期覆盖完整" : "本期覆盖不完整"],
+          ] as const).map(([label, value, hint]) => <div key={label} className="rounded border border-border p-2 text-xs"><p className="text-muted">{label}</p><p className="text-base font-semibold tabular-nums">{value}</p>{hint && <p className={label === "覆盖店铺日" && !periodData.totals.complete ? "text-warning-ink" : "text-muted"}>{hint}</p>}</div>)}
+        </div>
+        <p className="text-xs text-muted" data-testid="period-delta">环比上一等长区间：{periodData.previous
+          ? <>销量 {periodData.previous.unitsOrdered ?? "—"} → {periodData.totals.unitsOrdered ?? "—"}（{deltaText(periodData.previous.unitsOrdered, periodData.totals.unitsOrdered)}）{periodData.totals.sales.length && periodData.previous.sales.some(s => s.currency === periodData.totals.sales[0].currency) ? ` · ${periodData.totals.sales[0].currency} ${deltaText(periodData.previous.sales.find(s => s.currency === periodData.totals.sales[0].currency)?.amount, periodData.totals.sales[0].amount)}` : ""}</>
+          : "上一区间数据不完整或缺失，不做环比（不补零、不估算）。"}</p>
+        {periodData.periods.length > 1 && <TrendChart periods={periodData.periods} />}
+        <StandardDataTable
+          ariaLabel="周期销量汇总"
+          rows={periodData.periods}
+          getRowKey={(row) => row.period}
+          columns={[
+            { key: "period", header: "周期", render: (row) => <>{row.period}<span className="block text-muted">{row.periodStart} ~ {row.periodEnd}</span></> },
+            { key: "stores", header: "店铺数", numeric: true },
+            { key: "coverage", header: "覆盖店铺日", numeric: true, render: (row) => `${row.coveredStoreDays} / ${row.totalStoreDays}` },
+            { key: "units", header: "销量", numeric: true, render: (row) => row.unitsOrdered ?? "—" },
+            { key: "items", header: "订单商品项数", numeric: true, render: (row) => row.totalOrderItems ?? "—" },
+            { key: "sales", header: "销售额（按币种）", numeric: true, render: (row) => row.sales.length ? row.sales.map(s => `${s.amount} ${s.currency}`).join(" · ") : "—" },
+            { key: "sessions", header: "Sessions", numeric: true, render: (row) => row.sessions ?? "—" },
+          ] as DataTableColumn<SalesPeriodAgg>[]}
+          empty="所选范围内没有已发布的店铺日数据；这不代表销量为 0。"
+        />
+        {periodData.truncated && <p className="text-xs text-warning-ink">数据已达 20,000 行读取上限，汇总可能不完整，请缩小日期或店铺范围。</p>}
+      </>}
+      {topData && <>
+        <p className="text-xs text-muted" data-testid="top-note">销量排行基于商品日事实（{topData.dimension === "sku" ? "SKU 报告" : "CHILD 报告"}）聚合当前区间销量 Top {topData.limit}；覆盖店铺日 {topData.coveredStoreDays}。{topData.previous ? `下期列为上一等长区间销量（两期覆盖均完整）。` : "上一区间数据不完整，不提供对比列。"}</p>
+        <StandardDataTable
+          ariaLabel="销量排行"
+          rows={topData.items}
+          getRowKey={(row) => row.identity}
+          columns={[
+            { key: "rank", header: "#", render: (_row, index) => String(index + 1) },
+            { key: "identity", header: topData.dimension === "sku" ? "Seller SKU" : topData.dimension === "parent" ? "父 ASIN" : "ASIN", render: (row) => <span className="font-mono">{row.identity}</span> },
+            { key: "units", header: topData.previous ? "销量 / 上期" : "销量", numeric: true, render: (row) => topData.previous ? <>{row.units} <span className="text-muted">/ {topData.previous.find(p => p.identity === row.identity)?.units ?? "—"}</span></> : String(row.units) },
+            { key: "sales", header: "销售额（按币种）", numeric: true, render: (row) => row.sales.length ? row.sales.map(s => `${s.amount} ${s.currency}`).join(" · ") : "—" },
+            { key: "stores", header: "店铺数", numeric: true },
+          ] as DataTableColumn<SalesTopResult["items"][number]>[]}
+          empty="所选范围内没有商品日事实；请先同步单日 CHILD/SKU 商品报告。"
+        />
+      </>}
+      {loading && view === "period" && <p role="status">读取周期汇总…</p>}
     </>}
     <details className="rounded border border-border p-3 text-xs" data-testid="metric-definitions">
       <summary className="cursor-pointer text-brand">指标口径与数据边界说明</summary>

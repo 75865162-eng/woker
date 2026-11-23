@@ -10,6 +10,7 @@ import { allListingsReportType, parseAllListingsReport } from "./catalog-report"
 import { parseGetReportsPage } from "./domain-reports";
 import { rangeFromFrozen } from "./date-range";
 import { parseSalesTraffic, parseSalesTrafficProducts, salesTrafficReportType } from "./sales-traffic";
+import { parseSellerFeedbackReport, sellerFeedbackReportType, sellerFeedbackRowDigest } from "./seller-feedback";
 import { decryptCheckpoint, encryptCheckpoint } from "./checkpoint";
 import { digest, seal, unseal } from "./approval-policy";
 import { SyncInputError, type SyncScope } from "./policy";
@@ -35,9 +36,11 @@ export function createReportProcessor(runtime: ReportProcessorRuntime) {
   return async function executeReportSlice(run: AmazonSyncRun, client: AmazonSpApiClient, events: AmazonRequestEvent[], authorizationId: string, marketplaceId: string, sellerAccountId: string) {
     const scope = { organizationId: run.organizationId, workspaceId: run.workspaceId };
     const listing = run.resource === "catalog";
-    const rawResource = listing ? "catalog" : "sales_traffic";
-    const rawContext = listing ? "amazon-catalog-report-raw.v1" : "amazon-sales-traffic-raw.v1";
-    const range = listing ? undefined : rangeFromFrozen(run.frozenScope);
+    const feedback = run.resource === "seller_feedback";
+    const textReport = listing || feedback;
+    const rawResource = listing ? "catalog" : feedback ? "seller_feedback" : "sales_traffic";
+    const rawContext = listing ? "amazon-catalog-report-raw.v1" : feedback ? "amazon-seller-feedback-raw.v1" : "amazon-sales-traffic-raw.v1";
+    const range = textReport ? undefined : rangeFromFrozen(run.frozenScope);
     const checkpoint = decryptCheckpoint(run.checkpointCiphertext, scope, run.id);
     const state = checkpoint ? JSON.parse(checkpoint) as { creating?: boolean; reportId?: string; documentId?: string; requestedAt?: string; reconcileToken?: string; reconcileCandidates?: Array<{ reportId: string; createdTime: string | null }>; reconcilePages?: number; polls?: number } : {};
     const archivedReport = state.reportId && state.documentId ? await prisma.amazonSyncRawPage.findFirst({ where: { ...scope, taskId: run.id, page: 1, resource: rawResource } }) : null;
@@ -59,13 +62,13 @@ export function createReportProcessor(runtime: ReportProcessorRuntime) {
       const requestedAt = Date.parse(state.requestedAt ?? "");
       if (!Number.isFinite(requestedAt)) throw new SyncInputError("报告创建检查点缺少申请时间，禁止重复创建。", 409);
       if ((state.reconcilePages ?? 0) >= 100) throw new SyncInputError("报告创建核对分页超过安全上限；保留原检查点。", 409);
-      const reportType = listing ? allListingsReportType : salesTrafficReportType;
+      const reportType = listing ? allListingsReportType : feedback ? sellerFeedbackReportType : salesTrafficReportType;
       const response = await client.getReports({ reportType, marketplaceId, createdSince: new Date(requestedAt - 5000).toISOString(), createdUntil: new Date().toISOString(), ...(state.reconcileToken ? { nextToken: state.reconcileToken } : {}) }).catch(async error => { await persistRequests(run, events, budgetKey, error); throw error; });
       await persistRequests(run, events, budgetKey);
       const page = parseGetReportsPage(response, reportType, marketplaceId);
       state.reconcilePages = (state.reconcilePages ?? 0) + 1;
       const reports = (response as { reports: Array<{ reportId: string; dataStartTime?: string; dataEndTime?: string }> }).reports;
-      const matching = page.reports.filter(item => item.createdTime !== null && Date.parse(item.createdTime) >= requestedAt - 5000 && Date.parse(item.createdTime) <= Date.now() && (listing || reports.some(report => report.reportId === item.reportId && report.dataStartTime?.slice(0, 10) === range!.from && report.dataEndTime?.slice(0, 10) === range!.to)));
+      const matching = page.reports.filter(item => item.createdTime !== null && Date.parse(item.createdTime) >= requestedAt - 5000 && Date.parse(item.createdTime) <= Date.now() && (textReport || reports.some(report => report.reportId === item.reportId && report.dataStartTime?.slice(0, 10) === range!.from && report.dataEndTime?.slice(0, 10) === range!.to)));
       state.reconcileCandidates = [...new Map([...(state.reconcileCandidates ?? []), ...matching].map(item => [item.reportId, item])).values()];
       if (state.reconcileCandidates.length > 1) throw new SyncInputError("报告创建核对发现多个匹配报告，无法安全确定原报告；未重复创建。", 409);
       if (page.nextToken) state.reconcileToken = page.nextToken;
@@ -91,7 +94,7 @@ export function createReportProcessor(runtime: ReportProcessorRuntime) {
       let response: unknown;
       if (!state.reportId) {
         state.creating = true; state.requestedAt = new Date().toISOString(); await saveState("REPORT_CREATING");
-        try { response = listing ? await client.createAllListingsReport(marketplaceId) : await client.createSalesTrafficReport({ marketplaceId, ...range!, asinGranularity: range!.productGranularity ?? "CHILD" }); }
+        try { response = listing ? await client.createAllListingsReport(marketplaceId) : feedback ? await client.createSellerFeedbackReport({ marketplaceId }) : await client.createSalesTrafficReport({ marketplaceId, ...range!, asinGranularity: range!.productGranularity ?? "CHILD" }); }
         catch (error) {
           await persistRequests(run, events, budgetKey, error);
           // 明确拒绝可重试；其余错误可能已创建远端报告，先核对而非再次申请。
@@ -111,7 +114,7 @@ export function createReportProcessor(runtime: ReportProcessorRuntime) {
       await persistRequests(run, events, budgetKey);
       if (!state.documentId) {
         const report = response as { reportId?: unknown; reportType?: unknown; marketplaceIds?: unknown; processingStatus?: unknown; reportDocumentId?: unknown };
-        if (report.reportId !== state.reportId || report.reportType !== (listing ? allListingsReportType : salesTrafficReportType) || !Array.isArray(report.marketplaceIds) || report.marketplaceIds.length !== 1 || report.marketplaceIds[0] !== marketplaceId) throw new Error("报告身份与任务不一致。");
+        if (report.reportId !== state.reportId || report.reportType !== (listing ? allListingsReportType : feedback ? sellerFeedbackReportType : salesTrafficReportType) || !Array.isArray(report.marketplaceIds) || report.marketplaceIds.length !== 1 || report.marketplaceIds[0] !== marketplaceId) throw new Error("报告身份与任务不一致。");
         if (["CANCELLED", "FATAL"].includes(String(report.processingStatus))) throw new Error("Amazon 报告生成失败或取消。");
         if (["IN_QUEUE", "IN_PROGRESS"].includes(String(report.processingStatus))) { await yieldSlice(run, new Date(Date.now() + 60_000)); return; }
         if (report.processingStatus !== "DONE" || typeof report.reportDocumentId !== "string" || !report.reportDocumentId || report.reportDocumentId.length > 200) throw new Error("报告状态或文档 ID 无效。");
@@ -120,7 +123,7 @@ export function createReportProcessor(runtime: ReportProcessorRuntime) {
       }
       if ((response as { reportDocumentId?: unknown } | null)?.reportDocumentId !== state.documentId) throw new Error("报告文档身份不匹配。");
       events.length = 0;
-      try { document = listing ? await client.downloadReportText(response) : await client.downloadReportJsonText(response); }
+      try { document = textReport ? await client.downloadReportText(response) : await client.downloadReportJsonText(response); }
       catch (error) { await persistRequests(run, events, { ...budgetKey, operation: "downloadReportDocument" }, error); throw error; }
       await persistRequests(run, events, { ...budgetKey, operation: "downloadReportDocument" });
     }
@@ -140,6 +143,10 @@ export function createReportProcessor(runtime: ReportProcessorRuntime) {
     if (!archived) return;
     if (listing) {
       await publishAllListings(run, rawText, state.reportId!, state.documentId!, sellerAccountId, marketplaceId);
+      return;
+    }
+    if (feedback) {
+      await publishSellerFeedback(run, rawText, bodySha256, state.reportId!, state.documentId!, sellerAccountId, marketplaceId);
       return;
     }
     let reportBody: unknown;
@@ -180,6 +187,31 @@ export function createReportProcessor(runtime: ReportProcessorRuntime) {
       await log(tx, run, result.complete ? "PUBLISHED" : "QUALITY_REJECTED");
     });
   };
+
+
+  /** 卖家反馈明细发布：追加式快照，内容幂等 ID 去重；邮箱留加密原件，不落列。 */
+  async function publishSellerFeedback(run: AmazonSyncRun, text: string, bodySha256: string, reportId: string, documentId: string, sellerAccountId: string, marketplaceId: string) {
+    const parsed = parseSellerFeedbackReport(text), capturedAt = new Date();
+    const scope = { organizationId: run.organizationId, workspaceId: run.workspaceId };
+    await assertActor(run);
+    await prisma.$transaction(async tx => {
+      await scopeLock(tx, scope); await assertFence(tx, run); const source = await assertLiveSource(tx, run);
+      if (await stopForControl(tx, run)) return;
+      await tx.amazonSyncPage.create({ data: { ...scope, taskId: run.id, tokenHash: digest([reportId, documentId]), page: 1, rowCount: parsed.rows.length } });
+      // 内容幂等：同一反馈在多个 timeRange 报告中重复出现时只落一次。
+      const seen = new Map<string, typeof parsed.rows[number]>();
+      parsed.rows.forEach((row, index) => { const key = sellerFeedbackRowDigest(source.id, row, index) + `:${row.feedbackDate}:${row.rating}:${row.amazonOrderId ?? ""}`; if (!seen.has(key)) seen.set(key, row); });
+      const unique = [...seen.values()];
+      for (let i = 0; i < unique.length; i += 500) {
+        await tx.amazonSellerFeedbackSnapshot.createMany({ data: unique.slice(i, i + 500).map(row => ({ ...scope, id: digest([source.id, run.id, row.feedbackDate, String(row.rating), row.comments, row.response, row.amazonOrderId ?? ""]), sourceId: source.id, syncRunId: run.id, sellerAccountId, marketplaceId, reportId, documentId, feedbackDate: row.feedbackDate, rating: row.rating, comments: row.comments, response: row.response, amazonOrderId: row.amazonOrderId, capturedAt })), skipDuplicates: true });
+      }
+      await recordReportParseEvidence(tx, run, { rawTaskId: run.id, rawPage: 1, phase: "PUBLISHED", rowsCommitted: unique.length, totalRows: parsed.rawLines, checkedAt: capturedAt });
+      const coverage = { type: "feedback_details_snapshot", sourceApi: "Reports 2021-06-30", reportType: sellerFeedbackReportType, reportId, documentId, rowCount: unique.length, skippedLines: parsed.skippedLines, rawLines: parsed.rawLines, piiEmailInRawOnly: true, capturedTo: capturedAt.toISOString(), historicalSnapshot: false };
+      await tx.amazonSyncDataSource.update({ where: { id: source.id }, data: { activeRunId: run.id, lastSuccessAt: capturedAt, rowCount: unique.length, coverage } });
+      await tx.amazonSyncRun.update({ where: { id: run.id }, data: { status: "SUCCEEDED", stage: "COMPLETED", pagesCompleted: 1, paginationComplete: true, processedCount: unique.length, insertedCount: unique.length, finishedAt: capturedAt, leaseOwner: null, leaseExpiresAt: null, checkpointCiphertext: null, summary: { provider: "amazon_sp_api", executionVersion: 2, coverage, snapshotCount: unique.length } } });
+      await log(tx, run, "PUBLISHED");
+    }, { timeout: 30000 });
+  }
 
   async function publishAllListings(run: AmazonSyncRun, text: string, reportId: string, documentId: string, sellerAccountId: string, marketplaceId: string) {
     const rows = parseAllListingsReport(text), capturedAt = new Date();

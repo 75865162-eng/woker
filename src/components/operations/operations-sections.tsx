@@ -74,7 +74,7 @@ export const operationsSections: OperationsSection[] = [
     fields: "销售额、销量、订单商品量、Sessions、Page Views、转化与购物车相关指标（按返回）；搜索词、搜索查询、搜索目录、购买组合、复购",
     source: "销售与流量报告、Brand Analytics 报告；PPC 指标保留独立来源",
     boundary: "日报与品牌报告分别保留业务日、周期、版本和资格限制。搜索频率排名不等于搜索量；PPC 与店铺销售指标不混算。",
-    entries: [{ view: "sales-traffic", label: "销售流量日报" }, { view: "brand_analytics", label: "品牌分析" },       { view: "ads", label: "PPC 经营指标" },
+    entries: [{ view: "sales-traffic", label: "销售流量日报" }, { view: "seller-feedback", label: "卖家反馈" }, { view: "brand_analytics", label: "品牌分析" },       { view: "ads", label: "PPC 经营指标" },
       { view: "repeat-purchase", label: "复购分析" }],
   },
   {

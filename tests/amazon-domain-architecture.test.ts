@@ -29,7 +29,7 @@ test("全部已实现 SP 域都有真实落地路由与已注册自动计划", (
 
 test("落地 workbench 路由与 operations 视图约定一致（连字符/下划线不串用）", () => {
   const knownViews = new Set([
-    "catalog", "inventory", "orders", "finance", "returns", "order-items", "sales-traffic",
+    "catalog", "inventory", "orders", "finance", "returns", "order-items", "sales-traffic", "seller-feedback",
     "settlements", "reimbursements", "inventory_age", "inventory_events", "fulfillment",
     "listing_details", "catalog_items", "pricing", "buy_box_history", "brand_analytics",
     "fba_customer_sales", "mfn_returns", "fba_shipments", "fba_inventory_by_country",
@@ -74,7 +74,7 @@ test("架构自检全通过且不伪造真实数据验收结论", () => {
   const audit = auditDomainArchitecture();
   assert.equal(audit.ok, true, audit.gaps.join("；"));
   assert.equal(audit.gaps.length, 0);
-  assert.equal(audit.counts.spImplemented, 33);
+  assert.equal(audit.counts.spImplemented, 34);
   assert.equal(audit.counts.adsImplemented, 15);
   const ledger = getDomainArchitecture();
   assert.ok(ledger.every(r => r.acceptance.trim().length >= 6), "每行都应保留真实验收前置说明（非伪造接通结论）");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { WorkbenchPageTemplate } from "@/components/templates/page-templates";
 import { Button } from "@/components/ui/button";
 import { AreaField, Badge, Field, Kpis, Notice, Section, SelectField, Table, Tabs, bp, extPost, today, useExt, statusLabel } from "./kit";
@@ -33,7 +33,7 @@ const blankPerf = {
 };
 
 export function ReviewsWorkbench() {
-  const [tab, setTab] = useState<"REVIEW" | "ASIN" | "PERF">("REVIEW");
+  const [tab, setTab] = useState<"REVIEW" | "ASIN" | "PERF" | "FEEDBACK">("REVIEW");
   const [expandedAsin, setExpandedAsin] = useState("");
   const [filter, setFilter] = useState({ sentiment: "", status: "" });
   const [form, setForm] = useState({ ...blankReview });
@@ -59,7 +59,7 @@ export function ReviewsWorkbench() {
   const summary = reviews.data?.summary;
 
   return <WorkbenchPageTemplate context={<Notice error={error || reviews.error || performance.error || ""} notice={notice} />} main={<div className="space-y-5">
-    <Tabs value={tab} onChange={value => { setTab(value as "REVIEW" | "ASIN" | "PERF"); setExpandedAsin(""); }} tabs={[{ id: "REVIEW", label: "评论与差评", count: summary?.total }, { id: "ASIN", label: "ASIN 聚合", count: byAsin.data?.total }, { id: "PERF", label: "店铺绩效", count: performance.data?.items.length }]} />
+    <Tabs value={tab} onChange={value => { setTab(value as "REVIEW" | "ASIN" | "PERF" | "FEEDBACK"); setExpandedAsin(""); }} tabs={[{ id: "REVIEW", label: "评论与差评", count: summary?.total }, { id: "ASIN", label: "ASIN 聚合", count: byAsin.data?.total }, { id: "PERF", label: "店铺绩效", count: performance.data?.items.length }, { id: "FEEDBACK", label: "卖家差评（Feedback）" }]} />
 
     {tab === "REVIEW" && <>
       <Kpis items={[
@@ -185,6 +185,8 @@ export function ReviewsWorkbench() {
       })()}
     </>}
 
+    {tab === "FEEDBACK" && <FeedbackTab />}
+
     {tab === "PERF" && <>
       <Section title="固化绩效快照" description="比率按万分比录入（120 = 1.20%）；同一站点同一天只允许一份快照，避免覆盖历史。">
         <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
@@ -221,4 +223,69 @@ export function ReviewsWorkbench() {
       </Section>
     </>}
   </div>} />;
+}
+
+/* ===== 卖家 Feedback（GET_SELLER_FEEDBACK_DATA 订单级明细）：真实报告快照，邮箱 PII 不展示 ===== */
+type FeedbackRow = { id: string; feedbackDate: string; rating: number; comments: string; response: string; amazonOrderId: string | null; sellerName: string; marketplaceId: string; capturedAt: string };
+type FeedbackData = { rows: FeedbackRow[]; pagination: { page: number; pageSize: number; total: number; pageCount: number }; summary: { total: number; negative: number; neutral: number; positive: number; replied: number; buyerEmailAvailable: boolean }; asOf: string };
+function feedbackHeaders() {
+  const headers = new Headers({ "content-type": "application/json" });
+  try { headers.set("x-workspace-id", JSON.parse(localStorage.getItem("amazon_bulk_ad_workspace_scope") ?? "{}").workspaceId || "default"); } catch { headers.set("x-workspace-id", "default"); }
+  return headers;
+}
+function FeedbackTab() {
+  const [filters, setFilters] = useState({ from: "", to: "", rating: "", keyword: "" });
+  const [page, setPage] = useState(1), [reload, setReload] = useState(0);
+  const [data, setData] = useState<FeedbackData | null>(null), [error, setError] = useState(""), [loading, setLoading] = useState(true);
+  const queryKey = JSON.stringify(filters);
+  useEffect(() => {
+    const controller = new AbortController(); setLoading(true); setError("");
+    const active = Object.fromEntries(Object.entries(JSON.parse(queryKey) as Record<string, string>).filter(([, v]) => v));
+    const params = new URLSearchParams({ section: "seller-feedback", page: String(page), ...active });
+    void fetch(`/api/operations/sync-center?${params}`, { headers: feedbackHeaders(), cache: "no-store", signal: controller.signal })
+      .then(async response => { const payload = await response.json(); if (!response.ok) throw new Error(payload.error ?? "读取卖家反馈失败。"); setData(payload as FeedbackData); })
+      .catch(cause => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "读取卖家反馈失败。"); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => { controller.abort(); };
+  }, [page, reload, queryKey]);
+  const summary = data?.summary;
+  return <>
+    <Kpis items={[
+      { label: "Feedback 总数", value: String(summary?.total ?? 0), hint: "订单级卖家反馈明细" },
+      { label: "中差评（1–2 星）", value: String(summary?.negative ?? 0), tone: (summary?.negative ?? 0) > 0 ? "warn" : undefined, hint: summary?.total ? `差评占比 ${bp(Math.round(((summary.negative ?? 0) / summary.total) * 10_000))}` : undefined },
+      { label: "已回复", value: String(summary?.replied ?? 0), hint: summary?.total ? `回复率 ${bp(Math.round(((summary.replied ?? 0) / summary.total) * 10_000))}` : undefined },
+      { label: "好评（4–5 星）", value: String(summary?.positive ?? 0) },
+    ]} />
+    <Section title="卖家 Feedback（订单级差评 / 中差评）" description="来自 Amazon 卖家反馈报告 GET_SELLER_FEEDBACK_DATA 的真实明细快照：按反馈日倒序、差评优先；星级、评论、卖家回复、关联订单号逐一保留。买家邮箱属个人信息，仅保存在加密原件中，本页不展示。缺失字段显示“—”，不补造。">
+      <div className="flex flex-wrap items-end gap-2">
+        <Field label="开始日期" type="date" value={filters.from} onChange={value => { setFilters(c => ({ ...c, from: value })); setPage(1); }} />
+        <Field label="结束日期" type="date" value={filters.to} onChange={value => { setFilters(c => ({ ...c, to: value })); setPage(1); }} />
+        <SelectField label="星级" value={filters.rating} onChange={value => { setFilters(c => ({ ...c, rating: value })); setPage(1); }} options={[{ value: "", label: "全部星级" }, ...["1", "2", "3", "4", "5"].map(value => ({ value, label: `${value} 星` }))]} />
+        <Field label="评论/订单搜索" value={filters.keyword} onChange={value => { setFilters(c => ({ ...c, keyword: value })); setPage(1); }} />
+        <Button size="sm" variant="secondary" disabled={loading} onClick={() => setReload(value => value + 1)}>刷新</Button>
+      </div>
+      <p className="text-xs text-muted">没有数据时请先到「设置 → Amazon 连接」重配授权或到同步中心触发「卖家反馈」数据源同步；本页只读已发布的真实报告，不会向 Amazon 现场拉取。</p>
+      {error && <Notice error={error} />}
+      {loading && <p role="status" className="text-xs text-muted">读取卖家反馈…</p>}
+      <Table
+        rows={data?.rows ?? []}
+        empty="暂无卖家反馈明细。确认已同步 GET_SELLER_FEEDBACK_DATA 报告后回到此页；这不代表没有差评。"
+        rowKey={row => row.id}
+        columns={[
+          { key: "feedbackDate", label: "反馈日期" },
+          { key: "sellerName", label: "店铺 / 站点", render: row => <>{row.sellerName || "—"}<span className="block text-xs text-muted">{row.marketplaceId}</span></> },
+          { key: "rating", label: "星级", align: "right", render: row => <span className={row.rating <= 2 ? "text-danger-ink tabular-nums" : "tabular-nums"}>{row.rating} ★</span> },
+          { key: "comments", label: "评论内容", render: row => <span className="block max-w-[320px] truncate" title={row.comments}>{row.comments || "—"}</span> },
+          { key: "response", label: "卖家回复", render: row => row.response ? <span className="block max-w-[240px] truncate" title={row.response}>{row.response}</span> : <Badge text="未回复" tone="muted" /> },
+          { key: "amazonOrderId", label: "关联订单", render: row => <span className="font-mono text-xs">{row.amazonOrderId ?? "—"}</span> },
+        ]}
+      />
+      <div className="flex items-center justify-end gap-3 text-xs">
+        <span>{data?.pagination.total ?? 0} 条 · {page} / {Math.max(1, data?.pagination.pageCount ?? 1)}</span>
+        <Button size="sm" variant="secondary" disabled={page <= 1 || loading} onClick={() => setPage(value => value - 1)}>上一页</Button>
+        <Button size="sm" variant="secondary" disabled={page >= (data?.pagination.pageCount ?? 1) || loading} onClick={() => setPage(value => value + 1)}>下一页</Button>
+      </div>
+      <p className="text-xs text-muted" data-testid="feedback-asof">数据快照 asOf：{data?.asOf ?? "—"} · 明细去重口径：同一反馈在多次 timeRange 报告中重复出现只保留一条。</p>
+    </Section>
+  </>;
 }

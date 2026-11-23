@@ -163,6 +163,7 @@ export type ProductSalesRow = {
   sellerAccountId: string; marketplaceId: string; businessDate: string; granularity: string;
   childAsin: string; parentAsin: string | null; sellerSku: string | null; reportId: string; documentId: string;
   metrics: SalesMetrics; quality: string; capturedAt: Date; sellerName: string; amazonSellerId: string; publishedAt: Date;
+  productTitle?: string | null; imageUrl?: string | null;
 };
 /** 商品日版本 SQL：每 (sourceId, businessDate, granularity, 身份) 取最新成功完整版本；权限与店铺日完全一致。 */
 function productVersionSql(scope: SyncScope, query: ProductSalesQuery, cutoff: Date, access?: AmazonDataAccess, sourceFence?: string[]) {
@@ -209,9 +210,208 @@ export async function readSalesProducts(scope: SyncScope, p: URLSearchParams, op
     return { rows, pagination: { page, pageSize, total: Number(total[0].count), pageCount: Math.ceil(Number(total[0].count) / pageSize) }, query, asOf: cutoff.toISOString(), granularity: query.granularity ?? "ALL", versionPolicy: "latest_successful_per_source_day_identity" };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
   await amazonAccountReadAccess(scope, options.actor, p, prisma, "sales_traffic");
-  return { ...result, numericEncoding: "JSON_NUMERIC_STRINGS", rows: result.rows.map(({ metricsText, ...row }) => {
+  const rows = result.rows.map(({ metricsText, ...row }) => {
     const metrics = parseAmazonBusinessJson(metricsText);
     if (!metrics || typeof metrics !== "object" || Array.isArray(metrics)) throw new SyncInputError("商品销售指标不是有效的 JSON 对象。", 409);
     return { ...row, metrics: metrics as SalesMetrics };
-  }) };
+  });
+  return { ...result, numericEncoding: "JSON_NUMERIC_STRINGS", rows: await attachProductDisplay(scope, rows) };
+}
+
+/** 给商品日行补标题/图片：批量关联目录快照与图片引用；缺失留空，不猜不补。 */
+export async function attachProductDisplay(scope: SyncScope, rows: ProductSalesRow[]): Promise<ProductSalesRow[]> {
+  const asins = [...new Set(rows.map(r => r.childAsin).filter(asin => /^[A-Z0-9]{10}$/.test(asin)))];
+  if (!asins.length) return rows.map(row => ({ ...row, productTitle: null, imageUrl: null }));
+  const [catalog, images] = await Promise.all([
+    prisma.amazonCatalogSnapshot.findMany({ where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, asin: { in: asins } }, orderBy: { capturedAt: "desc" }, select: { asin: true, sellerAccountId: true, marketplaceId: true, listingAttributes: true } }),
+    prisma.amazonCatalogImageReference.findMany({ where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, asin: { in: asins }, variant: "MAIN" }, select: { asin: true, sellerAccountId: true, marketplaceId: true, sourceUrl: true } }),
+  ]);
+  const titleByAsin = new Map<string, string>();
+  for (const item of catalog) {
+    if (titleByAsin.has(item.asin)) continue;
+    const attributes = item.listingAttributes as { itemName?: unknown } | null;
+    const name = attributes && typeof attributes.itemName === "string" ? attributes.itemName.trim().slice(0, 300) : "";
+    if (name) titleByAsin.set(item.asin, name);
+  }
+  const imageByAsin = new Map<string, string>();
+  for (const image of images) if (!imageByAsin.has(image.asin) && image.sourceUrl) imageByAsin.set(image.asin, image.sourceUrl);
+  return rows.map(row => ({ ...row, productTitle: titleByAsin.get(row.childAsin) ?? null, imageUrl: imageByAsin.get(row.childAsin) ?? null }));
+}
+
+/* ===== 周期汇总（日/周/月 rollup + 区间合计 + 等长环比）：仅聚合已发布真实行，缺日不补零 ===== */
+export type SalesPeriodBucket = "day" | "week" | "month";
+export type SalesAmount = { currency: string; amount: string };
+export type SalesPeriodAgg = {
+  period: string; periodStart: string; periodEnd: string;
+  stores: number; coveredStoreDays: number; totalStoreDays: number;
+  unitsOrdered: string | null; totalOrderItems: string | null;
+  sessions: string | null; pageViews: string | null;
+  sales: SalesAmount[];
+};
+export type SalesPeriodSummary = {
+  bucket: SalesPeriodBucket;
+  periods: SalesPeriodAgg[];
+  totals: SalesPeriodAgg & { complete: boolean };
+  previous: (SalesPeriodAgg & { complete: boolean }) | null;
+  truncated: boolean; asOf: string;
+};
+const PERIOD_MAX_ROWS = 20000;
+export const num = (v: unknown): number | null => { const s = typeof v === "string" ? v.trim() : ""; if (!s || !/^\d+(\.\d+)?$/.test(s)) return null; const n = Number(s); return Number.isFinite(n) ? n : null; };
+export function isoWeekOf(dateStr: string): { year: number; week: number; monday: string } {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(Date.UTC(y, (m || 1) - 1, d || 1));
+  const dayNum = (date.getUTCDay() + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - dayNum + 3);
+  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - ((firstThursday.getUTCDay() + 6) % 7) + 3);
+  const week = 1 + Math.round((date.getTime() - firstThursday.getTime()) / (7 * 86_400_000));
+  const monday = new Date(date.getTime() - 3 * 86_400_000);
+  return { year: date.getUTCFullYear(), week, monday: monday.toISOString().slice(0, 10) };
+}
+export const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1;
+export function shiftDays(dateStr: string, delta: number): string { const d = new Date(`${dateStr}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + delta); return d.toISOString().slice(0, 10); }
+export function aggregateRows(rows: SalesRow[], periodOf: (date: string) => { key: string; start: string; end: string }, totalDaysOf: (start: string, end: string) => number): SalesPeriodAgg[] {  const groups = new Map<string, { start: string; end: string; stores: Set<string>; storeDays: number; units: number | null; items: number | null; sessions: number | null; views: number | null; sales: Map<string, number> }>();
+  for (const row of rows) {
+    const { key, start, end } = periodOf(row.businessDate);
+    let g = groups.get(key);
+    if (!g) { g = { start, end, stores: new Set(), storeDays: 0, units: 0, items: 0, sessions: 0, views: 0, sales: new Map() }; groups.set(key, g); }
+    g.stores.add(row.sellerAccountId); g.storeDays++;
+    const m = row.metrics ?? {};
+    const u = num(m.unitsOrdered), i = num(m.totalOrderItems), s = num(m.sessions), v = num(m.pageViews);
+    if (u !== null) g.units = (g.units ?? 0) + u; else g.units = null;
+    if (i !== null) g.items = (g.items ?? 0) + i; else g.items = null;
+    if (s !== null) g.sessions = (g.sessions ?? 0) + s; else g.sessions = null;
+    if (v !== null) g.views = (g.views ?? 0) + v; else g.views = null;
+    const sale = m.orderedProductSales;
+    if (sale && typeof sale.amount === "string" && typeof sale.currencyCode === "string" && sale.currencyCode) {
+      const a = num(sale.amount); if (a !== null) g.sales.set(sale.currencyCode, (g.sales.get(sale.currencyCode) ?? 0) + a);
+    }
+  }
+  const fmt = (n: number | null, digits = 0) => n === null ? null : digits ? n.toFixed(digits) : String(Math.round(n));
+  return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([key, g]) => ({
+    period: key, periodStart: g.start, periodEnd: g.end,
+    stores: g.stores.size, coveredStoreDays: g.storeDays, totalStoreDays: g.stores.size * totalDaysOf(g.start, g.end),
+    unitsOrdered: fmt(g.units), totalOrderItems: fmt(g.items), sessions: fmt(g.sessions), pageViews: fmt(g.views),
+    sales: [...g.sales.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([currency, amount]) => ({ currency, amount: amount.toFixed(2) })),
+  }));
+}
+export function summarize(rows: SalesRow[]): SalesPeriodSummary["totals"] {
+  const [agg] = aggregateRows(rows, (d) => ({ key: "all", start: d, end: d }), () => 1);
+  const covered = agg?.coveredStoreDays ?? 0;
+  const dates = new Set(rows.map(r => r.businessDate));
+  const stores = new Set(rows.map(r => r.sellerAccountId));
+  const total = dates.size * stores.size;
+  return { ...(agg ?? { period: "all", periodStart: "", periodEnd: "", stores: 0, coveredStoreDays: 0, totalStoreDays: 0, unitsOrdered: null, totalOrderItems: null, sessions: null, pageViews: null, sales: [] as SalesAmount[] }), coveredStoreDays: covered, totalStoreDays: total, complete: rows.length > 0 && covered === total };
+}
+/** 周期汇总读取：先读全量已发布店铺日行（复用 readSalesTraffic 权限与版本口径），再应用层 rollup；环比仅在两期数据完整时计算。 */
+export async function readSalesPeriods(scope: SyncScope, p: URLSearchParams, options: { cutoff?: Date; actor?: string } = {}): Promise<SalesPeriodSummary> {
+  p = new URLSearchParams(p);
+  const bucketParam = p.get("bucket");
+  if (bucketParam && !["day", "week", "month"].includes(bucketParam)) throw new SyncInputError("聚合粒度无效。");
+  const bucket: SalesPeriodBucket = bucketParam === "week" ? "week" : bucketParam === "month" ? "month" : "day";
+  const rows = await readSalesRowsForAggregation(scope, p, options);
+  const periodOf = bucket === "week"
+    ? (d: string) => { const w = isoWeekOf(d); return { key: `${w.year}-W${String(w.week).padStart(2, "0")}`, start: w.monday, end: shiftDays(w.monday, 6) }; }
+    : bucket === "month"
+      ? (d: string) => { const key = d.slice(0, 7); const [y, m] = key.split("-").map(Number); return { key, start: d.slice(0, 8) + "01", end: new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10) }; }
+      : (d: string) => ({ key: d, start: d, end: d });
+  const periods = aggregateRows(rows, periodOf, (s, e) => daysBetween(s, e));
+  const totals = summarize(rows);
+  let previous: SalesPeriodSummary["previous"] = null;
+  if (!p.get("taskId") && rows.length > 0) {
+    const dates = [...new Set(rows.map(r => r.businessDate))].sort();
+    const from = p.get("from") ?? dates[0], to = p.get("to") ?? dates[dates.length - 1];
+    const span = daysBetween(from, to);
+    const prevP = new URLSearchParams(p);
+    prevP.set("from", shiftDays(from, -span)); prevP.set("to", shiftDays(from, -1));
+    const prevRows = await readSalesRowsForAggregation(scope, prevP, options);
+    if (prevRows.length > 0) {
+      const prevTotals = summarize(prevRows);
+      if (prevTotals.complete && totals.complete) previous = prevTotals;
+    }
+  }
+  return { bucket, periods, totals, previous, truncated: rows.length >= PERIOD_MAX_ROWS, asOf: (options.cutoff ?? new Date()).toISOString() };
+}
+/** 有界拉取全部已发布店铺日行（复用 readSalesTraffic，权限与版本口径不变）。 */
+async function readSalesRowsForAggregation(scope: SyncScope, p: URLSearchParams, options: { cutoff?: Date; actor?: string } = {}) {
+  const all: SalesRow[] = []; const pageSize = 1000;
+  for (let page = 1; page <= Math.ceil(PERIOD_MAX_ROWS / pageSize); page++) {
+    const pageParams = new URLSearchParams(p);
+    pageParams.set("page", String(page));
+    const result = await readSalesTraffic(scope, pageParams, { ...options, pageSize, action: "view" });
+    all.push(...result.rows);
+    if (all.length >= PERIOD_MAX_ROWS || page >= result.pagination.pageCount) break;
+  }
+  return all;
+}
+
+/* ===== 销量排行 TopN（商品日事实聚合；当前区间 vs 等长上期，仅完整数据可比） ===== */
+export type SalesTopItem = { identity: string; label: string | null; units: number; sales: SalesAmount[]; stores: number };
+export type SalesTopResult = {
+  dimension: "child" | "parent" | "sku"; limit: number;
+  items: SalesTopItem[]; previous: SalesTopItem[] | null; comparable: boolean;
+  coveredStoreDays: number; asOf: string;
+};
+const TOP_MAX_ROWS = 20000;
+/** 排行读取：基于商品日事实（CHILD/SKU 报告）应用层聚合；维度=child|parent|sku。 */
+export async function readSalesTop(scope: SyncScope, p: URLSearchParams, options: { cutoff?: Date; actor?: string } = {}): Promise<SalesTopResult> {
+  p = new URLSearchParams(p);
+  const dimensionParam = p.get("dimension");
+  if (dimensionParam && !["child", "parent", "sku"].includes(dimensionParam)) throw new SyncInputError("排行维度无效。");
+  const dimension: "child" | "parent" | "sku" = dimensionParam === "parent" ? "parent" : dimensionParam === "sku" ? "sku" : "child";
+  const limit = Math.min(50, Math.max(1, Math.floor(Number(p.get("limit")) || 10)));
+  const productParams = new URLSearchParams(p);
+  productParams.set("granularity", dimension === "sku" ? "SKU" : "CHILD");
+  const all: ProductSalesRow[] = []; const pageSize = 1000;
+  for (let page = 1; page <= Math.ceil(TOP_MAX_ROWS / pageSize); page++) {
+    const pageParams = new URLSearchParams(productParams);
+    pageParams.set("page", String(page)); pageParams.set("pageSize", String(pageSize));
+    const result = await readSalesProducts(scope, pageParams, options);
+    all.push(...result.rows);
+    if (all.length >= TOP_MAX_ROWS || page >= result.pagination.pageCount) break;
+  }
+  const identityOf = (r: ProductSalesRow) => dimension === "sku" ? (r.sellerSku ?? "") : dimension === "parent" ? (r.parentAsin ?? "") : r.childAsin;
+  const coveredStoreDays = all.length;
+  const items = topFromRows(all, identityOf, limit);
+  let previous: SalesTopItem[] | null = null; let comparable = false;
+  if (!p.get("taskId") && all.length > 0) {
+    const dates = [...new Set(all.map(r => r.businessDate))].sort();
+    const stores = new Set(all.map(r => `${r.sellerAccountId}|${r.marketplaceId}`)).size;
+    const from = p.get("from") ?? dates[0], to = p.get("to") ?? dates[dates.length - 1];
+    const span = daysBetween(from, to);
+    const prevP = new URLSearchParams(productParams);
+    prevP.set("from", shiftDays(from, -span)); prevP.set("to", shiftDays(from, -1));
+    const prevAll: ProductSalesRow[] = [];
+    for (let page = 1; page <= Math.ceil(TOP_MAX_ROWS / pageSize); page++) {
+      const pageParams = new URLSearchParams(prevP);
+      pageParams.set("page", String(page)); pageParams.set("pageSize", String(pageSize));
+      const result = await readSalesProducts(scope, pageParams, options);
+      prevAll.push(...result.rows);
+      if (prevAll.length >= TOP_MAX_ROWS || page >= result.pagination.pageCount) break;
+    }
+    const expected = stores * span;
+    comparable = prevAll.length > 0 && all.length >= expected && prevAll.length >= expected;
+    if (comparable) previous = topFromRows(prevAll, identityOf, limit);
+  }
+  return { dimension, limit, items, previous, comparable, coveredStoreDays, asOf: (options.cutoff ?? new Date()).toISOString() };
+}
+export function topFromRows(rows: ProductSalesRow[], identityOf: (r: ProductSalesRow) => string, limit: number): SalesTopItem[] {
+  const groups = new Map<string, { units: number | null; sales: Map<string, number>; stores: Set<string>; label: string | null }>();
+  for (const row of rows) {
+    const identity = identityOf(row);
+    if (!identity) continue;
+    let g = groups.get(identity);
+    if (!g) { g = { units: 0, sales: new Map(), stores: new Set(), label: row.sellerName }; groups.set(identity, g); }
+    g.stores.add(`${row.sellerAccountId}|${row.marketplaceId}`);
+    const u = num(row.metrics?.unitsOrdered);
+    if (u !== null) g.units = (g.units ?? 0) + u; else g.units = null;
+    const sale = row.metrics?.orderedProductSales;
+    if (sale && typeof sale.amount === "string" && typeof sale.currencyCode === "string" && sale.currencyCode) {
+      const a = num(sale.amount); if (a !== null) g.sales.set(sale.currencyCode, (g.sales.get(sale.currencyCode) ?? 0) + a);
+    }
+  }
+  return [...groups.entries()]
+    .map(([identity, g]) => ({ identity, label: g.label, units: g.units ?? 0, sales: [...g.sales.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([currency, amount]) => ({ currency, amount: amount.toFixed(2) })), stores: g.stores.size }))
+    .sort((a, b) => b.units - a.units || a.identity.localeCompare(b.identity))
+    .slice(0, limit);
 }

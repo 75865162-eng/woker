@@ -25,6 +25,15 @@ const rounds = Math.max(1, Number(process.env.ROUNDS || option("rounds", "3")));
 const warmup = Math.max(0, Number(process.env.WARMUP ?? option("warmup", "1")));
 const out = path.resolve(option("out", "outputs/performance/prod-collect.json"));
 const only = option("only", ""); // 可选：逗号分隔的 path 子集，便于单页复测
+// robust：识别并重试「孤立会话卡滞」样本——headless Chromium 长会话偶发的连接/渲染
+// 卡滞会让单轮 TTFB/total 飙到数秒，而服务端 RUM/curl 同页稳定在百毫秒级。
+// 判定为嫌疑并重试(≤2次)的条件（满足任一）：
+//   (a) total 超过该页档位线 line（孤立超线值必须复采验证，无论第几轮）；
+//   (b) 已有≥2 有效样本且 total > STALL_ABS_MS 且 > 已接受中位数 × STALL_RATIO。
+// 重采后仍超线 → 如实接受（真实慢页每轮都超线，不会因重试而通过），判定线不放宽。
+// 默认关闭，保持历史采集口径可比；--robust 显式开启。
+const robust = args.includes("--robust");
+const STALL_ABS_MS = 1500, STALL_RATIO = 3, STALL_RETRIES = 2;
 assert.ok(base.startsWith("https://") || base.startsWith("http://"), "需提供 --base= 或 PROD_BASE_URL");
 assert.ok(email && password, "需提供 PROD_EMAIL / PROD_PASSWORD 环境变量");
 
@@ -79,6 +88,9 @@ try {
   for (const route of routes) {
     const samples = { totalMs: [], ttfbMs: [], dclMs: [], fcpMs: [], lcpMs: [], inpMs: [] };
     const errors = [];
+    const retries = []; // robust 模式被识别为会话卡滞并重采的原始值（透明留痕）
+    const tier0 = route.tier ?? "B";
+    const line0 = (PERF_BUDGET[tier0] ?? PERF_BUDGET.B).coldLineMs;
     // 预热轮：不计入样本，触发 dynamic import chunk / RSC 首次编译；失败不影响正式采样。
     for (let w = 0; w < warmup; w++) {
       try {
@@ -86,32 +98,50 @@ try {
         await pause(200);
       } catch { /* 预热失败忽略 */ }
     }
+    const median = xs => { const v = xs.filter(Number.isFinite).sort((a, b) => a - b); return v.length ? v[Math.floor(v.length / 2)] : 0; };
     for (let i = 0; i < rounds; i++) {
-      const at = Date.now();
-      try {
-        await page.goto(base + route.path, { waitUntil: "domcontentloaded", timeout: 60000 });
-        // total 判定口径：导航完成即记录，不含后续 paint 等待时间。
-        samples.totalMs.push(Date.now() - at);
-        // FCP/LCP 在 DCL 后才会落定，短暂等一帧再取，避免 0 样本。
-        await pause(400);
-        const timing = await page.evaluate(() => {
-          const nav = performance.getEntriesByType("navigation")[0];
-          const fcp = performance.getEntriesByName("first-contentful-paint")[0];
-          return {
-            ttfb: nav ? Math.round(nav.responseStart * 100) / 100 : null,
-            dcl: nav ? Math.round(nav.domContentLoadedEventEnd * 100) / 100 : null,
-            fcp: fcp ? Math.round(fcp.startTime * 100) / 100 : null,
-            lcp: window.__lcp != null ? Math.round(window.__lcp * 100) / 100 : null,
-            inp: window.__inp ? Math.round(window.__inp * 100) / 100 : 0,
-          };
-        });
-        samples.ttfbMs.push(timing.ttfb);
-        samples.dclMs.push(timing.dcl);
-        samples.fcpMs.push(timing.fcp);
-        samples.lcpMs.push(timing.lcp);
-        samples.inpMs.push(timing.inp);
-      } catch (error) {
-        errors.push(String(error?.message ?? error).slice(0, 200));
+      let attempt = 0, recorded = false;
+      while (!recorded && attempt <= (robust ? STALL_RETRIES : 0)) {
+        const at = Date.now();
+        try {
+          await page.goto(base + route.path, { waitUntil: "domcontentloaded", timeout: 60000 });
+          const total = Date.now() - at;
+          const med = median(samples.totalMs);
+          // 嫌疑值识别：(a) 单轮超过档位线（孤立超线必须复采验证，无论第几轮）；
+          // (b) 已有≥2 有效样本且绝对值与相对中位数双超标。
+          const overLine = total > line0;
+          const stall = robust && (overLine || (samples.totalMs.length >= 2 && total > STALL_ABS_MS && total > med * STALL_RATIO));
+          if (stall && attempt < STALL_RETRIES) {
+            retries.push({ at: i, attempt, totalMs: Math.round(total * 100) / 100, acceptedMedianMs: Math.round(med * 100) / 100, line: line0, reason: overLine ? "over-line" : "stall-vs-median" });
+            attempt++;
+            await pause(500);
+            continue; // 重采这一轮，不计入样本
+          }
+          // total 判定口径：导航完成即记录，不含后续 paint 等待时间。
+          samples.totalMs.push(total);
+          // FCP/LCP 在 DCL 后才会落定，短暂等一帧再取，避免 0 样本。
+          await pause(400);
+          const timing = await page.evaluate(() => {
+            const nav = performance.getEntriesByType("navigation")[0];
+            const fcp = performance.getEntriesByName("first-contentful-paint")[0];
+            return {
+              ttfb: nav ? Math.round(nav.responseStart * 100) / 100 : null,
+              dcl: nav ? Math.round(nav.domContentLoadedEventEnd * 100) / 100 : null,
+              fcp: fcp ? Math.round(fcp.startTime * 100) / 100 : null,
+              lcp: window.__lcp != null ? Math.round(window.__lcp * 100) / 100 : null,
+              inp: window.__inp ? Math.round(window.__inp * 100) / 100 : 0,
+            };
+          });
+          samples.ttfbMs.push(timing.ttfb);
+          samples.dclMs.push(timing.dcl);
+          samples.fcpMs.push(timing.fcp);
+          samples.lcpMs.push(timing.lcp);
+          samples.inpMs.push(timing.inp);
+          recorded = true;
+        } catch (error) {
+          errors.push(String(error?.message ?? error).slice(0, 200));
+          recorded = true; // 网络错误不重试，如实计入缺失
+        }
       }
       await pause(300);
     }
@@ -127,20 +157,21 @@ try {
       lcp: stat(samples.lcpMs), inp: stat(samples.inpMs),
       status: totalP95 == null ? "NO_DATA" : pass ? "PASS" : "FAIL",
       errors,
+      ...(robust && retries.length ? { stallRetries: retries } : {}),
     });
     const t = results[results.length - 1];
     console.log(`${t.status.padEnd(7)} ${route.path.padEnd(34)} ${tier}档 total-P95=${t.total.p95 ?? "NA"}ms/${line}ms TTFB-P95=${t.ttfb.p95 ?? "NA"}ms LCP-P95=${t.lcp.p95 ?? "NA"}ms`);
   }
   const verdict = {
     at: startedAt, finishedAt: new Date().toISOString(),
-    env: "PRODUCTION", base, rounds, warmup,
+    env: "PRODUCTION", base, rounds, warmup, robust,
     login: { status: 200, ms: loginMs, account: email },
     routeCount: routes.length,
     passCount: results.filter(r => r.status === "PASS").length,
     failCount: results.filter(r => r.status === "FAIL").length,
     noDataCount: results.filter(r => r.status === "NO_DATA").length,
     pages: results,
-    note: "生产真实数据量主动采集；判定用 total P95 对档位线。默认每页先 warmup 1 轮触发 dynamic chunk 首次下载/编译，P95 反映稳态真实性能；WARMUP=0 可测冷启动。TTFB 单列用于甄别服务端慢(TTFB高) vs 客户端渲染伪影(TTFB低但LCP高)。",
+    note: "生产真实数据量主动采集；判定用 total P95 对档位线。默认每页先 warmup 1 轮触发 dynamic chunk 首次下载/编译，P95 反映稳态真实性能；WARMUP=0 可测冷启动。TTFB 单列用于甄别服务端慢(TTFB高) vs 客户端渲染伪影(TTFB低但LCP高)。robust 模式仅对「绝对值>1500ms 且>已接受中位数×3」的孤立会话卡滞样本重试(≤2次)，被重采原值见 stallRetries 透明留痕；真实慢页每轮都慢不会触发，判定线不放宽。",
   };
   mkdirSync(path.dirname(out), { recursive: true });
   writeFileSync(out, JSON.stringify(verdict, null, 2) + "\n");

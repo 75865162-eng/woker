@@ -45,6 +45,7 @@ const spLanding: Record<string, { surface: LandingSurface; view: string; note: s
   finance: { surface: "workbench", view: "finance", note: "财务交易：卖家级交易与质量标记" },
   returns: { surface: "workbench", view: "returns", note: "FBA 仓收退货：按单份已发布报告" },
   sales_traffic: { surface: "workbench", view: "sales-traffic", note: "销售与流量日报：按业务日报告" },
+  seller_feedback: { surface: "workbench", view: "seller-feedback", note: "卖家反馈：订单级 Feedback 明细；承接页 /operations/reviews 的卖家差评标签" },
   settlements: { surface: "workbench", view: "settlements", note: "结算报告：发现 + 原始行（归属隔离）" },
   reimbursements: { surface: "workbench", view: "reimbursements", note: "赔偿报告：金额/数量/关联键" },
   inventory_age: { surface: "workbench", view: "inventory_age", note: "库龄快照：分桶逐列展示" },

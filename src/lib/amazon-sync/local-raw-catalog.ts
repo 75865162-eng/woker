@@ -67,6 +67,7 @@ export type AmazonLocalRawTable = (typeof amazonLocalRawTables)[number];
 /** 系统安全边界：这些表不是「同步到本地承接页的数据」，不通过通用原始行工具暴露。 */
 export const amazonLocalRawExcluded = [
   { table: "AmazonSalesTrafficProductSnapshot", reason: "SERVED_BY_AGGREGATE_API", alternative: "销量统计·商品日视图（sales-traffic-products）" },
+  { table: "AmazonSellerFeedbackSnapshot", reason: "SERVED_BY_AGGREGATE_API", alternative: "评论与店铺绩效·卖家差评（Feedback）标签" },
   { table: "AmazonSettlementAllocation", reason: "FINANCE_ACTION_REQUIRED", alternative: "结算分摊工作台" },
   { table: "AmazonSettlementAllocationLine", reason: "FINANCE_ACTION_REQUIRED", alternative: "结算分摊工作台" },
   { table: "AmazonIntegrationConnection", reason: "CREDENTIAL_STORE", alternative: "授权管理页" },
