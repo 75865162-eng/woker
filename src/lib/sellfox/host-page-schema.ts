@@ -38,6 +38,27 @@ export type HostDataset = {
   dateRange?: boolean;
   /** 广告类数据集才有 adType（sp/sb/sd）。 */
   adType?: boolean;
+  /** 实体当前态数据集支持 state（enabled/paused/archived）本地筛选；键名来自实见 payload。 */
+  stateFilter?: boolean;
+};
+
+/**
+ * 一级标签分组：把多个底层数据集归入赛狐页面可见的一个管理标签。
+ * 只做导航聚合，不改变任何 dataset id 或读取路径；href 用于纯外部/复用入口（如广告日志 domain=runs）。
+ */
+export type HostTabGroup = {
+  id: string;
+  label: string;
+  /** 该分组包含的 dataset id；可以为空（例如仅作外链或阻断态说明）。 */
+  datasetIds: string[];
+  status?: HostStatus;
+  note?: string;
+  /** 证据等级，展示在分组 tooltip，避免把设计/待验证写成实见。 */
+  evidence?: "实见" | "代码" | "设计" | "待验证";
+  /** 复用入口：例如广告日志跳 /sellfox?domain=runs。存在时优先渲染跳转按钮而非数据表。 */
+  href?: string;
+  /** 写操作面板：嵌入可审计的广告优化方案组件（生成/审批/写闸门），不直接写外部系统。 */
+  proposals?: boolean;
 };
 
 export type HostPage = {
@@ -48,6 +69,8 @@ export type HostPage = {
   /** 页面级来源徽标，全部是赛狐侧数据，不与 Amazon SP-API 混算。 */
   source: string;
   datasets: HostDataset[];
+  /** 可选一级分组；未提供时沿用旧的扁平 dataset 标签栏，保持其它承接页零改动。 */
+  groups?: HostTabGroup[];
 };
 
 export const storeColumn: HostColumn = { key: "store", label: "店铺/站点", kind: "store", width: 150 };

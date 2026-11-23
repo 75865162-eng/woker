@@ -570,6 +570,37 @@
 }
 
 /* 数据集二级 tab：状态点区分已接入 / 待接入 */
+.sellfox-ui .sf-proposals-panel { margin-bottom: var(--space-2); }
+
+/* 一级广告管理标签：与二级数据集标签分层，视觉上更轻、更窄。 */
+.sellfox-ui .sf-group {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  margin-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.sellfox-ui .sf-group button {
+  flex: none;
+  height: 32px;
+  padding: 0 var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-meta);
+  font-weight: 600;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+}
+
+.sellfox-ui .sf-group button:hover { color: var(--foreground); }
+
+.sellfox-ui .sf-group button[aria-current="page"] {
+  color: var(--brand);
+  border-bottom-color: var(--brand);
+}
+
 .sellfox-ui .sf-ds {
   display: flex;
   gap: 0;

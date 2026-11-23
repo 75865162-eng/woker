@@ -5,11 +5,12 @@ import { cachedApiGet } from "@/lib/workspace/workspace-api-cache";
 import { useStores, useSellfoxReferenceStore } from "@/lib/stores/sellfox-reference-store";
 import Link from "next/link";
 import { SellfoxTabs } from "../sellfox-nav";
+import { SellfoxAdsProposals } from "@/components/sellfox/sellfox-ads-proposals";
 import { ColumnResizeHandle } from "@/components/ui/column-resize-handle";
 import { useSessionColumnWidths } from "@/lib/hooks/use-session-column-widths";
 import { sellfoxSiteLabel } from "@/lib/sellfox/marketplace-site";
 import { rangeForPreset, shanghaiToday, type DatePreset } from "@/lib/sellfox/replica-pages";
-import { hostStatusLabel, type HostColumn, type HostDataset, type HostPage } from "@/lib/sellfox/host-pages";
+import { hostStatusLabel, type HostColumn, type HostDataset, type HostPage, type HostTabGroup } from "@/lib/sellfox/host-pages";
 
 type Row = Record<string, unknown>;
 type Store = { externalId: string; name: string; marketplace: string };
@@ -119,13 +120,24 @@ function hostWidthStyle(width: number | undefined): { width: number; minWidth: n
 
 export function HostWorkbench({ page }: { page: HostPage }) {
   const today = shanghaiToday();
-  const [datasetId, setDatasetId] = useState(page.datasets[0]?.id ?? "");
-  const dataset = page.datasets.find((item) => item.id === datasetId) ?? page.datasets[0];
+  const groups = page.groups ?? [];
+  // 一级分组：默认选中第一个有数据集的分组；外链/阻断分组（datasetIds 为空）不作为默认。
+  const [groupId, setGroupId] = useState(() => groups.find((group) => group.datasetIds.length > 0)?.id ?? "");
+  const group = groups.find((item) => item.id === groupId);
+  // 有分组时二级 tab 只在当前分组的数据集内切换；无分组时沿用旧的扁平列表。
+  const visibleDatasets = group && group.datasetIds.length
+    ? page.datasets.filter((item) => group.datasetIds.includes(item.id))
+    : page.datasets;
+  const [datasetId, setDatasetId] = useState(() => {
+    const first = groups.find((item) => item.datasetIds.length > 0)?.datasetIds[0];
+    return first ?? page.datasets[0]?.id ?? "";
+  });
+  const dataset = page.datasets.find((item) => item.id === datasetId) ?? visibleDatasets[0] ?? page.datasets[0];
   const [preset, setPreset] = useState<"d7" | "d14" | "d30" | "d90" | "custom">("d30");
   const [from, setFrom] = useState(() => rangeForPreset("d30", today).from);
   const [to, setTo] = useState(() => rangeForPreset("d30", today).to);
-  const [applied, setApplied] = useState({ from: rangeForPreset("d30", today).from, to: rangeForPreset("d30", today).to, site: "", shop: "", adType: "", search: "" });
-  const [draft, setDraft] = useState({ site: "", shop: "", adType: "", search: "" });
+  const [applied, setApplied] = useState({ from: rangeForPreset("d30", today).from, to: rangeForPreset("d30", today).to, site: "", shop: "", adType: "", search: "", state: "" });
+  const [draft, setDraft] = useState({ site: "", shop: "", adType: "", search: "", state: "" });
   const [rows, setRows] = useState<Row[]>([]);
   const [dynamicColumns, setDynamicColumns] = useState<HostColumn[] | null>(null);
   const [total, setTotal] = useState(0);
@@ -169,6 +181,7 @@ export function HostWorkbench({ page }: { page: HostPage }) {
     if (applied.site) params.set("site", applied.site);
     if (applied.shop) params.set("shop", applied.shop);
     if (applied.adType) params.set("adType", applied.adType);
+    if (applied.state) params.set("state", applied.state);
     if (applied.search) params.set("search", applied.search);
     setLoading(true);
     setError("");
@@ -228,9 +241,23 @@ export function HostWorkbench({ page }: { page: HostPage }) {
     setPreset("d30");
     setFrom(range.from);
     setTo(range.to);
-    setDraft({ site: "", shop: "", adType: "", search: "" });
-    setApplied({ from: range.from, to: range.to, site: "", shop: "", adType: "", search: "" });
+    setDraft({ site: "", shop: "", adType: "", search: "", state: "" });
+    setApplied({ from: range.from, to: range.to, site: "", shop: "", adType: "", search: "", state: "" });
     setPageNo(1);
+  }
+
+  function selectGroup(next: HostTabGroup) {
+    setGroupId(next.id);
+    setPageNo(1);
+    // 外链分组与阻断分组没有数据集，只切换说明面板，不改变当前 dataset。
+    if (next.href || !next.datasetIds.length) return;
+    if (!next.datasetIds.includes(datasetId)) setDatasetId(next.datasetIds[0]);
+    // state 筛选只适用于实体当前态数据集，切到日报或别的实体时清空，避免残留筛选。
+    const first = page.datasets.find((item) => item.id === next.datasetIds[0]);
+    if (!first?.stateFilter) {
+      setDraft((current) => ({ ...current, state: "" }));
+      setApplied((current) => ({ ...current, state: "" }));
+    }
   }
 
   function exportCsv() {
@@ -269,15 +296,66 @@ export function HostWorkbench({ page }: { page: HostPage }) {
           <p className="sf-page-sub">{page.subtitle}</p>
         </div>
 
+        {groups.length ? (
+          <div className="sf-group" role="tablist" aria-label="广告管理标签">
+            {groups.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-current={item.id === groupId ? "page" : undefined}
+                title={`${item.status === "live" ? "已接入" : item.status === "blocked" ? "无来源" : "待接入"} · ${item.evidence ?? "设计"}${item.note ? ` · ${item.note}` : ""}`}
+                onClick={() => selectGroup(item)}
+              >
+                <span className={item.status === "live" ? "sf-dot sf-dot-live" : "sf-dot"} aria-hidden="true" />
+                {item.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {group?.proposals ? (
+          <div className="sf-proposals-panel">
+            <SellfoxAdsProposals />
+          </div>
+        ) : group?.href ? (
+          <div className="sf-pending">
+            <div className="sf-pending-body">
+              <h2>{group.label}</h2>
+              <p>{group.note ?? "该入口复用现有数据。"}</p>
+              <p className="sf-note">证据等级：{group.evidence ?? "设计"}。该入口为复用/外链，不在本页写入或下载任何数据。</p>
+              <div className="sf-pending-actions">
+                <Link className="sf-btn sf-btn-primary" href={group.href}>打开同步日志</Link>
+              </div>
+            </div>
+          </div>
+        ) : group && !group.datasetIds.length ? (
+          <div className="sf-pending">
+            <div className="sf-pending-body">
+              <h2>{group.label} 未开通</h2>
+              <p>{group.note ?? "该能力没有可核实的来源。"}</p>
+              <p className="sf-note">证据等级：{group.evidence ?? "待验证"}。本页不展示任何数据行，也不填 0、不用其它数据集代替。</p>
+            </div>
+          </div>
+        ) : (
+          <>
         <div className="sf-ds" role="tablist" aria-label="数据集">
-          {page.datasets.map((item) => (
+          {visibleDatasets.map((item) => (
             <button
               key={item.id}
               type="button"
               role="tab"
               aria-current={item.id === dataset?.id ? "page" : undefined}
               title={`${hostStatusLabel(item.status)} · ${item.table}`}
-              onClick={() => { setDatasetId(item.id); setPageNo(1); }}
+              onClick={() => {
+                setDatasetId(item.id);
+                setPageNo(1);
+                // state 筛选只在实体当前态有意义。
+                if (!item.stateFilter) {
+                  setDraft((current) => ({ ...current, state: "" }));
+                  setApplied((current) => ({ ...current, state: "" }));
+                }
+              }}
             >
               <span className={item.status === "live" ? "sf-dot sf-dot-live" : "sf-dot"} aria-hidden="true" />
               {item.label}
@@ -304,6 +382,14 @@ export function HostWorkbench({ page }: { page: HostPage }) {
                   <option value="sp">SP</option>
                   <option value="sb">SB</option>
                   <option value="sd">SD</option>
+                </select>
+              ) : null}
+              {dataset.stateFilter ? (
+                <select aria-label="状态" value={draft.state} onChange={(event) => setDraft({ ...draft, state: event.target.value })}>
+                  <option value="">全部状态</option>
+                  <option value="enabled">启用</option>
+                  <option value="paused">暂停</option>
+                  <option value="archived">归档</option>
                 </select>
               ) : null}
               {dataset.dateRange ? (
@@ -386,6 +472,8 @@ export function HostWorkbench({ page }: { page: HostPage }) {
             </div>
           </>
         ) : null}
+          </>
+        )}
       </div>
     </section>
   );

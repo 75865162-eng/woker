@@ -30,6 +30,7 @@ export function SellfoxAdsProposals() {
   const scope = useMemo(() => normalizeWorkspaceScope(), []);
   const [data, setData] = useState<Response | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectedApproved, setSelectedApproved] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -61,6 +62,12 @@ export function SellfoxAdsProposals() {
       if (action === "generate") setNotice(`已生成方案：新 ${body.created} 条、更新 ${body.updated} 条（候选 ${body.generated}）`);
       if (action === "decide") { setNotice(`已完成业务审批 ${body.approved} 条；审批不会写回 Amazon Ads，当前尚未创建 Ads 变更草稿。`); setSelected(new Set()); }
       if (action === "reject") { setNotice(`已驳回 ${body.rejected} 条`); setSelected(new Set()); }
+      if (action === "execute") {
+        const failed = body.items?.filter((item: { status: string }) => item.status === "FAILED") ?? [];
+        const codes = [...new Set(failed.map((item: { code: string }) => item.code))].join(", ");
+        setNotice(`写回未执行（${codes || "无可执行项"}）：真实应用 ${body.applied ?? 0} 条。${body.capability?.note ?? ""}`);
+        setSelectedApproved(new Set());
+      }
       await load();
     } catch (e) { setError(e instanceof Error ? e.message : "操作失败"); }
     finally { setBusy(""); }
@@ -68,6 +75,7 @@ export function SellfoxAdsProposals() {
 
   const pending = data?.proposals.filter(p => p.status === "PENDING") ?? [];
   const toggle = (id: string) => setSelected(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const toggleApproved = (id: string) => setSelectedApproved(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
 
   return (
     <section className="border border-[var(--sf-line)] bg-surface">
@@ -98,6 +106,7 @@ export function SellfoxAdsProposals() {
           <thead className="bg-surface-muted text-left text-muted">
             <tr>
               <th className="w-8 px-2 py-1.5"><input type="checkbox" aria-label="全选待审批" checked={pending.length > 0 && pending.every(p => selected.has(p.id))} onChange={e => setSelected(e.target.checked ? new Set(pending.map(p => p.id)) : new Set())} /></th>
+              <th className="w-8 px-2 py-1.5" title="选择已批准方案进行受闸门写回">执行</th>
               <th className="px-2 py-1.5">类型</th>
               <th className="px-2 py-1.5">建议动作</th>
               <th className="px-2 py-1.5">店铺</th>
@@ -114,6 +123,7 @@ export function SellfoxAdsProposals() {
               return (
                 <tr key={p.id} className="border-t border-[var(--sf-line)] align-top">
                   <td className="px-2 py-1.5">{p.status === "PENDING" ? <input type="checkbox" aria-label={`选择方案 ${p.id}`} checked={selected.has(p.id)} onChange={() => toggle(p.id)} /> : null}</td>
+                  <td className="px-2 py-1.5">{p.status === "APPROVED" ? <input type="checkbox" aria-label={`执行方案 ${p.id}`} checked={selectedApproved.has(p.id)} onChange={() => toggleApproved(p.id)} /> : null}</td>
                   <td className="px-2 py-1.5"><span className={`inline-block border px-1.5 py-0.5 ${kind.className}`}>{kind.label}</span></td>
                   <td className="px-2 py-1.5 font-medium">{actionText[p.action] ?? p.action}<div className="text-muted">{proposed}</div></td>
                   <td className="px-2 py-1.5">{p.store?.name || p.storeId}</td>
@@ -131,7 +141,7 @@ export function SellfoxAdsProposals() {
                 </tr>
               );
             })}
-            {!data?.proposals.length ? <tr><td colSpan={8} className="px-2 py-6 text-center text-muted">暂无方案，点击「重新生成方案」分析最近 14 天数据</td></tr> : null}
+            {!data?.proposals.length ? <tr><td colSpan={9} className="px-2 py-6 text-center text-muted">暂无方案，点击「重新生成方案」分析最近 14 天数据</td></tr> : null}
           </tbody>
         </table>
       </div>
@@ -142,6 +152,13 @@ export function SellfoxAdsProposals() {
             className="h-7 border border-success/30 bg-success-soft px-2 text-xs text-success-ink hover:bg-success-soft disabled:opacity-50">批准所选</button>
           <button type="button" onClick={() => void act("reject", [...selected])} disabled={busy !== ""}
             className="h-7 border border-danger/30 bg-danger-soft px-2 text-xs text-danger-ink hover:bg-danger-soft disabled:opacity-50">驳回所选</button>
+        </footer>
+      ) : null}
+      {canEdit && selectedApproved.size ? (
+        <footer className="flex items-center gap-2 border-t border-warning-ink/30 bg-warning-soft px-3 py-2">
+          <span className="text-xs text-warning-ink">已批准 {selectedApproved.size} 条 · 写回需双人复核与授权，当前将被闸门拦截</span>
+          <button type="button" onClick={() => void act("execute", [...selectedApproved])} disabled={busy !== ""}
+            className="h-7 border border-warning-ink/40 px-2 text-xs text-warning-ink hover:border-warning-ink disabled:opacity-50">执行写回（受闸门）</button>
         </footer>
       ) : null}
     </section>

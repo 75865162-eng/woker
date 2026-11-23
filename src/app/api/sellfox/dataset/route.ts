@@ -61,6 +61,7 @@ export async function GET(request: Request) {
       shop: url.searchParams.get("shop") ?? "",
       search: (url.searchParams.get("search") ?? "").slice(0, 120),
       adType: ["sp", "sb", "sd"].includes(url.searchParams.get("adType") ?? "") ? String(url.searchParams.get("adType")) : "",
+      state: url.searchParams.get("state") ?? "",
       page,
       pageSize,
       sortBy: url.searchParams.get("sortBy") ?? "reportDate",
