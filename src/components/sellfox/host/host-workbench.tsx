@@ -5,11 +5,12 @@ import { cachedApiGet } from "@/lib/workspace/workspace-api-cache";
 import { useStores, useSellfoxReferenceStore } from "@/lib/stores/sellfox-reference-store";
 import Link from "next/link";
 import { SellfoxTabs } from "../sellfox-nav";
+import { SellfoxAdsProposals } from "@/components/sellfox/sellfox-ads-proposals";
 import { ColumnResizeHandle } from "@/components/ui/column-resize-handle";
 import { useSessionColumnWidths } from "@/lib/hooks/use-session-column-widths";
 import { sellfoxSiteLabel } from "@/lib/sellfox/marketplace-site";
 import { rangeForPreset, shanghaiToday, type DatePreset } from "@/lib/sellfox/replica-pages";
-import { hostStatusLabel, type HostColumn, type HostDataset, type HostPage } from "@/lib/sellfox/host-pages";
+import { hostStatusLabel, type HostColumn, type HostDataset, type HostPage, type HostTabGroup } from "@/lib/sellfox/host-pages";
 
 type Row = Record<string, unknown>;
 type Store = { externalId: string; name: string; marketplace: string };
@@ -21,8 +22,11 @@ type Totals = {
   quantity?: number | null;
   totalInventory?: number | null;
   unfulfillable?: number | null;
+  /** 汇总视图：先汇总分子分母再计算的比率合计（按币种），与行内同一口径。 */
+  derivedByCurrency?: { currency: string; values: Record<string, number | null> }[];
 };
-type Payload = { rows?: Row[]; total?: number; totals?: Totals; coverage?: { stores: number; rows: number }; error?: string; columns?: HostColumn[] | null };
+type Facets = { states?: { value: string; count: number }[]; buckets?: { value: string; count: number }[] };
+type Payload = { rows?: Row[]; total?: number; totals?: Totals; coverage?: { stores: number; rows: number }; error?: string; columns?: HostColumn[] | null; facets?: Facets };
 
 const emptyTotals: Totals = { impressions: null, clicks: null, adOrders: null, byCurrency: [] };
 const presets: { id: Exclude<DatePreset, "today" | "yesterday" | "thisMonth" | "lastMonth">; label: string }[] = [
@@ -100,6 +104,17 @@ function Cell({ column, row }: { column: HostColumn; row: Row }) {
   return <>{cellText(column, row)}</>;
 }
 
+const SUMMARY_SORTABLE = new Set(["impressions", "clicks", "cost", "adOrders", "adSales", "ctr", "cpc", "acos", "roas", "reportDates", "state", "name"]);
+
+const STATE_LABELS: Record<string, string> = { enabled: "启用", paused: "暂停", archived: "归档" };
+const BUCKET_LABELS: Record<string, string> = {
+  orders: "有订单",
+  clicksNoOrders: "有点击无订单",
+  impressionsNoClicks: "有曝光无点击",
+  noPerformance: "无表现",
+  insufficient: "数据不足",
+};
+
 function isNumeric(column: HostColumn) {
   return column.kind === "qty" || column.kind === "decimal" || column.kind === "money" || column.kind === "rate";
 }
@@ -119,17 +134,31 @@ function hostWidthStyle(width: number | undefined): { width: number; minWidth: n
 
 export function HostWorkbench({ page }: { page: HostPage }) {
   const today = shanghaiToday();
-  const [datasetId, setDatasetId] = useState(page.datasets[0]?.id ?? "");
-  const dataset = page.datasets.find((item) => item.id === datasetId) ?? page.datasets[0];
+  const groups = page.groups ?? [];
+  // 一级分组：默认选中第一个有数据集的分组；外链/阻断分组（datasetIds 为空）不作为默认。
+  const [groupId, setGroupId] = useState(() => groups.find((group) => group.datasetIds.length > 0)?.id ?? "");
+  const group = groups.find((item) => item.id === groupId);
+  // 有分组时二级 tab 只在当前分组的数据集内切换；无分组时沿用旧的扁平列表。
+  const visibleDatasets = group && group.datasetIds.length
+    ? page.datasets.filter((item) => group.datasetIds.includes(item.id))
+    : page.datasets;
+  const [datasetId, setDatasetId] = useState(() => {
+    const first = groups.find((item) => item.datasetIds.length > 0)?.datasetIds[0];
+    return first ?? page.datasets[0]?.id ?? "";
+  });
+  const dataset = page.datasets.find((item) => item.id === datasetId) ?? visibleDatasets[0] ?? page.datasets[0];
   const [preset, setPreset] = useState<"d7" | "d14" | "d30" | "d90" | "custom">("d30");
   const [from, setFrom] = useState(() => rangeForPreset("d30", today).from);
   const [to, setTo] = useState(() => rangeForPreset("d30", today).to);
-  const [applied, setApplied] = useState({ from: rangeForPreset("d30", today).from, to: rangeForPreset("d30", today).to, site: "", shop: "", adType: "", search: "" });
-  const [draft, setDraft] = useState({ site: "", shop: "", adType: "", search: "" });
+  const [applied, setApplied] = useState({ from: rangeForPreset("d30", today).from, to: rangeForPreset("d30", today).to, site: "", shop: "", adType: "", search: "", state: "", bucket: "" });
+  const [draft, setDraft] = useState({ site: "", shop: "", adType: "", search: "", state: "", bucket: "" });
+  // 汇总视图服务端排序：点击表头切换；非汇总数据集忽略（后端会回退默认列）。
+  const [sort, setSort] = useState<{ by: string; order: "asc" | "desc" }>({ by: "", order: "desc" });
   const [rows, setRows] = useState<Row[]>([]);
   const [dynamicColumns, setDynamicColumns] = useState<HostColumn[] | null>(null);
   const [total, setTotal] = useState(0);
   const [totals, setTotals] = useState<Totals>(emptyTotals);
+  const [facets, setFacets] = useState<Facets>({});
   const [, setCoverage] = useState({ stores: 0, rows: 0 });
   const [legacyStores, setLegacyStores] = useState<Store[]>([]);
   const referenceStores = useStores();
@@ -169,7 +198,10 @@ export function HostWorkbench({ page }: { page: HostPage }) {
     if (applied.site) params.set("site", applied.site);
     if (applied.shop) params.set("shop", applied.shop);
     if (applied.adType) params.set("adType", applied.adType);
+    if (applied.state) params.set("state", applied.state);
+    if (applied.bucket) params.set("bucket", applied.bucket);
     if (applied.search) params.set("search", applied.search);
+    if (sort.by) { params.set("sortBy", sort.by); params.set("sortOrder", sort.order); }
     setLoading(true);
     setError("");
     fetch(`/api/sellfox/dataset?${params}`, { cache: "no-store", signal: controller.signal })
@@ -184,6 +216,7 @@ export function HostWorkbench({ page }: { page: HostPage }) {
         setDynamicColumns(Array.isArray(body.columns) && body.columns.length ? body.columns : null);
         setTotal(body.total ?? 0);
         setTotals(body.totals ?? emptyTotals);
+        setFacets(body.facets ?? {});
         setCoverage(body.coverage ?? { stores: 0, rows: 0 });
       })
       .catch((reason: unknown) => {
@@ -192,11 +225,12 @@ export function HostWorkbench({ page }: { page: HostPage }) {
         setDynamicColumns(null);
         setTotal(0);
         setTotals(emptyTotals);
+        setFacets({});
         setError(reason instanceof Error ? reason.message : "读取失败");
       })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [applied, dataset, live, pageNo, pageSize, refreshNonce]);
+  }, [applied, dataset, live, pageNo, pageSize, refreshNonce, sort]);
 
   const sites = useMemo(() => [...new Set(stores.map((store) => store.marketplace).filter(Boolean))], [stores]);
   const pages = Math.max(1, Math.ceil(total / pageSize));
@@ -228,8 +262,54 @@ export function HostWorkbench({ page }: { page: HostPage }) {
     setPreset("d30");
     setFrom(range.from);
     setTo(range.to);
-    setDraft({ site: "", shop: "", adType: "", search: "" });
-    setApplied({ from: range.from, to: range.to, site: "", shop: "", adType: "", search: "" });
+    setDraft({ site: "", shop: "", adType: "", search: "", state: "", bucket: "" });
+    setApplied({ from: range.from, to: range.to, site: "", shop: "", adType: "", search: "", state: "", bucket: "" });
+    setPageNo(1);
+  }
+
+  function selectGroup(next: HostTabGroup) {
+    setGroupId(next.id);
+    setPageNo(1);
+    // 外链分组与阻断分组没有数据集，只切换说明面板，不改变当前 dataset。
+    if (next.href || !next.datasetIds.length) return;
+    if (!next.datasetIds.includes(datasetId)) setDatasetId(next.datasetIds[0]);
+    // state 筛选只适用于实体当前态数据集，切到日报或别的实体时清空，避免残留筛选。
+    const first = page.datasets.find((item) => item.id === next.datasetIds[0]);
+    if (!first?.stateFilter) {
+      setDraft((current) => ({ ...current, state: "", bucket: "" }));
+      setApplied((current) => ({ ...current, state: "", bucket: "" }));
+    }
+  }
+
+  /** 汇总视图：服务端按同一筛选与聚合口径导出全量；超过上限显式报错，不静默截断。 */
+  async function exportSummary() {
+    const params = new URLSearchParams({ dataset: dataset!.id, export: "1", format: "csv", page: "1", pageSize: String(pageSize) });
+    if (dataset!.dateRange) { params.set("from", applied.from); params.set("to", applied.to); }
+    if (applied.site) params.set("site", applied.site);
+    if (applied.shop) params.set("shop", applied.shop);
+    if (applied.adType) params.set("adType", applied.adType);
+    if (applied.state) params.set("state", applied.state);
+    if (applied.bucket) params.set("bucket", applied.bucket);
+    if (applied.search) params.set("search", applied.search);
+    if (sort.by) { params.set("sortBy", sort.by); params.set("sortOrder", sort.order); }
+    setNotice("正在导出全部筛选结果…");
+    const response = await fetch(`/api/sellfox/dataset?${params}`, { cache: "no-store" });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      setNotice(body.error ?? "导出失败，请缩小筛选范围后重试。");
+      return;
+    }
+    const blob = await response.blob();
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `${dataset!.id}-${applied.from}-${applied.to}.csv`;
+    link.click();
+    setNotice(`已导出当前筛选的全部 ${total} 行（服务端同口径，未写入数据库）。`);
+  }
+
+  function toggleSort(key: string) {
+    if (!SUMMARY_SORTABLE.has(key)) return;
+    setSort((current) => current.by === key ? { by: key, order: current.order === "asc" ? "desc" : "asc" } : { by: key, order: "desc" });
     setPageNo(1);
   }
 
@@ -255,6 +335,13 @@ export function HostWorkbench({ page }: { page: HostPage }) {
         .filter((item) => item.value != null);
       return list.length ? list.map((item) => money(item.value, item.currency)).join(" / ") : "";
     }
+    if (column.key === "ctr" || column.key === "cpc" || column.key === "acos" || column.key === "roas") {
+      const list = (totals.derivedByCurrency ?? [])
+        .map((item) => ({ currency: item.currency, value: item.values[column.key] ?? null }))
+        .filter((item) => item.value != null);
+      if (!list.length) return "";
+      return list.map((item) => column.key === "cpc" ? money(item.value, item.currency) : column.key === "roas" ? Number(item.value).toFixed(2) : rate(item.value)).join(" / ");
+    }
     if (column.key === "quantity") return qty(totals.quantity);
     if (column.key === "totalInventory") return qty(totals.totalInventory);
     if (column.key === "unfulfillable") return qty(totals.unfulfillable);
@@ -269,15 +356,67 @@ export function HostWorkbench({ page }: { page: HostPage }) {
           <p className="sf-page-sub">{page.subtitle}</p>
         </div>
 
+        {groups.length ? (
+          <div className="sf-group" role="tablist" aria-label="广告管理标签">
+            {groups.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-current={item.id === groupId ? "page" : undefined}
+                title={`${item.status === "live" ? "已接入" : item.status === "blocked" ? "无来源" : "待接入"} · ${item.evidence ?? "设计"}${item.note ? ` · ${item.note}` : ""}`}
+                onClick={() => selectGroup(item)}
+              >
+                <span className={item.status === "live" ? "sf-dot sf-dot-live" : "sf-dot"} aria-hidden="true" />
+                {item.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {group?.proposals ? (
+          <div className="sf-proposals-panel">
+            <SellfoxAdsProposals />
+          </div>
+        ) : group?.href ? (
+          <div className="sf-pending">
+            <div className="sf-pending-body">
+              <h2>{group.label}</h2>
+              <p>{group.note ?? "该入口复用现有数据。"}</p>
+              <p className="sf-note">证据等级：{group.evidence ?? "设计"}。该入口为复用/外链，不在本页写入或下载任何数据。</p>
+              <div className="sf-pending-actions">
+                <Link className="sf-btn sf-btn-primary" href={group.href}>打开同步日志</Link>
+              </div>
+            </div>
+          </div>
+        ) : group && !group.datasetIds.length ? (
+          <div className="sf-pending">
+            <div className="sf-pending-body">
+              <h2>{group.label} 未开通</h2>
+              <p>{group.note ?? "该能力没有可核实的来源。"}</p>
+              <p className="sf-note">证据等级：{group.evidence ?? "待验证"}。本页不展示任何数据行，也不填 0、不用其它数据集代替。</p>
+            </div>
+          </div>
+        ) : (
+          <>
         <div className="sf-ds" role="tablist" aria-label="数据集">
-          {page.datasets.map((item) => (
+          {visibleDatasets.map((item) => (
             <button
               key={item.id}
               type="button"
               role="tab"
               aria-current={item.id === dataset?.id ? "page" : undefined}
               title={`${hostStatusLabel(item.status)} · ${item.table}`}
-              onClick={() => { setDatasetId(item.id); setPageNo(1); }}
+              onClick={() => {
+                setDatasetId(item.id);
+                setPageNo(1);
+                // state 筛选只在实体当前态有意义。
+                if (!item.stateFilter) {
+                  setDraft((current) => ({ ...current, state: "", bucket: "" }));
+                  setApplied((current) => ({ ...current, state: "", bucket: "" }));
+                }
+                setSort({ by: "", order: "desc" });
+              }}
             >
               <span className={item.status === "live" ? "sf-dot sf-dot-live" : "sf-dot"} aria-hidden="true" />
               {item.label}
@@ -304,6 +443,14 @@ export function HostWorkbench({ page }: { page: HostPage }) {
                   <option value="sp">SP</option>
                   <option value="sb">SB</option>
                   <option value="sd">SD</option>
+                </select>
+              ) : null}
+              {dataset.stateFilter ? (
+                <select aria-label="状态" value={draft.state} onChange={(event) => setDraft({ ...draft, state: event.target.value })}>
+                  <option value="">全部状态</option>
+                  <option value="enabled">启用</option>
+                  <option value="paused">暂停</option>
+                  <option value="archived">归档</option>
                 </select>
               ) : null}
               {dataset.dateRange ? (
@@ -333,17 +480,58 @@ export function HostWorkbench({ page }: { page: HostPage }) {
             <div className="sf-actions">
               <span className="sf-spacer" />
               <Link className="sf-btn" href="/sellfox/sync">同步</Link>
-              <button type="button" className="sf-btn" onClick={exportCsv}>导出</button>
+              <button type="button" className="sf-btn" onClick={dataset.summaryKind ? exportSummary : exportCsv}>{dataset.summaryKind ? "导出全部" : "导出"}</button>
               <button type="button" className="sf-btn" onClick={() => setRefreshNonce((value) => value + 1)}>刷新</button>
               <button type="button" className="sf-btn" onClick={() => setNotice(`口径：${dataset.grain}。${dataset.note ?? ""}`)}>帮助</button>
             </div>
+            {dataset.summaryKind && ((facets.states?.length ?? 0) || (facets.buckets?.length ?? 0)) ? (
+              <div className="sf-facets" aria-label="候选值筛选">
+                {facets.states?.length ? <span className="sf-facet-label">状态</span> : null}
+                {facets.states?.map((item) => (
+                  <button
+                    key={`state-${item.value}`}
+                    type="button"
+                    className={applied.state === item.value ? "sf-chip sf-chip-on" : "sf-chip"}
+                    onClick={() => {
+                      const next = applied.state === item.value ? "" : item.value;
+                      setDraft((current) => ({ ...current, state: next }));
+                      setApplied((current) => ({ ...current, state: next }));
+                      setPageNo(1);
+                    }}
+                  >
+                    {STATE_LABELS[item.value] ?? (item.value || "未知")} {item.count}
+                  </button>
+                ))}
+                {facets.buckets?.length ? <span className="sf-facet-label">表现</span> : null}
+                {facets.buckets?.map((item) => (
+                  <button
+                    key={`bucket-${item.value}`}
+                    type="button"
+                    className={applied.bucket === item.value ? "sf-chip sf-chip-on" : "sf-chip"}
+                    onClick={() => {
+                      const next = applied.bucket === item.value ? "" : item.value;
+                      setDraft((current) => ({ ...current, bucket: next }));
+                      setApplied((current) => ({ ...current, bucket: next }));
+                      setPageNo(1);
+                    }}
+                  >
+                    {BUCKET_LABELS[item.value] ?? item.value} {item.count}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             {dataset.note ? <p className="sf-note">{dataset.note}</p> : null}
             {notice ? <p className="sf-notice" role="status">{notice}</p> : null}
             <div className="sf-table-wrap">
               <table>
                 <thead>
                   <tr>{columns.map((column) => (
-                    <th key={column.key} scope="col" className={isNumeric(column) ? "sf-num" : undefined} title={column.hint} style={hostWidthStyle(getWidth(column.key))}>{column.label}<ColumnResizeHandle label={column.label} onPointerDown={(event) => startResize(event, column.key)} onReset={() => resetWidths(column.key)} /></th>
+                    <th key={column.key} scope="col" className={isNumeric(column) ? "sf-num" : undefined} title={column.hint} aria-sort={sort.by === column.key ? (sort.order === "asc" ? "ascending" : "descending") : undefined} style={hostWidthStyle(getWidth(column.key))}>
+                      <span className={dataset.summaryKind && SUMMARY_SORTABLE.has(column.key) ? "sf-sortable" : undefined} onClick={dataset.summaryKind ? () => toggleSort(column.key) : undefined}>
+                        {column.label}{sort.by === column.key ? (sort.order === "asc" ? " ▲" : " ▼") : ""}
+                      </span>
+                      <ColumnResizeHandle label={column.label} onPointerDown={(event) => startResize(event, column.key)} onReset={() => resetWidths(column.key)} />
+                    </th>
                   ))}</tr>
                 </thead>
                 <tbody>
@@ -386,6 +574,8 @@ export function HostWorkbench({ page }: { page: HostPage }) {
             </div>
           </>
         ) : null}
+          </>
+        )}
       </div>
     </section>
   );

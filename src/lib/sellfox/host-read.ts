@@ -21,11 +21,19 @@ export type HostQuery = {
   shop: string;
   search: string;
   adType: string;
+  /** 实体当前态筛选：enabled/paused/archived；仅对 stateFilter 数据集生效。 */
+  state?: string;
   page: number;
   pageSize: number;
   sortBy: string;
   sortOrder: "asc" | "desc";
 };
+
+/** state 筛选白名单：来自实见 payload 的 state 取值，不接受任意键值注入。 */
+export const ADS_ENTITY_STATES = ["enabled", "paused", "archived"] as const;
+export function normalizeAdsEntityState(value: string | null | undefined): string {
+  return value && (ADS_ENTITY_STATES as readonly string[]).includes(value) ? value : "";
+}
 
 export type HostRow = Record<string, unknown>;
 
@@ -42,11 +50,18 @@ export type HostResult = {
     quantity?: number | null;
     totalInventory?: number | null;
     unfulfillable?: number | null;
+    /** 汇总视图：先汇总分子分母再计算的派生合计（按币种），与行内比率为同一口径。 */
+    derivedByCurrency?: { currency: string; values: Record<string, number | null> }[];
   };
   coverage: { stores: number; rows: number };
   grain: string;
   /** 原始行数据集：列由真实 payload 键动态派生，前端据此渲染，不套用规划列。 */
   columns?: HostColumn[];
+  /** 汇总视图的候选值计数（候选值不受自身筛选影响，标注各自 scope）。 */
+  facets?: {
+    states?: { value: string; count: number }[];
+    buckets?: { value: string; count: number }[];
+  };
 };
 
 type Scope = { organizationId: string; workspaceId: string; userId?: string };
@@ -107,6 +122,11 @@ function sumField(rows: HostRow[], field: string) {
     total += Number(sum[field] ?? 0);
   }
   return total;
+}
+
+/** 店铺授权收窄：供其它只读 reader（实体汇总）复用同一授权口径，避免第二套权限逻辑。 */
+export async function resolveStoreIds(scope: Scope, query: Pick<HostQuery, "site" | "shop">) {
+  return storeFilter(scope, query);
 }
 
 async function storeFilter(scope: Scope, query: Pick<HostQuery, "site" | "shop">) {
@@ -395,12 +415,16 @@ async function readRawEndpoint(dataset: HostDataset, scope: Scope, query: HostQu
     : Prisma.empty;
   const search = query.search.trim();
   const searchClause = search ? Prisma.sql`AND r."payload"::text ILIKE ${`%${search}%`}` : Prisma.empty;
+  // 实体当前态筛选：只对声明 stateFilter 且 state 在白名单内的数据集生效；
+  // 键名来自实见 payload 的 state，不猜字段、不覆盖 servingStatus。
+  const state = dataset.stateFilter ? normalizeAdsEntityState(query.state) : "";
+  const stateClause = state ? Prisma.sql`AND r."payload"->>'state' = ${state}` : Prisma.empty;
   const base = Prisma.sql`
     FROM "SellfoxApiRecord" r
     WHERE r."organizationId" = ${scope.organizationId}
       AND r."workspaceId" = ${scope.workspaceId}
       AND r."endpointCode" = ${code}
-      ${storeClause} ${searchClause}`;
+      ${storeClause} ${searchClause} ${stateClause}`;
 
   const [countRows, records] = await Promise.all([
     prisma.$queryRaw<{ total: bigint }[]>(Prisma.sql`SELECT count(*)::bigint AS total ${base}`),

@@ -1,6 +1,6 @@
 
 import type { HostPage, HostStatus } from "./host-page-schema";
-export type { HostStatus, HostPriority, HostColumnKind, HostColumn, HostDataset, HostPage } from "./host-page-schema";
+export type { HostStatus, HostPriority, HostColumnKind, HostColumn, HostDataset, HostPage, HostTabGroup } from "./host-page-schema";
 import { productsHostPage } from "./host-page-products";
 import { profitHostPage } from "./host-page-profit";
 import { adsHostPage } from "./host-page-ads";

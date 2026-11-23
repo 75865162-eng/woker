@@ -570,6 +570,37 @@
 }
 
 /* 数据集二级 tab：状态点区分已接入 / 待接入 */
+.sellfox-ui .sf-proposals-panel { margin-bottom: var(--space-2); }
+
+/* 一级广告管理标签：与二级数据集标签分层，视觉上更轻、更窄。 */
+.sellfox-ui .sf-group {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  margin-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.sellfox-ui .sf-group button {
+  flex: none;
+  height: 32px;
+  padding: 0 var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-meta);
+  font-weight: 600;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+}
+
+.sellfox-ui .sf-group button:hover { color: var(--foreground); }
+
+.sellfox-ui .sf-group button[aria-current="page"] {
+  color: var(--brand);
+  border-bottom-color: var(--brand);
+}
+
 .sellfox-ui .sf-ds {
   display: flex;
   gap: 0;
@@ -619,6 +650,34 @@
   background: var(--surface-sunken);
   border: 1px solid var(--border);
 }
+
+/* 汇总视图候选值：点击即按该候选值筛选，计数来自同一授权与日期范围。 */
+.sellfox-ui .sf-facets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  background: var(--surface);
+  font-size: var(--text-meta);
+}
+.sellfox-ui .sf-facet-label { color: var(--muted); margin-left: var(--space-1); }
+.sellfox-ui .sf-facet-label:first-child { margin-left: 0; }
+.sellfox-ui .sf-chip {
+  border: 1px solid var(--border);
+  background: var(--surface-sunken);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 2px var(--space-2);
+  font-size: var(--text-meta);
+  cursor: pointer;
+}
+.sellfox-ui .sf-chip:hover { border-color: var(--border-strong); }
+.sellfox-ui .sf-chip-on { background: var(--accent-soft, var(--surface-sunken)); border-color: var(--accent, var(--border-strong)); font-weight: 600; }
+.sellfox-ui .sf-sortable { cursor: pointer; user-select: none; }
+.sellfox-ui .sf-sortable:hover { text-decoration: underline; }
 
 /* 未接入数据集：字段结构照常展示，但明确说明没有行。 */
 .sellfox-ui .sf-pending {

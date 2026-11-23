@@ -6,6 +6,8 @@ import { readHostDataset, type HostQuery } from "@/lib/sellfox/host-read";
 import { readSellfoxWorkbench } from "@/lib/sellfox/workbench-read";
 import { sellfoxBrowseStoreIds } from "@/lib/sellfox/browse-store-scope";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
+import { adsSummaryCsv, readAdsEntitySummary } from "@/lib/sellfox/ads-entity-summary";
+import type { AdsSummaryMetrics, AdsSummaryQuery } from "@/lib/sellfox/ads-summary-spec";
 
 export const runtime = "nodejs";
 
@@ -27,6 +29,11 @@ export async function GET(request: Request) {
   const fullScope = { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId, userId: permission.user.id };
   const page = clamp(Number(url.searchParams.get("page")), 1, 10_000, 1);
   const pageSize = clamp(Number(url.searchParams.get("pageSize")), 1, 200, 20);
+  const exportAll = url.searchParams.get("export") === "1" || url.searchParams.get("format") === "csv";
+  const stateParam = url.searchParams.get("state") ?? "";
+  if (stateParam && dataset.stateFilter && !["enabled", "paused", "archived"].includes(stateParam)) {
+    return NextResponse.json({ error: "state 只能为 enabled / paused / archived。" }, { status: 400 });
+  }
 
   try {
     if (dataset.endpoint === "/api/sellfox/performance") {
@@ -61,11 +68,36 @@ export async function GET(request: Request) {
       shop: url.searchParams.get("shop") ?? "",
       search: (url.searchParams.get("search") ?? "").slice(0, 120),
       adType: ["sp", "sb", "sd"].includes(url.searchParams.get("adType") ?? "") ? String(url.searchParams.get("adType")) : "",
+      state: url.searchParams.get("state") ?? "",
       page,
       pageSize,
-      sortBy: url.searchParams.get("sortBy") ?? "reportDate",
+      sortBy: url.searchParams.get("sortBy") ?? (dataset.summaryKind ? "cost" : "reportDate"),
       sortOrder: url.searchParams.get("sortOrder") === "asc" ? "asc" : "desc",
     };
+
+    // 实体 × 区间汇总：一行一实体、聚合后筛选/排序、分币种合计；导出走同一 SQL，超限直接 413。
+    if (dataset.summaryKind) {
+      const summaryQuery: AdsSummaryQuery = {
+        ...query,
+        bucket: url.searchParams.get("bucket") ?? "",
+        exportAll,
+        ...metricParams(url),
+      };
+      const result = await readAdsEntitySummary(dataset, fullScope, summaryQuery, dataset.summaryKind);
+      if (url.searchParams.get("format") === "csv") {
+        const csv = adsSummaryCsv(dataset.columns, result.rows);
+        const filename = `${dataset.id}-${query.from}-${query.to}.csv`;
+        return new NextResponse(`\uFEFF${csv}`, {
+          headers: {
+            "Content-Type": "text/csv; charset=utf-8",
+            "Content-Disposition": `attachment; filename="${filename}"`,
+            "Cache-Control": "no-store",
+          },
+        });
+      }
+      return NextResponse.json({ ...result, columns: result.columns ?? null });
+    }
+
     const result = await readHostDataset(dataset, fullScope, query);
     // 原始行数据集的列由真实 payload 派生，随结果一并回传给前端渲染。
     return NextResponse.json({ ...result, columns: result.columns ?? null });
@@ -76,6 +108,26 @@ export async function GET(request: Request) {
     console.error(JSON.stringify({ scope: "sellfox.dataset", dataset: id, message: error instanceof Error ? error.message : "unknown" }));
     return NextResponse.json({ error: "读取赛狐数据集失败，请稍后重试。" }, { status: 500 });
   }
+}
+
+const METRIC_KEYS = ["impressions", "clicks", "cost", "adOrders", "adSales", "ctr", "cpc", "acos", "roas"] as const;
+
+/** 区间指标筛选参数：非负有限数、min ≤ max；非法输入返回可读 400，不静默忽略。 */
+function metricParams(url: URL): AdsSummaryMetrics {
+  const parsed: Record<string, number> = {};
+  for (const key of METRIC_KEYS) {
+    for (const bound of ["Min", "Max"] as const) {
+      const raw = url.searchParams.get(`${key}${bound}`);
+      if (raw == null || raw === "") continue;
+      const value = Number(raw);
+      if (!Number.isFinite(value) || value < 0) throw new SellfoxBrowseError(`指标筛选 ${key}${bound} 必须是非负数字。`, 400);
+      parsed[`${key}${bound}`] = value;
+    }
+    const min = parsed[`${key}Min`];
+    const max = parsed[`${key}Max`];
+    if (min != null && max != null && min > max) throw new SellfoxBrowseError(`指标筛选 ${key} 的最小值不能大于最大值。`, 400);
+  }
+  return parsed as AdsSummaryMetrics;
 }
 
 function clamp(value: number, min: number, max: number, fallback: number) {
