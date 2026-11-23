@@ -7,8 +7,12 @@ import Link from "next/link";
 import { SellfoxTabs } from "../sellfox-nav";
 import { SellfoxAdsProposals } from "@/components/sellfox/sellfox-ads-proposals";
 import { ColumnResizeHandle } from "@/components/ui/column-resize-handle";
+import { Dialog } from "@/components/ui/overlays";
+import { CopyableValue } from "@/components/sellfox/copyable-value";
+import { useColumnPreferences } from "@/lib/hooks/use-column-preferences";
 import { useSessionColumnWidths } from "@/lib/hooks/use-session-column-widths";
 import { sellfoxSiteLabel } from "@/lib/sellfox/marketplace-site";
+import { normalizeWorkspaceScope } from "@/lib/workspace/scope";
 import { rangeForPreset, shanghaiToday, type DatePreset } from "@/lib/sellfox/replica-pages";
 import { hostStatusLabel, type HostColumn, type HostDataset, type HostPage, type HostTabGroup } from "@/lib/sellfox/host-pages";
 
@@ -69,6 +73,15 @@ function safeImage(value: unknown) {
   return typeof value === "string" && /^https?:\/\//.test(value) ? value : "";
 }
 
+/** window.open 无法设置自定义 header，导出 URL 必须显式带 workspaceId（与 replica 导出一致）。 */
+function readWorkspaceId() {
+  try {
+    return normalizeWorkspaceScope(JSON.parse(localStorage.getItem("amazon_bulk_ad_workspace_scope") ?? "{}")).workspaceId;
+  } catch {
+    return normalizeWorkspaceScope().workspaceId;
+  }
+}
+
 function cellText(column: HostColumn, row: Row) {
   if (column.kind === "image") return "";
   if (column.kind === "qty") return qty(row[column.key]);
@@ -86,9 +99,10 @@ function Cell({ column, row }: { column: HostColumn; row: Row }) {
     return src ? <img className="sf-thumb" src={src} alt="商品主图" width={36} height={36} loading="lazy" decoding="async" referrerPolicy="no-referrer" /> : <span className="sf-thumb" />;
   }
   if (column.kind === "store") {
+    const storeName = row.storeName ?? row.name;
     return (
       <span className="sf-stack">
-        <span>{text(row.storeName ?? row.name)}</span>
+        <CopyableValue value={storeName}>{text(storeName)}</CopyableValue>
         <small>{sellfoxSiteLabel(row.storeMarketplace ?? row.marketplace) || "-"}</small>
       </span>
     );
@@ -96,10 +110,14 @@ function Cell({ column, row }: { column: HostColumn; row: Row }) {
   if (column.kind === "stack") {
     return (
       <span className="sf-stack">
-        <span>{text(row[column.key])}</span>
-        {column.sub ? <small>{text(row[column.sub])}</small> : null}
+        <CopyableValue value={row[column.key]}>{text(row[column.key])}</CopyableValue>
+        {column.sub ? <small><CopyableValue value={row[column.sub]}>{text(row[column.sub])}</CopyableValue></small> : null}
       </span>
     );
+  }
+  // ASIN / MSKU / SKU / 活动ID 等标识列：hover 一键复制，对齐复刻台交互。
+  if (/asin|msku|sku|campaign|adgroup|targeting|searchterm/i.test(column.key)) {
+    return <CopyableValue value={row[column.key]}>{cellText(column, row)}</CopyableValue>;
   }
   return <>{cellText(column, row)}</>;
 }
@@ -130,6 +148,52 @@ function hostColumnWidth(column: HostColumn) {
 }
 function hostWidthStyle(width: number | undefined): { width: number; minWidth: number; maxWidth: number } | undefined {
   return width ? { width, minWidth: width, maxWidth: width } : undefined;
+}
+
+/** 承接页自定义列：字段搜索 + 勾选 + 拖拽排序，与复刻台 ColumnPicker 交互一致。 */
+function HostColumnPicker({ columns, selected, onCancel, onSave }: { columns: HostColumn[]; selected: string[]; onCancel: () => void; onSave: (keys: string[]) => void }) {
+  const [draft, setDraft] = useState(selected);
+  const [query, setQuery] = useState("");
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const defaults = columns.map((column) => column.key);
+  const labelOf = (key: string) => columns.find((column) => column.key === key)?.label ?? key;
+  const filtered = columns.filter((column) => !query || column.label.includes(query) || column.key.toLowerCase().includes(query.toLowerCase()));
+  function toggle(key: string) { setDraft((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key]); }
+  function dropOn(targetKey: string) {
+    setDraft((current) => {
+      if (!dragKey || dragKey === targetKey || !current.includes(dragKey) || !current.includes(targetKey)) return current;
+      const next = current.filter((key) => key !== dragKey);
+      next.splice(next.indexOf(targetKey), 0, dragKey);
+      return next;
+    });
+    setDragKey(null);
+  }
+  return (
+    <>
+      <div className="sf-column-toolbar">
+        <input className="sf-search" aria-label="搜索字段" placeholder="搜索列名或字段" value={query} onChange={(event) => setQuery(event.target.value)} />
+        <button type="button" className="sf-btn" onClick={() => setDraft(defaults)}>恢复默认</button>
+      </div>
+      <p className="sf-notice">已选 {draft.length} / {columns.length} 列。拖拽「已选顺序」可调整列位置。</p>
+      <div className="sf-column-selected" aria-label="已选列顺序">
+        {draft.map((key) => (
+          <span key={key} className="sf-column-chip" draggable onDragStart={() => setDragKey(key)} onDragOver={(event) => event.preventDefault()} onDrop={() => dropOn(key)} title="拖拽调整顺序">{labelOf(key)}</span>
+        ))}
+      </div>
+      <div className="sf-modal-grid">
+        {filtered.map((column) => (
+          <label key={column.key} className="sf-check" title={column.hint}>
+            <input type="checkbox" checked={draft.includes(column.key)} onChange={() => toggle(column.key)} />
+            <span>{column.label}</span>
+          </label>
+        ))}
+      </div>
+      <div className="sf-modal-actions">
+        <button type="button" className="sf-btn" onClick={onCancel}>取消</button>
+        <button type="button" className="sf-btn sf-btn-primary" onClick={() => onSave(draft)}>确定</button>
+      </div>
+    </>
+  );
 }
 
 export function HostWorkbench({ page }: { page: HostPage }) {
@@ -237,9 +301,23 @@ export function HostWorkbench({ page }: { page: HostPage }) {
   // 没有可加总的列时不渲染汇总行，避免只显示一个「汇总」空行。
   const hasTotals = totals.byCurrency.length > 0 || totals.quantity != null || totals.totalInventory != null
     || totals.impressions != null || totals.clicks != null || totals.adOrders != null;
-  const columns = dynamicColumns ?? dataset?.columns ?? [];
+  const allColumns = useMemo(() => dynamicColumns ?? dataset?.columns ?? [], [dynamicColumns, dataset?.columns]);
+  const allColumnKeys = useMemo(() => allColumns.map((column) => column.key), [allColumns]);
+  // 自定义列：服务端持久化（账号级、跨设备），会话级列宽仍走 session hook。
+  // tableId 不能含冒号：user-preferences 的 key 为 <namespace>:<id>，仅允许一个冒号。
+  const { visible: visibleColumnKeys, saveVisible: saveVisibleColumns } = useColumnPreferences(`host_${dataset?.id ?? "none"}`, allColumnKeys);
+  const columns = useMemo(() => {
+    const set = new Set(visibleColumnKeys);
+    const ordered = visibleColumnKeys.map((key) => allColumns.find((column) => column.key === key)).filter((column): column is HostColumn => Boolean(column));
+    // 新出现的服务端列（payload 动态派生）默认追加，避免隐藏未知列导致数据不可见。
+    const extra = allColumns.filter((column) => !set.has(column.key));
+    return [...ordered, ...extra];
+  }, [allColumns, visibleColumnKeys]);
+  const [columnsOpen, setColumnsOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<"csv" | "xlsx">("csv");
   // 会话级列宽：拖拽仅当前标签页生效，不写库、不持久化。默认固定宽度按列类型推导。
-  const hostDefaults = useMemo(() => Object.fromEntries(columns.map((column) => [column.key, hostColumnWidth(column)])), [columns]);
+  const hostDefaults = useMemo(() => Object.fromEntries(allColumns.map((column) => [column.key, hostColumnWidth(column)])), [allColumns]);
   const { getWidth, startResize, resetWidths } = useSessionColumnWidths(`sellfox-host:${dataset?.id ?? "none"}`, hostDefaults);
 
   function applyPreset(next: "d7" | "d14" | "d30" | "d90" | "custom") {
@@ -313,15 +391,23 @@ export function HostWorkbench({ page }: { page: HostPage }) {
     setPageNo(1);
   }
 
-  function exportCsv() {
-    const header = columns.map((column) => column.label);
-    const lines = [header, ...rows.map((row) => columns.map((column) => cellText(column, row)))];
-    const csv = `\uFEFF${lines.map((line) => line.map((value) => `"${value.replaceAll('"', '""')}"`).join(",")).join("\r\n")}`;
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    link.download = `sellfox-${page.id}-${dataset?.id ?? "data"}.csv`;
-    link.click();
-    setNotice("已导出当前页，没有写入数据库。");
+  /** 服务端全量导出：与当前筛选/可见列一致，最多 10,000 行，缺失保持空白不补 0。 */
+  function serverExportUrl(format: "csv" | "xlsx"): string {
+    const params = new URLSearchParams();
+    params.set("dataset", dataset?.id ?? "");
+    params.set("workspaceId", readWorkspaceId());
+    if (dataset?.dateRange) { params.set("from", applied.from); params.set("to", applied.to); }
+    if (applied.site) params.set("site", applied.site);
+    if (applied.shop) params.set("shop", applied.shop);
+    if (applied.adType) params.set("adType", applied.adType);
+    if (applied.search) params.set("search", applied.search);
+    for (const column of columns) params.append("column", column.key);
+    params.set("format", format);
+    return `/api/sellfox/dataset/export?${params}`;
+  }
+  function runServerExport(format: "csv" | "xlsx") {
+    window.open(serverExportUrl(format), "_blank", "noopener,noreferrer");
+    setNotice(`已在后台生成${format === "xlsx" ? " Excel" : " CSV"}：按当前筛选导出全部结果（最多 10,000 行），不是仅当前页，未写入数据库。`);
   }
 
   function totalNode(column: HostColumn) {
@@ -480,7 +566,8 @@ export function HostWorkbench({ page }: { page: HostPage }) {
             <div className="sf-actions">
               <span className="sf-spacer" />
               <Link className="sf-btn" href="/sellfox/sync">同步</Link>
-              <button type="button" className="sf-btn" onClick={dataset.summaryKind ? exportSummary : exportCsv}>{dataset.summaryKind ? "导出全部" : "导出"}</button>
+              <button type="button" className="sf-btn" onClick={() => setColumnsOpen(true)}>自定义列</button>
+              <button type="button" className="sf-btn" onClick={dataset.summaryKind ? exportSummary : () => setExportOpen(true)}>{dataset.summaryKind ? "导出全部" : "导出"}</button>
               <button type="button" className="sf-btn" onClick={() => setRefreshNonce((value) => value + 1)}>刷新</button>
               <button type="button" className="sf-btn" onClick={() => setNotice(`口径：${dataset.grain}。${dataset.note ?? ""}`)}>帮助</button>
             </div>
@@ -577,6 +664,30 @@ export function HostWorkbench({ page }: { page: HostPage }) {
           </>
         )}
       </div>
+      {columnsOpen ? (
+        <Dialog open bare zIndex="modal" onClose={() => setColumnsOpen(false)}>
+          <div className="sf-modal mx-auto" role="dialog" aria-modal="true" aria-label="自定义列">
+            <h2>自定义列 · {dataset?.label ?? ""}</h2>
+            <HostColumnPicker columns={allColumns} selected={columns.map((column) => column.key)} onCancel={() => setColumnsOpen(false)} onSave={(keys) => { saveVisibleColumns(keys); setColumnsOpen(false); }} />
+          </div>
+        </Dialog>
+      ) : null}
+      {exportOpen ? (
+        <Dialog open bare zIndex="modal" onClose={() => setExportOpen(false)}>
+          <div className="sf-modal mx-auto" role="dialog" aria-modal="true" aria-label="导出">
+            <h2>导出 · {dataset?.label ?? ""}</h2>
+            <p className="sf-notice">按当前筛选导出服务端全部结果（最多 10,000 行），不是仅当前页。金额按币种分列，缺失保持空白不补 0。</p>
+            <div className="sf-modal-grid">
+              <label className="sf-check"><input type="radio" name="host-export-format" checked={exportFormat === "csv"} onChange={() => setExportFormat("csv")} /><span>CSV</span></label>
+              <label className="sf-check"><input type="radio" name="host-export-format" checked={exportFormat === "xlsx"} onChange={() => setExportFormat("xlsx")} /><span>Excel（xlsx）</span></label>
+            </div>
+            <div className="sf-modal-actions">
+              <button type="button" className="sf-btn" onClick={() => setExportOpen(false)}>取消</button>
+              <button type="button" className="sf-btn sf-btn-primary" onClick={() => { runServerExport(exportFormat); setExportOpen(false); }}>导出</button>
+            </div>
+          </div>
+        </Dialog>
+      ) : null}
     </section>
   );
 }

@@ -2,6 +2,8 @@ import {
   ArrowRight,
   Bot,
   Boxes,
+  ChartNoAxesCombined,
+  ClipboardList,
   PackageSearch,
   SearchCheck,
   Sparkles,
@@ -26,6 +28,14 @@ const modules = [
   { href: "/logistics", title: "物流处理", description: "装箱表、箱唛 PDF、物流模板和对比表", icon: PackageSearch },
 ];
 
+// 高频业务对象直达：对标 wimoor「模块名即入口」的一级导航，降低采购单/销量报表等常用对象的点击深度。
+const quickAccess = [
+  { href: "/product", title: "产品列表", icon: Boxes, moduleId: "products" },
+  { href: "/sellfox/profit", title: "销量统计", icon: ChartNoAxesCombined, moduleId: "sellfox" },
+  { href: "/sellfox/profit?view=report", title: "利润报表", icon: ChartNoAxesCombined, moduleId: "sellfox" },
+  { href: "/purchase/orders", title: "采购订单", icon: ClipboardList, moduleId: "operations" },
+];
+
 export default async function Home() {
   const user = await getCurrentUser();
   const rolePermissionsSnapshot = user?.organizationId ? await getOrganizationRolePermissionsSnapshot(user.organizationId) : null;
@@ -42,13 +52,33 @@ export default async function Home() {
             <h1 className="text-display text-foreground">今天要处理什么？</h1>
             <p className="mt-2 text-sm text-muted">选择一个模块开始工作，页面会标明当前数据来源和待迁移边界。</p>
           </div>
-          <div className="flex flex-wrap gap-3">
-            {visibleModules.some((module) => module.href === "/workspace") ? <PrefetchLink href="/workspace">
-              <Button>PPC 优化<ArrowRight className="h-4 w-4" /></Button>
-            </PrefetchLink> : null}
-            {visibleModules.some((module) => module.href === "/listing-ai") ? <PrefetchLink href="/listing-ai">
-              <Button variant="secondary">Listing AI</Button>
-            </PrefetchLink> : null}
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-3">
+              {visibleModules.some((module) => module.href === "/workspace") ? <PrefetchLink href="/workspace">
+                <Button>PPC 优化<ArrowRight className="h-4 w-4" /></Button>
+              </PrefetchLink> : null}
+              {visibleModules.some((module) => module.href === "/listing-ai") ? <PrefetchLink href="/listing-ai">
+                <Button variant="secondary">Listing AI</Button>
+              </PrefetchLink> : null}
+            </div>
+            <nav aria-label="高频业务直达" className="flex flex-wrap items-center gap-2">
+              <span className="text-label text-muted">常用：</span>
+              {quickAccess
+                .filter((item) => roleCanAccessModule(user?.role, item.moduleId, rolePermissionsSnapshot?.permissions))
+                .map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <PrefetchLink
+                      key={item.href}
+                      href={item.href}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-label text-foreground/80 transition-colors hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                    >
+                      <Icon aria-hidden className="h-3.5 w-3.5" />
+                      {item.title}
+                    </PrefetchLink>
+                  );
+                })}
+            </nav>
           </div>
         </section>}
         shortcuts={<section className="grid gap-[var(--gap-field)] md:grid-cols-2 xl:grid-cols-4">

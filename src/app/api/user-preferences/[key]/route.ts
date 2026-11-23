@@ -10,20 +10,62 @@ const VALUE_MAX_BYTES = 8 * 1024;
 const WIDTH_MIN = 48;
 const WIDTH_MAX = 800;
 
-function sanitizeValue(value: unknown): { widths: Record<string, number> } | null {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-  const widths = (value as { widths?: unknown }).widths;
-  if (typeof widths !== "object" || widths === null || Array.isArray(widths)) return null;
+type PreferenceValue = {
+  widths?: Record<string, number>;
+  /** 自定义列的可见键（顺序即列顺序）。服务端持久化，跨设备生效。 */
+  visible?: string[];
+  /** 预留：字段顺序（当 visible 仅表达显隐时使用）。 */
+  order?: string[];
+};
 
-  const result: Record<string, number> = {};
-  for (const [key, raw] of Object.entries(widths as Record<string, unknown>)) {
-    if (!/^[a-zA-Z0-9_-]{1,60}$/.test(key)) return null;
-    if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
-    result[key] = Math.round(Math.min(Math.max(raw, WIDTH_MIN), WIDTH_MAX));
+const COLUMN_KEY_PATTERN = /^[a-zA-Z0-9_-]{1,60}$/;
+
+function sanitizeStringList(value: unknown): string[] | null {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 200) return null;
+  const result: string[] = [];
+  for (const raw of value) {
+    if (typeof raw !== "string" || !COLUMN_KEY_PATTERN.test(raw)) return null;
+    if (!result.includes(raw)) result.push(raw); // 去重，防止超大重复数组
+  }
+  return result;
+}
+
+function sanitizeValue(value: unknown): PreferenceValue | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const input = value as { widths?: unknown; visible?: unknown; order?: unknown };
+  const result: PreferenceValue = {};
+  let hasField = false;
+
+  if (Object.hasOwn(input, "widths")) {
+    const widths = input.widths;
+    if (typeof widths !== "object" || widths === null || Array.isArray(widths)) return null;
+    const normalized: Record<string, number> = {};
+    for (const [key, raw] of Object.entries(widths as Record<string, unknown>)) {
+      if (!COLUMN_KEY_PATTERN.test(key)) return null;
+      if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
+      normalized[key] = Math.round(Math.min(Math.max(raw, WIDTH_MIN), WIDTH_MAX));
+    }
+    result.widths = normalized;
+    hasField = true;
   }
 
+  if (Object.hasOwn(input, "visible")) {
+    const visible = sanitizeStringList(input.visible);
+    if (!visible) return null;
+    result.visible = visible;
+    hasField = true;
+  }
+
+  if (Object.hasOwn(input, "order")) {
+    const order = sanitizeStringList(input.order);
+    if (!order) return null;
+    result.order = order;
+    hasField = true;
+  }
+
+  if (!hasField) return null;
   if (JSON.stringify(result).length > VALUE_MAX_BYTES) return null;
-  return { widths: result };
+  return result;
 }
 
 function normalizeKey(raw: string): string | null {

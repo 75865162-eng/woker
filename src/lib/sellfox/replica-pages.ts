@@ -18,6 +18,8 @@ export type ReplicaPage = {
   dimensions: ReplicaDimension[];
   /** 首屏默认维度；缺省取第一个可用维度。 */
   defaultDimension?: string;
+  /** 首屏默认排序列；缺省不排序。金额/销量页默认对主指标降序，进入即见头部商品（对齐 wimoor 默认降序）。 */
+  defaultSortBy?: string;
   metrics: { id: string; label: string }[];
   searchTypes: { id: string; label: string }[];
   showDate: boolean;
@@ -44,6 +46,7 @@ const salesDims: ReplicaDimension[] = [
   { id: "spu", label: "SPU" },
   { id: "store", label: "店铺" },
   { id: "developer", label: "开发员" },
+  { id: "category", label: "品类", disabled: true, reason: "销量/利润日快照没有品类字段；Listing 快照的 bsrCategory 尚未同步，接入前不造数。" },
   { id: "salesperson", label: "业务员", disabled: true, reason: "销量日快照没有业务员维度，不从 Listing 开发员伪造。" },
 ];
 
@@ -69,6 +72,8 @@ export const replicaPages: ReplicaPage[] = [
     // 销量页首屏按品名(MSKU) grain：经真实赛狐页面 1:1 校准并由测试锁定。
     // v4 规划文档 D1 称「默认 ASIN」为一般性描述，不覆盖实地校准结果；保持 msku。
     defaultDimension: "msku",
+    // 首屏按当前指标（默认销量）降序，进入即见头部商品，对齐 wimoor 金额列默认 desc。
+    defaultSortBy: "subtotal",
     metrics: [
       { id: "quantity", label: "销量" },
       { id: "orders", label: "订单量" },
@@ -133,6 +138,8 @@ export const replicaPages: ReplicaPage[] = [
     stub: false,
     query: "workbench",
     dimensions: salesDims.map((item) => item.id === "salesperson" ? { id: "salesperson", label: "业务员", disabled: true, reason: "利润查询维度没有业务员键；业务员只作筛选（payload.userNameList）。" } : item),
+    // 首屏按销售额降序，进入即见头部商品，对齐 wimoor 金额列默认 desc。
+    defaultSortBy: "saleRevenue",
     metrics: [],
     searchTypes: searchAsin,
     showDate: true,
@@ -150,7 +157,7 @@ export const replicaPages: ReplicaPage[] = [
       { key: "grossProfit", label: "毛利润", kind: "money" },
       { key: "grossProfitRate", label: "毛利率", kind: "rate" },
       { key: "netProfitRate", label: "净销售额毛利率", kind: "rate" },
-      { key: "saleRevenue", label: "销售额", kind: "money" },
+      { key: "saleRevenue", label: "销售额", kind: "money", sortable: true },
       { key: "netRevenue", label: "净销售额", kind: "money" },
       { key: "orderNum", label: "订单量", kind: "qty" },
       { key: "fulfillable", label: "FBA可售", kind: "qty" },

@@ -5,10 +5,12 @@ import { SellfoxTabs } from "@/components/sellfox/sellfox-nav";
 import { Dialog } from "@/components/ui/overlays";
 import { ColumnResizeHandle } from "@/components/ui/column-resize-handle";
 import { useSessionColumnWidths } from "@/lib/hooks/use-session-column-widths";
+import { useColumnPreferences } from "@/lib/hooks/use-column-preferences";
 import { normalizeWorkspaceScope } from "@/lib/workspace/scope";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
 import { sellfoxSiteLabel } from "@/lib/sellfox/marketplace-site";
 import { SfMultiSelect } from "@/components/sellfox/sf-multi-select";
+import { CopyableValue } from "@/components/sellfox/copyable-value";
 import {
   sellfoxAsinHref, sellfoxRowTrend, sellfoxTrendAverage, sellfoxTrendChange, sellfoxDrillHref,
 } from "@/lib/sellfox/row-actions";
@@ -42,6 +44,8 @@ type Filters = {
   salespersons: string[];
   owner: string;
   currency: string;
+  /** 展示币种（¥/$/原币）：仅影响展示，命中已复核汇率才换算。空串=原币。 */
+  displayCurrency: string;
   searchType: string;
   search: string;
   exact: boolean;
@@ -148,13 +152,15 @@ function initialFilters(page: ReplicaPage): Filters {
     salespersons: [],
     owner: "",
     currency: "",
+    displayCurrency: "",
     searchType: page.searchTypes[0]?.id ?? "",
     search: "",
     exact: false,
     hideZero: false,
     onlySettle: false,
-    // 默认按合计列降序：打开即"卖得最好的在前"。仅 sales 域支持 subtotal 排序列，其余域保持服务端默认。
-    sortBy: page.id === "sales" ? "subtotal" : "",
+    // 金额/销量页首屏对主指标降序（对齐 wimoor 默认降序），仅在列可排序时生效。
+    // 兼容两种来源：page.defaultSortBy（配置化，sales=subtotal / performance=saleRevenue）。
+    sortBy: page.defaultSortBy && page.columns.some((column) => column.key === page.defaultSortBy && column.sortable) ? page.defaultSortBy : "",
     sortOrder: "desc",
     page: 1,
     pageSize: 20,
@@ -206,12 +212,30 @@ function qty(value: unknown, digits = 0) {
   return number == null ? "-" : new Intl.NumberFormat("zh-CN", { maximumFractionDigits: digits }).format(number);
 }
 
-function money(value: unknown, currency: unknown) {
+type MoneyFx = {
+  displayCurrency: string;
+  map: Map<string, { rate: number; reference: string; observedAt: string }>;
+};
+
+function money(value: unknown, currency: unknown, fx?: MoneyFx) {
   const number = numberOf(value);
   if (number == null) return "-";
-  const code = typeof currency === "string" && currency ? currency : "";
-  const body = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(number);
-  return code === "USD" ? `US$${body}` : code ? `${code} ${body}` : body;
+  let code = typeof currency === "string" && currency ? currency : "";
+  let amount = number;
+  let converted = false;
+  if (fx?.displayCurrency && code && code.toUpperCase() !== fx.displayCurrency.toUpperCase()) {
+    const hit = fx.map.get(`${code.toUpperCase()}->${fx.displayCurrency.toUpperCase()}`);
+    // 仅当命中已复核汇率才换算；无汇率保留原币种，绝不臆造。
+    if (hit) {
+      amount = number * hit.rate;
+      code = fx.displayCurrency.toUpperCase();
+      converted = true;
+    }
+  }
+  const body = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+  const label = code === "USD" ? `US$${body}` : code ? `${code} ${body}` : body;
+  // ≈ 前缀提示这是按已复核汇率换算后的展示值，而非原始落库金额。
+  return converted ? `≈${label}` : label;
 }
 
 function rate(value: unknown) {
@@ -234,11 +258,11 @@ function cacheTimeLabel(cachedAt: string | null) {
   return date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
-function cellText(column: ReplicaColumn, row: Row, metric: string) {
+function cellText(column: ReplicaColumn, row: Row, metric: string, fx?: MoneyFx) {
   if (column.kind === "image" || column.kind === "icon") return "";
   if (column.kind === "missing") return "-";
   if (column.kind === "store") return [text(row.name), sellfoxSiteLabel(row.marketplace)].filter(Boolean).join(" / ") || "-";
-  if (column.kind === "mskuPrice") return [text(row.msku), money(row.price, row.currency)].join(" / ");
+  if (column.kind === "mskuPrice") return [text(row.msku), money(row.price, row.currency, fx)].join(" / ");
   if (column.kind === "skuName") return [text(row.title ?? row.identity), text(row.sku)].filter((item) => item !== "-").join(" / ") || "-";
   if (column.kind === "titleAsin") return [text(row.title), text(row.asin ?? row.identity)].join(" / ");
   if (column.kind === "asinMsku") return [text(row.asin), text(row.msku)].join(" / ");
@@ -246,9 +270,9 @@ function cellText(column: ReplicaColumn, row: Row, metric: string) {
   if (column.kind === "tags" || column.kind === "people") return text(column.kind === "people" ? row.userNameList : row.productTags);
   if (column.kind === "qty") return qty(row[column.key]);
   if (column.kind === "decimal") return qty(row[column.key], 2);
-  if (column.kind === "money") return money(row[column.key], row.currency);
+  if (column.kind === "money") return money(row[column.key], row.currency, fx);
   if (column.kind === "rate") return rate(row[column.key]);
-  if (column.kind === "metric") return metric === "revenue" ? money(row.subtotal, row.currency) : qty(row.subtotal);
+  if (column.kind === "metric") return metric === "revenue" ? money(row.subtotal, row.currency, fx) : qty(row.subtotal);
   return text(row[column.key]);
 }
 
@@ -264,8 +288,9 @@ type CellProps = {
   metric: string;
   drillParams: URLSearchParams;
   onTrend: (row: Row) => void;
+  fx?: MoneyFx;
 };
-function Cell({ column, row, metric, drillParams, onTrend }: CellProps) {
+function Cell({ column, row, metric, drillParams, onTrend, fx }: CellProps) {
   if (column.kind === "image") {
     const src = safeImage(row.mainImage);
     // 行内轻预览：hover/focus 出卡片（图/品名/MSKU/售价/负责人/标签），数据取当前行，不额外请求。
@@ -304,19 +329,20 @@ function Cell({ column, row, metric, drillParams, onTrend }: CellProps) {
     return <span className="sf-stack"><span>{text(row.name)}</span><small title={String(row.marketplace ?? "")}>{site || "-"}</small></span>;
   }
   if (column.kind === "mskuPrice") {
-    return <span className="sf-stack"><span>{text(row.msku)}</span><small>{money(row.price, row.currency)}</small></span>;
+    return <span className="sf-stack"><CopyableValue value={row.msku}>{text(row.msku)}</CopyableValue><small>{money(row.price, row.currency, fx)}</small></span>;
   }
   if (column.kind === "skuName") {
-    return <span className="sf-stack"><span>{text(row.title ?? row.identity)}</span><small>{text(row.sku)}</small></span>;
+    return <span className="sf-stack"><CopyableValue value={row.title ?? row.identity}>{text(row.title ?? row.identity)}</CopyableValue><small><CopyableValue value={row.sku}>{text(row.sku)}</CopyableValue></small></span>;
   }
   if (column.kind === "titleAsin") {
-    return <span className="sf-stack"><span>{text(row.title)}</span><small><AsinLink asin={row.asin ?? row.identity} fallback={text(row.asin ?? row.identity)} /></small></span>;
+    const asin = row.asin ?? row.identity;
+    return <span className="sf-stack"><CopyableValue value={row.title}>{text(row.title)}</CopyableValue><small><CopyableValue value={asin}><AsinLink asin={asin} fallback={text(asin)} /></CopyableValue></small></span>;
   }
   if (column.kind === "asinMsku") {
-    return <span className="sf-stack"><span><AsinLink asin={row.asin} fallback={text(row.asin)} /></span><small>{text(row.msku)}</small></span>;
+    return <span className="sf-stack"><span><CopyableValue value={row.asin}><AsinLink asin={row.asin} fallback={text(row.asin)} /></CopyableValue></span><small><CopyableValue value={row.msku}>{text(row.msku)}</CopyableValue></small></span>;
   }
-  if (column.key === "asin") return <AsinLink asin={row.asin} fallback={text(row.asin)} />;
-  return <>{cellText(column, row, metric)}</>;
+  if (column.key === "asin") return <CopyableValue value={row.asin}><AsinLink asin={row.asin} fallback={text(row.asin)} /></CopyableValue>;
+  return <>{cellText(column, row, metric, fx)}</>;
 }
 function mskuOk(value: unknown) { return typeof value === "string" && Boolean(value.trim()); }
 
@@ -343,6 +369,8 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
   const [dates, setDates] = useState<string[]>([]);
   const [total, setTotal] = useState(0);
   const [stores, setStores] = useState<Store[]>([]);
+  const [fxCurrencies, setFxCurrencies] = useState<string[]>([]);
+  const [fxMap, setFxMap] = useState<MoneyFx["map"]>(new Map());
   const [tags, setTags] = useState<string[]>([]);
   const [people, setPeople] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -358,26 +386,16 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
   const [trendRow, setTrendRow] = useState<Row | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<"csv" | "xlsx">("csv");
-  const [visible, setVisible] = useState<string[]>(() => page.columns.filter((column) => column.defaultVisible !== false).map((column) => column.key));
-  const storageKey = `sellfox-replica-columns:${page.id}`;
+  const defaultColumnKeys = useMemo(() => page.columns.filter((column) => column.defaultVisible !== false).map((column) => column.key), [page.columns]);
+  // 自定义列：localStorage 先行 + 服务端 UserPreference 为真值（账号级、跨设备）。
+  const { visible, saveVisible } = useColumnPreferences(page.id, defaultColumnKeys);
   const matrix = page.id === "sales";
   // 会话级列宽：拖拽仅当前标签页生效，不写库、不持久化。默认固定为赛狐规格表宽度。
   const { getWidth, startResize, resetWidths } = useSessionColumnWidths(`sellfox-replica:${page.id}`, COLUMN_WIDTH_PX);
 
   useEffect(() => {
-    const saved = localStorage.getItem(storageKey);
-    if (!saved) return;
-    try {
-      const keys = JSON.parse(saved) as unknown;
-      if (Array.isArray(keys) && keys.every((key) => typeof key === "string")) {
-        const known = keys.filter((key) => page.columns.some((column) => column.key === key));
-        if (known.length) setVisible(known);
-      }
-    } catch { /* keep defaults */ }
-  }, [page.columns, storageKey]);
-
-  useEffect(() => {
     // 分享链接还原：只在挂载时读取一次，后续由 applied → URL 单向写回，避免循环。
+    // 列配置显隐由 useColumnPreferences hook 负责（localStorage + 服务端偏好），此处不再重复读取。
     const restored = filtersFromUrl(page, initialFilters(page));
     setDraft(restored);
     setApplied(restored);
@@ -394,6 +412,25 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
     ...(scope.accountId ? { "x-account-id": scope.accountId } : {}),
     ...(scope.marketplace ? { "x-marketplace": scope.marketplace } : {}),
   }), [scope]);
+
+  // 已复核汇率：仅用于展示换算；无数据时切换控件禁用，绝不臆造汇率。
+  useEffect(() => {
+    if (!ready) return;
+    const controller = new AbortController();
+    fetch("/api/sellfox/fx-rates", { cache: "no-store", signal: controller.signal, headers })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body: { currencies?: string[]; rates?: { sourceCurrency: string; targetCurrency: string; rate: number; reference: string; observedAt: string }[] } | null) => {
+        if (controller.signal.aborted || !body) return;
+        setFxCurrencies(Array.isArray(body.currencies) ? body.currencies : []);
+        const map: MoneyFx["map"] = new Map();
+        for (const rate of body.rates ?? []) {
+          map.set(`${rate.sourceCurrency.toUpperCase()}->${rate.targetCurrency.toUpperCase()}`, rate);
+        }
+        setFxMap(map);
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [headers, ready]);
 
   useEffect(() => {
     if (!ready) return;
@@ -516,6 +553,8 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
 
   const days = useMemo(() => (matrix ? dayColumns(dates) : []), [matrix, dates]);
   // 当前筛选上下文（白名单键），用于行内跳转原样还原，不拼用户可控任意键。
+  const fx: MoneyFx = useMemo(() => ({ displayCurrency: applied.displayCurrency, map: fxMap }), [applied.displayCurrency, fxMap]);
+
   const drillParams = useMemo(() => {
     const p = new URLSearchParams();
     if (applied.from) p.set("from", applied.from);
@@ -690,11 +729,8 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
   }
   function saveColumns(next: string[]) {
     // 保留用户拖拽顺序，仅过滤掉未知列；空选择回退到默认全部列，不放行空表头。
-    const known = new Set(page.columns.map((column) => column.key));
-    const chosen = next.filter((key, index) => known.has(key) && next.indexOf(key) === index);
-    const finalKeys = chosen.length ? chosen : page.columns.map((column) => column.key);
-    setVisible(finalKeys);
-    localStorage.setItem(storageKey, JSON.stringify(finalKeys));
+    // 由 useColumnPreferences 同步写入 localStorage + 服务端，跨设备生效。
+    saveVisible(next);
     setColumnsOpen(false);
   }
 
@@ -706,7 +742,7 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
       const day = summary?.daily?.[column.key.slice(4)];
       if (!day || day.value == null) return "-";
       const label = `${day.entities}/${total} 个商品当日有快照`;
-      if (applied.metric === "revenue") return singleCurrency ? <span title={label}>{money(day.value, singleCurrency)}</span> : "-";
+      if (applied.metric === "revenue") return singleCurrency ? <span title={label}>{money(day.value, singleCurrency, fx)}</span> : "-";
       return <span title={label}>{qty(day.value)}</span>;
     }
     if (column.key === "quantity") return qty(summary?.quantity);
@@ -717,7 +753,7 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
       const values = totals.map((item) => numberOf(item.subtotal));
       if (!values.length || values.some((value) => value == null)) return "-";
       if (applied.metric === "orders") return qty(values.reduce<number>((sum, value) => sum + Number(value), 0));
-      return totals.map((item, index) => money(values[index], item.currency)).join(" / ");
+      return totals.map((item, index) => money(values[index], item.currency, fx)).join(" / ");
     }
     return "";
   }
@@ -745,8 +781,9 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
         <div className="sf-dims" role="tablist" aria-label="维度">
           {page.dimensions.map((item) => (
             <button key={item.id} type="button" role="tab" aria-current={applied.dimension === item.id ? "page" : undefined} className={item.disabled ? "sf-tab-muted" : undefined} title={item.reason ?? item.label} onClick={() => {
+              // 禁用维度只解释原因，不切换（避免把 category/salesperson 等无数据源的键发给后端）。
+              if (item.disabled) { setNotice(`${item.label}维度：${item.reason ?? MISSING_HINT}`); return; }
               setDimension(item.id);
-              if (item.disabled) setNotice(`${item.label}维度：${MISSING_HINT}`);
             }}>{item.label}</button>
           ))}
         </div>
@@ -861,6 +898,30 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
             {CURRENCY_OPTIONS.map((code) => <option key={code} value={code}>{code}</option>)}
           </select>
         ) : null}
+        {page.currency ? (
+          <select
+            aria-label="显示币种"
+            className="sf-select-muted"
+            title={fxCurrencies.length ? "按已复核汇率换算金额列展示，仅影响显示，不写入或导出原始数据。" : "未配置已复核汇率，无法换算展示；保持原币种，不臆造汇率。"}
+            value={applied.displayCurrency}
+            disabled={!fxCurrencies.length}
+            onChange={(event) => {
+              const next = event.target.value;
+              setDraft((current) => ({ ...current, displayCurrency: next }));
+              setApplied((current) => ({ ...current, displayCurrency: next }));
+            }}
+          >
+            <option value="">原币显示</option>
+            {fxCurrencies.map((code) => <option key={code} value={code}>{code}（已复核汇率）</option>)}
+          </select>
+        ) : null}
+        {page.id === "sales" ? (
+          <select aria-label="按日" className="sf-select-muted" title="快照按日存储，日列即原始粒度；不做周/月重采样。" value={draft.grain} onChange={(event) => { setGrain(event.target.value as Filters["grain"]); setNotice(`统计粒度已切换为「${event.target.value === "day" ? "按日" : event.target.value === "week" ? "按周" : "按月"}」；按周/按月在本地查询层重采样，明细快照仍按日存储。`); }}>
+            <option value="day">按日</option>
+            <option value="week">按周</option>
+            <option value="month">按月</option>
+          </select>
+        ) : null}
         {page.id === "performance" ? (
           <select aria-label="订购时间" className="sf-select-muted" title="利润日期使用订购时间。" onChange={() => setNotice(`订购时间：${MISSING_HINT}`)}>
             <option>订购时间</option>
@@ -953,8 +1014,8 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
             {!loading ? rows.map((row, index) => (
               <tr key={String(row.id ?? index)}>
                 {columns.map((column, columnIndex) => (
-                  <td key={column.key} style={{ ...colWidthStyle(getWidth(column.key)), ...freezeCellStyle(columnIndex) }} title={cellText(column, row, applied.metric) || undefined} className={[column.key.startsWith("day:") ? "sf-day" : column.kind === "qty" || column.kind === "metric" ? "sf-num" : undefined, freezeCellStyle(columnIndex) ? "sf-freeze" : undefined].filter(Boolean).join(" ")}>
-                    <Cell column={column} row={row} metric={applied.metric} drillParams={drillParams} onTrend={setTrendRow} />
+                  <td key={column.key} style={{ ...colWidthStyle(getWidth(column.key)), ...freezeCellStyle(columnIndex) }} title={cellText(column, row, applied.metric, fx) || undefined} className={[column.key.startsWith("day:") ? "sf-day" : column.kind === "qty" || column.kind === "metric" ? "sf-num" : undefined, freezeCellStyle(columnIndex) ? "sf-freeze" : undefined].filter(Boolean).join(" ")}>
+                    <Cell column={column} row={row} metric={applied.metric} drillParams={drillParams} onTrend={setTrendRow} fx={fx} />
                   </td>
                 ))}
               </tr>
@@ -975,7 +1036,7 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
       </div>
       {totals.length && !matrix ? (
         <div className="sf-totals">汇总 {columns.filter((column) => ["qty", "money", "metric"].includes(column.kind ?? "")).map((column) => {
-          const value = column.kind === "metric" ? (applied.metric === "revenue" ? money(totals[0].subtotal, totals[0].currency) : qty(totals[0].subtotal)) : column.kind === "money" ? money(totals[0][column.key], totals[0].currency) : qty(totals[0][column.key]);
+          const value = column.kind === "metric" ? (applied.metric === "revenue" ? money(totals[0].subtotal, totals[0].currency, fx) : qty(totals[0].subtotal)) : column.kind === "money" ? money(totals[0][column.key], totals[0].currency, fx) : qty(totals[0][column.key]);
           return <span key={column.key}>{column.key === "subtotal" ? metricLabel : column.label} {value}</span>;
         })}</div>
       ) : null}

@@ -40,6 +40,14 @@ test("列宽偏好使用 widths 契约、当前用户隔离、边界钳制和无
     }
     assert.equal((await PUT(await request("a", { widths: {} }), context("bad.key"))).status, 400);
     assert.equal((await PUT(await request("a", { widths: {} }), context())).status, 200);
+    // 自定义列 visible/order：服务端持久化，跨设备；去重 + 非法键拒绝。
+    const cols = await PUT(await request("a", { visible: ["sku", "asin", "sku", "subtotal"], order: ["sku", "asin"] }), context("replica-columns:sales"));
+    assert.equal(cols.status, 200);
+    assert.deepEqual((await cols.json()).value, { visible: ["sku", "asin", "subtotal"], order: ["sku", "asin"] });
+    assert.deepEqual((await (await GET(await request("a"), context("replica-columns:sales"))).json()).value, { visible: ["sku", "asin", "subtotal"], order: ["sku", "asin"] });
+    for (const bad of [{ visible: "sku" }, { visible: [123] }, { visible: ["bad.key"] }, { visible: [] }, { order: [null] }, { widths: null, visible: ["sku"] }]) {
+      assert.equal((await PUT(await request("a", bad), context())).status, 400);
+    }
   } finally {
     globals.prisma = previous;
     for (const [key, value] of Object.entries(env)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }

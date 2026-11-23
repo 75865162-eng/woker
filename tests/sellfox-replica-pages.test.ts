@@ -36,6 +36,21 @@ test("sales matrix keeps the sellfox first-screen columns and 品名 grain", () 
   assert.equal(sales?.columns.find((column) => column.key === "subtotal")?.kind, "metric");
 });
 
+test("首屏默认对主指标降序，且默认排序列必须可排序且服务端白名单允许", () => {
+  const sales = replicaPages.find((page) => page.id === "sales");
+  const performance = replicaPages.find((page) => page.id === "performance");
+  // 金额/销量页默认降序，进入即见头部商品（对齐 wimoor 金额列默认 desc）。
+  assert.equal(sales?.defaultSortBy, "subtotal");
+  assert.equal(performance?.defaultSortBy, "saleRevenue");
+  for (const page of [sales, performance]) {
+    assert.ok(page?.columns.some((column) => column.key === page.defaultSortBy && column.sortable), `${page?.id} 默认排序列必须标记 sortable`);
+  }
+  // 品类维度存在但禁用：本地快照无数据源，接入前不造数。
+  const category = sales?.dimensions.find((item) => item.id === "category");
+  assert.equal(category?.disabled, true);
+  assert.match(category?.reason ?? "", /不造数/);
+});
+
 test("date presets stay on the Asia/Shanghai calendar", () => {
   assert.equal(addCalendarDays("2026-11-06", -29), "2026-10-08");
   assert.deepEqual(rangeForPreset("d30", "2026-11-06"), { from: "2026-10-08", to: "2026-11-06" });

@@ -113,7 +113,7 @@ export function WorkspaceTabBar({ tabs, activeId, cachedIds, onSelect, onClose, 
                 type="button"
                 aria-label={`关闭 ${tab.label}`}
                 title="关闭标签页"
-                className="ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-body leading-none text-muted outline-none hover:bg-danger/10 hover:text-danger focus-visible:ring-2 focus-visible:ring-brand"
+                className="ml-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-body leading-none text-muted outline-none transition-colors hover:bg-danger/15 hover:text-danger focus-visible:ring-2 focus-visible:ring-brand active:scale-95"
                 onClick={() => onClose(tab.id)}
               >
                 ×

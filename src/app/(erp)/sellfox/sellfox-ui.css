@@ -1252,3 +1252,22 @@
   padding-top: var(--space-2);
   border-top: 1px solid var(--border);
 }
+
+/* 只读单元格一键复制：hover/聚焦显现，不撑破固定列宽。对齐 wimoor 报表复制交互。 */
+.sellfox-ui .sf-copyable {
+  max-width: 100%;
+  vertical-align: middle;
+}
+.sellfox-ui .sf-copyable > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sellfox-ui .sf-copyable .sf-copy-btn {
+  color: var(--muted);
+  cursor: pointer;
+}
+.sellfox-ui .sf-copyable .sf-copy-btn:hover {
+  color: var(--brand);
+}
