@@ -1,7 +1,8 @@
 "use client";
 import { formatSiteStore } from "@/lib/sellfox/marketplace-site";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useMainImagesByAsin, AsinThumbByAsin } from "@/components/amazon/asin-thumb";
 import { StandardDataTable } from "@/components/ui/table-variants";
 import { type DataTableColumn } from "@/components/ui/data-table";
 import { ReadinessNotice, readinessKindFromCode } from "@/components/operations/readiness-notice";
@@ -14,8 +15,9 @@ type ReturnsResult = {
 };
 const input = "min-h-9 rounded border border-border bg-background px-2 text-sm";
 type ReturnsRow = ReturnsResult["rows"][number];
-const returnColumns: DataTableColumn<ReturnsRow>[] = [
+const buildReturnColumns = (images: Map<string, string>): DataTableColumn<ReturnsRow>[] => [
   { key: "order", header: "订单 / 关联", render: (r) => (<>{r.amazonOrderId}<span className="block text-muted">{r.orderMatched ? "已匹配订单" : "尚未匹配订单"}</span></>) },
+  { key: "image", header: "主图", render: (r) => <AsinThumbByAsin asin={r.asin} images={images} className="h-14 w-14" /> },
   { key: "asin", header: "ASIN / SKU", render: (r) => (<>{r.asin}<span className="block text-muted">{r.sellerSku}</span></>) },
   { key: "returnAt", header: "仓收（UTC）", render: (r) => new Date(r.returnAt).toISOString() },
   { key: "quantity", header: "件数", numeric: true, render: (r) => String(r.quantity) },
@@ -25,6 +27,9 @@ const returnColumns: DataTableColumn<ReturnsRow>[] = [
 export function ReturnsWorkbench({ sellerAccountId = "", marketplaceId = "", getHeaders }: { sellerAccountId?: string; marketplaceId?: string; getHeaders: () => Headers }) {
   const [sourceId, setSourceId] = useState(""), [reportId, setReportId] = useState(""), [orderId, setOrderId] = useState(""), [asin, setAsin] = useState(""), [reason, setReason] = useState(""), [rawStatus, setRawStatus] = useState(""), [from, setFrom] = useState(""), [to, setTo] = useState(""), [page, setPage] = useState(1);
   const [result, setResult] = useState<ReturnsResult | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(""), [errorCode, setErrorCode] = useState(""), [refresh, setRefresh] = useState(0);
+  const returnAsins = useMemo(() => (result?.rows ?? []).map(r => r.asin).filter(Boolean), [result]);
+  const returnImages = useMainImagesByAsin(returnAsins);
+  const returnColumns = useMemo(() => buildReturnColumns(returnImages), [returnImages]);
   useEffect(() => {
     let active = true; setLoading(true); setResult(null); setError(""); setErrorCode("");
     void (async () => {

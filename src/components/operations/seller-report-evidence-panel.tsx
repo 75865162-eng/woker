@@ -1,11 +1,14 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useMainImagesByAsin, AsinThumbByAsin } from "@/components/amazon/asin-thumb";
 import { StandardDataTable } from "@/components/ui/table-variants";
 import { type DataTableColumn } from "@/components/ui/data-table";
 type Evidence = { archiveCollection?: { status?: string; lastCompletedAt?: string; from?: string; to?: string; rows?: number } | null; documents: Array<{ id: string; reportId: string; rowCount: number; capturedAt: string; sourceRunId: string }>; selectedDocumentId?: string; rows: Array<{ rowNumber: number; businessDate: string | null; orderId: string | null; sellerSku: string | null; asin: string | null; transactionType: string | null; amountOriginal: string | null; currencyCode: string | null; quantityOriginal: string | null }>; pagination: { total: number; pageCount: number }; duplicateReports: number };
 export function SellerReportEvidencePanel({ resource, sourceId, getHeaders, onTask }: { resource: string; sourceId: string; getHeaders: () => Headers; onTask: (id: string) => void }) {
   const [open, setOpen] = useState(false), [documentId, setDocumentId] = useState(""), [page, setPage] = useState(1), [result, setResult] = useState<Evidence | null>(null), [error, setError] = useState(""), [loading, setLoading] = useState(false);
+  const evidenceAsins = useMemo(() => (result?.rows ?? []).map(r => r.asin).filter((a): a is string => !!a), [result]);
+  const evidenceImages = useMainImagesByAsin(evidenceAsins);
   useEffect(() => {
     if (!open) return;
     const controller = new AbortController();
@@ -22,6 +25,7 @@ export function SellerReportEvidencePanel({ resource, sourceId, getHeaders, onTa
     { key: "businessDate", header: "业务日期", render: (row) => row.businessDate ?? "—" },
     { key: "orderId", header: "订单", render: (row) => row.orderId ?? "—" },
     { key: "skuAsin", header: "SKU / ASIN", render: (row) => `${row.sellerSku ?? "—"} / ${row.asin ?? "—"}` },
+    { key: "image", header: "主图", render: (row) => row.asin ? <AsinThumbByAsin asin={row.asin} images={evidenceImages} className="h-12 w-12" /> : <span className="text-muted">—</span> },
     { key: "transactionType", header: "事件类型", render: (row) => row.transactionType ?? "—" },
     { key: "amount", header: "金额原值 / 币种", render: (row) => `${row.amountOriginal ?? "—"} ${row.currencyCode ?? ""}` },
     { key: "quantity", header: "数量原值", render: (row) => row.quantityOriginal ?? "—" },

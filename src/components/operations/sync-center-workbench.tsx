@@ -5,8 +5,9 @@ import { ReportAttributionRecoveryPanel } from "./report-attribution-recovery-pa
 import { BrandAnalyticsWorkbench } from "./brand-analytics-workbench";
 import { SyncCoverageWorkbench } from "./sync-coverage-workbench";
 import { ObservationsWorkbench } from "./observations-workbench";
-import { cloneElement, useCallback, useEffect, useId, useRef, useState } from "react";
+import { cloneElement, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
+import { useMainImagesByAsin, AsinThumbByAsin } from "@/components/amazon/asin-thumb";
 import { useSearchParams } from "next/navigation";
 import { getJson } from "@/lib/workspace/get-json";
 import { amazonSlugView } from "@/lib/amazon/amazon-slug-routes";
@@ -486,8 +487,11 @@ function SnapshotBrowser({ taskId }: { taskId: string }) {
   const [sku, setSku] = useState(""), [asin, setAsin] = useState(""), [from, setFrom] = useState(""), [to, setTo] = useState(""), [dateField, setDateField] = useState("capturedAt");
   const [page, setPage] = useState(1), [result, setResult] = useState<SyncSnapshotView | null>(null);
   const [error, setError] = useState(""), [loading, setLoading] = useState(true), [refresh, setRefresh] = useState(0);
+  const snapAsins = useMemo(() => (result?.snapshotRows ?? []).map(r => r.asin).filter(Boolean), [result]);
+  const snapImages = useMainImagesByAsin(snapAsins);
   const snapshotColumns: DataTableColumn<SyncSnapshotView["snapshotRows"][number]>[] = [
     { key: "identity", header: "SKU / ASIN", width: 190, render: row => <>{row.sellerSku}<span className="block text-muted">{row.asin || "—"}</span></> },
+    { key: "image", header: "主图", width: 70, render: row => row.asin ? <AsinThumbByAsin asin={row.asin} images={snapImages} className="h-12 w-12" /> : <span className="text-muted">—</span> },
     { key: "condition", header: "状态 / 条件", width: 150, render: row => <>{row.condition ?? row.listingStatus ?? "—"}{row.fulfillmentType ? ` / ${row.fulfillmentType}` : ""}</> },
     { key: "quantity", header: "可售 / 在途 / 预留", width: 180, numeric: true, render: row => row.fulfillableQuantity === undefined ? "—" : `${row.fulfillableQuantity} / ${formatInboundQuantity(row)} / ${row.reservedQuantity === undefined ? "—" : row.reservedQuantity}` },
     { key: "sourceUpdated", header: "源更新时间", width: 165, render: row => stamp(row.sourceUpdatedAt) },
