@@ -11,12 +11,13 @@ type Review = {
   replyText: string; revision: number;
 };
 type Summary = { total: number; positive: number; neutral: number; negative: number; replied: number; negativeRateBp: number; replyRateBp: number };
-type AsinDetail = { id: string; marketplace: string; asin: string; rating: number; sentiment: string; title: string; content: string; status: string; reviewedAt: string };
+type AsinDetail = { id: string; marketplace: string; asin: string; rating: number; sentiment: string; vp: boolean; title: string; content: string; status: string; reviewedAt: string };
 type AsinGroup = {
   id: string; marketplace: string; asin: string; total: number; avgRating: number | null;
-  positive: number; neutral: number; negative: number; replied: number;
-  negativeRateBp: number; replyRateBp: number; latestReviewedAt: string; details: AsinDetail[];
+  positive: number; neutral: number; negative: number; vp: number;
+  negativeRateBp: number; latestReviewedAt: string; details: AsinDetail[];
 };
+type AsinResponse = { items: AsinGroup[]; total: number; reviewTotal: number };
 type Performance = {
   id: string; marketplace: string; periodStart: string; periodEnd: string; totalOrders: number;
   orderDefectRateBp: number; lateShipmentRateBp: number; cancellationRateBp: number;
@@ -44,7 +45,7 @@ export function ReviewsWorkbench() {
   const [busy, setBusy] = useState(false);
 
   const reviews = useExt<{ items: Review[]; summary: Summary }>("reviews", filter);
-  const byAsin = useExt<{ items: AsinGroup[]; total: number }>("reviews-by-asin", {}, tab === "ASIN");
+  const byAsin = useExt<AsinResponse>("reviews-by-asin", {}, tab === "ASIN");
   const performance = useExt<{ items: Performance[] }>("performance");
 
   async function run(action: string, body: Record<string, unknown>, message: string, after: () => Promise<void> | void) {
@@ -137,7 +138,7 @@ export function ReviewsWorkbench() {
     {tab === "ASIN" && <>
       <Kpis items={[
         { label: "覆盖 ASIN 数", value: String(byAsin.data?.total ?? 0), hint: "按站点 + ASIN 去重" },
-        { label: "评论总数", value: String((byAsin.data?.items ?? []).reduce((sum, row) => sum + row.total, 0)) },
+        { label: "评论总数", value: String(byAsin.data?.reviewTotal ?? 0), hint: "赛狐真实评论" },
         { label: "有差评 ASIN", value: String((byAsin.data?.items ?? []).filter(row => row.negative > 0).length), tone: (byAsin.data?.items ?? []).some(row => row.negative > 0) ? "warn" : undefined, hint: "存在中差评，建议优先处理" },
         { label: "平均星级", value: (() => {
           const rows = byAsin.data?.items ?? [];
@@ -147,10 +148,10 @@ export function ReviewsWorkbench() {
         })() },
       ]} />
 
-      <Section title="按 ASIN 聚合" description="对每条真实评论按站点 + ASIN 归集；差评率高的排前面。点击 ASIN 展开该 ASIN 下的评论明细。当前评论为手工录入数据源，录入后自动聚合，不补零、不造数据。">
+      <Section title="按 ASIN 聚合" description="数据来自赛狐已同步的真实评价明细（/api/review/pageDetailList.json）：按站点 + ASIN 归集，reviewId 去重，星级推导情绪（4-5 好评 / 3 中评 / 1-2 差评）。差评率高的排前面，点击 ASIN 展开该 ASIN 的评论明细。不补零、不造数据。">
         <Table
           rows={byAsin.data?.items ?? []}
-          empty="还没有评论记录，暂无可聚合的 ASIN。可在「评论与差评」录入，接入合规评论报告后批量导入，再回到此页查看按 ASIN 聚合的口径。"
+          empty="赛狐评价明细暂无可聚合的数据。确认赛狐同步已拉回「商品·评价明细」后，再回到此页查看按 ASIN 聚合的口径。"
           rowKey={row => row.id}
           columns={[
             { key: "asin", label: "ASIN", render: row => <button type="button" className="text-left font-mono underline decoration-dotted hover:text-brand" onClick={() => setExpandedAsin(current => current === row.id ? "" : row.id)}>{row.asin || "(未填 ASIN)"}</button> },
@@ -159,7 +160,7 @@ export function ReviewsWorkbench() {
             { key: "avgRating", label: "平均星级", align: "right", render: row => row.avgRating === null ? "—" : `${row.avgRating.toFixed(2)} ★` },
             { key: "sentiment", label: "好评/中评/差评", render: row => <span className="tabular-nums">{row.positive} / {row.neutral} / <span className={row.negative > 0 ? "text-danger-ink" : ""}>{row.negative}</span></span> },
             { key: "negativeRateBp", label: "差评率", align: "right", render: row => <span className={row.negative > 0 ? "text-danger-ink" : ""}>{bp(row.negativeRateBp)}</span> },
-            { key: "replyRateBp", label: "回复率", align: "right", render: row => bp(row.replyRateBp) },
+            { key: "vp", label: "VP 数", align: "right", render: row => row.vp },
             { key: "latestReviewedAt", label: "最新评论日", render: row => row.latestReviewedAt || "—" },
           ]}
         />
@@ -176,8 +177,8 @@ export function ReviewsWorkbench() {
               { key: "reviewedAt", label: "日期" },
               { key: "rating", label: "星级", align: "right", render: row => `${row.rating} ★` },
               { key: "sentiment", label: "情绪", render: row => <Badge text={statusLabel(row.sentiment)} tone={row.sentiment === "NEGATIVE" ? "warn" : row.sentiment === "POSITIVE" ? "good" : "muted"} /> },
+              { key: "vp", label: "VP", render: row => row.vp ? <Badge text="VP" tone="good" /> : <span className="text-muted-foreground">—</span> },
               { key: "title", label: "标题 / 内容", render: row => <span className="block max-w-[320px] truncate" title={row.content}>{row.title || row.content || "—"}</span> },
-              { key: "status", label: "状态", render: row => <Badge text={statusLabel(row.status)} tone={row.status === "NEW" ? "info" : "muted"} /> },
             ]}
           />
         </Section>;

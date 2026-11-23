@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { authorizeEntity, scoped } from './access';
 import { WmsError, type WmsScope } from '@/lib/wms/contracts';
@@ -6,6 +7,58 @@ import { cheapestQuotation, dayKey, performanceVerdict } from './rules';
 import { observedTotal, readPlanActuals, readPlanForecasts } from './sales-plans';
 const listLimit = 300;
 const num = (value: unknown) => (value === null || value === undefined ? 0 : Number(value));
+
+type SellfoxReview = {
+  reviewId: string; marketplace: string; asin: string; parentAsin: string; sellerSku: string;
+  rating: number; sentiment: "POSITIVE" | "NEUTRAL" | "NEGATIVE"; vp: boolean;
+  title: string; content: string; reviewer: string; reviewedAt: string; source: string; status: string;
+};
+const sentimentOfStar = (star: number): "POSITIVE" | "NEUTRAL" | "NEGATIVE" => star >= 4 ? "POSITIVE" : star === 3 ? "NEUTRAL" : "NEGATIVE";
+const text = (value: unknown) => (typeof value === "string" ? value : value === null || value === undefined ? "" : String(value));
+const dayOf = (value: unknown) => {
+  const raw = text(value);
+  return raw ? raw.slice(0, 10) : "";
+};
+
+/** Read the real customer reviews already synced from Sellfox (/api/review/pageDetailList.json). */
+async function readSellfoxReviews(tx: Prisma.TransactionClient, scope: WmsScope, where: { organizationId: string; workspaceId: string }): Promise<SellfoxReview[]> {
+  const rows = await tx.sellfoxApiRecord.findMany({
+    where: { ...where, endpointCode: "reviews" },
+    orderBy: [{ syncedAt: "desc" }],
+    take: 5000,
+  });
+  const seen = new Set<string>();
+  const out: SellfoxReview[] = [];
+  for (const row of rows) {
+    const payload = row.payload && typeof row.payload === "object" && !Array.isArray(row.payload) ? row.payload as Record<string, unknown> : {};
+    const asin = text(payload.asin);
+    const reviewId = text(payload.reviewId) || `${asin}:${text(payload.reviewDate)}:${text(payload.title)}`;
+    if (seen.has(reviewId)) continue;
+    seen.add(reviewId);
+    const rating = Number(payload.star);
+    const star = Number.isFinite(rating) ? Math.min(5, Math.max(1, Math.round(rating))) : 0;
+    const shopList = Array.isArray(payload.shopList) ? payload.shopList as Array<Record<string, unknown>> : [];
+    const shopNameList = Array.isArray(payload.shopNameList) ? payload.shopNameList as unknown[] : [];
+    const shopName = text(shopList[0]?.shopName) || text(shopNameList[0]);
+    out.push({
+      reviewId,
+      marketplace: text(payload.marketplaceName) || "—",
+      asin,
+      parentAsin: text(payload.parentAsin),
+      sellerSku: text(payload.msku) || text(payload.sellerSku),
+      rating: star,
+      sentiment: star > 0 ? sentimentOfStar(star) : "NEUTRAL",
+      vp: Number(payload.vp) === 1,
+      title: text(payload.title),
+      content: text(payload.content),
+      reviewer: text(payload.reviewer) || shopName,
+      reviewedAt: dayOf(payload.reviewDate),
+      source: "SELLFOX",
+      status: "NEW",
+    });
+  }
+  return out;
+}
 
 export async function queryExt(scope: WmsScope, kind: string, params: URLSearchParams) {
   return prisma.$transaction(async tx => {
@@ -48,68 +101,46 @@ export async function queryExt(scope: WmsScope, kind: string, params: URLSearchP
         };
       }
       case 'reviews-by-asin': {
-        // 全部口径都来自真实的 ReviewRecord 分组聚合，不补零、不造数据。
-        const [groups, bySentiment, replied, details] = await Promise.all([
-          tx.reviewRecord.groupBy({
-            by: ['marketplace', 'asin'], where,
-            _count: { _all: true }, _avg: { rating: true }, _max: { reviewedAt: true },
-          }),
-          tx.reviewRecord.groupBy({
-            by: ['marketplace', 'asin', 'sentiment'], where,
-            _count: { _all: true },
-          }),
-          tx.reviewRecord.groupBy({
-            by: ['marketplace', 'asin'], where: { ...where, status: 'REPLIED' },
-            _count: { _all: true },
-          }),
-          tx.reviewRecord.findMany({
-            where, orderBy: [{ reviewedAt: 'desc' }, { createdAt: 'desc' }], take: 1000,
-            select: { id: true, marketplace: true, asin: true, rating: true, sentiment: true, title: true, content: true, status: true, reviewedAt: true },
-          }),
-        ]);
-        // 用分隔符合成复合键，避免 ASIN 含空格时与站点串拼接碰撞。
+        // 聚合来自赛狐已同步的真实评价明细（SellfoxApiRecord endpointCode=reviews），按站点 + ASIN 归集；不补零、不造数据。
+        const reviews = await readSellfoxReviews(tx, scope, where);
         const key = (m: string, a: string) => `${m}\u0000${a}`;
-        const sentimentMap = new Map<string, Record<string, number>>();
-        for (const row of bySentiment) {
+        type AsinDetail = { id: string; marketplace: string; asin: string; rating: number; sentiment: string; vp: boolean; title: string; content: string; status: string; reviewedAt: string };
+        type Acc = { marketplace: string; asin: string; total: number; ratingSum: number; positive: number; neutral: number; negative: number; vp: number; latest: string; details: AsinDetail[] };
+        const groups = new Map<string, Acc>();
+        for (const row of reviews) {
+          if (!row.asin) continue;
           const k = key(row.marketplace, row.asin);
-          const entry = sentimentMap.get(k) ?? { POSITIVE: 0, NEUTRAL: 0, NEGATIVE: 0 };
-          entry[row.sentiment] = row._count._all;
-          sentimentMap.set(k, entry);
+          let acc = groups.get(k);
+          if (!acc) {
+            acc = { marketplace: row.marketplace, asin: row.asin, total: 0, ratingSum: 0, positive: 0, neutral: 0, negative: 0, vp: 0, latest: '', details: [] };
+            groups.set(k, acc);
+          }
+          acc.total += 1;
+          acc.ratingSum += row.rating;
+          if (row.sentiment === 'POSITIVE') acc.positive += 1;
+          else if (row.sentiment === 'NEGATIVE') acc.negative += 1;
+          else acc.neutral += 1;
+          if (row.vp) acc.vp += 1;
+          if (row.reviewedAt > acc.latest) acc.latest = row.reviewedAt;
+          if (acc.details.length < 50) acc.details.push({ id: row.reviewId, marketplace: row.marketplace, asin: row.asin, rating: row.rating, sentiment: row.sentiment, vp: row.vp, title: row.title, content: row.content, status: row.status, reviewedAt: row.reviewedAt });
         }
-        const repliedMap = new Map(replied.map(row => [key(row.marketplace, row.asin), row._count._all]));
-        type AsinDetail = { id: string; marketplace: string; asin: string; rating: number; sentiment: string; title: string; content: string; status: string; reviewedAt: string };
-        const detailsMap = new Map<string, AsinDetail[]>();
-        for (const row of details) {
-          const k = key(row.marketplace, row.asin);
-          const list = detailsMap.get(k) ?? [];
-          if (list.length < 50) list.push({ ...row, reviewedAt: dayKey(row.reviewedAt) });
-          detailsMap.set(k, list);
-        }
-        const items = groups.map(row => {
-          const k = key(row.marketplace, row.asin);
-          const dist = sentimentMap.get(k) ?? { POSITIVE: 0, NEUTRAL: 0, NEGATIVE: 0 };
-          const total = row._count._all;
-          const negative = dist.NEGATIVE ?? 0;
-          const repliedCount = repliedMap.get(k) ?? 0;
-          return {
-            id: k,
-            marketplace: row.marketplace,
-            asin: row.asin,
-            total,
-            avgRating: row._avg.rating === null ? null : Math.round(row._avg.rating * 100) / 100,
-            positive: dist.POSITIVE ?? 0,
-            neutral: dist.NEUTRAL ?? 0,
-            negative,
-            replied: repliedCount,
-            negativeRateBp: total > 0 ? Math.round((negative / total) * 10_000) : 0,
-            replyRateBp: total > 0 ? Math.round((repliedCount / total) * 10_000) : 0,
-            latestReviewedAt: row._max.reviewedAt ? dayKey(row._max.reviewedAt) : '',
-            details: detailsMap.get(k) ?? [],
-          };
-        });
+        const items = Array.from(groups.entries()).map(([k, acc]) => ({
+          id: k,
+          marketplace: acc.marketplace,
+          asin: acc.asin,
+          total: acc.total,
+          avgRating: acc.total > 0 ? Math.round((acc.ratingSum / acc.total) * 100) / 100 : null,
+          positive: acc.positive,
+          neutral: acc.neutral,
+          negative: acc.negative,
+          vp: acc.vp,
+          negativeRateBp: acc.total > 0 ? Math.round((acc.negative / acc.total) * 10_000) : 0,
+          latestReviewedAt: acc.latest,
+          details: acc.details.sort((a, b) => b.reviewedAt.localeCompare(a.reviewedAt)),
+        }));
         // 差评率优先、其次评论量，便于运营先处理问题 ASIN。
         items.sort((a, b) => b.negativeRateBp - a.negativeRateBp || b.total - a.total || b.latestReviewedAt.localeCompare(a.latestReviewedAt));
-        return { items, total: items.length };
+        return { items, total: items.length, reviewTotal: reviews.length };
       }
       case 'performance': {
         const items = await tx.storePerformanceSnapshot.findMany({ where, orderBy: [{ periodStart: 'desc' }], take: 60 });
