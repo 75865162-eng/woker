@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { businessDate } from "./date-range";
 import { SyncInputError, type SyncScope } from "./policy";
+import { resolveProductDisplay } from "./product-master-resolver";
 
 export type SalesQuery = { from?: string; to?: string; sellerAccountId?: string; marketplaceId?: string; taskId?: string; keyword?: string; direction: "asc" | "desc" };
 export function parseSalesQuery(p: URLSearchParams): SalesQuery {
@@ -218,24 +219,13 @@ export async function readSalesProducts(scope: SyncScope, p: URLSearchParams, op
   return { ...result, numericEncoding: "JSON_NUMERIC_STRINGS", rows: await attachProductDisplay(scope, rows) };
 }
 
-/** 给商品日行补标题/图片：批量关联目录快照与图片引用；缺失留空，不猜不补。 */
+/** 给商品日行补标题/图片：统一走商品主档 resolver；缺失留空，不猜不补。 */
 export async function attachProductDisplay(scope: SyncScope, rows: ProductSalesRow[]): Promise<ProductSalesRow[]> {
-  const asins = [...new Set(rows.map(r => r.childAsin).filter(asin => /^[A-Z0-9]{10}$/.test(asin)))];
-  if (!asins.length) return rows.map(row => ({ ...row, productTitle: null, imageUrl: null }));
-  const [catalog, images] = await Promise.all([
-    prisma.amazonCatalogSnapshot.findMany({ where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, asin: { in: asins } }, orderBy: { capturedAt: "desc" }, select: { asin: true, sellerAccountId: true, marketplaceId: true, listingAttributes: true } }),
-    prisma.amazonCatalogImageReference.findMany({ where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, asin: { in: asins }, variant: "MAIN" }, select: { asin: true, sellerAccountId: true, marketplaceId: true, sourceUrl: true } }),
-  ]);
-  const titleByAsin = new Map<string, string>();
-  for (const item of catalog) {
-    if (titleByAsin.has(item.asin)) continue;
-    const attributes = item.listingAttributes as { itemName?: unknown } | null;
-    const name = attributes && typeof attributes.itemName === "string" ? attributes.itemName.trim().slice(0, 300) : "";
-    if (name) titleByAsin.set(item.asin, name);
-  }
-  const imageByAsin = new Map<string, string>();
-  for (const image of images) if (!imageByAsin.has(image.asin) && image.sourceUrl) imageByAsin.set(image.asin, image.sourceUrl);
-  return rows.map(row => ({ ...row, productTitle: titleByAsin.get(row.childAsin) ?? null, imageUrl: imageByAsin.get(row.childAsin) ?? null }));
+  const display = await resolveProductDisplay(scope, rows.map(r => ({ asin: r.childAsin, sellerSku: (r as { sellerSku?: string }).sellerSku })));
+  return rows.map(row => {
+    const d = display.get((row.childAsin ?? "").toUpperCase());
+    return { ...row, productTitle: d?.title ?? null, imageUrl: d?.imageUrl ?? null };
+  });
 }
 
 /* ===== 周期汇总（日/周/月 rollup + 区间合计 + 等长环比）：仅聚合已发布真实行，缺日不补零 ===== */

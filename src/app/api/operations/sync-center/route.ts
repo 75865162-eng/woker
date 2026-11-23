@@ -30,6 +30,8 @@ import { amazonDataAccess, sourceAccessWhere, assertAmazonScopeAdmin } from "@/l
 import { readSalesMatrix, readSalesPeriods, readSalesProducts, readSalesTop, readSalesTraffic } from "@/lib/amazon-sync/sales-query";
 import { readSellerFeedback } from "@/lib/amazon-sync/seller-feedback-query";
 import { readOrders } from "@/lib/amazon-sync/orders-query";
+import { readTodayDashboard } from "@/lib/amazon-sync/today-dashboard";
+import { readOrderPeriods } from "@/lib/amazon-sync/order-period-summary";
 import { readDomainReports } from "@/lib/amazon-sync/domain-reports-query";
 import { readSellerReportEvidence } from "@/lib/amazon-sync/seller-report-evidence";
 import { localSellerEvidenceEnabled } from "@/lib/amazon-sync/seller-report-evidence";
@@ -116,6 +118,8 @@ export async function GET(request: Request) {
     if (section === "returns") return json({ ...await readReturns(scope, p, actor), access });
     if (section === "finance") return json({ ...await readFinance(scope, p, actor), access });
     if (section === "orders") return json({ ...await readOrders(scope, p, actor), access });
+    if (section === "today-dashboard") return json({ ...await readTodayDashboard(scope, p, actor), access });
+    if (section === "order-period") return json({ ...await readOrderPeriods(scope, p, actor), access });
     if (section === "observations") return json({ ...await readObservations(scope, p, actor), access });
     if (section === "brand-analytics") return json({ ...await readBrandAnalytics(scope, p, actor), access });
     if (section === "brand-asin-analysis") return json(await readBrandAsinAnalysis(scope, p, actor));
