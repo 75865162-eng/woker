@@ -245,6 +245,14 @@ export type SalesPeriodSummary = {
   previous: (SalesPeriodAgg & { complete: boolean }) | null;
   truncated: boolean; asOf: string;
 };
+
+/** 日均销量（文档 3.1 P2-7）：近 N 个完整发布日的真实平均，附窗口/有效天数/覆盖率。 */
+export type SalesDailyAverage = {
+  windowDays: number; effectiveDays: number; coverage: string;
+  unitsOrderedAvg: string | null; totalOrderItemsAvg: string | null;
+  sessionsAvg: string | null; pageViewsAvg: string | null;
+  salesAvg: SalesAmount[]; completeDates: string[]; asOf: string;
+};
 const PERIOD_MAX_ROWS = 20000;
 export const num = (v: unknown): number | null => { const s = typeof v === "string" ? v.trim() : ""; if (!s || !/^\d+(\.\d+)?$/.test(s)) return null; const n = Number(s); return Number.isFinite(n) ? n : null; };
 export function isoWeekOf(dateStr: string): { year: number; week: number; monday: string } {
@@ -404,4 +412,72 @@ export function topFromRows(rows: ProductSalesRow[], identityOf: (r: ProductSale
     .map(([identity, g]) => ({ identity, label: g.label, units: g.units ?? 0, sales: [...g.sales.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([currency, amount]) => ({ currency, amount: amount.toFixed(2) })), stores: g.stores.size }))
     .sort((a, b) => b.units - a.units || a.identity.localeCompare(b.identity))
     .slice(0, limit);
+}
+
+/* ===== 日均销量（文档 3.1 P2-7）：近 N 个完整发布日的真实平均 =====
+ * 口径护栏：
+ *  - 只用「完整发布日」：该业务日覆盖店铺数达到区间内最大店铺数，且该日销量指标非 null。
+ *  - 完整日不足窗口 N 时按实际有效天数计算，并如实给出覆盖率（不补零、不摊派缺失日）。
+ *  - 销售额按币种分列，绝不跨币种相加；订单商品项数不冒充订单数。
+ *  - 排除含今天/taskId 的历史回溯（今日未闭合，不进正式日均）。
+ */
+export function dailyAverageOf(rows: SalesRow[], windowDays: number, asOf: string): SalesDailyAverage {
+  const size = Math.min(90, Math.max(1, Math.floor(Number(windowDays) || 30)));
+  const empty: SalesDailyAverage = { windowDays: size, effectiveDays: 0, coverage: "0", unitsOrderedAvg: null, totalOrderItemsAvg: null, sessionsAvg: null, pageViewsAvg: null, salesAvg: [], completeDates: [], asOf };
+  if (!rows.length) return empty;
+  // 区间内期望店铺数 = 任一业务日出现的最大店铺数（按 sellerAccount|marketplace）。
+  const storesByDate = new Map<string, Set<string>>();
+  const rowsByDate = new Map<string, SalesRow[]>();
+  for (const row of rows) {
+    const store = `${row.sellerAccountId}|${row.marketplaceId}`;
+    if (!storesByDate.has(row.businessDate)) storesByDate.set(row.businessDate, new Set());
+    storesByDate.get(row.businessDate)!.add(store);
+    if (!rowsByDate.has(row.businessDate)) rowsByDate.set(row.businessDate, []);
+    rowsByDate.get(row.businessDate)!.push(row);
+  }
+  const expectedStores = Math.max(0, ...[...storesByDate.values()].map(s => s.size));
+  if (expectedStores === 0) return empty;
+  // 完整发布日：覆盖店铺数达标 且 该日所有行的销量指标均非 null（任一行缺失则不完整）。
+  const completeDates = [...rowsByDate.keys()]
+    .filter(date => (storesByDate.get(date)?.size ?? 0) >= expectedStores && (rowsByDate.get(date) ?? []).every(r => num(r.metrics?.unitsOrdered) !== null))
+    .sort((a, b) => b.localeCompare(a))
+    .slice(0, size)
+    .sort((a, b) => a.localeCompare(b));
+  const effectiveDays = completeDates.length;
+  if (!effectiveDays) return { ...empty, coverage: "0" };
+  const selected = completeDates.flatMap(d => rowsByDate.get(d) ?? []);
+  const sumField = (key: "unitsOrdered" | "totalOrderItems" | "sessions" | "pageViews"): string | null => {
+    const values = selected.map(r => num((r.metrics as Record<string, unknown> | undefined)?.[key])).filter((v): v is number => v !== null);
+    if (!values.length || values.length !== selected.length) return null;
+    const total = values.reduce((a, v) => a + v, 0);
+    return (total / effectiveDays).toFixed(2);
+  };
+  const salesMap = new Map<string, number>();
+  let salesComplete = true;
+  for (const row of selected) {
+    const sale = row.metrics?.orderedProductSales;
+    const amount = sale && typeof sale.amount === "string" && typeof sale.currencyCode === "string" && sale.currencyCode ? num(sale.amount) : null;
+    if (amount === null) { salesComplete = false; continue; }
+    salesMap.set(sale!.currencyCode!, (salesMap.get(sale!.currencyCode!) ?? 0) + amount);
+  }
+  if (!salesMap.size) salesComplete = false;
+  const salesAvg = salesComplete
+    ? [...salesMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([currency, amount]) => ({ currency, amount: (amount / effectiveDays).toFixed(2) }))
+    : [];
+  return {
+    windowDays: size, effectiveDays,
+    coverage: (effectiveDays / size).toFixed(2),
+    unitsOrderedAvg: sumField("unitsOrdered"),
+    totalOrderItemsAvg: sumField("totalOrderItems"),
+    sessionsAvg: sumField("sessions"),
+    pageViewsAvg: sumField("pageViews"),
+    salesAvg, completeDates, asOf,
+  };
+}
+
+/** 日均销量读取：复用 readSalesTraffic 的权限与版本口径拉全量已发布行，再应用层计算。 */
+export async function readSalesDailyAverage(scope: SyncScope, p: URLSearchParams, options: { cutoff?: Date; actor?: string } = {}): Promise<SalesDailyAverage> {
+  const windowDays = Math.min(90, Math.max(1, Math.floor(Number(p.get("windowDays")) || 30)));
+  const rows = await readSalesRowsForAggregation(scope, p, options);
+  return dailyAverageOf(rows, windowDays, (options.cutoff ?? new Date()).toISOString());
 }
