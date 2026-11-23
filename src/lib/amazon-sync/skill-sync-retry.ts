@@ -2,7 +2,7 @@ import { SyncInputError } from "./policy";
 import { sellerArchivePolicy } from "./seller-archive-policy";
 
 /** Only checkpoint-preserving retries through the existing approval service. */
-export const skillSyncRetryResources = ["fba_inventory_report", "reserved_inventory", "stranded_inventory", "orders", "finance", "returns", "reimbursements", "inventory_events", "fulfillment", "catalog_items", "listing_details", "promotions"] as const;
+export const skillSyncRetryResources = ["fba_inventory_report", "reserved_inventory", "stranded_inventory", "orders", "finance", "returns", "reimbursements", "inventory_events", "fulfillment", "catalog_items", "listing_details", "promotions", "customer_feedback"] as const;
 
 export function assertSkillSyncSourcePublishable(resource: string, domainPolicy: unknown) {
   if (sellerArchivePolicy(resource, domainPolicy)) throw new SyncInputError("当前来源只允许归档卖家级原件，不会发布站点级 Skill 数据；请先通过现有审批流程完成报告归属核验，避免重复采集。", 409);

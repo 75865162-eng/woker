@@ -57,7 +57,7 @@ test("aliases retain independent names and sync creation is explicitly an approv
   const request = amazonMcpToolDefinitions.find(tool => tool.name === "data_sync_start")!;
   assert.equal(request.operationMode, "APPROVAL_REQUEST");
   assert.ok(request.requiredPermissions.includes("operations:create"));
-  assert.deepEqual(amazonMcpSyncResources, ["inventory", "catalog", "sales_traffic", "orders", "finance", "settlements", "reimbursements", "returns", "inventory_age", "inventory_events", "fulfillment", "catalog_items", "listing_details", "promotions"]);
+  assert.deepEqual(amazonMcpSyncResources, ["inventory", "catalog", "sales_traffic", "orders", "finance", "settlements", "reimbursements", "returns", "inventory_age", "inventory_events", "fulfillment", "catalog_items", "listing_details", "promotions", "customer_feedback"]);
   const resourceSchema = (request.inputSchema.properties as Record<string, { enum?: string[] }>).resource;
   assert.deepEqual(resourceSchema.enum, amazonMcpSyncResources);
   const eventTypeSchema = (request.inputSchema.properties as Record<string, { enum?: string[] }>).eventType;

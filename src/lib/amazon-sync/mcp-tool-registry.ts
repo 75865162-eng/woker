@@ -6,7 +6,7 @@ export type McpOperationMode = "READ_ONLY" | "APPROVAL_REQUEST";
 export type McpDataAction = "view" | "export" | "sync";
 export const amazonMcpSyncResources = [
   "inventory", "catalog", "sales_traffic", "orders", "finance", "settlements",
-  "reimbursements", "returns", "inventory_age", "inventory_events", "fulfillment", "catalog_items", "listing_details", "promotions",
+  "reimbursements", "returns", "inventory_age", "inventory_events", "fulfillment", "catalog_items", "listing_details", "promotions", "customer_feedback",
 ] as const;
 /** Fixed business tools inherit account read access; clients cannot change their dataset. */
 export const skillBusinessDatasetTools = {

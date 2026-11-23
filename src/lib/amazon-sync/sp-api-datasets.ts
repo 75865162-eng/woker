@@ -4,7 +4,7 @@ import type { McpDataset, SkillTable } from "./mcp-datasets";
 const field = (name: string, type = "string", nullable = false) => ({ name, type, nullable });
 const observationFields = [field("id"), field("sourceRunId"), field("kind"), field("asin", "string", true), field("sellerSku", "string", true), field("searchTerm", "string", true), field("facts", "object"), field("capturedAt", "datetime")];
 const reports = ["settlements_v2", "reimbursements", "inventory_age", "long_term_storage_fees", "removal_shipment_report", "inventory_events", "removal_order_report", "fba_shipments", "fba_customer_sales", "mfn_returns", ...inventoryReportResources] as const;
-const observations = ["fulfillment", "listing_details", "catalog_items", "pricing", "buy_box_history", "brand_analytics", "notifications", "promotions"] as const;
+const observations = ["fulfillment", "listing_details", "catalog_items", "pricing", "buy_box_history", "brand_analytics", "notifications", "promotions", "customer_feedback"] as const;
 const reportFields = (name: typeof reports[number]) => {
   if (name === "fba_inventory_by_country") return [field("fnSku", "string", true), field("country"), field("localFulfillmentQuantityOriginal"), field("snapshotSemantics")];
   if (name === "recommended_removals") return [field("fnSku", "string", true), field("snapshotDateRaw", "string"), field("condition", "string", true), field("quantities", "object"), field("snapshotSemantics"), field("recommendationExecutionStatus")];

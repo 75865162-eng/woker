@@ -100,6 +100,7 @@ export const operationsSections: OperationsSection[] = [
       { view: "removal_shipment_report", label: "移除货件明细" },
       { view: "promotions", label: "促销（Promotions）" },
       { view: "notifications", label: "通知订阅发现" },
+      { view: "customer_feedback", label: "评论话题洞察" },
     ],
   },
   {

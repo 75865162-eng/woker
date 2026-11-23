@@ -4,20 +4,24 @@ import { brandReportTypes } from "./observation-policy";
 import { parseProductDetail } from "./product-observations";
 import { assertInboundPageProgress, assertInboundPlanMarketplace, inboundItemKey, maxDiscoveredInboundPlans, parseInboundItemsPage, parseInboundPlan, parseInboundShipment, parseInboundPlansPage } from "./inbound";
 import { observationFact, parseOwnPrices, parseCompetitivePrices, parseObservationReport, type SafeFact } from "./observation-parsers";
+import { parseCustomerFeedback } from "./customer-feedback";
 import { observationInvalid as invalid, observationObject as object, observationText as text, type NotificationPolicy, type ObservationPolicy } from "./observation-policy";
 
 export type NotificationPage = { index: number; token?: string; priorTokens: string[] };
-export type ObservationState = { version: 1; promotions?: PromotionsState; stage: "PROMOTIONS" | "SUBSCRIPTIONS" | "DISCOVER_PLANS" | "PRODUCT_DETAIL" | "PLAN" | "PLAN_ITEMS" | "SHIPMENT" | "SHIPMENT_ITEMS" | "VERIFY_PLAN" | "PRICE" | "OWN_PRICE" | "CREATE" | "CREATING" | "POLL" | "DOCUMENT" | "DOWNLOAD" | "COMPLETE"; requests: number; planIndex: number; shipmentIndex: number; shipmentIds: string[]; discoveredPlanIds?: string[]; unavailableObjectIndexes?: number[]; objectRetryQueue?: number[]; unavailableNotificationTypes?: string[]; notificationFailures?: NotificationPage[]; notificationRetryQueue?: NotificationPage[]; planSignature?: string; token?: string; priorTokens: string[]; reportId?: string; documentId?: string; document?: Record<string, unknown> };
+export type ObservationFeedbackStage = "FEEDBACK_TOPICS_MENTIONS" | "FEEDBACK_TOPICS_IMPACT" | "FEEDBACK_TRENDS";
+export type ObservationState = { version: 1; promotions?: PromotionsState; stage: "PROMOTIONS" | "SUBSCRIPTIONS" | "DISCOVER_PLANS" | "PRODUCT_DETAIL" | "PLAN" | "PLAN_ITEMS" | "SHIPMENT" | "SHIPMENT_ITEMS" | "VERIFY_PLAN" | "PRICE" | "OWN_PRICE" | "CREATE" | "CREATING" | "POLL" | "DOCUMENT" | "DOWNLOAD" | ObservationFeedbackStage | "COMPLETE"; requests: number; planIndex: number; shipmentIndex: number; shipmentIds: string[]; discoveredPlanIds?: string[]; unavailableObjectIndexes?: number[]; objectRetryQueue?: number[]; unavailableNotificationTypes?: string[]; notificationFailures?: NotificationPage[]; notificationRetryQueue?: NotificationPage[]; planSignature?: string; token?: string; priorTokens: string[]; reportId?: string; documentId?: string; document?: Record<string, unknown> };
 export function initialObservationState(policy: ObservationPolicy): ObservationState {
   if (policy.resource === "promotions") return { version: 1, stage: "PROMOTIONS", promotions: initialPromotionsState(), requests: 0, planIndex: 0, shipmentIndex: 0, shipmentIds: [], priorTokens: [] };
-  if ((policy.resource === "listing_details" || policy.resource === "catalog_items" || policy.resource === "pricing") && policy.discovery && (policy.resource === "listing_details" ? policy.sellerSkus.length : policy.asins.length) === 0) {
+  if ((policy.resource === "listing_details" || policy.resource === "catalog_items" || policy.resource === "pricing" || policy.resource === "customer_feedback") && policy.discovery && (policy.resource === "listing_details" ? policy.sellerSkus.length : policy.asins.length) === 0) {
     return { version: 1, stage: "COMPLETE", requests: 0, planIndex: 0, shipmentIndex: 0, shipmentIds: [], priorTokens: [] };
   }
-  return { version: 1, stage: policy.resource === "notifications" ? "SUBSCRIPTIONS" : ["listing_details", "catalog_items"].includes(policy.resource) ? "PRODUCT_DETAIL" : policy.resource === "fulfillment" ? policy.discoverPlans ? "DISCOVER_PLANS" : "PLAN" : policy.resource === "pricing" ? "PRICE" : "CREATE", requests: 0, planIndex: 0, shipmentIndex: 0, shipmentIds: [], priorTokens: [] };
+  if (policy.resource === "customer_feedback" && policy.asins.length === 0) return { version: 1, stage: "COMPLETE", requests: 0, planIndex: 0, shipmentIndex: 0, shipmentIds: [], priorTokens: [] };
+  const stage = policy.resource === "notifications" ? "SUBSCRIPTIONS" : ["listing_details", "catalog_items"].includes(policy.resource) ? "PRODUCT_DETAIL" : policy.resource === "fulfillment" ? policy.discoverPlans ? "DISCOVER_PLANS" : "PLAN" : policy.resource === "pricing" ? "PRICE" : policy.resource === "customer_feedback" ? "FEEDBACK_TOPICS_MENTIONS" : "CREATE";
+  return { version: 1, stage, requests: 0, planIndex: 0, shipmentIndex: 0, shipmentIds: [], priorTokens: [] };
 }
 export function observationOperation(state: ObservationState, resource?: string): string {
   if (state.stage === "PROMOTIONS" && state.promotions) return state.promotions.stage === "SEARCH" ? "searchPromotions" : state.promotions.stage === "SELECTION" ? "getSelection" : "getPromotion";
-  const map: Record<ObservationState["stage"], string> = { PROMOTIONS: "searchPromotions", SUBSCRIPTIONS: "getSubscriptions", DISCOVER_PLANS: "listInboundPlans", PRODUCT_DETAIL: resource === "listing_details" ? "getListingsItem" : "getCatalogItem", PLAN: "getInboundPlan", PLAN_ITEMS: "listInboundPlanItems", SHIPMENT: "getShipment", SHIPMENT_ITEMS: "listShipmentItems", VERIFY_PLAN: "getInboundPlan", PRICE: "getCompetitiveSummary", OWN_PRICE: "getPricing", CREATE: "createReport", CREATING: "uncertainCreate", POLL: "getReport", DOCUMENT: "getReportDocument", DOWNLOAD: "downloadReportDocument", COMPLETE: "publish" };
+  const map: Record<ObservationState["stage"], string> = { PROMOTIONS: "searchPromotions", SUBSCRIPTIONS: "getSubscriptions", DISCOVER_PLANS: "listInboundPlans", PRODUCT_DETAIL: resource === "listing_details" ? "getListingsItem" : "getCatalogItem", PLAN: "getInboundPlan", PLAN_ITEMS: "listInboundPlanItems", SHIPMENT: "getShipment", SHIPMENT_ITEMS: "listShipmentItems", VERIFY_PLAN: "getInboundPlan", PRICE: "getCompetitiveSummary", OWN_PRICE: "getPricing", FEEDBACK_TOPICS_MENTIONS: "getItemReviewTopics", FEEDBACK_TOPICS_IMPACT: "getItemReviewTopics", FEEDBACK_TRENDS: "getItemReviewTrends", CREATE: "createReport", CREATING: "uncertainCreate", POLL: "getReport", DOCUMENT: "getReportDocument", DOWNLOAD: "downloadReportDocument", COMPLETE: "publish" };
   return map[state.stage];
 }
 /** State is authenticated/encrypted by the processor. Validate again before use. */
@@ -28,12 +32,16 @@ export function parseObservationState(value: unknown, policy: ObservationPolicy)
     const promotion = validatePromotionsState(s.promotions);
     if ((s.stage === "COMPLETE") !== (promotion.stage === "COMPLETE") || !["COMPLETE", "PROMOTIONS"].includes(String(s.stage))) return invalid();
   } else if (s.promotions !== undefined) return invalid();
-  if (s.version !== 1 || !["PROMOTIONS", "SUBSCRIPTIONS", "DISCOVER_PLANS", "PRODUCT_DETAIL", "PLAN", "PLAN_ITEMS", "SHIPMENT", "SHIPMENT_ITEMS", "VERIFY_PLAN", "PRICE", "OWN_PRICE", "CREATE", "CREATING", "POLL", "DOCUMENT", "DOWNLOAD", "COMPLETE"].includes(String(s.stage))) return invalid();
+  if (s.version !== 1 || !["PROMOTIONS", "SUBSCRIPTIONS", "DISCOVER_PLANS", "PRODUCT_DETAIL", "PLAN", "PLAN_ITEMS", "SHIPMENT", "SHIPMENT_ITEMS", "VERIFY_PLAN", "PRICE", "OWN_PRICE", "FEEDBACK_TOPICS_MENTIONS", "FEEDBACK_TOPICS_IMPACT", "FEEDBACK_TRENDS", "CREATE", "CREATING", "POLL", "DOCUMENT", "DOWNLOAD", "COMPLETE"].includes(String(s.stage))) return invalid();
   for (const key of ["requests", "planIndex", "shipmentIndex"]) if (!Number.isSafeInteger(s[key]) || Number(s[key]) < 0) return invalid();
   if (!Array.isArray(s.shipmentIds) || s.shipmentIds.length > 1000 || !Array.isArray(s.priorTokens) || s.priorTokens.length > 1000 || s.shipmentIds.some(v => typeof v !== "string") || s.priorTokens.some(v => typeof v !== "string") || Number(s.requests) > policy.maxRequests) return invalid();
   if (policy.resource === "listing_details" || policy.resource === "catalog_items") {
     const count = policy.resource === "listing_details" ? policy.sellerSkus.length : policy.asins.length;
     if (!["PRODUCT_DETAIL", "COMPLETE"].includes(String(s.stage)) || Number(s.planIndex) > count || (s.stage === "COMPLETE") !== (s.planIndex === count)) return invalid();
+  }
+  if (policy.resource === "customer_feedback") {
+    const count = policy.asins.length;
+    if (!["FEEDBACK_TOPICS_MENTIONS", "FEEDBACK_TOPICS_IMPACT", "FEEDBACK_TRENDS", "COMPLETE"].includes(String(s.stage)) || Number(s.planIndex) > count || (s.stage === "COMPLETE") !== (s.planIndex === count)) return invalid();
   }
   if (policy.resource === "notifications") {
     if (!["SUBSCRIPTIONS", "COMPLETE"].includes(String(s.stage)) || Number(s.planIndex) > policy.notificationTypes.length || (s.stage === "COMPLETE") !== (s.planIndex === policy.notificationTypes.length)) return invalid();
@@ -50,7 +58,7 @@ export function parseObservationState(value: unknown, policy: ObservationPolicy)
     }
   } else if (s.unavailableNotificationTypes !== undefined || s.notificationFailures !== undefined || s.notificationRetryQueue !== undefined) return invalid();
   if (s.discoveredPlanIds !== undefined && (!Array.isArray(s.discoveredPlanIds) || s.discoveredPlanIds.length > maxDiscoveredInboundPlans || s.discoveredPlanIds.some(v => typeof v !== "string" || !/^[A-Za-z0-9-]{38}$/.test(v)) || new Set(s.discoveredPlanIds).size !== s.discoveredPlanIds.length)) return invalid();
-  if (s.unavailableObjectIndexes !== undefined && (!Array.isArray(s.unavailableObjectIndexes) || !["listing_details", "catalog_items"].includes(policy.resource) || s.unavailableObjectIndexes.some(v => !Number.isSafeInteger(v) || Number(v) < 0 || Number(v) >= (s.objectRetryQueue !== undefined ? (policy.resource === "listing_details" ? policy.sellerSkus.length : policy.resource === "catalog_items" ? policy.asins.length : 0) : Number(s.planIndex))) || new Set(s.unavailableObjectIndexes).size !== s.unavailableObjectIndexes.length)) return invalid();
+  if (s.unavailableObjectIndexes !== undefined && (!Array.isArray(s.unavailableObjectIndexes) || !["listing_details", "catalog_items", "customer_feedback"].includes(policy.resource) || s.unavailableObjectIndexes.some(v => !Number.isSafeInteger(v) || Number(v) < 0 || Number(v) >= Number(s.planIndex)) || new Set(s.unavailableObjectIndexes).size !== s.unavailableObjectIndexes.length)) return invalid();
   if (s.objectRetryQueue !== undefined) {
     if (policy.resource !== "listing_details" && policy.resource !== "catalog_items") return invalid();
     const count = policy.resource === "listing_details" ? policy.sellerSkus.length : policy.asins.length;
@@ -98,6 +106,14 @@ export function completeProductObject(s: ObservationState, policy: ObservationPo
     s.objectRetryQueue.shift(); s.planIndex = s.objectRetryQueue[0] ?? count;
   } else s.planIndex++;
   if (s.planIndex === count) s.stage = "COMPLETE";
+}
+
+/** 某个 ASIN 的 Customer Feedback 全部阶段不可用（如 404 无洞察），跳过整个 ASIN 而非单阶段。 */
+export function skipFeedbackAsin(s: ObservationState, policy: ObservationPolicy): void {
+  if (policy.resource !== "customer_feedback") return invalid();
+  const count = policy.asins.length;
+  s.planIndex++;
+  s.stage = s.planIndex === count ? "COMPLETE" : "FEEDBACK_TOPICS_MENTIONS";
 }
 
 function signature(value: unknown): string { return JSON.stringify(value); }
@@ -167,6 +183,12 @@ export function advanceObservation(policy: ObservationPolicy, state: Observation
     if (!batch.asins.length) return invalid();
     if (s.stage === "PRICE") { rows = parseCompetitivePrices(context.rawBody, batch, context.marketplaceId, context.sellerId); s.stage = "OWN_PRICE"; }
     else if (s.stage === "OWN_PRICE") { rows = parseOwnPrices(context.rawBody, batch, context.marketplaceId, context.sellerId); s.planIndex += batch.asins.length; s.stage = s.planIndex === policy.asins.length ? "COMPLETE" : "PRICE"; }
+    else return invalid();
+  } else if (policy.resource === "customer_feedback") {
+    if (s.planIndex >= policy.asins.length) return invalid();
+    if (s.stage === "FEEDBACK_TOPICS_MENTIONS") { rows = parseCustomerFeedback(context.rawBody, policy, s.planIndex, context.marketplaceId, "topics-mentions"); s.stage = "FEEDBACK_TOPICS_IMPACT"; }
+    else if (s.stage === "FEEDBACK_TOPICS_IMPACT") { rows = parseCustomerFeedback(context.rawBody, policy, s.planIndex, context.marketplaceId, "topics-impact"); s.stage = "FEEDBACK_TRENDS"; }
+    else if (s.stage === "FEEDBACK_TRENDS") { rows = parseCustomerFeedback(context.rawBody, policy, s.planIndex, context.marketplaceId, "trends"); s.planIndex++; s.stage = s.planIndex === policy.asins.length ? "COMPLETE" : "FEEDBACK_TOPICS_MENTIONS"; }
     else return invalid();
   } else {
     const root = s.stage === "DOWNLOAD" ? {} : object(response);

@@ -35,7 +35,7 @@ test("落地 workbench 路由与 operations 视图约定一致（连字符/下�
     "fba_customer_sales", "mfn_returns", "fba_shipments", "fba_inventory_by_country",
     "fba_fulfilled_inventory", "fba_inventory_report", "reserved_inventory", "stranded_inventory",
     "recommended_removals", "storage_fees", "long_term_storage_fees", "fba_overage_fees",
-    "fee_preview", "removal_order_report", "removal_shipment_report", "promotions", "notifications",
+    "fee_preview", "removal_order_report", "removal_shipment_report", "promotions", "notifications", "customer_feedback",
   ]);
   const spWorkbenches = getDomainArchitecture().filter(r => r.provider === "amazon_sp_api" && r.landing.surface === "workbench");
   assert.ok(spWorkbenches.length > 0);
@@ -74,7 +74,7 @@ test("架构自检全通过且不伪造真实数据验收结论", () => {
   const audit = auditDomainArchitecture();
   assert.equal(audit.ok, true, audit.gaps.join("；"));
   assert.equal(audit.gaps.length, 0);
-  assert.equal(audit.counts.spImplemented, 34);
+  assert.equal(audit.counts.spImplemented, 35);
   assert.equal(audit.counts.adsImplemented, 15);
   const ledger = getDomainArchitecture();
   assert.ok(ledger.every(r => r.acceptance.trim().length >= 6), "每行都应保留真实验收前置说明（非伪造接通结论）");

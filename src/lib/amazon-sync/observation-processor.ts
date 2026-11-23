@@ -5,7 +5,7 @@ import { brandFairTurn } from "./brand-fairness";
 import { continuityProbeDue } from "./continuity-access";
 import { resolvedProductPolicy, type ProductManifest } from "./product-discovery";
 import { deduplicateFacts } from "./observation-parsers";
-import { completeNotificationType, completeProductObject, advanceObservation, parseObservationState, observationOperation, type ObservationState } from "./observation-machine";
+import { completeNotificationType, completeProductObject, skipFeedbackAsin, advanceObservation, parseObservationState, observationOperation, type ObservationState } from "./observation-machine";
 import { observationReportSpec, type AnalyticsPolicy } from "./observation-policy";
 import { parseObservationPolicy } from "./observation-policy";
 import { automaticPlanKey } from "./automatic-schedule";
@@ -21,7 +21,7 @@ export function createObservationProcessor(runtime: Pick<SyncProcessorRuntime, "
 return async function executeObservationSlice(run: AmazonSyncRun, client: AmazonSpApiClient, events: AmazonRequestEvent[]) {
   const scope = { organizationId: run.organizationId, workspaceId: run.workspaceId };
   const source = await prisma.$transaction(async tx => { await scopeLock(tx, scope); await assertFence(tx, run); return assertLiveSource(tx, run); });
-  const configuredPolicy = parseObservationPolicy(["promotions", "brand_analytics", "buy_box_history"].includes(run.resource) ? (run.frozenScope as { domainPolicy?: unknown }).domainPolicy : source.domainPolicy, run.resource);
+  const configuredPolicy = parseObservationPolicy(["promotions", "brand_analytics", "buy_box_history", "customer_feedback"].includes(run.resource) ? (run.frozenScope as { domainPolicy?: unknown }).domainPolicy : source.domainPolicy, run.resource);
   const manifest = (run.frozenScope as { productManifest?: ProductManifest }).productManifest;
   const policy = resolvedProductPolicy(configuredPolicy, manifest);
   let state = parseObservationState(run.checkpointCiphertext ? unseal(run.checkpointCiphertext, scope, run.id, "amazon-observation-state.v1").state : null, policy);
@@ -62,7 +62,8 @@ return async function executeObservationSlice(run: AmazonSyncRun, client: Amazon
       await scopeLock(tx, scope); await assertFence(tx, run); const live = await assertLiveSource(tx, run);
       if (await stopForControl(tx, run)) return;
       const rowCount = await tx.amazonDomainObservation.count({ where: { ...scope, sourceRunId: run.id, sourceId: live.id } });
-      if (rowCount !== run.insertedCount || rowCount + run.skippedCount !== run.processedCount || (!state.requests && !(manifest?.total === 0 && state.planIndex === 0 && rowCount === 0)) || !syncCenterEnabled(run)) throw new SyncInputError("观察记录完整性校验失败。");
+      const allFeedbackUnavailable = policy.resource === "customer_feedback" && policy.asins.length > 0 && (state.unavailableObjectIndexes?.length ?? 0) >= policy.asins.length && rowCount === 0;
+      if (rowCount !== run.insertedCount || rowCount + run.skippedCount !== run.processedCount || (!state.requests && !(manifest?.total === 0 && state.planIndex === 0 && rowCount === 0) && !allFeedbackUnavailable) || !syncCenterEnabled(run)) throw new SyncInputError("观察记录完整性校验失败。");
       if (state.unavailableObjectIndexes?.length || state.unavailableNotificationTypes?.length) {
         const coverage = { complete: false, accountUniverseComplete: false, rowCount, requestedObjects: state.planIndex, unavailableObjects: state.unavailableObjectIndexes?.length ?? 0, unavailableNotificationTypes: state.unavailableNotificationTypes ?? [], unavailableObjectIndexes: state.unavailableObjectIndexes, reason: "UPSTREAM_OBJECT_NOT_FOUND", capturedAt: new Date().toISOString() };
         await tx.amazonSyncRun.update({ where: { id: run.id }, data: { status: "PARTIAL_SUCCESS", stage: "OBJECTS_UNAVAILABLE", paginationComplete: true, finishedAt: new Date(), leaseOwner: null, leaseExpiresAt: null, summary: { coverage }, error: "部分对象在 Amazon 返回 404；其他对象已采集，原发布版本保留，缺口未标为完成。" } });
@@ -70,7 +71,7 @@ return async function executeObservationSlice(run: AmazonSyncRun, client: Amazon
         return;
       }
       if ((policy.resource === "listing_details" || policy.resource === "catalog_items") && policy.discovery && (state.planIndex !== (policy.resource === "listing_details" ? policy.sellerSkus.length : policy.asins.length) || rowCount !== state.planIndex)) throw new SyncInputError("全店详情分片尚未完整提交，不能发布。");
-      const coverage = { ...(manifest ? { discovery: manifest, catalogSnapshotComplete: true, noData: manifest.total === 0 } : {}), type: "APPROVED_SCOPE_OBSERVATION", resource: policy.resource, complete: true, accountUniverseComplete: false, rowCount, capturedFrom: run.executionStartedAt!.toISOString(), capturedTo: new Date().toISOString(), ...(policy.resource === "promotions" ? { apiVersion: promotionsContract.version, discoveredPromotions: state.promotions?.ids.length ?? 0, retainedPromotions: state.promotions?.retainedPromotions ?? 0, totalResults: state.promotions?.totalResults ?? null, historicalComplete: false, historyBasis: promotionsContract.history, feeSemantics: promotionsContract.feeSemantics } : policy.resource === "notifications" ? { scope: "SELLER_SUBSCRIPTION", notificationTypes: policy.notificationTypes, eventDeliveryVerified: false } : policy.resource === "fulfillment" ? { planIds: policy.discoverPlans ? state.discoveredPlanIds ?? [] : policy.planIds, discoveryComplete: !!policy.discoverPlans, marketplaceVerified: true, quantitySemantics: "DECLARED_ONLY", transportEventsAvailable: false } : policy.resource === "listing_details" ? { sellerSkus: policy.sellerSkus, attributeCoverage: "PRODUCT_FIELD_ALLOWLIST" } : policy.resource === "catalog_items" ? { asins: policy.asins, attributeCoverage: "PRODUCT_FIELD_ALLOWLIST" } : policy.resource === "pricing" ? { asins: policy.asins, ownPriceCoverage: "APPROVED_ASINS_NEW_B2C_GET_PRICING" } : { from: policy.from, to: policy.to, asins: policy.asins, ...(policy.resource === "brand_analytics" ? { reportKind: policy.reportKind, reportPeriod: policy.reportPeriod, eligibility: "UPSTREAM_REPORT_PUBLISHED", historicalComplete: false } : {}), reportId: state.reportId! }) };
+      const coverage = { ...(manifest ? { discovery: manifest, catalogSnapshotComplete: true, noData: manifest.total === 0 } : {}), type: "APPROVED_SCOPE_OBSERVATION", resource: policy.resource, complete: true, accountUniverseComplete: false, rowCount, capturedFrom: run.executionStartedAt!.toISOString(), capturedTo: new Date().toISOString(), ...(policy.resource === "promotions" ? { apiVersion: promotionsContract.version, discoveredPromotions: state.promotions?.ids.length ?? 0, retainedPromotions: state.promotions?.retainedPromotions ?? 0, totalResults: state.promotions?.totalResults ?? null, historicalComplete: false, historyBasis: promotionsContract.history, feeSemantics: promotionsContract.feeSemantics } : policy.resource === "notifications" ? { scope: "SELLER_SUBSCRIPTION", notificationTypes: policy.notificationTypes, eventDeliveryVerified: false } : policy.resource === "fulfillment" ? { planIds: policy.discoverPlans ? state.discoveredPlanIds ?? [] : policy.planIds, discoveryComplete: !!policy.discoverPlans, marketplaceVerified: true, quantitySemantics: "DECLARED_ONLY", transportEventsAvailable: false } : policy.resource === "listing_details" ? { sellerSkus: policy.sellerSkus, attributeCoverage: "PRODUCT_FIELD_ALLOWLIST" } : policy.resource === "catalog_items" ? { asins: policy.asins, attributeCoverage: "PRODUCT_FIELD_ALLOWLIST" } : policy.resource === "pricing" ? { asins: policy.asins, ownPriceCoverage: "APPROVED_ASINS_NEW_B2C_GET_PRICING" } : policy.resource === "customer_feedback" ? { asins: policy.asins, apiVersion: "2024-06-01", topicsSortBy: ["MENTIONS", "STAR_RATING_IMPACT"], refresh: "WEEKLY", availability: "EN_ONLY_US_UK_FR_IT_DE_ES_JP", replacesProductReviewDetail: false, historicalComplete: false } : { from: policy.from, to: policy.to, asins: policy.asins, ...(policy.resource === "brand_analytics" ? { reportKind: policy.reportKind, reportPeriod: policy.reportPeriod, eligibility: "UPSTREAM_REPORT_PUBLISHED", historicalComplete: false } : {}), reportId: state.reportId! }) };
       await tx.amazonSyncDataSource.update({ where: { id: live.id }, data: { activeRunId: run.id, lastSuccessAt: new Date(), rowCount, coverage } });
       await tx.amazonSyncRun.update({ where: { id: run.id }, data: { status: "SUCCEEDED", stage: "COMPLETED", paginationComplete: true, finishedAt: new Date(), leaseOwner: null, leaseExpiresAt: null, checkpointCiphertext: null, summary: { coverage } } });
       // A failed report may have deferred its plan for a day. Once that same
@@ -95,13 +96,14 @@ return async function executeObservationSlice(run: AmazonSyncRun, client: Amazon
       catch { /* Keep the normal download path for an unchanged invalid report. */ }
     }
   }
-  if (["promotions", "pricing", "listing_details", "catalog_items", "notifications", "fulfillment"].includes(policy.resource) && state.requests > 0) {
+  if (["promotions", "pricing", "listing_details", "catalog_items", "notifications", "fulfillment", "customer_feedback"].includes(policy.resource) && state.requests > 0) {
     const page = await prisma.amazonSyncRawPage.findFirst({ where: { ...scope, taskId: run.id, page: state.requests, resource: policy.resource } });
     const metadata = page?.requestMetadata as { operation?: string; objectIndex?: number; tokenHash?: string; requestPathHash?: string } | undefined;
     if (page && metadata?.operation === observationOperation(state, policy.resource)) {
       const raw = unseal(page.rawCiphertext, scope, `${run.id}:${page.page}`, "amazon-observation-raw.v1").rawBody;
       if (typeof raw !== "string" || digest(raw) !== page.bodySha256) throw new SyncInputError("观察原件完整性校验失败。", 409);
       let matches = policy.resource === "promotions" ? page.page > run.pagesCompleted && metadata.requestPathHash === digest(promotionsRequest(state.promotions!, source.marketplaceId).path) : policy.resource === "notifications" ? page.page > run.pagesCompleted && metadata.objectIndex === state.planIndex && metadata.tokenHash === digest(state.token ?? null)
+        : policy.resource === "customer_feedback" ? page.page > run.pagesCompleted && metadata.objectIndex === state.planIndex && metadata.operation === observationOperation(state, policy.resource)
         : policy.resource === "pricing" || policy.resource === "fulfillment" && page.page > run.pagesCompleted;
       if (policy.resource === "listing_details" || policy.resource === "catalog_items") {
         // Explicit identifier lists used to omit objectIndex. Their own raw
@@ -123,7 +125,7 @@ return async function executeObservationSlice(run: AmazonSyncRun, client: Amazon
   const operation = observationOperation(state, policy.resource), auth = source.authorization;
   const key = { ...scope, authorizationId: auth.id, operation };
   // Same bucket namespace as existing Reports receivers. Never split by site.
-  const bucketKey = digest([`${operation}.${["createReport", "getReport", "getReportDocument"].includes(operation) ? "2021-06-30" : policy.resource === "promotions" ? "2025-12-01" : policy.resource === "notifications" ? "v1" : policy.resource === "listing_details" ? "2021-08-01" : policy.resource === "catalog_items" ? "2022-04-01" : policy.resource === "fulfillment" ? "2024-03-20" : operation === "getPricing" ? "v0" : "2022-05-01"}`, auth.amazonSellerId, policy.applicationId]);
+  const bucketKey = digest([`${operation}.${["createReport", "getReport", "getReportDocument"].includes(operation) ? "2021-06-30" : policy.resource === "promotions" ? "2025-12-01" : policy.resource === "notifications" ? "v1" : policy.resource === "listing_details" ? "2021-08-01" : policy.resource === "catalog_items" ? "2022-04-01" : policy.resource === "customer_feedback" ? "2024-06-01" : policy.resource === "fulfillment" ? "2024-03-20" : operation === "getPricing" ? "v0" : "2022-05-01"}`, auth.amazonSellerId, policy.applicationId]);
   const reserve = archivedDownload !== undefined ? { allowed: true, nextAt: new Date() } : await prisma.$transaction(async tx => {
     await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run);
     if (await stopForControl(tx, run)) return null;
@@ -166,6 +168,10 @@ return async function executeObservationSlice(run: AmazonSyncRun, client: Amazon
     } else if (policy.resource === "pricing") {
       const asins = policy.asins.slice(state.planIndex, state.planIndex + 20);
       const result = state.stage === "OWN_PRICE" ? await client.getOwnPrices({ asins, marketplaceId: source.marketplaceId }) : await client.getCompetitiveSummary({ asins, marketplaceId: source.marketplaceId }); body = result.body; rawBody = result.rawBody;
+    } else if (policy.resource === "customer_feedback") {
+      const asin = policy.asins[state.planIndex];
+      const result = state.stage === "FEEDBACK_TRENDS" ? await client.getCustomerFeedbackTrends({ asin, marketplaceId: source.marketplaceId }) : await client.getCustomerFeedbackTopics({ asin, marketplaceId: source.marketplaceId, sortBy: state.stage === "FEEDBACK_TOPICS_IMPACT" ? "STAR_RATING_IMPACT" : "MENTIONS" });
+      body = result.body; rawBody = result.rawBody;
     } else if (state.stage === "CREATING") body = await client.createObservationReport(observationReportSpec(policy, source.marketplaceId));
     else if (state.stage === "POLL") body = await client.getReport(state.reportId!);
     else if (state.stage === "DOCUMENT") body = await client.getReportDocument(state.documentId!);
@@ -202,6 +208,18 @@ return async function executeObservationSlice(run: AmazonSyncRun, client: Amazon
       });
       await yieldSlice(run, new Date()); return;
     }
+    if (policy.resource === "customer_feedback" && ["FEEDBACK_TOPICS_MENTIONS", "FEEDBACK_TOPICS_IMPACT", "FEEDBACK_TRENDS"].includes(state.stage) && error instanceof AmazonSpApiError && error.status === 404) {
+      state.unavailableObjectIndexes = [...(state.unavailableObjectIndexes ?? []), state.planIndex];
+      skipFeedbackAsin(state, policy);
+      await prisma.$transaction(async tx => {
+        await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run);
+        if (await stopForControl(tx, run)) throw fenceLost();
+        await saveState(tx, state);
+        await tx.amazonSyncRun.update({ where: { id: run.id }, data: { failedCount: { increment: 1 } } });
+        await log(tx, run, "OBSERVATION_OBJECT_NOT_FOUND");
+      });
+      await yieldSlice(run, new Date()); return;
+    }
     // A definite 429 means create was rejected. All uncertain outcomes retain intent.
     if (state.stage === "CREATING" && error instanceof AmazonSpApiError && error.status === 429 || state.stage === "DOWNLOAD" && error instanceof AmazonSpApiError && [403, 404].includes(error.status ?? 0)) {
       state.stage = state.stage === "CREATING" ? "CREATE" : "DOCUMENT"; delete state.document;
@@ -217,7 +235,7 @@ return async function executeObservationSlice(run: AmazonSyncRun, client: Amazon
   await prisma.$transaction(async tx => {
     await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run);
     if (await stopForControl(tx, run)) throw fenceLost();
-    if (archivedDownload === undefined) await tx.amazonSyncRawPage.create({ data: { ...scope, taskId: run.id, page: state.requests, resource: run.resource, requestMetadata: { operation, ...(policy.resource === "promotions" ? { apiVersion: "2025-12-01", requestPathHash: digest(promotionsRequest(state.promotions!, source.marketplaceId).path) } : {}), ...(["listing_details", "catalog_items"].includes(policy.resource) ? { objectIndex: state.planIndex } : {}), ...(policy.resource === "notifications" ? { objectIndex: state.planIndex, tokenHash: digest(state.token ?? null) } : {}), ...(manifest ? { batchIndex: Math.floor(state.planIndex / 100), objectIndex: state.planIndex } : {}) }, rawCiphertext: seal(rawResponseEnvelope(rawBody, state.stage === "DOWNLOAD" && (policy.resource === "brand_analytics" || policy.resource === "buy_box_history") ? observationReportSpec(policy, source.marketplaceId).reportType : operation), scope, `${run.id}:${state.requests}`, "amazon-observation-raw.v1"), bodySha256: digest(rawBody), capturedAt } });
+    if (archivedDownload === undefined) await tx.amazonSyncRawPage.create({ data: { ...scope, taskId: run.id, page: state.requests, resource: run.resource, requestMetadata: { operation, ...(policy.resource === "promotions" ? { apiVersion: "2025-12-01", requestPathHash: digest(promotionsRequest(state.promotions!, source.marketplaceId).path) } : {}), ...(["listing_details", "catalog_items", "customer_feedback"].includes(policy.resource) ? { objectIndex: state.planIndex } : {}), ...(policy.resource === "notifications" ? { objectIndex: state.planIndex, tokenHash: digest(state.token ?? null) } : {}), ...(manifest ? { batchIndex: Math.floor(state.planIndex / 100), objectIndex: state.planIndex } : {}) }, rawCiphertext: seal(rawResponseEnvelope(rawBody, state.stage === "DOWNLOAD" && (policy.resource === "brand_analytics" || policy.resource === "buy_box_history") ? observationReportSpec(policy, source.marketplaceId).reportType : operation), scope, `${run.id}:${state.requests}`, "amazon-observation-raw.v1"), bodySha256: digest(rawBody), capturedAt } });
     await registerArchivedFields(tx, run, state.requests, rawBody, "JSON");
   });
   const result = advanceObservation(policy, state, body, { rawBody, marketplaceId: source.marketplaceId, sellerId: auth.amazonSellerId });

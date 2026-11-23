@@ -155,6 +155,21 @@ export class AmazonSpApiClient {
     return { body, rawBody };
   }
 
+  /** Customer Feedback API v2024-06-01，只读评论话题洞察；站点与 ASIN 由已审批策略绑定。 */
+  async getCustomerFeedbackTopics(input: { asin: string; marketplaceId: string; sortBy: "MENTIONS" | "STAR_RATING_IMPACT" }): Promise<{ body: unknown; rawBody: string }> {
+    if (!/^[A-Z0-9]{10}$/.test(input.asin) || !/^[A-Z0-9]{2,}$/.test(input.marketplaceId) || input.marketplaceId.length > 50 || !["MENTIONS", "STAR_RATING_IMPACT"].includes(input.sortBy)) throw new AmazonSpApiError("评论话题请求范围无效。");
+    const query = new URLSearchParams({ marketplaceId: input.marketplaceId, sortBy: input.sortBy });
+    let rawBody = "";
+    const body = await this.request("GET", `/customerFeedback/2024-06-01/items/${input.asin}/reviews/topics?${query}`, undefined, text => { rawBody = text; });
+    return { body, rawBody };
+  }
+  async getCustomerFeedbackTrends(input: { asin: string; marketplaceId: string }): Promise<{ body: unknown; rawBody: string }> {
+    if (!/^[A-Z0-9]{10}$/.test(input.asin) || !/^[A-Z0-9]{2,}$/.test(input.marketplaceId) || input.marketplaceId.length > 50) throw new AmazonSpApiError("评论趋势请求范围无效。");
+    const query = new URLSearchParams({ marketplaceId: input.marketplaceId });
+    let rawBody = "";
+    const body = await this.request("GET", `/customerFeedback/2024-06-01/items/${input.asin}/reviews/trends?${query}`, undefined, text => { rawBody = text; });
+    return { body, rawBody };
+  }
   async searchListingsItems(input: { sellerId: string; marketplaceId: string; nextToken?: string }, captureRaw?: (text: string) => void): Promise<unknown> {
     const query = new URLSearchParams({ marketplaceIds: input.marketplaceId, includedData: "summaries,fulfillmentAvailability", pageSize: "20" });
     if (input.nextToken) query.set("pageToken", input.nextToken);

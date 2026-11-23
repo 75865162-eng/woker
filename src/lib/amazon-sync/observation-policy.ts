@@ -4,7 +4,7 @@ import { assertProductAccessEvidence, type ProductAccessContext } from "./produc
 import { reportTimeZone } from "./date-range";
 import { SyncInputError } from "./policy";
 
-export const observationResources = ["fulfillment", "pricing", "brand_analytics", "buy_box_history", "listing_details", "catalog_items", "notifications", "promotions"] as const;
+export const observationResources = ["fulfillment", "pricing", "brand_analytics", "buy_box_history", "listing_details", "catalog_items", "notifications", "promotions", "customer_feedback"] as const;
 export type ObservationResource = typeof observationResources[number];
 export const brandReportTypes = {
   search_terms: "GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT",
@@ -26,7 +26,9 @@ export type ListingDetailPolicy = CommonPolicy & ProductOptions & { resource: "l
 export type CatalogDetailPolicy = CommonPolicy & ProductOptions & { resource: "catalog_items"; asins: string[] };
 export type NotificationPolicy = CommonPolicy & { resource: "notifications"; notificationTypes: string[] };
 export type PromotionsPolicy = CommonPolicy & { resource: "promotions" };
-export type ObservationPolicy = PromotionsPolicy | NotificationPolicy | ListingDetailPolicy | CatalogDetailPolicy | InboundPolicy | PricingPolicy | AnalyticsPolicy | BuyBoxHistoryPolicy;
+/** 评论话题分析 Customer Feedback API v2024-06-01：按审批 ASIN 逐个抓 topics(两种排序)+trends。只读观察，不覆盖商品 Review。 */
+export type CustomerFeedbackPolicy = CommonPolicy & ProductOptions & { resource: "customer_feedback"; asins: string[] };
+export type ObservationPolicy = PromotionsPolicy | NotificationPolicy | ListingDetailPolicy | CatalogDetailPolicy | InboundPolicy | PricingPolicy | AnalyticsPolicy | BuyBoxHistoryPolicy | CustomerFeedbackPolicy;
 export const isObservationResource = (value: string): value is ObservationResource => (observationResources as readonly string[]).includes(value);
 export function observationInvalid(message = "数据域策略、响应或范围校验失败；未发布新版本。"): never { throw new SyncInputError(message, 422); }
 export function observationObject(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : observationInvalid(); }
@@ -47,7 +49,7 @@ export function parseObservationPolicy(value: unknown, resource?: string): Obser
   if (!/^[A-Za-z0-9][A-Za-z0-9_.:-]*$/.test(applicationId)) return observationInvalid();
   const integer = (value: unknown, max: number) => typeof value === "number" && Number.isSafeInteger(value) && value >= 1 && value <= max ? value : observationInvalid();
   const rate = p.requestsPerSecond;
-  const ceiling = p.resource === "promotions" ? .1 : ["listing_details", "catalog_items", "notifications"].includes(p.resource) ? 1 : p.resource === "fulfillment" ? .5 : p.resource === "pricing" ? .03 : .0167;
+  const ceiling = p.resource === "promotions" ? .1 : ["listing_details", "catalog_items", "notifications"].includes(p.resource) ? 1 : p.resource === "fulfillment" ? .5 : p.resource === "pricing" ? .03 : p.resource === "customer_feedback" ? .1 : .0167;
   if (typeof rate !== "number" || !Number.isFinite(rate) || rate <= 0 || rate > ceiling) return observationInvalid();
   const base: CommonPolicy = { resource: p.resource, applicationId, maxRequests: integer(p.maxRequests, 1000), maxRows: integer(p.maxRows, 50_000), requestsPerSecond: rate };
   if (p.resource === "promotions") return { ...base, resource: "promotions" };
@@ -73,6 +75,18 @@ export function parseObservationPolicy(value: unknown, resource?: string): Obser
     const ids = p.resource === "listing_details" ? list(p.sellerSkus, /^[^\u0000-\u001f\u007f]{1,255}$/, 100, !!extra.discovery) : list(p.asins, /^[A-Z0-9]{10}$/, p.resource === "pricing" ? 20 : 100, !!extra.discovery);
     if (extra.discovery && ids.length) return observationInvalid("自动发现不能同时配置静态对象。");
     return p.resource === "listing_details" ? { ...base, ...extra, resource: p.resource, sellerSkus: ids } : p.resource === "pricing" ? { ...base, ...extra, resource: p.resource, asins: ids } : { ...base, ...extra, resource: p.resource, asins: ids };
+  }
+  if (p.resource === "customer_feedback") {
+    const extra: ProductOptions = {};
+    if (p.discovery !== undefined) {
+      const d = observationObject(p.discovery);
+      if (d.mode !== "catalog_snapshot" || d.batchSize !== 100 || base.requestsPerSecond > .2 || base.maxRequests > 500) return observationInvalid();
+      extra.discovery = { mode: "catalog_snapshot", sourceId: observationText(d.sourceId, 200), maxObjects: integer(d.maxObjects, 1000), batchSize: 100 };
+    }
+    if (p.accessEvidence !== undefined) extra.accessEvidence = observationText(p.accessEvidence, 6000);
+    const asins = list(p.asins, /^[A-Z0-9]{10}$/, 100, !!extra.discovery);
+    if (extra.discovery && asins.length) return observationInvalid("自动发现不能同时配置静态对象。");
+    return { ...base, ...extra, resource: "customer_feedback", asins };
   }
   const asins = list(p.asins, /^[A-Z0-9]{10}$/, 18, p.resource === "buy_box_history" && p.allAsins === true || p.resource === "brand_analytics" && ["search_terms", "market_basket", "repeat_purchase"].includes(String(p.reportKind)));
   const from = observationDate(p.from), to = observationDate(p.to), marketplaceTimeZone = observationText(p.marketplaceTimeZone, 100);
