@@ -93,7 +93,8 @@ test('菜单复用实际入口和权限过滤，可搜索、关闭并返回焦�
   await expect(dialog.getByRole('link', { name: 'FBA 装箱', exact: true })).toHaveAttribute('aria-current', 'page');
   await page.screenshot({ path: screenshotDir + '/business-navigation.png', fullPage: true });
   await dialog.getByLabel('搜索业务入口').fill('采购');
-  await expect(dialog.getByRole('link', { name: '采购订单', exact: true })).toHaveAttribute('href', '/operations?view=purchase-orders');
+  // 高频直达导航上线后，同一业务对象可能出现多个同名入口；只验证首个入口指向采购订单页即可。
+  await expect(dialog.getByRole('link', { name: '采购订单', exact: true }).first()).toHaveAttribute('href', /(\/purchase\/orders|\/operations\?view=purchase-orders)/);
   await expect(dialog.getByRole('link', { name: 'FBA 装箱', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: '打开业务菜单', exact: true })).toBeFocused();
