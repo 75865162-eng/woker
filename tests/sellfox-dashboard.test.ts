@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 const scope: DashboardScope = { organizationId: "o1", workspaceId: "w1", userId: "u1" };
 const NOW = new Date("2026-11-21T00:00:00Z");
 
-function fakePrisma() {
+function fakePrisma(queryRaw?: () => Promise<unknown[]>) {
   return {
     // profit/ads KPI 用数据库端 SUM（非 findMany 拉全明细到 JS reduce），语义等价。
     sellfoxProfitAggDaily: { aggregate: async () => ({ _sum: { netRevenue: 0n }, _count: { id: 0 } }), findFirst: async () => null },
@@ -16,7 +16,7 @@ function fakePrisma() {
     sellfoxStore: { count: async () => 0 },
     sellfoxSalesDailySnapshot: { count: async () => 0 },
     sellfoxSyncRun: { findFirst: async () => null },
-    $queryRaw: async () => [],
+    $queryRaw: queryRaw ?? (async () => []),
   } as never;
 }
 
@@ -75,6 +75,35 @@ test("readDashboard: 多币种销售额留 MULTI 不强行相加;单项读取失
   assert.equal(revenue?.currency, "MULTI");
   assert.equal(data.pendingCount, 0);
   assert.ok(data.degraded.includes("pending"));
+});
+
+test("readDashboard: 排行榜个别金额NULL不抹掉整店销售额,SQL对有效值求和", async () => {
+  // 模拟生产 NV店-US 情形：1458 行里 2 行 revenueOriginal 为 NULL。
+  // 修复后 SQL 用 count(x)>0 判定，只要存在有效金额就返回 SUM(有效值)。
+  const db = fakePrisma(async () => [
+    { storeId: "nv-us", storeName: "NV店-US", revenue: "82966.07", quantity: 3956n },
+    { storeId: "all-null", storeName: "全空店", revenue: null, quantity: 12n },
+  ]);
+  const data = await readDashboard(scope, undefined, {
+    prisma: db, now: NOW,
+    readSalesSummary: (async () => fullSales) as never,
+    loadPending: (async () => []) as never,
+  });
+  const nv = data.ranking.find((r) => r.storeId === "nv-us");
+  assert.equal(nv?.quantity, 3956);
+  assert.equal(nv?.revenue, 82966.07, "部分行金额缺失时，整店销售额应对有效值求和而非留空");
+  const allNull = data.ranking.find((r) => r.storeId === "all-null");
+  assert.equal(allNull?.revenue, null, "整店金额全缺失仍留空，不臆造");
+});
+
+test("source guard: 排行榜SQL不用 count=count 全有或全无(防NV店销售额被抹空)", () => {
+  const src = readFileSync(new URL("../src/lib/sellfox/dashboard-read.ts", import.meta.url), "utf8");
+  const rankingSql = src.slice(src.indexOf("async function readRanking"), src.indexOf("type CoverageBase"));
+  assert.match(rankingSql, /count\(a\."revenueOriginal"\)>0/, "排行榜须对有效金额求和");
+  assert.doesNotMatch(rankingSql, /count\(a\."revenueOriginal"\)=count\(\*\)/, "不得用全有或全无抹掉整店销售额");
+  // 聚合写入层的 NULL-preserving 语义保持不变，确保与对账一致。
+  const aggRefresh = readFileSync(new URL("../src/lib/sellfox/agg-refresh.ts", import.meta.url), "utf8");
+  assert.match(aggRefresh, /count\(t\."revenue"\)=count\(\*\)/, "聚合写入层对账语义不得改动");
 });
 
 test("source guard: 看板API鉴权+三态收窄,首页kpis插槽接入,不臆造数据", () => {

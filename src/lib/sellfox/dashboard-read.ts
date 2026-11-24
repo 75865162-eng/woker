@@ -241,10 +241,14 @@ async function readRanking(
   degraded: string[],
 ): Promise<DashboardRankRow[]> {
   try {
+    // 排行榜是展示层汇总：个别行的 revenueOriginal 缺失（如赛狐源数据某些行未回传金额）
+    // 不应抹掉整店销售额。只要该店窗口内有任意有效金额，就对有效值求和；SQL SUM 本身
+    // 忽略 NULL，不伪造缺失值。这与聚合写入层（agg-refresh / reconcile）的
+    // "count=count 才写、否则留 NULL" 的 NULL-preserving 对账语义不同——那是对账设计，不能动。
     const rows = await db.$queryRaw<Array<{ storeId: string; storeName: string; revenue: string | null; quantity: bigint | number }>>(Prisma.sql`
       SELECT s."storeId" AS "storeId",
         max(st."name") AS "storeName",
-        CASE WHEN count(a."revenueOriginal")=count(*) THEN SUM(a."revenueOriginal")::text END AS revenue,
+        CASE WHEN count(a."revenueOriginal")>0 THEN SUM(a."revenueOriginal")::text END AS revenue,
         SUM(a."quantity")::bigint AS quantity
       FROM "SellfoxSalesAggDaily" a
       JOIN "SellfoxStore" st ON st."id" = a."storeId" AND st."organizationId" = a."organizationId" AND st."workspaceId" = a."workspaceId"
