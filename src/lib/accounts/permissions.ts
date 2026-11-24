@@ -40,7 +40,7 @@ export const permissionModules = [
 ];
 
 export const defaultAccessiblePaths = [
-  { href: "/", moduleId: null },
+  { href: "/erp", moduleId: null },
   { href: "/product", moduleId: "products" },
   { href: "/sellfox", moduleId: "sellfox" },
   { href: "/workspace", moduleId: "workspace" },
@@ -124,7 +124,7 @@ const publicModuleIds = new Set<string>();
  * Only these are allowed through when module resolution returns null; any
  * other unmapped path falls back to the role's first accessible module.
  */
-const publicPathsWithoutModule = new Set<string>(["/", "/forbidden", "/help"]);
+const publicPathsWithoutModule = new Set<string>(["/", "/erp", "/forbidden", "/help"]);
 
 export function roleCanAccessModule(role: string | undefined, moduleId: string | null, permissions?: RolePermissionMap | null) {
   if (!moduleId) return false;

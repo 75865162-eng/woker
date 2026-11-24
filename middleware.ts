@@ -115,10 +115,10 @@ export async function middleware(request: NextRequest) {
   const validSession = await hasValidSessionCookie(request);
 
   if (validSession) {
-    // Signed-in staff have no reason to see a sign-in form. Send them to the
-    // public brand homepage; from there they can continue into the workspace.
+    // Signed-in staff have no reason to see a sign-in form. Send them straight
+    // to the ERP dashboard instead of the public brand homepage.
     if (pathname === "/login" || pathname === "/HKQ") {
-      return NextResponse.redirect(new URL("/", publicOrigin));
+      return NextResponse.redirect(new URL("/erp", publicOrigin));
     }
 
     const requestHeaders = new Headers(request.headers);

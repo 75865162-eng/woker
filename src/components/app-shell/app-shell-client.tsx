@@ -187,7 +187,7 @@ export function AppShellClient({
         )}
       >
         <div className={cn("flex h-[var(--shell-topbar)] w-full shrink-0 items-center border-b border-border", navCollapsed ? "justify-center px-0" : "px-4")}>
-          <Link href="/" prefetch={false} aria-label="工作台首页" title="工作台首页" className="flex min-w-0 items-center gap-2 overflow-hidden rounded-lg transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">
+          <Link href="/erp" prefetch={false} aria-label="工作台首页" title="工作台首页" className="flex min-w-0 items-center gap-2 overflow-hidden rounded-lg transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">
             <Image src="/brand-logo.png" alt="品牌图标" width={32} height={32} className="h-7 w-7 shrink-0 object-cover" />
             <span className={cn("truncate text-section text-foreground", navCollapsed && "sr-only")}>条条 ERP</span>
           </Link>

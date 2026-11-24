@@ -150,29 +150,29 @@
   .left { display: none; }
 }
 
-/* 数据源 / MCP 配置面板 */
+/* 数据源 / MCP 配置面板（紧凑版） */
 .dsPanel { border-bottom: 1px solid var(--border); background: var(--surface); }
 .dsHead {
-  display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 16px;
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 12px;
   border: 0; background: transparent; cursor: pointer; text-align: left; color: var(--foreground);
 }
 .dsHead:hover { background: var(--surface-muted); }
-.dsHeadTitle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; }
-.dsHeadHint { flex: 1; font-size: 11px; color: var(--muted); }
-.dsBody { display: flex; flex-direction: column; gap: 8px; padding: 4px 16px 12px; }
+.dsHeadTitle { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.dsHeadHint { flex: 1; min-width: 0; font-size: 10px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dsBody { display: flex; flex-direction: column; gap: 4px; padding: 2px 12px 8px; }
 .dsSource {
-  display: flex; align-items: flex-start; gap: 10px; padding: 9px 10px;
-  border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
+  display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 4px 8px;
+  border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
 }
 .dsSource:hover { background: var(--surface-muted); }
 .dsSourceDisabled { opacity: 0.6; cursor: not-allowed; }
-.dsSource input { margin-top: 3px; accent-color: var(--brand); }
-.dsSourceMain { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
-.dsSourceTop { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-.dsSourceMeta { font-size: 11px; color: var(--muted); line-height: 1.5; }
-.dsActions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.dsSource input { margin: 0; accent-color: var(--brand); flex-shrink: 0; }
+.dsSourceMain { display: flex; flex-direction: row; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+.dsSourceTop { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; flex-shrink: 0; }
+.dsSourceMeta { font-size: 11px; color: var(--muted); line-height: 1.3; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dsActions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-top: 2px; }
 .dsLink {
-  display: inline-flex; align-items: center; gap: 5px; font-size: 12px;
+  display: inline-flex; align-items: center; gap: 4px; font-size: 11px;
   color: var(--brand); text-decoration: none;
 }
 .dsLink:hover { text-decoration: underline; }
