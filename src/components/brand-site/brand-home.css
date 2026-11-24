@@ -47,7 +47,16 @@
 .bp .bp-hero h1 em{font-style:normal;color:var(--bp-brand-2)}
 .bp .bp-slogan{margin-top:22px;font-size:19px;color:var(--bp-brand);font-weight:550;letter-spacing:.01em}
 .bp .bp-hero p.bp-lead{margin-top:20px;font-size:17px}
-.bp .bp-hero-art{width:100%;height:auto;display:block}
+.bp .bp-hero-art{width:100%;display:block}
+.bp .bp-hero-stage{position:relative;width:100%;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(circle at 50% 45%,#eef4f7 0%,#fbfcfd 62%,#fff 100%);border-radius:28px;overflow:hidden}
+.bp .bp-hero-stage::before{content:"";position:absolute;inset:0;
+  background-image:radial-gradient(rgba(27,74,107,.08) 1px,transparent 1px);background-size:22px 22px;opacity:.5}
+.bp .bp-hero-card{position:absolute;background:#fff;border-radius:14px;box-shadow:0 18px 44px rgba(15,77,99,.16);
+  display:flex;align-items:center;justify-content:center;padding:10px}
+.bp .bp-hero-card img{width:100%;height:100%;object-fit:contain}
+.bp .bp-hero-card-main{width:78%;aspect-ratio:1/1;z-index:2;transform:rotate(-3deg)}
+.bp .bp-hero-card-sub{width:38%;aspect-ratio:1/1;z-index:3;right:2%;bottom:4%;transform:rotate(8deg);box-shadow:0 12px 30px rgba(15,77,99,.22)}
 .bp .bp-actions{display:flex;gap:14px;margin-top:34px;flex-wrap:wrap}
 .bp .bp-btn{display:inline-flex;align-items:center;gap:9px;padding:13px 24px;border-radius:8px;
   font-size:14px;font-weight:650;transition:transform .2s,box-shadow .2s,background .2s}

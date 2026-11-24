@@ -48,39 +48,18 @@ const pillars: Pillar[] = [
 ];
 
 function HeroArt() {
+  // 真实产品图：来自我们已同步上架的庭院标牌目录（铝制 Private Property / Pool Rules 标牌）。
   return (
-    <svg className="bp-hero-art" viewBox="0 0 560 460" role="img" aria-label="A collection of clean, modern property signs">
-      <defs>
-        <linearGradient id="bpWall" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="var(--bp-art-wall-a)" /><stop offset="1" stopColor="var(--bp-art-wall-b)" />
-        </linearGradient>
-        <filter id="bpShadow" x="-30%" y="-30%" width="160%" height="160%">
-          <feDropShadow dx="0" dy="10" stdDeviation="12" floodColor="var(--bp-brand)" floodOpacity="0.12" />
-        </filter>
-      </defs>
-      <rect x="20" y="20" width="520" height="420" rx="24" fill="url(#bpWall)" />
-      <circle cx="430" cy="110" r="72" fill="var(--bp-art-circle)" opacity="0.7" />
-      <circle cx="110" cy="380" r="54" fill="var(--bp-art-circle)" opacity="0.6" />
-      <g filter="url(#bpShadow)">
-        <rect x="150" y="96" width="260" height="150" rx="10" fill="#fff" stroke="var(--bp-brand)" strokeWidth="2.5" />
-        <circle cx="168" cy="116" r="4" fill="var(--bp-art-screw)" /><circle cx="392" cy="116" r="4" fill="var(--bp-art-screw)" />
-        <rect x="196" y="150" width="168" height="12" rx="6" fill="var(--bp-brand)" opacity="0.85" />
-        <rect x="216" y="176" width="128" height="8" rx="4" fill="var(--bp-art-bar)" />
-        <rect x="236" y="196" width="88" height="8" rx="4" fill="var(--bp-art-bar)" />
-      </g>
-      <g filter="url(#bpShadow)">
-        <rect x="70" y="250" width="150" height="96" rx="9" fill="#fff" stroke="var(--bp-brand-2)" strokeWidth="2.5" transform="rotate(-6 145 298)" />
-        <circle cx="86" cy="266" r="3.5" fill="var(--bp-art-screw)" /><circle cx="204" cy="266" r="3.5" fill="var(--bp-art-screw)" />
-        <rect x="102" y="292" width="86" height="9" rx="4.5" fill="var(--bp-brand-2)" opacity="0.8" transform="rotate(-6 145 296)" />
-        <rect x="112" y="312" width="66" height="7" rx="3.5" fill="var(--bp-art-bar)" transform="rotate(-6 145 315)" />
-      </g>
-      <g filter="url(#bpShadow)">
-        <rect x="352" y="262" width="150" height="96" rx="9" fill="#fff" stroke="var(--bp-brand)" strokeWidth="2.5" transform="rotate(5 427 310)" />
-        <rect x="384" y="304" width="86" height="9" rx="4.5" fill="var(--bp-brand)" opacity="0.8" transform="rotate(5 427 308)" />
-        <rect x="392" y="324" width="66" height="7" rx="3.5" fill="var(--bp-art-bar)" transform="rotate(5 427 327)" />
-      </g>
-      <path d="M40 402 Q280 372 520 402" stroke="var(--bp-art-screw)" strokeWidth="2" fill="none" strokeDasharray="4 8" />
-    </svg>
+    <div className="bp-hero-art" role="img" aria-label="Our real yard signs: Private Property and Pool Rules aluminium signs">
+      <div className="bp-hero-stage">
+        <div className="bp-hero-card bp-hero-card-main">
+          <Image src="/products/private-property.jpg" alt="Private Property / No Trespassing yard sign" width={560} height={560} priority style={{ objectFit: "contain" }} />
+        </div>
+        <div className="bp-hero-card bp-hero-card-sub">
+          <Image src="/products/pool.jpg" alt="Pool Rules safety sign" width={300} height={300} style={{ objectFit: "contain" }} />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -135,12 +114,12 @@ export function BrandHome() {
       <section className="bp-hero" id="home">
         <div className="bp-wrap bp-hero-grid">
           <div className="bp-reveal">
-            <span className="bp-eyebrow">Thoughtful Signs for Everyday Spaces</span>
-            <h1>Making spaces <em>clearer</em>,<br />safer and more welcoming.</h1>
-            <p className="bp-slogan">Well-made signs. Considered details. Confidence in every space.</p>
+            <span className="bp-eyebrow">Durable Yard &amp; Property Signs</span>
+            <h1>Make your space <em>clearer</em>,<br />safer and more welcoming.</h1>
+            <p className="bp-slogan">Rust-free aluminium. Pre-drilled to mount in minutes. Built for the outdoors.</p>
             <p className="bp-lead">
-              We are a brand-focused company dedicated to the design, development and sale of practical
-              signage products — created for homes, pools, driveways and the everyday places that matter.
+              From &ldquo;Private Property&rdquo; and pool rules to parking, no-smoking and delivery notes — our
+              yard signs say clearly what matters, so homes, pools and driveways feel safer and more considered.
             </p>
             <div className="bp-actions">
               <a href="#products" className="bp-btn bp-btn-primary">Explore Our Products <Check size={16} /></a>
