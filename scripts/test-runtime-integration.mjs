@@ -249,7 +249,8 @@ try {
   await operationsContext.route("**/*", route => new URL(route.request().url()).origin === base ? route.continue() : route.abort());
   await operationsContext.addCookies(operationsLogin.headers.getSetCookie().filter(value => value.startsWith("amazon_bulk_ad_session=")).map(value => { const pair = value.split(";")[0]; const i = pair.indexOf("="); return { name: pair.slice(0,i), value: pair.slice(i+1), domain: "127.0.0.1", path: "/", httpOnly: true, secure: false }; }));
   const operationsPage = await operationsContext.newPage();
-  await operationsPage.goto(base + "/");
+  // Root is now the public brand site; permission navigation lives in the ERP shell.
+  await operationsPage.goto(base + "/operations");
   // 二级菜单项经浮层渲染；打开有权限的板块浮层确认可见项存在。
   await operationsPage.getByRole("button", { name: "采购管理 二级菜单", exact: true }).first().click();
   // 首页高频直达/侧栏/抽屉可能同时渲染同名「采购订单」链接；断言目的仅为「存在可见项」，取首个避免 strict-mode 多元素歧义。
