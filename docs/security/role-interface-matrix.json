@@ -1,0 +1,4238 @@
+{
+  "summary": {
+    "generatedAt": "2026-11-24T12:38:57.319Z",
+    "totalRoutes": 251,
+    "protected": 250,
+    "publicOrUnprotected": 1,
+    "workspaceFenced": 225,
+    "authKindCounts": {
+      "accessEdit": 7,
+      "accessView": 7,
+      "apiPermission": 193,
+      "authEndpoint": 33,
+      "sessionUser": 57,
+      "amazonRead": 29,
+      "publicHealth": 8,
+      "mcpBearer": 9,
+      "liliOAuth": 4,
+      "wmsAccess": 14,
+      "pointsAccess": 10,
+      "researchAccess": 4,
+      "workspacesAccess": 2
+    },
+    "note": "公开/未保护条目为认证端点、健康检查、MCP Bearer 端点与低敏遥测；静态分析不执行路由。"
+  },
+  "routes": [
+    {
+      "route": "/accounts/access/effective",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "accessEdit",
+        "accessView",
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "accounts"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/accounts/access/matrix",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "accessEdit",
+        "accessView",
+        "apiPermission",
+        "authEndpoint",
+        "sessionUser"
+      ],
+      "moduleIds": [
+        "accounts"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/accounts/access/preview",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "accessEdit",
+        "accessView",
+        "apiPermission",
+        "authEndpoint",
+        "sessionUser"
+      ],
+      "moduleIds": [
+        "accounts"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/accounts/access",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "authKinds": [
+        "accessEdit",
+        "accessView",
+        "apiPermission",
+        "authEndpoint",
+        "sessionUser"
+      ],
+      "moduleIds": [
+        "accounts"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/accounts/approvals",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "authKinds": [
+        "accessEdit",
+        "accessView",
+        "apiPermission",
+        "authEndpoint",
+        "sessionUser"
+      ],
+      "moduleIds": [
+        "accounts"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/accounts/mcp/scopes",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "authKinds": [
+        "accessEdit",
+        "accessView",
+        "apiPermission",
+        "authEndpoint",
+        "sessionUser"
+      ],
+      "moduleIds": [
+        "accounts"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/accounts/points/templates",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "authKinds": [
+        "accessEdit",
+        "accessView",
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "accounts"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/accounts/role-permissions",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "accounts"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/accounts/roles",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "accounts"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/accounts/team-members",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "authKinds": [
+        "apiPermission",
+        "authEndpoint"
+      ],
+      "moduleIds": [
+        "accounts"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/[agentId]/executions",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/[agentId]",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/approvals/[approvalId]",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "approve"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/evaluations",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/listing/executions",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/listing/projects",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/listing",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/market/executions",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/market/projects",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/market/selection-evidence",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/market/selection-local",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents",
+        "products"
+      ],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/market/selection-reviews",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents",
+        "products"
+      ],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/market/selection-slugs",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents",
+        "products"
+      ],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/market/selection-suppliers",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents",
+        "products"
+      ],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/orchestrator/executions",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/orchestrator",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/ppc/actions",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/ppc/audits/[auditId]/apply",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "approve"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/ppc/audits/[auditId]",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/ppc/audits",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/ppc/executions",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/product/executions",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/product/projects",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/supplier/projects",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/agents/tools",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/ai-settings",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "authKinds": [
+        "apiPermission",
+        "authEndpoint"
+      ],
+      "moduleIds": [
+        "settings"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/ai-settings/test-chat",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "settings"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/ai/chat/conversations/[id]/messages",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission",
+        "authEndpoint",
+        "sessionUser"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/ai/chat/conversations/[id]",
+      "methods": [
+        "GET",
+        "PATCH",
+        "DELETE"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "view",
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/ai/chat/conversations/[id]/runs/[runId]/cancel",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/ai/chat/conversations/[id]/runs/[runId]",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/ai/chat/conversations",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "view",
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/ai/chat/data-sources",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "view",
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/amazon/catalog-workbench/items",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "amazonRead",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/amazon/catalog-workbench",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "amazonRead",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/amazon/inventory-workbench/asins",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "amazonRead",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/amazon/inventory-workbench",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "amazonRead",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/amazon/main-images",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "amazonRead",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/approvals/center",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/assets/[...key]",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/assets/upload",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "listingAi"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/audit/versions",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "versions"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/auth/login",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "authEndpoint",
+        "publicHealth",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/auth/logout",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "authEndpoint",
+        "publicHealth",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/auth/me",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "authEndpoint",
+        "publicHealth",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/auth/register",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "authEndpoint",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/dashboard",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "authEndpoint",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/files/[id]/download",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "workspace"
+      ],
+      "actions": [
+        "export"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/files",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "workspace"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/files/upload",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "workspace"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/health",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "public_or_unprotected"
+    },
+    {
+      "route": "/image-upscale/batches/[batchId]/zip",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "imageUpscale"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/image-upscale/jobs/[id]/download",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "imageUpscale"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/image-upscale/jobs/[id]",
+      "methods": [
+        "GET",
+        "POST",
+        "DELETE"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "imageUpscale"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/image-upscale",
+      "methods": [
+        "POST",
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "imageUpscale"
+      ],
+      "actions": [
+        "create",
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/integrations/amazon/ads/changes",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "amazonRead",
+        "apiPermission",
+        "sessionUser"
+      ],
+      "moduleIds": [
+        "settings"
+      ],
+      "actions": [
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/integrations/amazon/ads/data",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "amazonRead",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/integrations/amazon/ads/oauth/callback",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "settings"
+      ],
+      "actions": [
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/integrations/amazon/ads/oauth/start",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "settings"
+      ],
+      "actions": [
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/integrations/amazon/ads/profiles",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "amazonRead",
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "settings"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/integrations/amazon/ads/reports",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission",
+        "publicHealth"
+      ],
+      "moduleIds": [
+        "settings"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/integrations/amazon/ads/sync",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "settings"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/integrations/amazon/sp-api/bindings",
+      "methods": [],
+      "authKinds": [
+        "apiPermission",
+        "authEndpoint",
+        "sessionUser"
+      ],
+      "moduleIds": [
+        "settings"
+      ],
+      "actions": [
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/integrations/amazon/sp-api/credentials",
+      "methods": [],
+      "authKinds": [
+        "apiPermission",
+        "authEndpoint",
+        "sessionUser"
+      ],
+      "moduleIds": [
+        "settings"
+      ],
+      "actions": [
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/integrations/amazon/sp-api/oauth/callback",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "amazonRead",
+        "authEndpoint",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/integrations/amazon/sp-api/oauth/start",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "settings"
+      ],
+      "actions": [
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/integrations/catalog",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "settings"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/integrations/sellersprite",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission",
+        "authEndpoint"
+      ],
+      "moduleIds": [
+        "settings"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/integrations/sellfox/credentials",
+      "methods": [
+        "GET",
+        "PUT",
+        "DELETE"
+      ],
+      "authKinds": [
+        "authEndpoint",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/integrations/sellfox/credentials/test",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "authEndpoint",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/internal/amazon/execution",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "mcpBearer"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/jobs/[id]/retry",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "tasks"
+      ],
+      "actions": [
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/jobs/[id]",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission",
+        "authEndpoint",
+        "sessionUser"
+      ],
+      "moduleIds": [
+        "tasks"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/jobs",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "tasks"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/lili/[...path]",
+      "methods": [],
+      "authKinds": [
+        "amazonRead",
+        "apiPermission",
+        "liliOAuth"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/lili/call-quota",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission",
+        "authEndpoint",
+        "sessionUser"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/lili/devices",
+      "methods": [],
+      "authKinds": [
+        "amazonRead",
+        "apiPermission",
+        "liliOAuth"
+      ],
+      "moduleIds": [
+        "settings"
+      ],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/lili/oauth/[action]",
+      "methods": [],
+      "authKinds": [
+        "liliOAuth",
+        "mcpBearer"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/lili/pair",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "amazonRead",
+        "liliOAuth"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/listing-ai/chat-history",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "listingAi"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/listing-ai/chat",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "listingAi"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/listing-ai/gallery-saves",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "listingAi"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/listing-ai/generate-description",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "listingAi"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/listing-ai/generate-images",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "listingAi"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/listing-ai/generate-title",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "listingAi"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/listing-ai/optimize",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "listingAi"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/listing-ai/studio/export",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission",
+        "authEndpoint",
+        "sessionUser"
+      ],
+      "moduleIds": [
+        "listingAi"
+      ],
+      "actions": [
+        "export"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/listing-ai/studio/rewrite",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "listingAi"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/listing-ai/studio",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "listingAi"
+      ],
+      "actions": [
+        "view",
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/listing-ai/workspace",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "listingAi"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/mcp/amazon",
+      "methods": [
+        "POST",
+        "GET"
+      ],
+      "authKinds": [
+        "amazonRead",
+        "mcpBearer"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/mcp/sellfox",
+      "methods": [
+        "POST",
+        "GET"
+      ],
+      "authKinds": [
+        "mcpBearer"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/notifications/user",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "authKinds": [
+        "authEndpoint",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/notifications/wecom",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission",
+        "authEndpoint",
+        "sessionUser"
+      ],
+      "moduleIds": [
+        "settings"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/notifications/wecom/settings",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "authKinds": [
+        "apiPermission",
+        "authEndpoint"
+      ],
+      "moduleIds": [
+        "settings"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/observability/metrics",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission",
+        "publicHealth"
+      ],
+      "moduleIds": [
+        "settings"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/observability/vitals",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "publicHealth"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/amazon-fx-rate",
+      "methods": [
+        "GET",
+        "POST",
+        "DELETE"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/amazon-mcp",
+      "methods": [],
+      "authKinds": [
+        "amazonRead",
+        "mcpBearer",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/amazon-sku-cost",
+      "methods": [
+        "GET",
+        "POST",
+        "DELETE"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/amazon-stores",
+      "methods": [],
+      "authKinds": [
+        "amazonRead",
+        "apiPermission"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/assembly",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH"
+      ],
+      "authKinds": [
+        "sessionUser",
+        "wmsAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/buybox-traffic-trend",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/connection/validate",
+      "methods": [],
+      "authKinds": [
+        "apiPermission",
+        "authEndpoint",
+        "sessionUser"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/data-quality",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/ext",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/fba-customs-profiles",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "sessionUser",
+        "wmsAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/fba-customs-templates",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "sessionUser",
+        "wmsAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/fba-local-labels",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "sessionUser",
+        "wmsAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/fba-local-plans",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "sessionUser",
+        "wmsAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/fba-remote-actions",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "sessionUser",
+        "wmsAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/fba-workflow-options",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "sessionUser",
+        "wmsAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/finance-attachments/[id]",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/finance-attachments",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view",
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/finance-auxiliary",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/finance-bank",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/finance-catalog",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/finance-close-reviews",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/finance-expenses",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/finance-external-sources",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "amazonRead",
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/finance-fx-revaluations",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "amazonRead",
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/finance-ledger",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/finance-ledger/sources",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view",
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/finance-open-items",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/finance-reports",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/finance-structure",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/finance-transaction-analytics",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/finance-voucher-import",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/finance-voucher-import/workbook",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/finance-voucher-templates",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/freshness",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "amazonRead",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/inventory-health",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/inventory/snapshots",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "amazonRead",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/mcp-isolation",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "amazonRead",
+        "apiPermission",
+        "mcpBearer"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/metrics/daily",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission",
+        "authEndpoint",
+        "sessionUser"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/ops-extensions",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/procurement/approvals",
+      "methods": [
+        "PATCH"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "approve"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/procurement/invoices",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/procurement/plans",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/procurement",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/product-period-analytics",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/products/images/[fileId]",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "amazonRead",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/products",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "amazonRead",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/profit-report",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/readiness",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "amazonRead",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/replenishment-signals",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/replenishment",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "authKinds": [
+        "amazonRead",
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/return-analytics",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/schedules",
+      "methods": [],
+      "authKinds": [
+        "apiPermission",
+        "authEndpoint",
+        "sessionUser"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/settlement-allocations",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/settlement-monthly-summary",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/settlement-sku-pivot",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/sku-profit-final",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "amazonRead",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/sync-center/approvals",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission",
+        "mcpBearer"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/sync-center/exports",
+      "methods": [],
+      "authKinds": [
+        "amazonRead",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/sync-center/replica",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "amazonRead",
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/sync-center",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "amazonRead",
+        "apiPermission",
+        "mcpBearer"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/sync-runs",
+      "methods": [],
+      "authKinds": [
+        "apiPermission",
+        "authEndpoint",
+        "sessionUser"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/wimoor-field-parity",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "operations"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/wms-aging-schedules",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "wms"
+      ],
+      "actions": [
+        "view",
+        "approve"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/wms-aging-snapshots",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "wms"
+      ],
+      "actions": [
+        "view",
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/wms-cost-adjustments",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "authEndpoint",
+        "publicHealth",
+        "sessionUser",
+        "wmsAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/wms-inventory-risk",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "wmsAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/wms-overseas-charges",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "sessionUser",
+        "wmsAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/wms-stocktake-print",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "sessionUser",
+        "wmsAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/wms/[kind]",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH"
+      ],
+      "authKinds": [
+        "wmsAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/wms/approvals",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "sessionUser",
+        "wmsAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/operations/wms/commands",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "sessionUser",
+        "wmsAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/points/adjust",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "pointsAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/points/ledger",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "pointsAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/points/override",
+      "methods": [
+        "PUT",
+        "GET"
+      ],
+      "authKinds": [
+        "pointsAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/points/overview",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "pointsAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/points/policy",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "authKinds": [
+        "pointsAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/points/price",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "pointsAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/points/requests/[id]",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "pointsAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/points/requests",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "pointsAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/points/spend",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "pointsAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/points/summary",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "pointsAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/products/[sku]/detail",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "products"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/products/[sku]/meeting-notes",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH",
+        "DELETE"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "products"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/products/[sku]",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "products"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/products/[sku]/video-plan",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "products"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/products/catalogs",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "products"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/products/conclusion-files/[id]/download",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "products"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/products/conclusion-files/upload",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "products"
+      ],
+      "actions": [
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/products/export/[id]/download",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "products"
+      ],
+      "actions": [
+        "export"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/products/export/[id]",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission",
+        "authEndpoint",
+        "sessionUser"
+      ],
+      "moduleIds": [
+        "products"
+      ],
+      "actions": [
+        "export"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/products/export",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "products"
+      ],
+      "actions": [
+        "export"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/products/file-assets/[id]/download",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "products"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/products/file-assets/upload",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "products"
+      ],
+      "actions": [
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/products/image-assets/upload",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "products"
+      ],
+      "actions": [
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/products/image-urls",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "products"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/products/patent-files/upload",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "products"
+      ],
+      "actions": [
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/products",
+      "methods": [],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "products"
+      ],
+      "actions": [
+        "view",
+        "edit",
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/products/video-assets/upload",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "products"
+      ],
+      "actions": [
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/saihu-search-merge/history",
+      "methods": [
+        "GET",
+        "POST",
+        "DELETE"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "searchMerge"
+      ],
+      "actions": [
+        "view",
+        "create",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/selection-research/[id]/report/[fileId]",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "agents"
+      ],
+      "actions": [
+        "export"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/selection-research/[id]/report",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission",
+        "researchAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/selection-research/[id]",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission",
+        "researchAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/selection-research/discover",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "amazonRead",
+        "apiPermission",
+        "mcpBearer",
+        "researchAccess",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/selection-research",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "researchAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/sellfox/[domain]/[id]",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/sellfox/[domain]/export",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "export"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/sellfox/[domain]",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/sellfox/ads-proposals",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/sellfox/dataset/export",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "export"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/sellfox/dataset",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/sellfox/dimensions",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/sellfox/endpoint-records",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/sellfox/endpoints",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "view",
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/sellfox/full-sync",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/sellfox/fx-rates",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/sellfox/hub",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/sellfox/order-detail",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/sellfox/orders",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/sellfox/overview",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/sellfox/performance/export",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "export"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/sellfox/performance",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/sellfox/reference-data",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/sellfox/restock",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/sellfox/sales",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/sellfox/schedules",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "view",
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/sellfox/shipments",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/sellfox/store-grants",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/sellfox/sync",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "sellfox"
+      ],
+      "actions": [
+        "create"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/skills/[slug]/export/[downloadId]",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/skills/[slug]",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/skills/[slug]/run",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/skills",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/skills/runs/[id]/document",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/skills/runs/[id]",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/skills/runs",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/system/worker-health",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "settings"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/user-preferences/[key]",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "authKinds": [
+        "authEndpoint",
+        "publicHealth",
+        "sessionUser"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": false,
+      "status": "protected"
+    },
+    {
+      "route": "/workspace/draft-runs",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "workspace"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/workspace/snapshot",
+      "methods": [
+        "GET",
+        "PUT",
+        "DELETE"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "workspace"
+      ],
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/workspace/workbook-files/[id]/download",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "workspace"
+      ],
+      "actions": [
+        "view"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/workspace/workbook-files/upload",
+      "methods": [
+        "POST"
+      ],
+      "authKinds": [
+        "apiPermission"
+      ],
+      "moduleIds": [
+        "workspace"
+      ],
+      "actions": [
+        "edit"
+      ],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/workspaces/members",
+      "methods": [
+        "GET"
+      ],
+      "authKinds": [
+        "sessionUser",
+        "workspacesAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    },
+    {
+      "route": "/workspaces",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authKinds": [
+        "authEndpoint",
+        "sessionUser",
+        "workspacesAccess"
+      ],
+      "moduleIds": [],
+      "actions": [],
+      "workspaceFence": true,
+      "status": "protected"
+    }
+  ]
+}

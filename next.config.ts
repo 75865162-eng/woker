@@ -30,10 +30,28 @@ const nextConfig: NextConfig = {
     return [...namespaceRewrites(), ...amazonSlugRewrites()];
   },
   async headers() {
+    // CSP 白名单：所有第三方数据/LLM/SP-API 均为服务端调用，浏览器只连同源。
+    // script/style 的 unsafe-inline 是 Next.js App Router hydration 与 Tailwind 运行时所需；
+    // 图片仅放行本地与 Amazon 商品图 CDN（与 image-url.ts 白名单一致）。
+    // ERP_CSP_REPORT_ONLY=true 时只上报不拦截，用于灰度观察后再收紧。
+    const cspDirectives = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https://m.media-amazon.com https://images-na.ssl-images-amazon.com https://images-eu.ssl-images-amazon.com https://images-fe.ssl-images-amazon.com",
+      "font-src 'self' data:",
+      "connect-src 'self'",
+      "media-src 'self'",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'self'",
+    ];
+    const cspName = process.env.ERP_CSP_REPORT_ONLY === "true" ? "Content-Security-Policy-Report-Only" : "Content-Security-Policy";
     const headers = [
       { key: "X-Content-Type-Options", value: "nosniff" },
       { key: "X-Frame-Options", value: "SAMEORIGIN" },
-      { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+      { key: cspName, value: cspDirectives.join("; ") },
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
       { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
       { key: "X-Permitted-Cross-Domain-Policies", value: "none" },

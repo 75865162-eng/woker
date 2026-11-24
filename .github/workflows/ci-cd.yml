@@ -175,6 +175,10 @@ jobs:
         if: steps.plan.outputs.release == 'true'
         run: npm run lint
 
+      - name: Supply-chain audit (baseline + new-finding gate)
+        if: steps.plan.outputs.release == 'true'
+        run: npm run audit:deps
+
       - name: Build
         if: steps.plan.outputs.release == 'true'
         run: npm run build
