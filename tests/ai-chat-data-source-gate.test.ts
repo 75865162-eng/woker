@@ -102,7 +102,7 @@ test("Amazon 凭证身份非全量，按 id 复核库内 tools/scopes", () => {
 
 test("orchestrator 透传 enabledProviders", () => {
   assert.match(orchestrator, /enabledProviders: ChatDataProvider\[\]/);
-  assert.match(orchestrator, /buildChatRuntime\(scope, input\.sessionGuard, input\.enabledProviders\)/);
+  assert.match(orchestrator, /buildChatRuntime\(scope, input\.sessionGuard, input\.enabledProviders, settings, input\.runId\)/);
 });
 
 test("前端配置面板：预检、勾选、保存、未配置禁用输入", () => {
