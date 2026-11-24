@@ -1,0 +1,73 @@
+{
+  "policy": {
+    "description": "供应链漏洞闸门基线：已知漏洞登记豁免，新增漏洞或更严重级别即阻断。",
+    "auditLevel": "high",
+    "note": "auditLevel=high 表示 moderate 及以下不阻断但记录；豁免项必须带 reason 与 reviewBy。",
+    "reviewCadenceDays": 90
+  },
+  "accepted": [
+    {
+      "package": "next",
+      "severity": "critical",
+      "reason": "Next.js 15.x 全线存在 Image Optimization SVG RCE/SSG 缓存投毒公告；修复需 major 升级到 16.x，属独立迁移，已列入升级 backlog。当前部署禁用 SVG 上传并通过 CSP img-src 收紧。",
+      "backlog": "upgrade-next-16",
+      "reviewBy": "2026-12-31"
+    },
+    {
+      "package": "prisma",
+      "severity": "high",
+      "reason": "@prisma/config -> effect 传递依赖公告；修复需 prisma 6.x，与当前 Prisma 7 为 major 回退，不可直接降级。等待上游在 7.x 线修复。",
+      "backlog": "prisma-effect-advisory",
+      "reviewBy": "2026-12-31"
+    },
+    {
+      "package": "@prisma/config",
+      "severity": "high",
+      "reason": "经 effect 传递引入，同上，随 prisma 7.x 上游修复。",
+      "backlog": "prisma-effect-advisory",
+      "reviewBy": "2026-12-31"
+    },
+    {
+      "package": "effect",
+      "severity": "high",
+      "reason": "prisma 7 传递依赖，等待上游升级。",
+      "backlog": "prisma-effect-advisory",
+      "reviewBy": "2026-12-31"
+    },
+    {
+      "package": "sharp",
+      "severity": "high",
+      "reason": "图片处理传递依赖公告，fix 可用；升级纳入常规依赖更新批次并回归图片链路测试。",
+      "backlog": "deps-routine-upgrade",
+      "reviewBy": "2026-12-15"
+    },
+    {
+      "package": "undici",
+      "severity": "high",
+      "reason": "HTTP 客户端多个公告，fix 可用；随 Node 22 运行时依赖批次升级。",
+      "backlog": "deps-routine-upgrade",
+      "reviewBy": "2026-12-15"
+    },
+    {
+      "package": "brace-expansion",
+      "severity": "high",
+      "reason": "构建工具传递依赖，fix 可用；随常规依赖更新处理。",
+      "backlog": "deps-routine-upgrade",
+      "reviewBy": "2026-12-15"
+    },
+    {
+      "package": "source-map-js",
+      "severity": "high",
+      "reason": "样式工具传递依赖，fix 可用；随常规依赖更新处理。",
+      "backlog": "deps-routine-upgrade",
+      "reviewBy": "2026-12-15"
+    },
+    {
+      "package": "fast-uri",
+      "severity": "moderate",
+      "reason": "中危，低于阻断阈值，仅记录跟踪。",
+      "backlog": "deps-routine-upgrade",
+      "reviewBy": "2026-12-15"
+    }
+  ]
+}

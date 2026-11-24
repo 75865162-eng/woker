@@ -43,6 +43,7 @@
     "setup:realesrgan:linux": "bash scripts/setup-realesrgan-ncnn-linux.sh",
     "lint": "eslint",
     "typecheck": "node scripts/runtime/typecheck.mjs",
+    "audit:deps": "node scripts/runtime/audit-dependencies.mjs",
     "test": "node scripts/runtime/run-unit-tests.mjs",
     "verify:acceptance": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/acceptance-run.ts",
     "verify:acceptance:local": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/acceptance-run.ts --in-place",
