@@ -267,6 +267,12 @@
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 
+/* 虚拟行容器：限制视口高度，useVirtualRows 才有稳定的 clientHeight 计算可见窗口。
+   仅对超过阈值的大页追加该类，小页保持原有自然高度。 */
+.sellfox-ui .sf-table-wrap.sf-virtual-scroll {
+  max-height: min(72vh, 760px);
+}
+
 /* 加载遮罩：等待有明确反馈，不把空 tbody 误读成"没有数据"。 */
 .sellfox-ui .sf-loading-mask {
   position: absolute;

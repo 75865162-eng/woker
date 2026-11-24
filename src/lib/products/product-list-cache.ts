@@ -3,18 +3,17 @@ import { prisma } from "@/lib/db/prisma";
 import type { Product, ProductListSummary } from "@/lib/products/types";
 import type { ProductListSource } from "@/lib/products/list-query";
 import type { ProductListSort } from "@/lib/products/list-sort";
+import { LruMap } from "@/lib/cache/lru-map";
 import { Prisma } from "@prisma/client";
-
-type CachedValue<T> = {
-  expiresAt: number;
-  value: T;
-};
-
-const listResponseCache = new Map<string, CachedValue<unknown>>();
-const listSummaryCache = new Map<string, CachedValue<ProductListSummary>>();
 
 const listResponseCacheTtlMs = 30_000;
 const listSummaryCacheTtlMs = 60_000;
+/** 内存快照缓存上限：持久化表仍保留全量，内存层只留热点，避免无界增长。 */
+const LIST_RESPONSE_CACHE_LIMIT = 500;
+const LIST_SUMMARY_CACHE_LIMIT = 500;
+
+const listResponseCache = new LruMap<unknown>({ maxEntries: LIST_RESPONSE_CACHE_LIMIT });
+const listSummaryCache = new LruMap<ProductListSummary>({ maxEntries: LIST_SUMMARY_CACHE_LIMIT });
 
 export function createProductListScopeKey(input: {
   organizationId: string;
@@ -69,16 +68,10 @@ export function createProductListResponseCacheKey(input: {
 
 export async function getCachedProductListResponse<T>(cacheKey: string) {
   const cached = listResponseCache.get(cacheKey);
-  if (!cached) {
+  if (cached === undefined) {
     return getPersistedProductListResponse<T>(cacheKey);
   }
-
-  if (cached.expiresAt < Date.now()) {
-    listResponseCache.delete(cacheKey);
-    return getPersistedProductListResponse<T>(cacheKey);
-  }
-
-  return cached.value as T;
+  return cached as T;
 }
 
 async function getPersistedProductListResponse<T>(cacheKey: string) {
@@ -107,10 +100,9 @@ async function getPersistedProductListResponse<T>(cacheKey: string) {
       return null;
     }
 
-    listResponseCache.set(cacheKey, {
-      expiresAt,
-      value: cached.payload,
-    });
+    // 内存层 TTL 不超过持久化层的剩余有效期，避免内存比 DB 更“新”导致陈旧读。
+    const remainingMs = expiresAt - Date.now();
+    if (remainingMs > 0) listResponseCache.set(cacheKey, cached.payload, remainingMs);
     return cached.payload as T;
   } catch {
     return null;
@@ -127,10 +119,7 @@ export async function setCachedProductListResponse<T>(
   value: T,
 ) {
   const expiresAt = Date.now() + listResponseCacheTtlMs;
-  listResponseCache.set(cacheKey, {
-    expiresAt,
-    value,
-  });
+  listResponseCache.set(cacheKey, value, listResponseCacheTtlMs);
 
   try {
     await prisma.productListCacheRecord.upsert({
@@ -158,25 +147,12 @@ export async function setCachedProductListResponse<T>(
   }
 }
 
-export function getCachedProductListSummary(cacheKey: string) {
-  const cached = listSummaryCache.get(cacheKey);
-  if (!cached) {
-    return null;
-  }
-
-  if (cached.expiresAt < Date.now()) {
-    listSummaryCache.delete(cacheKey);
-    return null;
-  }
-
-  return cached.value;
+export function getCachedProductListSummary(cacheKey: string): ProductListSummary | null {
+  return listSummaryCache.get(cacheKey) ?? null;
 }
 
 export function setCachedProductListSummary(cacheKey: string, value: ProductListSummary) {
-  listSummaryCache.set(cacheKey, {
-    expiresAt: Date.now() + listSummaryCacheTtlMs,
-    value,
-  });
+  listSummaryCache.set(cacheKey, value, listSummaryCacheTtlMs);
 }
 
 export function updateCachedProductListSummariesForProductChange(input: {

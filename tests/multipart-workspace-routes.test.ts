@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { File } from "node:buffer";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -38,23 +38,29 @@ const routes = [
   { name: "workbook-files", file: "workspace/workbook-files/upload", filename: "fixture.xlsx", mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", files: 1 },
 ] as const;
 
-function fixture(route: typeof routes[number]) {
+function fixture(route: typeof routes[number], opts: { duplicate?: boolean } = {}) {
   const effects: Effect[] = [];
   const lookups: string[] = [];
   const fileRows: FileData[] = [];
   let job: Record<string, unknown>;
   const prisma = {
     organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) },
+    fileObject: {
+      findFirst: async () => opts.duplicate ? {
+        id: "dup-file", originalName: "existing.xlsx", createdAt: new Date(0),
+        jobs: [{ id: "dup-job", status: "done" }],
+      } : null,
+      create: async ({ data }: { data: FileData }) => {
+        effects.push({ kind: "fileObject.create", data });
+        fileRows.push(data);
+        return { ...data, id: `file-${fileRows.length}`, createdAt: new Date(0) };
+      },
+    },
     workspaceScope: { findUnique: async ({ where }: { where: { organizationId_id: { organizationId: string; id: string } } }) => {
       assert.equal(where.organizationId_id.organizationId, "org-a");
       const id = where.organizationId_id.id;
       lookups.push(id);
       return id.startsWith("allowed-") ? { id } : null;
-    } },
-    fileObject: { create: async ({ data }: { data: FileData }) => {
-      effects.push({ kind: "fileObject.create", data });
-      fileRows.push(data);
-      return { ...data, id: `file-${fileRows.length}`, createdAt: new Date(0) };
     } },
     importJob: {
       create: async ({ data }: { data: FileData }) => { effects.push({ kind: "importJob.create", data }); return job = { ...data, id: "job-a", status: "queued", progress: 0 }; },
@@ -84,7 +90,7 @@ function fixture(route: typeof routes[number]) {
     return chain;
   };
   const api = loadModule<Route>(`src/app/api/${route.file}/route.ts`, {
-    "node:crypto": { randomUUID }, "node:path": { default: path }, "next/server": next, "@prisma/client": {},
+    "node:crypto": { randomUUID, createHash }, "node:path": { default: path }, "next/server": next, "@prisma/client": {},
     "@/lib/auth/api-permissions": permissions, "@/lib/workspace/access": access, "@/lib/workspace/scope": scope, "@/lib/db/prisma": { prisma },
     "@/lib/storage": { getStorageDriver: () => { effects.push({ kind: "getStorageDriver" }); return storage; }, getStorageType: () => "fixture" },
     "@/lib/audit/versioning": { recordDataChangeVersion: async (data: unknown) => { effects.push({ kind: "audit", data }); } },
@@ -140,3 +146,16 @@ for (const route of routes) {
     });
   }
 }
+
+test("files：同工作区重复文件（sha256 命中）返回 409 并拦截所有写入副作用", async () => {
+  const route = routes.find((item) => item.name === "files")!;
+  const state = fixture(route, { duplicate: true });
+  const response = await state.post("allowed-form");
+  assert.equal(response.status, 409);
+  const body = await response.json() as { error: string; duplicate?: { jobId?: string } };
+  assert.match(body.error, /重复导入/);
+  assert.equal(body.duplicate?.jobId, "dup-job");
+  assert.deepEqual(state.fileRows, []);
+  assert.equal(state.effects.some((effect) => effect.kind.startsWith("storage.put")), false, "重复文件不应重复存储");
+  assert.equal(state.effects.filter((effect) => effect.kind === "importJob.create").length, 0, "重复文件不应重复入队");
+});

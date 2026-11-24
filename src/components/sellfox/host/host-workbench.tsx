@@ -11,6 +11,8 @@ import { Dialog } from "@/components/ui/overlays";
 import { CopyableValue } from "@/components/sellfox/copyable-value";
 import { useColumnPreferences } from "@/lib/hooks/use-column-preferences";
 import { useSessionColumnWidths } from "@/lib/hooks/use-session-column-widths";
+import { useVirtualRows } from "@/lib/hooks/use-virtual-rows";
+import { estimateReplicaRowHeight, shouldVirtualizeRows } from "@/lib/sellfox/virtual-row-height";
 import { sellfoxSiteLabel } from "@/lib/sellfox/marketplace-site";
 import { normalizeWorkspaceScope } from "@/lib/workspace/scope";
 import { rangeForPreset, shanghaiToday, type DatePreset } from "@/lib/sellfox/replica-pages";
@@ -351,6 +353,16 @@ export function HostWorkbench({ page }: { page: HostPage }) {
     const extra = allColumns.filter((column) => !set.has(column.key));
     return [...ordered, ...extra];
   }, [allColumns, visibleColumnKeys]);
+  // 虚拟行：列结构固定 → 行高可预测；大页才窗口化，小页保持全量渲染。
+  const rowHeight = estimateReplicaRowHeight(columns);
+  const virtualEnabled = shouldVirtualizeRows(rows.length);
+  const virtualRows = useVirtualRows<HTMLDivElement>({
+    itemCount: rows.length,
+    rowHeight,
+    overscan: 8,
+    enabled: virtualEnabled && !loading,
+  });
+  const visibleRows = virtualEnabled ? rows.slice(virtualRows.startIndex, virtualRows.endIndex) : rows;
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<"csv" | "xlsx">("csv");
@@ -667,7 +679,7 @@ export function HostWorkbench({ page }: { page: HostPage }) {
             ) : null}
             {dataset.note ? <p className="sf-note">{dataset.note}</p> : null}
             {notice ? <p className="sf-notice" role="status">{notice}</p> : null}
-            <div className="sf-table-wrap">
+            <div ref={virtualEnabled ? virtualRows.containerRef : undefined} data-virtual-total={virtualEnabled ? rows.length : undefined} data-virtual-window={virtualEnabled ? `${virtualRows.startIndex}-${virtualRows.endIndex}` : undefined} className={`sf-table-wrap${virtualEnabled ? " sf-virtual-scroll" : ""}`}>
               <table>
                 <thead>
                   <tr>{columns.map((column) => (
@@ -687,13 +699,19 @@ export function HostWorkbench({ page }: { page: HostPage }) {
                       <div className="sf-empty" role="status"><strong>暂无数据</strong>该数据集已接入，但所选店铺与时间范围内没有快照。缺失不补 0。</div>
                     </td></tr>
                   ) : null}
-                  {!loading && !error ? rows.map((row, index) => (
-                    <tr key={String(row.id ?? index)}>
+                  {virtualEnabled && virtualRows.beforeHeight > 0 ? (
+                    <tr aria-hidden="true"><td colSpan={columns.length} style={{ height: `${virtualRows.beforeHeight}px`, padding: 0, border: 0 }} /></tr>
+                  ) : null}
+                  {!loading && !error ? visibleRows.map((row, index) => (
+                    <tr key={String(row.id ?? virtualRows.startIndex + index)}>
                       {columns.map((column) => (
                         <td key={column.key} className={isNumeric(column) ? "sf-num" : undefined} style={hostWidthStyle(getWidth(column.key))} title={cellText(column, row) || undefined}><Cell column={column} row={row} /></td>
                       ))}
                     </tr>
                   )) : null}
+                  {virtualEnabled && virtualRows.afterHeight > 0 ? (
+                    <tr aria-hidden="true"><td colSpan={columns.length} style={{ height: `${virtualRows.afterHeight}px`, padding: 0, border: 0 }} /></tr>
+                  ) : null}
                 </tbody>
                 {!loading && !error && rows.length && hasTotals ? (
                   <tfoot>
