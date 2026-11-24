@@ -252,7 +252,7 @@ try {
   await operationsPage.goto(base + "/");
   // 二级菜单项经浮层渲染；打开有权限的板块浮层确认可见项存在。
   await operationsPage.getByRole("button", { name: "采购管理 二级菜单", exact: true }).first().click();
-  // 浮层可能同时渲染侧栏与抽屉中的同名链接；断言目的仅为「存在可见项」，取首个避免 strict 多重匹配误报。
+  // 首页高频直达/侧栏/抽屉可能同时渲染同名「采购订单」链接；断言目的仅为「存在可见项」，取首个避免 strict-mode 多元素歧义。
   await operationsPage.getByRole("link", { name: "采购订单", exact: true }).first().waitFor();
   // 无 WMS 权限时「仓库管理」一级板块整体被过滤，其二级菜单按钮不应存在。
   assert.equal(await operationsPage.getByRole("button", { name: "仓库管理 二级菜单", exact: true }).count(), 0);

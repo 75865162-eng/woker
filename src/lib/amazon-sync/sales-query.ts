@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db/prisma";
 import { businessDate } from "./date-range";
 import { SyncInputError, type SyncScope } from "./policy";
 import { resolveProductDisplay } from "./product-master-resolver";
+import { forecastDemand, backtestForecast, type ForecastResult, type DemandObservation } from "@/lib/forecast";
 
 export type SalesQuery = { from?: string; to?: string; sellerAccountId?: string; marketplaceId?: string; taskId?: string; keyword?: string; direction: "asc" | "desc" };
 export function parseSalesQuery(p: URLSearchParams): SalesQuery {
@@ -245,6 +246,14 @@ export type SalesPeriodSummary = {
   previous: (SalesPeriodAgg & { complete: boolean }) | null;
   truncated: boolean; asOf: string;
 };
+
+/** 日均销量（文档 3.1 P2-7）：近 N 个完整发布日的真实平均，附窗口/有效天数/覆盖率。 */
+export type SalesDailyAverage = {
+  windowDays: number; effectiveDays: number; coverage: string;
+  unitsOrderedAvg: string | null; totalOrderItemsAvg: string | null;
+  sessionsAvg: string | null; pageViewsAvg: string | null;
+  salesAvg: SalesAmount[]; completeDates: string[]; asOf: string;
+};
 const PERIOD_MAX_ROWS = 20000;
 export const num = (v: unknown): number | null => { const s = typeof v === "string" ? v.trim() : ""; if (!s || !/^\d+(\.\d+)?$/.test(s)) return null; const n = Number(s); return Number.isFinite(n) ? n : null; };
 export function isoWeekOf(dateStr: string): { year: number; week: number; monday: string } {
@@ -404,4 +413,160 @@ export function topFromRows(rows: ProductSalesRow[], identityOf: (r: ProductSale
     .map(([identity, g]) => ({ identity, label: g.label, units: g.units ?? 0, sales: [...g.sales.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([currency, amount]) => ({ currency, amount: amount.toFixed(2) })), stores: g.stores.size }))
     .sort((a, b) => b.units - a.units || a.identity.localeCompare(b.identity))
     .slice(0, limit);
+}
+
+/* ===== 日均销量（文档 3.1 P2-7）：近 N 个完整发布日的真实平均 =====
+ * 口径护栏：
+ *  - 只用「完整发布日」：该业务日覆盖店铺数达到区间内最大店铺数，且该日销量指标非 null。
+ *  - 完整日不足窗口 N 时按实际有效天数计算，并如实给出覆盖率（不补零、不摊派缺失日）。
+ *  - 销售额按币种分列，绝不跨币种相加；订单商品项数不冒充订单数。
+ *  - 排除含今天/taskId 的历史回溯（今日未闭合，不进正式日均）。
+ */
+export function dailyAverageOf(rows: SalesRow[], windowDays: number, asOf: string): SalesDailyAverage {
+  const size = Math.min(90, Math.max(1, Math.floor(Number(windowDays) || 30)));
+  const empty: SalesDailyAverage = { windowDays: size, effectiveDays: 0, coverage: "0", unitsOrderedAvg: null, totalOrderItemsAvg: null, sessionsAvg: null, pageViewsAvg: null, salesAvg: [], completeDates: [], asOf };
+  if (!rows.length) return empty;
+  // 区间内期望店铺数 = 任一业务日出现的最大店铺数（按 sellerAccount|marketplace）。
+  const storesByDate = new Map<string, Set<string>>();
+  const rowsByDate = new Map<string, SalesRow[]>();
+  for (const row of rows) {
+    const store = `${row.sellerAccountId}|${row.marketplaceId}`;
+    if (!storesByDate.has(row.businessDate)) storesByDate.set(row.businessDate, new Set());
+    storesByDate.get(row.businessDate)!.add(store);
+    if (!rowsByDate.has(row.businessDate)) rowsByDate.set(row.businessDate, []);
+    rowsByDate.get(row.businessDate)!.push(row);
+  }
+  const expectedStores = Math.max(0, ...[...storesByDate.values()].map(s => s.size));
+  if (expectedStores === 0) return empty;
+  // 完整发布日：覆盖店铺数达标 且 该日所有行的销量指标均非 null（任一行缺失则不完整）。
+  const completeDates = [...rowsByDate.keys()]
+    .filter(date => (storesByDate.get(date)?.size ?? 0) >= expectedStores && (rowsByDate.get(date) ?? []).every(r => num(r.metrics?.unitsOrdered) !== null))
+    .sort((a, b) => b.localeCompare(a))
+    .slice(0, size)
+    .sort((a, b) => a.localeCompare(b));
+  const effectiveDays = completeDates.length;
+  if (!effectiveDays) return { ...empty, coverage: "0" };
+  const selected = completeDates.flatMap(d => rowsByDate.get(d) ?? []);
+  const sumField = (key: "unitsOrdered" | "totalOrderItems" | "sessions" | "pageViews"): string | null => {
+    const values = selected.map(r => num((r.metrics as Record<string, unknown> | undefined)?.[key])).filter((v): v is number => v !== null);
+    if (!values.length || values.length !== selected.length) return null;
+    const total = values.reduce((a, v) => a + v, 0);
+    return (total / effectiveDays).toFixed(2);
+  };
+  const salesMap = new Map<string, number>();
+  let salesComplete = true;
+  for (const row of selected) {
+    const sale = row.metrics?.orderedProductSales;
+    const amount = sale && typeof sale.amount === "string" && typeof sale.currencyCode === "string" && sale.currencyCode ? num(sale.amount) : null;
+    if (amount === null) { salesComplete = false; continue; }
+    salesMap.set(sale!.currencyCode!, (salesMap.get(sale!.currencyCode!) ?? 0) + amount);
+  }
+  if (!salesMap.size) salesComplete = false;
+  const salesAvg = salesComplete
+    ? [...salesMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([currency, amount]) => ({ currency, amount: (amount / effectiveDays).toFixed(2) }))
+    : [];
+  return {
+    windowDays: size, effectiveDays,
+    coverage: (effectiveDays / size).toFixed(2),
+    unitsOrderedAvg: sumField("unitsOrdered"),
+    totalOrderItemsAvg: sumField("totalOrderItems"),
+    sessionsAvg: sumField("sessions"),
+    pageViewsAvg: sumField("pageViews"),
+    salesAvg, completeDates, asOf,
+  };
+}
+
+/** 日均销量读取：复用 readSalesTraffic 的权限与版本口径拉全量已发布行，再应用层计算。 */
+export async function readSalesDailyAverage(scope: SyncScope, p: URLSearchParams, options: { cutoff?: Date; actor?: string } = {}): Promise<SalesDailyAverage> {
+  const windowDays = Math.min(90, Math.max(1, Math.floor(Number(p.get("windowDays")) || 30)));
+  const rows = await readSalesRowsForAggregation(scope, p, options);
+  return dailyAverageOf(rows, windowDays, (options.cutoff ?? new Date()).toISOString());
+}
+
+/* ===== 销量预测（文档 3.1 P2-8）：经过回测的独立预测对象 =====
+ * 口径护栏（文档 A3 / 9.1）：
+ *  - 预测是独立对象，含模型 method、窗口 horizonDays、回测误差 backtest、版本 version；
+ *    前端必须与真实销量分开呈现，不混排、不作为事实。
+ *  - 历史只用「完整发布日」的真实销量：覆盖店铺数达标且该日所有行 unitsOrdered 非 null；
+ *    缺日不补零、不外推，缺口交给 forecast 引擎按需阻断（NEEDS_DATA）。
+ *  - 基准日 asOf 取最新完整发布日（T+1，不含今日/未闭合日）。
+ *  - 回测为 walk-forward，每个 origin 只用其前历史；不足则明确返回 null，不臆造误差。
+ */
+export type SalesForecast = {
+  version: string;
+  status: "READY" | "NEEDS_DATA";
+  model: ForecastResult["method"];
+  confidence: ForecastResult["confidence"];
+  asOf: string;                       // 预测基准日（最新完整发布日）
+  horizonDays: number;                // 预测窗口
+  baseDailyP50: number | null;
+  horizonP50Total: number | null;
+  horizonP90Total: number | null;
+  points: ForecastResult["points"];   // 逐日 P50/P90（独立预测值）
+  backtest: {
+    version: string;
+    evaluatedPoints: number;
+    mape: number | null;
+    wape: number | null;
+    bias: number | null;
+    p90Coverage: number | null;
+    notes: string[];
+  } | null;
+  historyDays: number;                // 纳入训练的完整发布日数
+  reasons: string[];
+  missingInputs: string[];
+};
+
+/** 纯函数：把完整发布日的销量序列喂给预测引擎 + 走前回测。 */
+export function forecastFromRows(rows: SalesRow[], horizonDays: number, backtestDays: number): SalesForecast {
+  const horizon = Math.min(90, Math.max(1, Math.floor(Number(horizonDays) || 30)));
+  // 按业务日聚合真实销量；先确定区间内期望店铺数（任一业务日最大店铺数）。
+  const storesByDate = new Map<string, Set<string>>();
+  const unitsByDate = new Map<string, { sum: number; complete: boolean }>();
+  for (const row of rows) {
+    const store = `${row.sellerAccountId}|${row.marketplaceId}`;
+    if (!storesByDate.has(row.businessDate)) storesByDate.set(row.businessDate, new Set());
+    storesByDate.get(row.businessDate)!.add(store);
+    if (!unitsByDate.has(row.businessDate)) unitsByDate.set(row.businessDate, { sum: 0, complete: true });
+    const u = num(row.metrics?.unitsOrdered);
+    const acc = unitsByDate.get(row.businessDate)!;
+    if (u === null) acc.complete = false; else acc.sum += u;
+  }
+  const expectedStores = Math.max(0, ...[...storesByDate.values()].map(s => s.size));
+  // 完整发布日：店铺数达标且该日所有行 unitsOrdered 非 null。缺日/不完整日直接不进历史（不补零）。
+  const history: DemandObservation[] = [...unitsByDate.entries()]
+    .filter(([date, acc]) => acc.complete && (storesByDate.get(date)?.size ?? 0) >= expectedStores && expectedStores > 0)
+    .map(([date, acc]) => ({ date, units: acc.sum }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (!history.length || expectedStores === 0) {
+    return { version: "forecast-v1", status: "NEEDS_DATA", model: null, confidence: "UNKNOWN", asOf: "", horizonDays: horizon, baseDailyP50: null, horizonP50Total: null, horizonP90Total: null, points: [], backtest: null, historyDays: 0, reasons: [], missingInputs: ["完整发布日的真实销量历史"] };
+  }
+  const asOf = history[history.length - 1].date; // 最新完整发布日，不含今日/未闭合日
+  const forecast = forecastDemand({ history, asOf, horizonDays: horizon, lifecycle: "MATURE" });
+
+  // 走前回测：起点数量受 backtestDays 限制；每个 origin 只用其前历史（引擎内部保证）。
+  let backtest: SalesForecast["backtest"] = null;
+  const minTrain = 28;
+  if (forecast.status === "READY" && history.length >= minTrain + horizon + 1) {
+    const lastOrigin = shiftDays(asOf, -(horizon + 1)); // 最后一个可评估 origin（其预测窗内要有真实值）
+    const firstOrigin = history[Math.min(minTrain, history.length - 1)].date;
+    if (firstOrigin < lastOrigin) {
+      const bt = backtestForecast({ history, startDate: firstOrigin, endDate: shiftDays(lastOrigin, 1), horizonDays: horizon, stepDays: Math.max(1, Math.floor(backtestDays) || horizon) });
+      backtest = { version: bt.version, evaluatedPoints: bt.evaluatedPoints, mape: bt.mape, wape: bt.wape, bias: bt.bias, p90Coverage: bt.p90Coverage, notes: bt.notes };
+    }
+  }
+  return {
+    version: forecast.version, status: forecast.status, model: forecast.method, confidence: forecast.confidence,
+    asOf, horizonDays: horizon, baseDailyP50: forecast.baseDailyP50, horizonP50Total: forecast.horizonP50Total,
+    horizonP90Total: forecast.horizonP90Total, points: forecast.points, backtest, historyDays: history.length,
+    reasons: forecast.reasons, missingInputs: forecast.missingInputs,
+  };
+}
+
+/** 销量预测读取：复用 readSalesTraffic 的权限与版本口径拉全量已发布行，再独立生成预测对象。 */
+export async function readSalesForecast(scope: SyncScope, p: URLSearchParams, options: { cutoff?: Date; actor?: string } = {}): Promise<SalesForecast> {
+  const horizonDays = Math.min(90, Math.max(1, Math.floor(Number(p.get("horizonDays")) || 30)));
+  const backtestDays = Math.min(90, Math.max(1, Math.floor(Number(p.get("backtestDays")) || 14)));
+  const rows = await readSalesRowsForAggregation(scope, p, options);
+  return forecastFromRows(rows, horizonDays, backtestDays);
 }
