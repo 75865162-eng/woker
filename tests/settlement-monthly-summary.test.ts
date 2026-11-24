@@ -57,6 +57,20 @@ test("金额缺失按 0 计（不补零估算），仍计笔数", () => {
   assert.equal(rows[0].lineCount, 1);
 });
 
+test("金额解析兼容逗号小数分隔符(BRL/欧洲)：'115,31'=115.31、'-17,61'=-17.61", () => {
+  const rows = buildSettlementTypeRows([
+    line("Order", "BRL", "115,31", "2026-11-01"),
+    line("Refund", "BRL", "-17,61", "2026-11-01"),
+    line("Order", "EUR", "1.234,56", "2026-11-01"), // 点千分位+逗号小数
+  ]);
+  const order = rows.find(r => r.transactionType === "Order" && r.currency === "BRL")!;
+  assert.equal(order.amount, "115.31");
+  const refund = rows.find(r => r.transactionType === "Refund")!;
+  assert.equal(refund.amount, "-17.61");
+  const eur = rows.find(r => r.currency === "EUR")!;
+  assert.equal(eur.amount, "1234.56");
+});
+
 test("口径声明：仅 ATTRIBUTED、原币不折算、distinct 订单、不接赛狐", () => {
   assert.match(SETTLEMENT_MONTHLY_BASIS, /ATTRIBUTED/);
   assert.match(SETTLEMENT_MONTHLY_BASIS, /原币不折算/);

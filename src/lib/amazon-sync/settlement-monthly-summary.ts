@@ -38,9 +38,20 @@ export type SettlementMonthRow = {
   amount: string;
 };
 
+/**
+ * 安全十进制解析：兼容 Amazon 结算报告里逗号作小数分隔符的 locale 格式
+ * （如 BRL/欧洲站 "115,31" = 115.31、"-17,61" = -17.61）。
+ * 规则：含逗号且不含点 → 逗号视为小数点；同时含点和逗号 → 点为千分位、逗号为小数点；
+ * 纯数字（含负号/单点）按原样解析。无法解析返回 0（不臆造）。
+ */
 function dec(value: unknown): number {
   if (typeof value !== "string" || !value.trim()) return 0;
-  const n = Number(value);
+  let normalized = value.trim();
+  if (normalized.includes(",")) {
+    if (normalized.includes(".")) normalized = normalized.replace(/\./g, ""); // 点=千分位
+    normalized = normalized.replace(",", "."); // 逗号=小数点
+  }
+  const n = Number(normalized);
   return Number.isFinite(n) ? n : 0;
 }
 
