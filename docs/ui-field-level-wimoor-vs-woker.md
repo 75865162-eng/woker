@@ -224,3 +224,52 @@
 
 - 本地用 `127.0.0.1:3000` 访问时，dev 的 CSRF 把 expectedOrigin 规范化为 `localhost`，与该 Origin 不匹配 → 所有写请求（含列偏好 PUT）返回 **403**；改用 `localhost:3000` 访问即恢复正常，生产配 `AUTH_PUBLIC_ORIGIN` 不受影响。这是既有 dev 环境配置坑，非本次代码缺陷。验证持久化时用 `localhost` 完成。
 - 本地销量/广告快照表为 0 行（真实数据在服务器），故复制按钮的实际数据行无法本地视觉验收；代码层已通过 typecheck/lint，逻辑正确。如需视觉验收可从服务器导一批真实数据回本地。
+
+---
+
+## 13. P0–P4 全量闭环与验证循环（2026-11-24）
+
+按用户要求把 P0 到 P4 全部推进并做完整验证循环。承接第 12 节 P1/P2 的成果，本轮补齐 P3/P4 剩余项并对 P0–P2 做复验；坚持「不臆造数据/不造假开关」红线。
+
+### 13.1 分级定义与落地结果
+
+| 级 | 项 | 本轮结论 | 实现 / 依据 |
+| --- | --- | --- | --- |
+| P0 | ASIN/SKU/标题一键复制 | ✅ 复验通过 | `copyable-value.tsx` 已接入复刻台与 host 台，hover 显现复制按钮 + `aria-live` 反馈。 |
+| P1 | 金额列默认降序 | ✅ 复验通过 | 销量页 `subtotal`、绩效页 `saleRevenue` 默认 desc；浏览器实测请求带 `sortBy=subtotal&sortOrder=desc`。 |
+| P1 | 排序走服务端 | ✅ 核实无需改 | 复刻台排序本就在 SQL 层 `ORDER BY`（`workbench-read.ts`），非内存排序。 |
+| P1 | 品类维度 tab | ⚠️ 条件落地（禁用占位） | 本地商品/快照表品类字段 0 行，按红线加「品类」tab 但 `disabled`，浏览器实测类名 `sf-tab-muted`。有真实品类数据后去掉 `disabled` 即启用。 |
+| P2 | 展示币种换算 | ⚠️ 条件落地（诚实开关） | `display-fx.ts` 仅用已复核 ACTIVE 汇率换算（带 `≈` + 审计提示），无汇率时下拉禁用显示「原币显示」。浏览器实测控件存在。 |
+| P2 | 列配置服务端持久化 | ✅ 复验通过 | `user-preferences` API 接受 `{widths,visible,order}`，`use-column-preferences.ts` localStorage 先行 + 服务端真值 + 保存代次防竞态，第 12 节实测落库。 |
+| P2 | host 工作台对齐 | ✅ 复验通过 | 一键复制 + 自定义列弹窗 + 全量导出弹窗（CSV/XLSX）。 |
+| P3 | 商品图 36→48px | ✅ 本轮落地 | `replica-workbench.tsx` 缩略图 `width/height` 36→48，`sellfox-ui.css` `.sf-thumb` 36→48px。列宽 80px 仍容纳，比 wimoor 内图 60 略保守但更清晰。浏览器实测 CSS 生效。 |
+| P4 | 日期快捷项近3月/上月 | ✅ 复验通过 | `replica-pages.ts` 已有 `m2`/`m3`/`lastMonth` 预设与 `rangeForPreset` 自然月回溯逻辑。 |
+| P4 | host 字段选择 + 精确切换 | ✅ 本轮落地 | 见 13.2。 |
+| P4 | 业务员维度 | ⚠️ 数据红线保持禁用 | 销量/利润快照无业务员维度，不从 Listing 开发员伪造；维持 `disabled` 占位。 |
+
+### 13.2 P4 host 字段选择 + 精确切换（本轮核心改造）
+
+把 wimoor「字段选择下拉 + 精确匹配」能力补齐到 host 工作台，且确保是**真实下推到 SQL**而非前端假开关：
+
+- **后端类型**：`HostQuery` 加 `searchField?: string`、`exactMatch?: boolean`；`AdsSummaryQuery extends HostQuery` 自动继承。
+- **ads 日报表**（`host-read.ts` `readAds`）：字段限定在该 reader 的 `searchFields` 白名单内，非法字段忽略并退回全字段；精确用 Prisma `equals`，否则 `contains`（均 `mode: insensitive`）。
+- **库存视图**（`readInventoryFba`）：字段走静态 `Prisma.Sql` 映射（asin/msku/sku/fnsku/commodityName），值参数化；精确用 `=`，否则 `ILIKE`；杜绝标识符注入。
+- **广告实体汇总**（`ads-entity-summary.ts`）：字段别名 `id`（dailyId）/ `name`（fallbackName），精确用 `=`，否则 `ILIKE`。
+- **API**：`dataset/route.ts` 透传 `searchField`（截 60 字符）与 `exactMatch=1`。performance 分支走 `sellfoxBrowseQuery`（复刻台同款，本已支持）。
+- **前端**（`host-workbench.tsx`）：按数据集读取能力派生字段选项（summary→id/name，各 ads reader→各自白名单，inventory→库存字段，raw 全文数据集→不显示），搜索区加字段下拉 + 「精确」勾选，draft/applied/reset/fetch/导出全链路透传。
+- **单元测试**（`sellfox-host-read.test.ts` 新增 3 条）：字段选择只查白名单单列、精确用 equals、非法字段退回全字段——全部通过。
+
+### 13.3 验证循环结果
+
+- **typecheck**：通过。
+- **eslint**：0 error；12 条既有 warning（unused-vars / `<img>`），无新增。
+- **ui:guard**：11 项指标零回退。
+- **单元测试**：全量 2842 项，2839 通过 / 3 失败；3 个失败均为基线环境问题——2× Playwright 浏览器二进制未安装（`amazon-ads-scope-isolation`、`sales-plans-workbench`）、1× Node 版本门禁（22.13.1 < 22.19），与本次改动无关。新增 3 条 P4 断言通过。
+- **浏览器实测（localhost:3000，系统 chromium）**：
+  - 销量页默认请求带 `sortBy=subtotal&sortOrder=desc` ✅
+  - 商品缩略图 CSS `.sf-thumb` = 48px ✅
+  - 「品类」tab 禁用占位（`sf-tab-muted`）✅
+  - 「显示币种」控件存在 ✅
+  - host 广告产品页字段选择下拉 + 精确勾选渲染 ✅，字段选项随数据集派生（summary→实体ID/实体名称）✅
+  - 选「实体ID + 精确」搜索，请求带 `searchField=id&exactMatch=1` ✅
+- **环境备注**：本地销量/广告快照表 0 行（真实数据在服务器），复制按钮的实际数据行与商品图渲染尺寸无法本地视觉验收；代码层已通过 typecheck/lint/单测，逻辑正确。

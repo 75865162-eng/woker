@@ -296,7 +296,7 @@ function Cell({ column, row, metric, drillParams, onTrend, fx }: CellProps) {
     // 行内轻预览：hover/focus 出卡片（图/品名/MSKU/售价/负责人/标签），数据取当前行，不额外请求。
     return (
       <span className="sf-thumb-preview" tabIndex={src ? 0 : -1} aria-label={src ? `预览 ${text(row.identity ?? row.sku ?? row.title)}` : "无主图"}>
-        {src ? <img className="sf-thumb" src={src} alt="商品主图" width={36} height={36} loading="lazy" decoding="async" referrerPolicy="no-referrer" /> : <span className="sf-thumb" />}
+        {src ? <img className="sf-thumb" src={src} alt="商品主图" width={48} height={48} loading="lazy" decoding="async" referrerPolicy="no-referrer" /> : <span className="sf-thumb" />}
         {src ? (
           <span className="sf-thumb-card" role="tooltip">
             <img className="sf-thumb-card-img" src={src} alt="" loading="lazy" referrerPolicy="no-referrer" />

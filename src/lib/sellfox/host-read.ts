@@ -20,6 +20,10 @@ export type HostQuery = {
   site: string;
   shop: string;
   search: string;
+  /** 搜索字段白名单内的限定字段；留空则跨全部可搜索字段。 */
+  searchField?: string;
+  /** 精确匹配（相等）而非包含匹配。 */
+  exactMatch?: boolean;
   adType: string;
   /** 实体当前态筛选：enabled/paused/archived；仅对 stateFilter 数据集生效。 */
   state?: string;
@@ -172,13 +176,25 @@ async function readAds(readerKey: string, scope: Scope, query: HostQuery): Promi
   if (storeIds && storeIds.length === 0) {
     return { rows: [], total: 0, totals: { impressions: null, clicks: null, adOrders: null, byCurrency: [] }, coverage: { stores: 0, rows: 0 }, grain: "按日 × 店铺" };
   }
+  // 字段选择限定在该 reader 的白名单内；非法字段忽略并退回全字段，避免键注入。
+  const fields = query.searchField && reader.searchFields.includes(query.searchField)
+    ? [query.searchField]
+    : reader.searchFields;
+  const searchValue = query.search.trim();
+  const searchWhere = searchValue
+    ? fields.map((field) => ({
+        [field]: query.exactMatch
+          ? { equals: searchValue, mode: "insensitive" }
+          : { contains: searchValue, mode: "insensitive" },
+      }))
+    : [];
   const where: Record<string, unknown> = {
     organizationId: scope.organizationId,
     workspaceId: scope.workspaceId,
     ...(storeIds ? { storeId: { in: storeIds } } : {}),
     reportDate: { gte: query.from, lte: query.to },
     ...(query.adType ? { adType: query.adType } : {}),
-    ...(query.search ? { OR: reader.searchFields.map((field) => ({ [field]: { contains: query.search, mode: "insensitive" } })) } : {}),
+    ...(searchWhere.length ? { OR: searchWhere } : {}),
   };
   const orderBy = [
     { [adsSortable.has(query.sortBy) ? query.sortBy : "reportDate"]: query.sortOrder },
@@ -312,8 +328,20 @@ type InventoryRow = {
 
 async function readInventoryFba(scope: Scope, query: HostQuery): Promise<HostResult> {
   const search = query.search.trim();
+  // 字段限定在库存可见列白名单内；精确用相等，否则包含。标识符走静态映射，值走参数化，杜绝注入。
+  const inventorySearchFields: Record<string, Prisma.Sql> = {
+    asin: Prisma.sql`i.asin`,
+    msku: Prisma.sql`i.msku`,
+    sku: Prisma.sql`i.sku`,
+    fnsku: Prisma.sql`i.fnsku`,
+    commodityName: Prisma.sql`i."commodityName"`,
+  };
+  const column = query.searchField ? inventorySearchFields[query.searchField] : undefined;
+  const pattern = query.exactMatch ? search : `%${search}%`;
+  const op = query.exactMatch ? Prisma.sql`=` : Prisma.sql`ILIKE`;
+  const targets = column ? [column] : Object.values(inventorySearchFields);
   const searchFilter = search
-    ? Prisma.sql`AND (i.asin ILIKE ${`%${search}%`} OR i.msku ILIKE ${`%${search}%`} OR i.sku ILIKE ${`%${search}%`} OR i.fnsku ILIKE ${`%${search}%`} OR i."commodityName" ILIKE ${`%${search}%`})`
+    ? Prisma.sql`AND (${Prisma.join(targets.map((target) => Prisma.sql`${target} ${op} ${pattern}`), " OR ")})`
     : Prisma.empty;
   const siteFilter = query.site ? Prisma.sql`AND i.marketplace = ${query.site}` : Prisma.empty;
   const shopFilter = query.shop ? Prisma.sql`AND i."shopExternalId" = ${query.shop}` : Prisma.empty;
