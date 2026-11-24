@@ -99,6 +99,7 @@ export const navigationGroups: NavigationGroup[] = [
     { id: "amazon.pricing", href: "/amazon/pricing", label: "定价与 BuyBox", icon: Tags, moduleId: "operations" },
     { id: "amazon.buyBox", href: "/amazon/buy-box", label: "BuyBox 历史", icon: ChartNoAxesCombined, moduleId: "operations" },
     { id: "amazon.inventory", href: "/amazon/inventory", label: "FBA 库存", icon: Warehouse, moduleId: "operations" },
+    { id: "amazon.inventoryHealth", href: "/amazon/inventory-health", label: "库存健康透视", icon: Activity, moduleId: "operations" },
     { id: "amazon.inventoryAge", href: "/amazon/inventory-age", label: "库存库龄", icon: Activity, moduleId: "operations" },
     { id: "amazon.replenishment", href: "/amazon/replenishment", label: "补货计划", icon: Boxes, moduleId: "operations" },
     { id: "amazon.fulfillment", href: "/amazon/fulfillment", label: "FBA 在途货件", icon: Truck, moduleId: "operations" },
@@ -106,7 +107,9 @@ export const navigationGroups: NavigationGroup[] = [
     { id: "amazon.firstMile", href: "/amazon/first-mile", label: "头程物流", icon: Truck, moduleId: "operations" },
     // 财务（含原财务板块移入的结算报告 / FBA 赔偿）
     { id: "amazon.finance", href: "/amazon/finance", label: "财务交易", icon: Banknote, moduleId: "operations" },
+    { id: "amazon.financeTransactions", href: "/amazon/finance-transactions", label: "交易费用透视", icon: Banknote, moduleId: "operations" },
     { id: "amazon.settlements", href: "/amazon/settlements", label: "结算报告", icon: Banknote, moduleId: "operations" },
+    { id: "amazon.settlementSummary", href: "/amazon/settlement-summary", label: "结算月度汇总", icon: Banknote, moduleId: "operations" },
     { id: "amazon.fees", href: "/amazon/fees", label: "费用估算", icon: Calculator, moduleId: "operations" },
     // 报告与观察中心（Amazon 报告原始行 + 促销/通知观察，数据已落库，与赛狐隔离）
     { id: "amazon.fbaCustomerSales", href: "/amazon/fba-customer-sales", label: "FBA 客户发货销售", icon: ReceiptText, moduleId: "operations" },
