@@ -8,7 +8,7 @@ import { workspaceScopeHeaders } from "@/lib/workspace/workspace-scope-store";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
 import styles from "./ai-chat.module.css";
 
-type Skill = { slug: string; name: string; summary: string };
+type Skill = { slug: string; name: string; summary: string; prompt: string };
 type Conv = { id: string; title: string; revision: number; updatedAt: string };
 type Msg = { id: string; role: "user" | "assistant"; content: string; skillSlug?: string; createdAt: string; answer?: ChatAnswerData };
 type ToolEvidence = { seq: number; provider: string; tool: string; argsSummary: string; resultSource?: string; rowCount?: number; status: "ok" | "error"; errorCode?: string; durationMs: number };
@@ -117,13 +117,28 @@ export function AiChatWorkspace({ initialSkillSlug, skills, canCreate, locale }:
     } catch { setError("无法读取该会话。"); }
   }, [headers]);
 
+  // 选中技能：同步技能状态并把该技能的 prompt 自动填入输入框，方便直接发送或继续编辑。
+  const applySkill = useCallback((slug: string) => {
+    setSkillSlug(slug);
+    if (!slug) return;
+    const picked = skills.find(s => s.slug === slug);
+    if (picked?.prompt) {
+      setDraft(picked.prompt);
+      textareaRef.current?.focus();
+    }
+  }, [skills]);
+
   useEffect(() => {
     mountedRef.current = true;
     void loadConversations();
     void loadDataSources();
-    if (initialSkillSlug) setSkillSlug(initialSkillSlug);
+    if (initialSkillSlug) {
+      setSkillSlug(initialSkillSlug);
+      const picked = skills.find(s => s.slug === initialSkillSlug);
+      if (picked?.prompt) setDraft(picked.prompt);
+    }
     return () => { mountedRef.current = false; };
-  }, [loadConversations, loadDataSources, initialSkillSlug]);
+  }, [loadConversations, loadDataSources, initialSkillSlug, skills]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, statusText]);
 
@@ -374,7 +389,7 @@ export function AiChatWorkspace({ initialSkillSlug, skills, canCreate, locale }:
         <div className={styles.composer}>
           <div className={styles.composerTop}>
             <div className={styles.skillPicker}>
-              <select value={skillSlug} onChange={e => setSkillSlug(e.target.value)} aria-label="选择技能">
+              <select value={skillSlug} onChange={e => applySkill(e.target.value)} aria-label="选择技能">
                 <option value="">通用查询（不指定技能）</option>
                 {skills.map(s => <option key={s.slug} value={s.slug}>{s.name}</option>)}
               </select>
@@ -453,7 +468,7 @@ export function AiChatWorkspace({ initialSkillSlug, skills, canCreate, locale }:
                 <h4>快速筛选技能</h4>
                 <input value={skillFilter} onChange={e => setSkillFilter(e.target.value)} placeholder="输入技能名" aria-label="筛选技能" />
                 <div className={styles.quickSkills}>
-                  {filteredSkills.map(s => <button key={s.slug} onClick={() => setSkillSlug(s.slug)} className={s.slug === skillSlug ? styles.quickActive : ""}>{s.name}</button>)}
+                  {filteredSkills.map(s => <button key={s.slug} onClick={() => applySkill(s.slug)} className={s.slug === skillSlug ? styles.quickActive : ""}>{s.name}</button>)}
                 </div>
               </section>
             </div>

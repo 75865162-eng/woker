@@ -17,8 +17,14 @@ export default async function AiChatPage({ searchParams }: { searchParams: Promi
   }
   const { skill } = await searchParams;
   const canCreate = roleCanPerformAction(authorization.user.role, "agents", "create", authorization.permissions);
-  const skills = listSkills().map(s => ({ slug: s.slug, name: s.nameZh ?? s.nameEn, summary: s.summaryZh ?? s.summaryEn }));
   const locale = (await cookies()).get("lili_locale")?.value === "en" ? "en" : "zh";
+  const skills = listSkills().map(s => ({
+    slug: s.slug,
+    name: s.nameZh ?? s.nameEn,
+    summary: s.summaryZh ?? s.summaryEn,
+    // 选中技能时自动填入输入框的问法，跟目录「复制 prompt」保持一致。
+    prompt: locale === "en" ? s.promptEn : s.promptZh,
+  }));
   return (
     <AppShell title="AI 对话" subtitle="自然语言提问 · 只读数据 · 来源可核对">
       <AiChatWorkspace
