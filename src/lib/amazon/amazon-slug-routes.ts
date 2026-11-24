@@ -14,6 +14,9 @@
 export const amazonSlugRoutes: Record<string, string> = {
   // 订单
   "sales-traffic": "view:sales-traffic",
+  // product-periods / buybox-trend：Wimoor 商品多周期销量与 BuyBox 流量趋势迁移，真实 page 提供，映射自身作兜底。
+  "product-periods": "/amazon/product-periods",
+  "buybox-trend": "/amazon/buybox-trend",
   orders: "view:orders",
   order: "view:orders", // 单数别名：/amazon/order 与 /sellfox/order 对称
   "order-items": "view:order-items",
@@ -34,8 +37,9 @@ export const amazonSlugRoutes: Record<string, string> = {
   // 此处保留 view:inventory 映射作为导航兜底声明；Next.js 真实文件路径优先于 afterFiles rewrite，
   // 故 /amazon/inventory 实际命中真实 page，不会落到通用 view 表格。
   inventory: "view:inventory",
-  // inventory-health：Wimoor FBA 库存 detail+planning 迁移，真实 page 提供，映射自身作导航兜底声明。
+  // inventory-health / replenishment-signals：Wimoor FBA 库存与补货信号迁移，真实 page 提供，映射自身作兜底。
   "inventory-health": "/amazon/inventory-health",
+  "replenishment-signals": "/amazon/replenishment-signals",
   "inventory-age": "view:inventory_age",
   replenishment: "view:replenishment",
   fulfillment: "view:fulfillment",
@@ -71,6 +75,8 @@ export const amazonSlugRoutes: Record<string, string> = {
   pricing: "view:pricing",
   fees: "view:fee_preview",
   returns: "view:returns",
+  // return-analytics：Wimoor 退货率与质量归因迁移，真实 page 提供，映射自身作兜底。
+  "return-analytics": "/amazon/return-analytics",
   "repeat-purchase": "view:repeat-purchase",
   // 同步 / 配置
   sync: "view:amazon-sync",

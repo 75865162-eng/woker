@@ -79,6 +79,8 @@ export const navigationGroups: NavigationGroup[] = [
   { id: "amazon", label: "亚马逊数据", icon: Activity, href: "/amazon/sales-traffic", items: [
     // 经营分析
     { id: "amazon.salesTraffic", href: "/amazon/sales-traffic", label: "销售与流量", icon: ChartNoAxesCombined, moduleId: "operations" },
+    { id: "amazon.productPeriods", href: "/amazon/product-periods", label: "商品多周期销量", icon: ChartNoAxesCombined, moduleId: "operations" },
+    { id: "amazon.buyBoxTrend", href: "/amazon/buybox-trend", label: "BuyBox 流量趋势", icon: ChartNoAxesCombined, moduleId: "operations" },
     { id: "amazon.brandAnalytics", href: "/amazon/brand-analytics", label: "品牌分析", icon: SearchCheck, moduleId: "operations" },
     { id: "amazon.dataDictionary", href: "/amazon/data-dictionary", label: "数据字典", icon: BookMarked, moduleId: "operations" },
     { id: "amazon.fieldParity", href: "/amazon/wimoor-field-parity", label: "Wimoor 字段对标", icon: ListChecks, moduleId: "operations" },
@@ -92,6 +94,7 @@ export const navigationGroups: NavigationGroup[] = [
     { id: "amazon.orders", href: "/amazon/orders", label: "订单", icon: ClipboardList, moduleId: "operations" },
     { id: "amazon.orderItems", href: "/amazon/order-items", label: "订单商品", icon: Boxes, moduleId: "operations" },
     { id: "amazon.returns", href: "/amazon/returns", label: "退货与退款", icon: RefreshCw, moduleId: "operations" },
+    { id: "amazon.returnAnalytics", href: "/amazon/return-analytics", label: "退货率与质量归因", icon: RefreshCw, moduleId: "operations" },
     { id: "amazon.repeatPurchase", href: "/amazon/repeat-purchase", label: "重复购买", icon: RefreshCw, moduleId: "operations" },
     // 广告
     { id: "amazon.ads", href: "/amazon/ads", label: "PPC 经营指标", icon: Target, moduleId: "operations" },
@@ -103,6 +106,7 @@ export const navigationGroups: NavigationGroup[] = [
     { id: "amazon.inventoryHealth", href: "/amazon/inventory-health", label: "库存健康透视", icon: Activity, moduleId: "operations" },
     { id: "amazon.inventoryAge", href: "/amazon/inventory-age", label: "库存库龄", icon: Activity, moduleId: "operations" },
     { id: "amazon.replenishment", href: "/amazon/replenishment", label: "补货计划", icon: Boxes, moduleId: "operations" },
+    { id: "amazon.replenishmentSignals", href: "/amazon/replenishment-signals", label: "补货信号与覆盖周数", icon: Boxes, moduleId: "operations" },
     { id: "amazon.fulfillment", href: "/amazon/fulfillment", label: "FBA 在途货件", icon: Truck, moduleId: "operations" },
     { id: "amazon.fbaBoxing", href: "/amazon/fba-boxing", label: "FBA 装箱", icon: PackageSearch, moduleId: "operations" },
     { id: "amazon.firstMile", href: "/amazon/first-mile", label: "头程物流", icon: Truck, moduleId: "operations" },
