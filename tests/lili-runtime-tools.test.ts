@@ -4,6 +4,47 @@ import { createRuntimeTools } from "@/lib/lili/runtime-tools";
 import type { ToolDefinition } from "@/lib/selection-research/types";
 const schema = { type: "object", properties: { asin: { type: "string" } }, required: ["asin"] };
 
+test("opted-in chat runtime exposes read-only research_prepare and prepares the five-skill 开品 workflow without business calls", async () => {
+  let providerDispatched = 0;
+  const { publicResearchTools, callPublicResearchTool } = await import("@/lib/lili/public-research-tools");
+  const extraSkillTools = publicResearchTools
+    .filter(tool => tool.annotations?.readOnlyHint !== false)
+    .map(tool => ({ ...tool, dispatch: async (args: import("@/lib/selection-research/types").ObjectJson) => await callPublicResearchTool(tool.name, args) as never }));
+  // Global runtime must NOT expose it (public/bearer MCP append their own definition).
+  const plain = createRuntimeTools([]);
+  assert.ok(!(await plain.discover()).tools.some(tool => tool.name === "research_prepare"));
+  const runtime = createRuntimeTools([{ id: "erp", isReadOnly: () => true, transport: {
+    async listTools() { return []; },
+    async callTool() { providerDispatched++; return {}; },
+  } }], { extraSkillTools });
+  const discovery = await runtime.discover();
+  const prep = discovery.tools.find(tool => tool.name === "research_prepare");
+  assert.ok(prep, "research_prepare should be discoverable in the chat runtime");
+  assert.equal(prep!.provider, "skills");
+  assert.equal(prep!.permission, "read");
+  assert.equal(prep!.availability, "available");
+
+  const requirement = "使用粒粒 MCP，帮我从一个大方向做到开品文档。我想做的方向是：【arrow bag】。按下面的顺序来：1. 用 amazon-niche-finder 找 3 到 5 个细分市场；2. 用 amazon-product-research 研究透；3. 用 amazon-review-analyzer 分析差评；4. 用 tariff-calculator-amazon 算关税和到岸成本；5. 用 amazon-product-selection 打分并给出结论。";
+  const result = await runtime.call("research_prepare", { requirement, marketplace: "US" }, new AbortController().signal) as {
+    ok: boolean; stage: number; persisted: boolean; marketDataCollected: boolean;
+    brief: { productDirection: { value: string } | null };
+    skills: { stage: number; name: string }[];
+    budget: unknown; nextAction: { kind: string; tool: string };
+  };
+  assert.equal(result.ok, true);
+  assert.equal(result.stage, 0);
+  assert.equal(result.persisted, false);
+  assert.equal(result.marketDataCollected, false);
+  assert.equal(result.brief.productDirection?.value, "arrow bag");
+  assert.deepEqual(result.skills.map(skill => skill.name), [
+    "amazon-niche-finder", "amazon-product-research", "amazon-review-analyzer",
+    "tariff-calculator-amazon", "amazon-product-selection",
+  ]);
+  assert.ok(result.budget);
+  assert.equal(result.nextAction.tool, "research_start");
+  assert.equal(providerDispatched, 0, "stage-0 preparation must not dispatch any provider/business call");
+});
+
 test("a stalled provider cannot prevent discovery of connected ERP tools or Skill loading", async () => {
   let aborted = false;
   const runtime = createRuntimeTools([

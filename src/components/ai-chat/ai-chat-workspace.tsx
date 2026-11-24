@@ -13,7 +13,7 @@ type Conv = { id: string; title: string; revision: number; updatedAt: string };
 type Msg = { id: string; role: "user" | "assistant"; content: string; skillSlug?: string; createdAt: string; answer?: ChatAnswerData };
 type ToolEvidence = { seq: number; provider: string; tool: string; argsSummary: string; resultSource?: string; rowCount?: number; status: "ok" | "error"; errorCode?: string; durationMs: number };
 type ProviderStatus = { provider: string; status: string; toolCount: number; reason?: string };
-type DataSourceStatus = { provider: string; label: string; configured: boolean; credentialName: string | null; toolCount: number; scopeSummary: string; readOnly: boolean };
+type DataSourceStatus = { provider: string; label: string; configured: boolean; credentialName: string | null; toolCount: number; scopeSummary: string; readOnly: boolean; paidExternal?: boolean };
 type DataSourceSnapshot = { sources: DataSourceStatus[]; enabledProviders: string[]; confirmedAt: string | null; ready: boolean };
 type ChatAnswerData = {
   text: string; runId: string; model: string;
@@ -315,6 +315,7 @@ export function AiChatWorkspace({ initialSkillSlug, skills, canCreate, locale }:
                         <span className={styles.dsSourceMain}>
                           <span className={styles.dsSourceTop}>
                             <strong>{src.label}</strong>
+                            {src.paidExternal && <Badge tone="warning">第三方付费</Badge>}
                             {src.configured ? <Badge tone="success"><ShieldCheck size={11} /> 只读已授权</Badge> : <Badge tone="danger">未配置</Badge>}
                           </span>
                           <span className={styles.dsSourceMeta}>
@@ -330,7 +331,7 @@ export function AiChatWorkspace({ initialSkillSlug, skills, canCreate, locale }:
                       {dsSaving ? <Loader2 size={14} className={styles.spin} /> : <ShieldCheck size={14} />}
                       保存并启用
                     </Button>
-                    <a className={styles.dsLink} href="/settings?tab=mcp" target="_blank" rel="noreferrer"><Settings2 size={13} /> 管理 MCP 凭证</a>
+                    <a className={styles.dsLink} href="/accounts?tab=mcp" target="_blank" rel="noreferrer"><Settings2 size={13} /> 管理 MCP 凭证</a>
                   </div>
                 </>
               )}
@@ -351,7 +352,7 @@ export function AiChatWorkspace({ initialSkillSlug, skills, canCreate, locale }:
             <div className={styles.welcome}>
               <div className={styles.welcomeIcon}><Bot size={30} /></div>
               <h2>用自然语言分析你的经营数据</h2>
-              <p>模型只能读取你在「数据源 / MCP 配置」中确认启用的只读数据；每条回答都附带来源与覆盖范围。</p>
+              <p>模型只能读取你在「数据源 / MCP 配置」中确认启用的只读数据；每条回答都附带来源与覆盖范围。卖家精灵 / 西柚为第三方付费数据源，启用即表示同意其在查询时按供应商规则计费。</p>
               <div className={styles.examples}>
                 {["对比最近一个完整周的销售额与订单量，并说明数据范围", "查看赛狐店铺近 7 天销售趋势，列出来源与缺口", "当前的销售数据覆盖了哪些店铺和日期？"].map(ex => (
                   <button key={ex} onClick={() => { setDraft(ex); textareaRef.current?.focus(); }}>{ex}</button>

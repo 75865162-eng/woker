@@ -8,6 +8,8 @@ export type ProviderId = "erp" | "sellfox" | "sellersprite" | "xiyou";
 export type RuntimeTool = ToolDefinition & { provider: ProviderId | "skills"; remoteName: string; permission: "read" | "approval_required"; availability: "available" | "blocked" };
 export type ProviderStatus = { provider: ProviderId; status: "connected" | "not_connected" | "unavailable"; toolCount: number; reason?: string };
 export type RuntimeProvider = { id: ProviderId; transport?: Transport; reason?: string; isReadOnly(tool: ToolDefinition): boolean };
+/** Extra read-only Skill tools a caller (e.g. the chat runtime) opts into, with their dispatcher. */
+export type ExtraSkillTool = ToolDefinition & { dispatch: (args: ObjectJson) => Promise<Json> };
 export class RuntimeToolError extends ToolNotDispatchedError {}
 const skillNames = new Set(["meta_search_skills", "meta_load_skill", "meta_list_workflows", ...skillMetaTools.map(tool => tool.name)]);
 /** Reviewed read endpoints observed in the fixed Xiyou runtime registry. Missing hints never grant arbitrary tools. */
@@ -15,7 +17,7 @@ export const xiyouResearchReadTools = new Set(["get_asin_info", "get_asin_traffi
 export const runtimeName = (provider: ProviderId, name: string) => `${provider}__${name}`;
 
 /** Request-scoped registry. Only actual adapter definitions are exposed; shipped business catalog is never used. */
-export function createRuntimeTools(providers: RuntimeProvider[], options: { discoveryTimeoutMs?: number } = {}) {
+export function createRuntimeTools(providers: RuntimeProvider[], options: { discoveryTimeoutMs?: number; extraSkillTools?: ExtraSkillTool[] } = {}) {
   async function registryFor(provider: RuntimeProvider) {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -31,6 +33,14 @@ export function createRuntimeTools(providers: RuntimeProvider[], options: { disc
       annotations: { readOnlyHint: true }, provider: "skills", remoteName: tool.name, permission: "read", availability: "available",
     }));
     tools.push(...skillMetaTools.map(tool => ({ ...tool, provider: "skills" as const, remoteName: tool.name, permission: "read" as const, availability: "available" as const })));
+    // Optional read-only Skill tools opted into by a specific caller (e.g. chat's research_prepare).
+    // Never added globally so the public/bearer MCP catalogs, which append their own definitions,
+    // do not advertise duplicates.
+    for (const extra of options.extraSkillTools ?? []) {
+      if (extra.annotations?.readOnlyHint === false || skillNames.has(extra.name)) continue;
+      const { dispatch: _dispatch, ...definition } = extra;
+      tools.push({ ...definition, provider: "skills" as const, remoteName: extra.name, permission: "read" as const, availability: "available" as const });
+    }
     const statuses: ProviderStatus[] = [];
     // Bound provider count (three); one disconnected provider cannot hide working sources.
     const results = await Promise.all(providers.filter(provider => !selected || provider.id === selected).map(async provider => {
@@ -52,7 +62,8 @@ export function createRuntimeTools(providers: RuntimeProvider[], options: { disc
     return { tools, providers: statuses, discoveredAt: new Date().toISOString() };
   }
   async function call(name: string, args: ObjectJson, signal: AbortSignal, expectedSchema?: ObjectJson): Promise<Json> {
-    const selected = skillNames.has(name) ? "skills" : providers.find(provider => name.startsWith(`${provider.id}__`))?.id;
+    const isExtraSkill = (options.extraSkillTools ?? []).some(tool => tool.name === name);
+    const selected = skillNames.has(name) || isExtraSkill ? "skills" : providers.find(provider => name.startsWith(`${provider.id}__`))?.id;
     if (!selected) throw new RuntimeToolError("RUNTIME_TOOL_UNAVAILABLE_OR_FORBIDDEN");
     const { tools } = await discover(selected); // Recheck permissions and current schema immediately before dispatch.
     const tool = tools.find(tool => tool.name === name);
@@ -66,6 +77,8 @@ export function createRuntimeTools(providers: RuntimeProvider[], options: { disc
     let result: Json;
     if (tool.provider === "skills") {
       if (skillMetaTools.some(tool => tool.name === name)) return await callSkillMeta(name, args) as unknown as Json;
+      const extra = (options.extraSkillTools ?? []).find(tool => tool.name === name);
+      if (extra) return await extra.dispatch(args);
       const response = await runCatalogTool(name, args);
       if (response.status !== 200 || response.body.ok !== true) throw new RuntimeToolError("INVALID_TOOL_ARGUMENTS");
       result = response.body as unknown as Json;
