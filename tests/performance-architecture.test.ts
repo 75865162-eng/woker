@@ -15,8 +15,13 @@ function files(directory: string): string[] {
 
 test("business routes retain the authenticated app shell in one persistent App Router layout", () => {
   assert.ok(files(path.join(root, "src/app/(erp)")).some(filename => filename.endsWith("/layout.tsx")));
+  // Public routes intentionally live outside the authenticated (erp) group:
+  // the brand homepage, the staff sign-in pages and the privacy policy must not
+  // inherit the ERP app shell. Everything else stays under (erp).
+  const publicPageAllowlist = ["/page.tsx", "/login/", "/HKQ/", "/privacy-policy/"];
   assert.ok(!files(path.join(root, "src/app")).filter(filename => !filename.includes("/(erp)/"))
-    .some(filename => filename.endsWith("/page.tsx") && !filename.includes("/login/")));
+    .some(filename => filename.endsWith("/page.tsx") && !publicPageAllowlist.some(allowed =>
+      allowed === "/page.tsx" ? filename.endsWith(allowed) : filename.includes(allowed))));
   for (const filename of files(path.join(root, "src/app/(erp)"))) {
     if (!filename.endsWith("/page.tsx")) continue;
     const source = readFileSync(filename, "utf8");
