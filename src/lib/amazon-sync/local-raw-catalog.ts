@@ -85,6 +85,8 @@ export const amazonLocalRawExcluded = [
   { table: "AmazonSyncPage", reason: "PAGINATION_CURSOR", alternative: null },
   { table: "AmazonCatalogImageBlob", reason: "BINARY_BLOB", alternative: "商品图片引用表" },
   { table: "AmazonFieldRegistry", reason: "INTERNAL_FIELD_REGISTRY", alternative: "amazon.fields.catalog" },
+  { table: "AmazonSkuCost", reason: "INTERNAL_CONFIG", alternative: "SKU 成本录入页（amazon/sku-cost）" },
+  { table: "AmazonFxRate", reason: "INTERNAL_CONFIG", alternative: "汇率配置页（amazon/fx-rate）" },
 ] as const;
 
 /** 无租户列的进程级表：无法做租户围栏，任何情况下都不开放。 */

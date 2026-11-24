@@ -8223,3 +8223,46 @@ model PurchaseReturn {
   @@unique([organizationId, workspaceId, number], map: "PurchaseReturn_number_key")
   @@index([organizationId, workspaceId, status, createdAt])
 }
+
+/// 亚马逊 SKU 成本录入：对标 Wimoor t_product_in_profit / SKU 成本分摊。
+/// 按 sellerSku + 成本原币录入采购/头程/其他成本；与 AmazonSettlementRow.sellerSku 直接对齐，
+/// 绕开与亚马逊 SKU 对不上的商品主档。纯亚马逊模块数据，不接赛狐。
+model AmazonSkuCost {
+  id             String   @id @default(cuid())
+  organizationId String
+  workspaceId    String   @default("default")
+  sku            String
+  asin           String   @default("")
+  costCurrency   String   @default("CNY")
+  purchaseCost   Decimal  @default(0) @db.Decimal(20, 6)
+  freightCost    Decimal  @default(0) @db.Decimal(20, 6)
+  otherCost      Decimal  @default(0) @db.Decimal(20, 6)
+  note           String   @default("")
+  effectiveAt    DateTime?
+  createdBy      String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, workspaceId, sku, costCurrency], map: "AmazonSkuCost_scope_sku_ccy_key")
+  @@index([organizationId, workspaceId, sku])
+  @@index([organizationId, workspaceId, updatedAt])
+}
+
+/// 汇率配置：用户显式录入 from→to 汇率（如 CNY→USD），用于成本折算到结算币种。
+/// 保守口径：无配置汇率时净利润留空，绝不臆造或自动抓汇率。纯亚马逊模块，不接赛狐。
+model AmazonFxRate {
+  id             String   @id @default(cuid())
+  organizationId String
+  workspaceId    String   @default("default")
+  fromCurrency   String
+  toCurrency     String
+  rate           Decimal  @db.Decimal(20, 8)
+  effectiveAt    DateTime?
+  note           String   @default("")
+  createdBy      String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, workspaceId, fromCurrency, toCurrency], map: "AmazonFxRate_scope_pair_key")
+  @@index([organizationId, workspaceId, updatedAt])
+}

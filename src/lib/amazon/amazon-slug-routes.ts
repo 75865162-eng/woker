@@ -51,6 +51,10 @@ export const amazonSlugRoutes: Record<string, string> = {
   "finance-transactions": "/amazon/finance-transactions",
   settlements: "view:settlements",
   "settlement-summary": "/amazon/settlement-summary",
+  // 最终利润链路（真实 page 提供，映射自身作导航兜底声明）
+  "sku-profit-final": "/amazon/sku-profit-final",
+  "sku-cost": "/amazon/sku-cost",
+  "fx-rate": "/amazon/fx-rate",
   // 报告与观察中心（15 个 report 域 + 促销 / 通知订阅，均为 Amazon 数据源，与赛狐隔离）
   "fba-customer-sales": "view:fba_customer_sales",
   "mfn-returns": "view:mfn_returns",
