@@ -61,6 +61,10 @@ export async function middleware(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: "可信入口配置缺失或无效，服务暂不可用。" }, { status: 503 });
   }
+  // Public brand-site product photos are static assets and never require a session.
+  if (pathname.startsWith("/products/")) {
+    return NextResponse.next();
+  }
   const isPublicRoute = publicRoutes.includes(pathname);
   const isPublicApi = publicApiPrefixes.some((prefix) => pathname.startsWith(prefix));
 
@@ -111,7 +115,9 @@ export async function middleware(request: NextRequest) {
   const validSession = await hasValidSessionCookie(request);
 
   if (validSession) {
-    if (pathname === "/login") {
+    // Signed-in staff have no reason to see a sign-in form. Send them to the
+    // public brand homepage; from there they can continue into the workspace.
+    if (pathname === "/login" || pathname === "/HKQ") {
       return NextResponse.redirect(new URL("/", publicOrigin));
     }
 
@@ -129,12 +135,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const loginUrl = new URL("/login", publicOrigin);
+  const loginUrl = new URL("/HKQ", publicOrigin);
   loginUrl.searchParams.set("next", pathname === "/agents/selection-research" ? pathname + request.nextUrl.search : pathname);
 
   return NextResponse.redirect(loginUrl);
 }
 
 export const config = {
-  matcher: ["/((?!_next|favicon.ico|brand-logo.png).*)"],
+  matcher: ["/((?!_next|favicon.ico|brand-logo.png|products/).*)"],
 };

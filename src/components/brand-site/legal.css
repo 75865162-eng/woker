@@ -1,0 +1,10 @@
+/* Legal page styles — scoped to the `.bp` brand shell. */
+.bp .bp-legal{padding:64px 0 96px}
+.bp .bp-legal-back{display:inline-block;margin-bottom:32px;font-size:14px;color:var(--bp-body)}
+.bp .bp-legal-meta{margin-top:12px;font-size:13px;color:#8b989f}
+.bp .bp-legal .bp-lead{margin-top:20px}
+.bp .bp-legal-body{margin-top:44px;max-width:820px}
+.bp .bp-legal-section{margin-bottom:34px}
+.bp .bp-legal-section h2{font-size:20px;font-weight:650;color:var(--bp-ink);margin-bottom:12px;letter-spacing:-.01em}
+.bp .bp-legal-section p{font-size:15.5px;line-height:1.75;color:var(--bp-body);margin-bottom:12px}
+.bp .bp-legal-note{margin-top:20px;padding:18px 22px;background:var(--bp-soft);border-left:3px solid var(--bp-brand);border-radius:0 8px 8px 0;font-size:14px;color:var(--bp-body);max-width:820px}

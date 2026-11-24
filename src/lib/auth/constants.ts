@@ -2,7 +2,9 @@ export const sessionCookieName = "amazon_bulk_ad_session";
 
 export const sessionMaxAgeSeconds = 60 * 60 * 12;
 
-export const publicRoutes = ["/login"];
+// `/` is the public brand website. `/HKQ` is the canonical internal staff
+// sign-in route; `/login` is kept as a compatibility alias for existing links.
+export const publicRoutes = ["/", "/HKQ", "/login", "/privacy-policy"];
 
 // /api/health is an unauthenticated liveness probe; it returns only {status:"ok"}.
 export const publicApiPrefixes = ["/api/auth/login", "/api/auth/register", "/api/health"];
