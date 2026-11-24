@@ -302,7 +302,7 @@ export function BrandHome() {
           </div>
           <div className="bp-foot-bottom">
             <span>© 2026 AOOCY. All rights reserved.</span>
-            <Link href="/HKQ" className="bp-foot-staff">Internal Staff Login</Link>
+            <Link href="/tiaotiao" className="bp-foot-staff">Internal Staff Login</Link>
           </div>
         </div>
       </footer>

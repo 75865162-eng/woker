@@ -11,7 +11,7 @@ export const metadata = { title: "AI 对话 · 经营分析" };
 
 export default async function AiChatPage({ searchParams }: { searchParams: Promise<{ skill?: string }> }) {
   const authorization = await getAuthorizationContext();
-  if (!authorization) redirect("/HKQ?next=%2Fai%2Fchat");
+  if (!authorization) redirect("/tiaotiao?next=%2Fai%2Fchat");
   if (!roleCanPerformAction(authorization.user.role, "agents", "view", authorization.permissions)) {
     redirect("/forbidden?from=%2Fai%2Fchat");
   }

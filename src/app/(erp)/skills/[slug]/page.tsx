@@ -16,7 +16,7 @@ export default async function SkillDetailPage({ params }: { params: Promise<{ sl
   if (!loaded) notFound();
 
   const authorization = await getAuthorizationContext();
-  if (!authorization) redirect(`/HKQ?next=${encodeURIComponent(`/skills/${slug}`)}`);
+  if (!authorization) redirect(`/tiaotiao?next=${encodeURIComponent(`/skills/${slug}`)}`);
   if (!roleCanPerformAction(authorization.user.role, SKILL_MODULE_ID, "view", authorization.permissions)) {
     redirect("/forbidden");
   }
