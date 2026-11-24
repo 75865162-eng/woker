@@ -27,7 +27,7 @@ import { readReturns } from "@/lib/amazon-sync/returns-query";
 import { readFinance } from "@/lib/amazon-sync/finance-query";
 import { auditAmazonDataRead } from "@/lib/amazon-sync/read-audit";
 import { amazonDataAccess, sourceAccessWhere, assertAmazonScopeAdmin } from "@/lib/amazon-sync/data-access";
-import { readSalesDailyAverage, readSalesMatrix, readSalesPeriods, readSalesProducts, readSalesTop, readSalesTraffic } from "@/lib/amazon-sync/sales-query";
+import { readSalesDailyAverage, readSalesForecast, readSalesMatrix, readSalesPeriods, readSalesProducts, readSalesTop, readSalesTraffic } from "@/lib/amazon-sync/sales-query";
 import { readSellerFeedback } from "@/lib/amazon-sync/seller-feedback-query";
 import { readOrders } from "@/lib/amazon-sync/orders-query";
 import { readTodayDashboard } from "@/lib/amazon-sync/today-dashboard";
@@ -87,6 +87,7 @@ export async function GET(request: Request) {
     if (section === "sales-traffic-period") return json({ ...await readSalesPeriods(scope, p, { actor }), access });
     if (section === "sales-traffic-top") return json({ ...await readSalesTop(scope, p, { actor }), access });
     if (section === "sales-traffic-daily-average") return json({ ...await readSalesDailyAverage(scope, p, { actor }), access });
+    if (section === "sales-traffic-forecast") return json({ ...await readSalesForecast(scope, p, { actor }), access });
     if (section === "seller-feedback") return json({ ...await readSellerFeedback(scope, p, { actor }), access });
     if (section === "data") return json({ ...await readDataset(scope, p, actor), access });
     if (section === "datasets") return json({ datasets: mcpDatasets.filter(d => d.module === "amazon_sync").map(describeMcpDataset), access });

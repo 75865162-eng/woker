@@ -3,13 +3,14 @@ import { formatSiteStore, siteCodeForDisplay } from "@/lib/sellfox/marketplace-s
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { StandardDataTable } from "@/components/ui/table-variants";
 import { type DataTableColumn } from "@/components/ui/data-table";
 import { ReadinessNotice, readinessKindFromCode } from "@/components/operations/readiness-notice";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
 import { useMainImages, AsinThumb, type ImageProduct } from "@/components/amazon/asin-thumb";
 import type { SyncSourceView } from "@/lib/amazon-sync/contracts";
-import type { SalesRow, SalesMatrix, SalesMatrixCell, SalesMatrixDimension, ProductSalesRow, SalesPeriodSummary, SalesPeriodAgg, SalesTopResult, SalesDailyAverage } from "@/lib/amazon-sync/sales-query";
+import type { SalesRow, SalesMatrix, SalesMatrixCell, SalesMatrixDimension, ProductSalesRow, SalesPeriodSummary, SalesPeriodAgg, SalesTopResult, SalesDailyAverage, SalesForecast } from "@/lib/amazon-sync/sales-query";
 const endpoint = "/api/operations/sync-center";
 const input = "min-h-9 rounded border border-border bg-background px-2 text-sm";
 const PENDING_DIMENSIONS = ["MSKU", "SPU", "开发员", "业务员"] as const;
@@ -64,7 +65,8 @@ export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onT
   const [view, setView] = useState<"rows" | "matrix" | "products" | "period">("rows"), [metric, setMetric] = useState<MetricKey>("units");
   const [periodBucket, setPeriodBucket] = useState<"day" | "week" | "month">("day"), [topDim, setTopDim] = useState<"child" | "parent" | "sku">("child");
   const [dailyWindow, setDailyWindow] = useState(30);
-  const [periodData, setPeriodData] = useState<SalesPeriodSummary | null>(null), [topData, setTopData] = useState<SalesTopResult | null>(null), [dailyData, setDailyData] = useState<SalesDailyAverage | null>(null);
+  const [horizonDays, setHorizonDays] = useState(30);
+  const [periodData, setPeriodData] = useState<SalesPeriodSummary | null>(null), [topData, setTopData] = useState<SalesTopResult | null>(null), [dailyData, setDailyData] = useState<SalesDailyAverage | null>(null), [forecastData, setForecastData] = useState<SalesForecast | null>(null);
   const [productDim, setProductDim] = useState<"ASIN" | "父ASIN" | "SKU">("ASIN"), [syncGranularity, setSyncGranularity] = useState<"CHILD" | "SKU">("CHILD");
   const [productKeyword, setProductKeyword] = useState("");
   const sequence = useRef(0), mutation = useRef(0);
@@ -72,9 +74,9 @@ export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onT
   const mainImages = useMainImages(mainImageProducts);
   const filters = { sellerAccountId: seller, marketplaceId: site, from, to, keyword, direction, ...(taskId ? { taskId } : {}) };
   const queryKey = JSON.stringify(filters);
-  useEffect(() => { const requests = sequence, mutations = mutation; const reset = () => { ++requests.current; ++mutations.current; setResult(null); setMatrix(null); setProductResult(null); setPeriodData(null); setTopData(null); setDailyData(null); setJob(null); setError(""); setErrorCode(""); setNotice(""); setBusy(false); setPage(1); setSeller(""); setSite(""); setSource(""); setReload(v => v + 1); }; window.addEventListener(workspaceScopeChangedEventName, reset); return () => { ++requests.current; ++mutations.current; window.removeEventListener(workspaceScopeChangedEventName, reset); }; }, []);
+  useEffect(() => { const requests = sequence, mutations = mutation; const reset = () => { ++requests.current; ++mutations.current; setResult(null); setMatrix(null); setProductResult(null); setPeriodData(null); setTopData(null); setDailyData(null); setForecastData(null); setJob(null); setError(""); setErrorCode(""); setNotice(""); setBusy(false); setPage(1); setSeller(""); setSite(""); setSource(""); setReload(v => v + 1); }; window.addEventListener(workspaceScopeChangedEventName, reset); return () => { ++requests.current; ++mutations.current; window.removeEventListener(workspaceScopeChangedEventName, reset); }; }, []);
   useEffect(() => {
-    const n = ++sequence.current, controller = new AbortController(); setLoading(true); setResult(null); setMatrix(null); setProductResult(null); setPeriodData(null); setTopData(null); setDailyData(null); setError(""); setErrorCode("");
+    const n = ++sequence.current, controller = new AbortController(); setLoading(true); setResult(null); setMatrix(null); setProductResult(null); setPeriodData(null); setTopData(null); setDailyData(null); setForecastData(null); setError(""); setErrorCode("");
     const base = JSON.parse(queryKey) as Record<string, string>;
     const go = async (params: URLSearchParams, assign: (payload: unknown) => void) => {
       const response = await fetch(`${endpoint}?${params}`, { headers: scopeHeaders(), cache: "no-store", signal: controller.signal });
@@ -86,14 +88,15 @@ export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onT
       const periodParams = new URLSearchParams({ ...base, section: "sales-traffic-period", bucket: periodBucket });
       const topParams = new URLSearchParams({ ...base, section: "sales-traffic-top", dimension: topDim, limit: "10" });
       const dailyParams = new URLSearchParams({ ...base, section: "sales-traffic-daily-average", windowDays: String(dailyWindow) });
-      void Promise.all([go(periodParams, p => setPeriodData(p as SalesPeriodSummary)), go(topParams, p => setTopData(p as SalesTopResult)), go(dailyParams, p => setDailyData(p as SalesDailyAverage))]).catch(e => { if (n === sequence.current && !controller.signal.aborted) { setError(e instanceof Error ? e.message : "读取失败。"); setErrorCode((e as Error & { code?: string }).code ?? ""); } }).finally(() => { if (n === sequence.current) setLoading(false); });
+      const forecastParams = new URLSearchParams({ ...base, section: "sales-traffic-forecast", horizonDays: String(horizonDays) });
+      void Promise.all([go(periodParams, p => setPeriodData(p as SalesPeriodSummary)), go(topParams, p => setTopData(p as SalesTopResult)), go(dailyParams, p => setDailyData(p as SalesDailyAverage)), go(forecastParams, p => setForecastData(p as SalesForecast))]).catch(e => { if (n === sequence.current && !controller.signal.aborted) { setError(e instanceof Error ? e.message : "读取失败。"); setErrorCode((e as Error & { code?: string }).code ?? ""); } }).finally(() => { if (n === sequence.current) setLoading(false); });
     } else {
       const section = view === "matrix" ? "sales-traffic-matrix" : view === "products" ? "sales-traffic-products" : "sales-traffic";
       const params = new URLSearchParams({ section, ...(view === "rows" || view === "products" ? { page: String(page) } : {}), ...base, ...(view === "products" ? { granularity: productDim === "SKU" ? "SKU" : "CHILD", ...(productDim === "SKU" && productKeyword.trim() ? { sellerSku: productKeyword.trim() } : {}) } : {}) });
       void go(params, p => { if (view === "matrix") setMatrix(p as SalesMatrix); else if (view === "products") setProductResult(p as ProductResult); else setResult(p as Result); }).catch(e => { if (n === sequence.current && !controller.signal.aborted) { setError(e instanceof Error ? e.message : "读取失败。"); setErrorCode((e as Error & { code?: string }).code ?? ""); } }).finally(() => { if (n === sequence.current) setLoading(false); });
     }
     return () => { controller.abort(); };
-  }, [queryKey, page, reload, view, productDim, productKeyword, periodBucket, topDim, dailyWindow]);
+  }, [queryKey, page, reload, view, productDim, productKeyword, periodBucket, topDim, dailyWindow, horizonDays]);
   useVisiblePolling({
     intervalMs: 3000,
     enabled: Boolean(job && ["QUEUED", "RUNNING"].includes(job.status)),
@@ -254,6 +257,8 @@ export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onT
         {([["child", "ASIN"], ["parent", "父ASIN"], ["sku", "SKU"]] as const).map(([v, label]) => <Button key={v} size="sm" variant={topDim === v ? "primary" : "secondary"} onClick={() => setTopDim(v)} data-testid={`top-${v}`}>{label}</Button>)}
         <span className="ml-2 text-muted">日均窗口</span>
         {([7, 30, 90] as const).map(v => <Button key={v} size="sm" variant={dailyWindow === v ? "primary" : "secondary"} onClick={() => setDailyWindow(v)} data-testid={`daily-window-${v}`}>近{v}天</Button>)}
+        <span className="ml-2 text-muted">预测窗口</span>
+        {([7, 30, 90] as const).map(v => <Button key={v} size="sm" variant={horizonDays === v ? "primary" : "secondary"} onClick={() => setHorizonDays(v)} data-testid={`forecast-window-${v}`}>{v}天</Button>)}
       </div>
       <p className="text-xs text-muted">周期汇总仅聚合<strong>已发布的真实店铺日行</strong>；某指标在期内任一日缺失则该期显示“—”，不做拆分、平均或补零。环比仅当本期与上一等长区间均为完整覆盖时计算，否则显示“—”。</p>
       {dailyData && <>
@@ -274,6 +279,34 @@ export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onT
             ] as const).map(([label, value, hint]) => <div key={label} className="rounded border border-border p-2 text-xs"><p className="text-muted">{label}</p><p className="text-base font-semibold tabular-nums">{value}</p>{hint && <p className="text-muted">{hint}</p>}</div>)}
           </div>
           <p className="mt-2 text-xs text-muted">仅采用<strong>完整发布日</strong>真实销量求平均，不把缺失日补零、不摊派；完整日不足窗口时按实际有效天数计算并如实给出覆盖率。完整发布日：{dailyData.completeDates.length ? `${dailyData.completeDates[0]} ~ ${dailyData.completeDates[dailyData.completeDates.length - 1]}（${dailyData.completeDates.length} 天）` : "无"}</p>
+        </div>
+      </>}
+      {forecastData && <>
+        <div className="rounded border border-dashed border-brand/60 bg-brand/5 p-3" data-testid="sales-forecast">
+          <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+            <span className="font-semibold text-brand">销量预测（独立预测值 · 非实际销量）</span>
+            <span className="text-muted">版本 <code>{forecastData.version}</code></span>
+            <span className="text-muted">基准日 {forecastData.asOf || "—"}</span>
+            <span className="text-muted">训练 {forecastData.historyDays} 个完整发布日</span>
+            {forecastData.status === "READY" ? <Badge tone={forecastData.confidence === "HIGH" ? "good" : forecastData.confidence === "LOW" ? "warning" : "neutral"}>{`置信 ${forecastData.confidence}`}</Badge> : <Badge tone="neutral">数据不足</Badge>}
+          </div>
+          {forecastData.status === "READY" ? <>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {([
+                [`未来 ${forecastData.horizonDays} 天 P50 合计`, forecastData.horizonP50Total ?? "—", "中位预测"],
+                [`未来 ${forecastData.horizonDays} 天 P90 合计`, forecastData.horizonP90Total ?? "—", "保守上界"],
+                ["基准日销量/天", forecastData.baseDailyP50 ?? "—", null],
+                ["模型", forecastData.model ?? "—", null],
+              ] as const).map(([label, value, hint]) => <div key={label} className="rounded border border-border bg-background p-2 text-xs"><p className="text-muted">{label}</p><p className="text-base font-semibold tabular-nums">{value}</p>{hint && <p className="text-muted">{hint}</p>}</div>)}
+            </div>
+            <div className="mt-2 text-xs text-muted" data-testid="forecast-backtest">
+              <span className="font-semibold">走前回测（walk-forward）：</span>
+              {forecastData.backtest
+                ? <>评估点 <strong className="tabular-nums">{forecastData.backtest.evaluatedPoints}</strong> · MAPE <strong className="tabular-nums">{forecastData.backtest.mape ?? "—"}</strong> · WAPE <strong className="tabular-nums">{forecastData.backtest.wape ?? "—"}</strong> · 偏差 <strong className="tabular-nums">{forecastData.backtest.bias ?? "—"}</strong> · P90 覆盖率 <strong className="tabular-nums">{forecastData.backtest.p90Coverage ?? "—"}</strong></>
+                : "历史不足以支撑走前回测，未提供误差评估（不以短期数据臆造误差）。"}
+            </div>
+          </> : <p className="text-xs text-muted">预测数据不足：{forecastData.missingInputs.length ? forecastData.missingInputs.join("；") : "缺少足够的完整发布日历史"}。缺日不补零、不外推，不以短期销量冒充预测。</p>}
+          <p className="mt-2 text-xs text-muted">以上为<strong>模型预测值</strong>，与上方真实销量严格分开，不参与任何事实汇总或环比。预测仅用完整发布日历史、缺日阻断，逐日 P50/P90 与回测误差可追溯。</p>
         </div>
       </>}
       {periodData && <>
@@ -333,6 +366,7 @@ export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onT
         <li>库存：<strong>FBA 库存</strong>是按店铺 / 站点 / SKU 保存的采集<strong>时点快照</strong>，反映当前可售、预留、不可售和入库状态，<strong>不是历史每日库存</strong>，也不能当作某业务日的销量；查看当前库存请到 <a className="text-brand" href="/amazon/inventory">/amazon/inventory</a>。</li>
         <li>业务日为 Marketplace 报告业务日（含结束日）；每日选择最新成功且完整的发布版本；缺失日期显示“—”，不补零。</li>
         <li><strong>日均销量</strong>：近 N 个完整发布日的真实销量 ÷ 有效天数；完整日 = 该业务日覆盖店铺数达标且销量非空；缺失日不补零、不摊派，覆盖率按有效天数/窗口如实展示；销售额按币种分列。</li>
+        <li><strong>销量预测</strong>：独立预测对象（版本 / 模型 / 置信 / 逐日 P50·P90 / 走前回测 MAPE·WAPE·偏差·P90 覆盖率），只用完整发布日历史、缺日阻断、不外推，与真实销量严格分开呈现，不参与任何事实汇总或环比。历史不足以回测时明确显示「数据不足」，不臆造误差。</li>
       </ul>
     </details>
   </div>;

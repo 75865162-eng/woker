@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db/prisma";
 import { businessDate } from "./date-range";
 import { SyncInputError, type SyncScope } from "./policy";
 import { resolveProductDisplay } from "./product-master-resolver";
+import { forecastDemand, backtestForecast, type ForecastResult, type DemandObservation } from "@/lib/forecast";
 
 export type SalesQuery = { from?: string; to?: string; sellerAccountId?: string; marketplaceId?: string; taskId?: string; keyword?: string; direction: "asc" | "desc" };
 export function parseSalesQuery(p: URLSearchParams): SalesQuery {
@@ -480,4 +481,92 @@ export async function readSalesDailyAverage(scope: SyncScope, p: URLSearchParams
   const windowDays = Math.min(90, Math.max(1, Math.floor(Number(p.get("windowDays")) || 30)));
   const rows = await readSalesRowsForAggregation(scope, p, options);
   return dailyAverageOf(rows, windowDays, (options.cutoff ?? new Date()).toISOString());
+}
+
+/* ===== 销量预测（文档 3.1 P2-8）：经过回测的独立预测对象 =====
+ * 口径护栏（文档 A3 / 9.1）：
+ *  - 预测是独立对象，含模型 method、窗口 horizonDays、回测误差 backtest、版本 version；
+ *    前端必须与真实销量分开呈现，不混排、不作为事实。
+ *  - 历史只用「完整发布日」的真实销量：覆盖店铺数达标且该日所有行 unitsOrdered 非 null；
+ *    缺日不补零、不外推，缺口交给 forecast 引擎按需阻断（NEEDS_DATA）。
+ *  - 基准日 asOf 取最新完整发布日（T+1，不含今日/未闭合日）。
+ *  - 回测为 walk-forward，每个 origin 只用其前历史；不足则明确返回 null，不臆造误差。
+ */
+export type SalesForecast = {
+  version: string;
+  status: "READY" | "NEEDS_DATA";
+  model: ForecastResult["method"];
+  confidence: ForecastResult["confidence"];
+  asOf: string;                       // 预测基准日（最新完整发布日）
+  horizonDays: number;                // 预测窗口
+  baseDailyP50: number | null;
+  horizonP50Total: number | null;
+  horizonP90Total: number | null;
+  points: ForecastResult["points"];   // 逐日 P50/P90（独立预测值）
+  backtest: {
+    version: string;
+    evaluatedPoints: number;
+    mape: number | null;
+    wape: number | null;
+    bias: number | null;
+    p90Coverage: number | null;
+    notes: string[];
+  } | null;
+  historyDays: number;                // 纳入训练的完整发布日数
+  reasons: string[];
+  missingInputs: string[];
+};
+
+/** 纯函数：把完整发布日的销量序列喂给预测引擎 + 走前回测。 */
+export function forecastFromRows(rows: SalesRow[], horizonDays: number, backtestDays: number): SalesForecast {
+  const horizon = Math.min(90, Math.max(1, Math.floor(Number(horizonDays) || 30)));
+  // 按业务日聚合真实销量；先确定区间内期望店铺数（任一业务日最大店铺数）。
+  const storesByDate = new Map<string, Set<string>>();
+  const unitsByDate = new Map<string, { sum: number; complete: boolean }>();
+  for (const row of rows) {
+    const store = `${row.sellerAccountId}|${row.marketplaceId}`;
+    if (!storesByDate.has(row.businessDate)) storesByDate.set(row.businessDate, new Set());
+    storesByDate.get(row.businessDate)!.add(store);
+    if (!unitsByDate.has(row.businessDate)) unitsByDate.set(row.businessDate, { sum: 0, complete: true });
+    const u = num(row.metrics?.unitsOrdered);
+    const acc = unitsByDate.get(row.businessDate)!;
+    if (u === null) acc.complete = false; else acc.sum += u;
+  }
+  const expectedStores = Math.max(0, ...[...storesByDate.values()].map(s => s.size));
+  // 完整发布日：店铺数达标且该日所有行 unitsOrdered 非 null。缺日/不完整日直接不进历史（不补零）。
+  const history: DemandObservation[] = [...unitsByDate.entries()]
+    .filter(([date, acc]) => acc.complete && (storesByDate.get(date)?.size ?? 0) >= expectedStores && expectedStores > 0)
+    .map(([date, acc]) => ({ date, units: acc.sum }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (!history.length || expectedStores === 0) {
+    return { version: "forecast-v1", status: "NEEDS_DATA", model: null, confidence: "UNKNOWN", asOf: "", horizonDays: horizon, baseDailyP50: null, horizonP50Total: null, horizonP90Total: null, points: [], backtest: null, historyDays: 0, reasons: [], missingInputs: ["完整发布日的真实销量历史"] };
+  }
+  const asOf = history[history.length - 1].date; // 最新完整发布日，不含今日/未闭合日
+  const forecast = forecastDemand({ history, asOf, horizonDays: horizon, lifecycle: "MATURE" });
+
+  // 走前回测：起点数量受 backtestDays 限制；每个 origin 只用其前历史（引擎内部保证）。
+  let backtest: SalesForecast["backtest"] = null;
+  const minTrain = 28;
+  if (forecast.status === "READY" && history.length >= minTrain + horizon + 1) {
+    const lastOrigin = shiftDays(asOf, -(horizon + 1)); // 最后一个可评估 origin（其预测窗内要有真实值）
+    const firstOrigin = history[Math.min(minTrain, history.length - 1)].date;
+    if (firstOrigin < lastOrigin) {
+      const bt = backtestForecast({ history, startDate: firstOrigin, endDate: shiftDays(lastOrigin, 1), horizonDays: horizon, stepDays: Math.max(1, Math.floor(backtestDays) || horizon) });
+      backtest = { version: bt.version, evaluatedPoints: bt.evaluatedPoints, mape: bt.mape, wape: bt.wape, bias: bt.bias, p90Coverage: bt.p90Coverage, notes: bt.notes };
+    }
+  }
+  return {
+    version: forecast.version, status: forecast.status, model: forecast.method, confidence: forecast.confidence,
+    asOf, horizonDays: horizon, baseDailyP50: forecast.baseDailyP50, horizonP50Total: forecast.horizonP50Total,
+    horizonP90Total: forecast.horizonP90Total, points: forecast.points, backtest, historyDays: history.length,
+    reasons: forecast.reasons, missingInputs: forecast.missingInputs,
+  };
+}
+
+/** 销量预测读取：复用 readSalesTraffic 的权限与版本口径拉全量已发布行，再独立生成预测对象。 */
+export async function readSalesForecast(scope: SyncScope, p: URLSearchParams, options: { cutoff?: Date; actor?: string } = {}): Promise<SalesForecast> {
+  const horizonDays = Math.min(90, Math.max(1, Math.floor(Number(p.get("horizonDays")) || 30)));
+  const backtestDays = Math.min(90, Math.max(1, Math.floor(Number(p.get("backtestDays")) || 14)));
+  const rows = await readSalesRowsForAggregation(scope, p, options);
+  return forecastFromRows(rows, horizonDays, backtestDays);
 }
