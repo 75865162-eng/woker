@@ -16,7 +16,7 @@ export default async function LiliPage({ params }: { params: Promise<{ path?: st
   const page = resolveLiliPage(parts);
   if (!page) notFound();
   const authorization = await getAuthorizationContext();
-  if (!authorization) redirect("/tiaotiao?next=%2Flili");
+  if (!authorization) redirect("/HKQ?next=%2Flili");
   if (!roleCanPerformAction(authorization.user.role, page.moduleId, "view", authorization.permissions)) {
     redirect("/forbidden?from=%2Flili");
   }

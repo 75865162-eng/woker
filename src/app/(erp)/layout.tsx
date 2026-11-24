@@ -6,7 +6,7 @@ import { getCurrentAppVersionLabel } from "@/lib/app-version-server";
 
 export default async function ErpLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
-  if (!user) redirect("/tiaotiao");
+  if (!user) redirect("/HKQ");
   const snapshot = await getOrganizationRolePermissionsSnapshot(user.organizationId);
   return <WorkspaceShell configuration={{
     title: "运营工作台", subtitle: "", userId: user.id, organizationId: user.organizationId,

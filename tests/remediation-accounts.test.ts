@@ -45,8 +45,8 @@ test("权限判定对 null/未映射模块 fail-closed，而不是无条件放�
 
   // 显式白名单路径（根路径）仍可达，但不映射任何模块的路径不再绕过授权。
   assert.equal(getAccessiblePathOrFallback("/", "operations"), "/");
-  assert.equal(getFirstAccessiblePath("operations"), "/");
-  assert.equal(getAccessiblePathOrFallback("/not-a-module", "operations"), "/");
+  assert.equal(getFirstAccessiblePath("operations"), "/tiaotiao");
+  assert.equal(getAccessiblePathOrFallback("/not-a-module", "operations"), "/tiaotiao");
 });
 
 test("拒绝访问页在无模块授权时仍可达，且不放行其他路径", () => {
@@ -54,7 +54,7 @@ test("拒绝访问页在无模块授权时仍可达，且不放行其他路径",
   for (const role of ["viewer", "unknown"]) {
     assert.equal(getAccessiblePathOrFallback("/forbidden", role, permissions), "/forbidden");
     for (const pathname of ["/forbidden/nested", "/forbidden-other", "/amazon-ads/accounts", "/accounts", "/not-a-module"]) {
-      assert.equal(getAccessiblePathOrFallback(pathname, role, permissions), "/");
+      assert.equal(getAccessiblePathOrFallback(pathname, role, permissions), "/tiaotiao");
     }
     assert.equal(roleCanAccessModule(role, null, permissions), false);
     assert.equal(roleCanPerformAction(role, null, "view", permissions), false);
@@ -324,11 +324,11 @@ test("Ads 路由复用 PPC 权限，帮助中心可达而未知路径仍拒绝",
   for (const path of ["/amazon-ads", "/amazon-ads/accounts", "/amazon-ads/campaigns"]) {
     assert.equal(getModuleIdForPath(path), "workspace");
     assert.equal(getAccessiblePathOrFallback(path, "owner", permissions), path);
-    assert.equal(getAccessiblePathOrFallback(path, "viewer", permissions), "/");
+    assert.equal(getAccessiblePathOrFallback(path, "viewer", permissions), "/tiaotiao");
   }
   for (const role of ["owner", "viewer"]) {
     assert.equal(getAccessiblePathOrFallback("/help", role, permissions), "/help");
-    assert.equal(getAccessiblePathOrFallback("/help-other", role, permissions), "/");
-    assert.equal(getAccessiblePathOrFallback("/amazon-ads-other", role, permissions), "/");
+    assert.equal(getAccessiblePathOrFallback("/help-other", role, permissions), "/tiaotiao");
+    assert.equal(getAccessiblePathOrFallback("/amazon-ads-other", role, permissions), "/tiaotiao");
   }
 });

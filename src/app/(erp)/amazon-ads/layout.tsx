@@ -8,7 +8,7 @@ import "@/components/amazon-ads/amazon-ads.css";
 // Local Ads reads inherit PPC view access; API handlers independently enforce current scope.
 export default async function AmazonAdsLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
-  if (!user) redirect("/tiaotiao");
+  if (!user) redirect("/HKQ");
   const snapshot = user.organizationId ? await getOrganizationRolePermissionsSnapshot(user.organizationId) : null;
   if (!roleCanPerformAction(user.role, "workspace", "view", snapshot?.permissions)) redirect("/forbidden?from=%2Famazon-ads");
   return <AppShell title="Amazon Ads" subtitle="广告管理中心 · 本地数据工作台"><AdsWorkspaceRoute />{children}</AppShell>;

@@ -2,10 +2,10 @@ export const sessionCookieName = "amazon_bulk_ad_session";
 
 export const sessionMaxAgeSeconds = 60 * 60 * 12;
 
-// `/` is the public brand website. `/tiaotiao` (pinyin of 条条) is the canonical
-// internal staff sign-in route; `/HKQ` and `/login` stay as compatibility
-// aliases for existing bookmarks and links.
-export const publicRoutes = ["/", "/tiaotiao", "/HKQ", "/login", "/privacy-policy"];
+// `/` is the public brand website. `/HKQ` is the internal staff sign-in route;
+// `/login` is kept as a compatibility alias. The workspace home lives at the
+// protected pinyin route `/tiaotiao` (条条), so it is NOT public.
+export const publicRoutes = ["/", "/HKQ", "/login", "/privacy-policy"];
 
 // /api/health is an unauthenticated liveness probe; it returns only {status:"ok"}.
 export const publicApiPrefixes = ["/api/auth/login", "/api/auth/register", "/api/health"];

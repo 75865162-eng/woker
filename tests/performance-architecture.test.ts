@@ -18,7 +18,7 @@ test("business routes retain the authenticated app shell in one persistent App R
   // Public routes intentionally live outside the authenticated (erp) group:
   // the brand homepage, the staff sign-in pages and the privacy policy must not
   // inherit the ERP app shell. Everything else stays under (erp).
-  const publicPageAllowlist = ["/page.tsx", "/login/", "/HKQ/", "/tiaotiao/", "/privacy-policy/"];
+  const publicPageAllowlist = ["/page.tsx", "/login/", "/HKQ/", "/privacy-policy/"];
   assert.ok(!files(path.join(root, "src/app")).filter(filename => !filename.includes("/(erp)/"))
     .some(filename => filename.endsWith("/page.tsx") && !publicPageAllowlist.some(allowed =>
       allowed === "/page.tsx" ? filename.endsWith(allowed) : filename.includes(allowed))));

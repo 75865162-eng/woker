@@ -115,10 +115,10 @@ export async function middleware(request: NextRequest) {
   const validSession = await hasValidSessionCookie(request);
 
   if (validSession) {
-    // Signed-in staff have no reason to see a sign-in form. Send them to the
-    // public brand homepage; from there they can continue into the workspace.
-    if (pathname === "/login" || pathname === "/HKQ" || pathname === "/tiaotiao") {
-      return NextResponse.redirect(new URL("/", publicOrigin));
+    // Signed-in staff have no reason to see a sign-in form. Send them straight
+    // to the workspace dashboard at its pinyin route `/tiaotiao`.
+    if (pathname === "/login" || pathname === "/HKQ") {
+      return NextResponse.redirect(new URL("/tiaotiao", publicOrigin));
     }
 
     const requestHeaders = new Headers(request.headers);
@@ -135,7 +135,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const loginUrl = new URL("/tiaotiao", publicOrigin);
+  const loginUrl = new URL("/HKQ", publicOrigin);
   loginUrl.searchParams.set("next", pathname === "/agents/selection-research" ? pathname + request.nextUrl.search : pathname);
 
   return NextResponse.redirect(loginUrl);

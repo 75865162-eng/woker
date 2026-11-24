@@ -34,7 +34,7 @@ export async function AppShell({
       : "AM";
 
   if (!user) {
-    redirect("/tiaotiao");
+    redirect("/HKQ");
   }
 
   if (currentPath) {

@@ -126,7 +126,7 @@ export function PrivacyPolicy() {
         <div className="bp-wrap">
           <div className="bp-foot-bottom">
             <span>&copy; 2026 AOOCY. All rights reserved. <Link href="/privacy-policy" className="bp-inline-link">Privacy Policy</Link></span>
-            <Link href="/tiaotiao" className="bp-foot-staff">Internal Staff Login</Link>
+            <Link href="/HKQ" className="bp-foot-staff">Internal Staff Login</Link>
           </div>
         </div>
       </footer>

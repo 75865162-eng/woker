@@ -453,7 +453,9 @@ export function AiChatWorkspace({ initialSkillSlug, skills, canCreate, locale }:
                     <div className={styles.toolArgs}>{t.argsSummary}</div>
                     <div className={styles.toolFoot}>
                       {t.rowCount !== undefined && <span>返回 {t.rowCount} 行</span>}
-                      {t.resultSource && <span>来源 {t.resultSource}</span>}
+                      {t.resultSource?.startsWith("/api/skills/")
+                        ? <a className={styles.dsLink} href={t.resultSource} target="_blank" rel="noreferrer">下载报告文件</a>
+                        : t.resultSource && <span>来源 {t.resultSource}</span>}
                       {t.errorCode && <span className={styles.errText}>{t.errorCode}</span>}
                     </div>
                   </div>

@@ -111,6 +111,6 @@ test("source guard: 看板API鉴权+三态收窄,首页kpis插槽接入,不臆�
   assert.match(route, /getCurrentUserFromRequest/);
   assert.match(route, /resolveSellfoxVisibleStoreIds/);
   assert.doesNotMatch(route, /requireApiPermission\("sellfox"/);
-  const home = readFileSync(new URL("../src/app/(erp)/page.tsx", import.meta.url), "utf8");
+  const home = readFileSync(new URL("../src/app/(erp)/tiaotiao/page.tsx", import.meta.url), "utf8");
   assert.match(home, /kpis=\{<DashboardOverview/);
 });

@@ -1,5 +1,7 @@
 import { createRuntimeTools, runtimeName, type ProviderStatus, type RuntimeProvider, type RuntimeTools, type ExtraSkillTool } from "@/lib/lili/runtime-tools";
 import { publicResearchTools, callPublicResearchTool } from "@/lib/lili/public-research-tools";
+import { createChatSkillTools } from "./skill-tools";
+import type { AiModelSettings } from "@/lib/ai-settings";
 import type { Json } from "@/lib/selection-research/types";
 import { createChatAmazonMcpIdentity, listDiscoverableAmazonMcpTools, invokeAmazonMcp } from "@/lib/amazon-sync/mcp";
 import { createErpSessionSellfoxMcpIdentity, invokeSellfoxMcp } from "@/lib/sellfox/mcp";
@@ -34,6 +36,8 @@ export async function buildChatRuntime(
   scope: ChatScope,
   sessionGuard?: () => Promise<void>,
   enabledProviders?: ChatDataProvider[],
+  settings?: AiModelSettings,
+  runId?: string,
 ): Promise<ChatRuntime> {
   const assertSession = async () => {
     await sessionGuard?.();
@@ -176,6 +180,17 @@ export async function buildChatRuntime(
   const extraSkillTools: ExtraSkillTool[] = publicResearchTools
     .filter(tool => tool.annotations?.readOnlyHint !== false)
     .map(tool => ({ ...tool, dispatch: async (args) => await callPublicResearchTool(tool.name, args) as Json }));
+
+  // 服务器端大模型（对话里配置的模型）调 Skill：发现 → 读版本/正文 → 运行。
+  // 与旧 Codex→MCP 链路等价，复用 catalog/manifest/skill-engine 唯一源；identity 由 scope 闭包绑定。
+  // 仅在编排层显式传入 settings/runId 时注入（研究准备之外的新工具）；服务侧模型缺省时不影响既有 behavior。
+  if (settings) {
+    extraSkillTools.push(...createChatSkillTools({
+      scope, settings,
+      runId: runId ?? "chat-skill",
+      assertSession,
+    }));
+  }
   const tools = createRuntimeTools(providers, { discoveryTimeoutMs: 20_000, extraSkillTools });
   let cached: ProviderStatus[] | undefined;
   const discover = async () => {

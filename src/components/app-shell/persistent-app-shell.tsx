@@ -491,7 +491,7 @@ function internalHrefFromAnchor(anchor: HTMLAnchorElement): string | null {
     return null;
   }
   const path = splitHref(href).pathname;
-  if (path.startsWith("/api/") || path.startsWith("/_next/") || path === "/login" || path === "/HKQ" || path === "/tiaotiao" || path === "/logout" || /\.[a-z0-9]+$/i.test(path)) return null;
+  if (path.startsWith("/api/") || path.startsWith("/_next/") || path === "/login" || path === "/HKQ" || path === "/logout" || /\.[a-z0-9]+$/i.test(path)) return null;
   return normalizeHref(href);
 }
 
