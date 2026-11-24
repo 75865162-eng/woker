@@ -138,8 +138,17 @@ export async function readAdsEntitySummary(
     ? Prisma.sql`,${Prisma.join(spec.parentColumns.map((column) => Prisma.sql`min(d.${Prisma.raw(`"${column}"`)}) AS ${Prisma.raw(`"${column}"`)}`))}`
     : Prisma.empty;
   const search = query.search.trim();
+  const exact = Boolean(query.exactMatch);
+  const pattern = exact ? search : `%${search}%`;
+  const op = exact ? Prisma.sql`=` : Prisma.sql`ILIKE`;
+  const idField = Prisma.sql`d.${dailyId}`;
+  const nameField = spec.fallbackNameColumn ? Prisma.sql`d.${Prisma.raw(`"${spec.fallbackNameColumn}"`)}` : undefined;
+  // 字段选择限定在实体 ID / 名称两个真实列；id/name 之外的别名一律忽略，退回两列都查。
+  const targets = query.searchField === "id" ? [idField]
+    : query.searchField === "name" && nameField ? [nameField]
+    : [idField, ...(nameField ? [nameField] : [])];
   const searchClause = search
-    ? Prisma.sql`AND (d.${dailyId} ILIKE ${`%${search}%`} ${spec.fallbackNameColumn ? Prisma.sql`OR d.${Prisma.raw(`"${spec.fallbackNameColumn}"`)} ILIKE ${`%${search}%`}` : Prisma.empty})`
+    ? Prisma.sql`AND (${Prisma.join(targets.map((target) => Prisma.sql`${target} ${op} ${pattern}`), " OR ")})`
     : Prisma.empty;
 
   // 当前区间的实体汇总（严格「先求和、后算比率」；任一成员缺值 → NULL，不补 0）。

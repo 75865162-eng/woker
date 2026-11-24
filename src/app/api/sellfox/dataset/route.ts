@@ -67,6 +67,8 @@ export async function GET(request: Request) {
       site: url.searchParams.get("site") ?? "",
       shop: url.searchParams.get("shop") ?? "",
       search: (url.searchParams.get("search") ?? "").slice(0, 120),
+      searchField: (url.searchParams.get("searchField") ?? "").slice(0, 60),
+      exactMatch: url.searchParams.get("exactMatch") === "1",
       adType: ["sp", "sb", "sd"].includes(url.searchParams.get("adType") ?? "") ? String(url.searchParams.get("adType")) : "",
       state: url.searchParams.get("state") ?? "",
       page,

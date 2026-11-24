@@ -344,8 +344,8 @@
 
 .sellfox-ui .sf-thumb {
   display: block;
-  width: 36px;
-  height: 36px;
+  width: 48px;
+  height: 48px;
   object-fit: cover;
   background: var(--surface-muted);
   border: 1px solid var(--border);

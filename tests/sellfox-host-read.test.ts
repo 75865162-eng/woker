@@ -98,3 +98,45 @@ test("广告缺失聚合观测和全空金额保持未知", async () => {
     byCurrency: [{ currency: "USD", values: { cost: null, adSales: null } }],
   });
 });
+
+// P4：字段选择 + 精确匹配必须真实下推到 Prisma where，不能是前端假开关。
+async function captureWhere(extra: Partial<HostQuery>) {
+  assert.equal(process.env.DATABASE_URL, undefined, "隔离测试不得继承数据库凭据");
+  const globals = globalThis as unknown as { prisma?: PrismaClient };
+  const previous = globals.prisma;
+  let captured: Record<string, unknown> = {};
+  globals.prisma = {
+    sellfoxAdsProductDaily: {
+      findMany: async ({ where }: { where: Record<string, unknown> }) => { captured = where; return []; },
+      count: async () => 0,
+      groupBy: async () => [],
+    },
+  } as unknown as PrismaClient;
+  try {
+    await readHostDataset(dataset, scope, { ...query, ...extra });
+    return captured;
+  } finally {
+    globals.prisma = previous;
+  }
+}
+
+test("P4 字段选择：限定字段只查白名单内单列", async () => {
+  const where = await captureWhere({ search: "B0XXX", searchField: "asin" });
+  assert.deepEqual(where.OR, [{ asin: { contains: "B0XXX", mode: "insensitive" } }]);
+});
+
+test("P4 精确匹配：相等而非包含", async () => {
+  const where = await captureWhere({ search: "B0XXX", exactMatch: true });
+  const or = where.OR as Record<string, Record<string, unknown>>[];
+  assert.ok(Array.isArray(or) && or.length === 5);
+  for (const clause of or) {
+    const condition = Object.values(clause)[0];
+    assert.deepEqual(condition, { equals: "B0XXX", mode: "insensitive" });
+  }
+});
+
+test("P4 非法字段：忽略并退回全字段，杜绝字段注入", async () => {
+  const where = await captureWhere({ search: "x", searchField: "asin; DROP TABLE" });
+  const or = where.OR as Record<string, unknown>[];
+  assert.equal(or.length, 5, "非法字段不参与，退回全部 5 个白名单字段");
+});

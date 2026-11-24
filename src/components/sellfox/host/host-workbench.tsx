@@ -40,6 +40,40 @@ const presets: { id: Exclude<DatePreset, "today" | "yesterday" | "thisMonth" | "
   { id: "d90", label: "近90天" },
 ];
 
+/**
+ * 字段选择的标签映射：仅列真实可搜索字段，键与后端 host-read.ts / ads-entity-summary.ts 白名单一致。
+ * 未在映射内的键不会下发，后端也会二次白名单校验，杜绝字段注入。
+ */
+const SEARCH_FIELD_LABELS: Record<string, string> = {
+  asin: "ASIN", msku: "MSKU", sku: "SKU", fnsku: "FNSKU", commodityName: "商品名称",
+  campaignId: "广告活动ID", campaignName: "广告活动名称", adGroupId: "广告组ID", adGroupName: "广告组名称",
+  productId: "商品ID", targetingId: "投放ID", targetingText: "投放词", placement: "广告位", searchTerm: "搜索词",
+  id: "实体ID", name: "实体名称",
+};
+
+/** 按数据集读取能力派生「字段选择 + 精确」选项；与后端白名单同口径，raw 全文数据集不支持字段/精确。 */
+function searchFieldOptions(dataset: HostDataset | undefined): { value: string; label: string }[] {
+  if (!dataset) return [];
+  const keys = dataset.summaryKind
+    ? ["id", "name"]
+    : dataset.reader === "ads_product"
+      ? ["asin", "msku", "campaignId", "adGroupId", "productId"]
+      : dataset.reader === "ads_campaign"
+        ? ["campaignName", "campaignId", "asin", "msku"]
+        : dataset.reader === "ads_ad_group"
+          ? ["adGroupName", "campaignId", "adGroupId", "targetingText", "asin", "msku"]
+          : dataset.reader === "ads_targeting"
+            ? ["targetingText", "targetingId", "campaignId", "adGroupId", "asin", "msku"]
+            : dataset.reader === "ads_placement"
+              ? ["placement", "campaignId", "asin", "msku"]
+              : dataset.reader === "ads_search_term"
+                ? ["searchTerm", "targetingText", "campaignId", "adGroupId", "asin", "msku"]
+                : dataset.reader === "inventory_fba"
+                  ? ["asin", "msku", "sku", "fnsku", "commodityName"]
+                  : [];
+  return keys.map((key) => ({ value: key, label: SEARCH_FIELD_LABELS[key] ?? key }));
+}
+
 function numberOf(value: unknown) {
   if (value == null || value === "") return null;
   const parsed = typeof value === "number" ? value : Number(value);
@@ -214,8 +248,8 @@ export function HostWorkbench({ page }: { page: HostPage }) {
   const [preset, setPreset] = useState<"d7" | "d14" | "d30" | "d90" | "custom">("d30");
   const [from, setFrom] = useState(() => rangeForPreset("d30", today).from);
   const [to, setTo] = useState(() => rangeForPreset("d30", today).to);
-  const [applied, setApplied] = useState({ from: rangeForPreset("d30", today).from, to: rangeForPreset("d30", today).to, site: "", shop: "", adType: "", search: "", state: "", bucket: "" });
-  const [draft, setDraft] = useState({ site: "", shop: "", adType: "", search: "", state: "", bucket: "" });
+  const [applied, setApplied] = useState({ from: rangeForPreset("d30", today).from, to: rangeForPreset("d30", today).to, site: "", shop: "", adType: "", search: "", searchField: "", exact: false, state: "", bucket: "" });
+  const [draft, setDraft] = useState({ site: "", shop: "", adType: "", search: "", searchField: "", exact: false, state: "", bucket: "" });
   // 汇总视图服务端排序：点击表头切换；非汇总数据集忽略（后端会回退默认列）。
   const [sort, setSort] = useState<{ by: string; order: "asc" | "desc" }>({ by: "", order: "desc" });
   const [rows, setRows] = useState<Row[]>([]);
@@ -264,7 +298,11 @@ export function HostWorkbench({ page }: { page: HostPage }) {
     if (applied.adType) params.set("adType", applied.adType);
     if (applied.state) params.set("state", applied.state);
     if (applied.bucket) params.set("bucket", applied.bucket);
-    if (applied.search) params.set("search", applied.search);
+    if (applied.search) {
+      params.set("search", applied.search);
+      if (applied.searchField) params.set("searchField", applied.searchField);
+      if (applied.exact) params.set("exactMatch", "1");
+    }
     if (sort.by) { params.set("sortBy", sort.by); params.set("sortOrder", sort.order); }
     setLoading(true);
     setError("");
@@ -340,8 +378,8 @@ export function HostWorkbench({ page }: { page: HostPage }) {
     setPreset("d30");
     setFrom(range.from);
     setTo(range.to);
-    setDraft({ site: "", shop: "", adType: "", search: "", state: "", bucket: "" });
-    setApplied({ from: range.from, to: range.to, site: "", shop: "", adType: "", search: "", state: "", bucket: "" });
+    setDraft({ site: "", shop: "", adType: "", search: "", searchField: "", exact: false, state: "", bucket: "" });
+    setApplied({ from: range.from, to: range.to, site: "", shop: "", adType: "", search: "", searchField: "", exact: false, state: "", bucket: "" });
     setPageNo(1);
   }
 
@@ -368,7 +406,11 @@ export function HostWorkbench({ page }: { page: HostPage }) {
     if (applied.adType) params.set("adType", applied.adType);
     if (applied.state) params.set("state", applied.state);
     if (applied.bucket) params.set("bucket", applied.bucket);
-    if (applied.search) params.set("search", applied.search);
+    if (applied.search) {
+      params.set("search", applied.search);
+      if (applied.searchField) params.set("searchField", applied.searchField);
+      if (applied.exact) params.set("exactMatch", "1");
+    }
     if (sort.by) { params.set("sortBy", sort.by); params.set("sortOrder", sort.order); }
     setNotice("正在导出全部筛选结果…");
     const response = await fetch(`/api/sellfox/dataset?${params}`, { cache: "no-store" });
@@ -551,14 +593,30 @@ export function HostWorkbench({ page }: { page: HostPage }) {
                 </>
               ) : null}
               {dataset.searchable ? (
-                <input
-                  className="sf-search"
-                  aria-label="搜索"
-                  placeholder={dataset.id.startsWith("ads") ? "搜索 ASIN / MSKU / 活动 / 投放词" : "搜索 ASIN / MSKU / SKU"}
-                  value={draft.search}
-                  onChange={(event) => setDraft({ ...draft, search: event.target.value })}
-                  onKeyDown={(event) => { if (event.key === "Enter") search(); }}
-                />
+                <>
+                  {searchFieldOptions(dataset).length ? (
+                    <select
+                      aria-label="搜索字段"
+                      title="限定搜索字段；留空则跨全部可搜索字段"
+                      value={draft.searchField}
+                      onChange={(event) => setDraft({ ...draft, searchField: event.target.value })}
+                    >
+                      <option value="">全部字段</option>
+                      {searchFieldOptions(dataset).map((field) => <option key={field.value} value={field.value}>{field.label}</option>)}
+                    </select>
+                  ) : null}
+                  <input
+                    className="sf-search"
+                    aria-label="搜索"
+                    placeholder={dataset.id.startsWith("ads") ? "搜索 ASIN / MSKU / 活动 / 投放词" : "搜索 ASIN / MSKU / SKU"}
+                    value={draft.search}
+                    onChange={(event) => setDraft({ ...draft, search: event.target.value })}
+                    onKeyDown={(event) => { if (event.key === "Enter") search(); }}
+                  />
+                  {searchFieldOptions(dataset).length ? (
+                    <label className="sf-check" title="精确匹配（相等）而非包含匹配"><input type="checkbox" checked={draft.exact} onChange={(event) => setDraft({ ...draft, exact: event.target.checked })} /><span>精确</span></label>
+                  ) : null}
+                </>
               ) : null}
               <button type="button" className="sf-btn sf-btn-primary" onClick={search}>搜索</button>
               <button type="button" className="sf-btn" onClick={reset}>重置</button>
