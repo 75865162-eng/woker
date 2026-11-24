@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
@@ -67,9 +67,44 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "文件不能超过 50MB。" }, { status: 400 });
     }
 
+    // 同工作区文件指纹去重：先算 sha256，命中已完成/处理中的同一文件则拦截，避免重复导入。
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const contentHash = createHash("sha256").update(buffer).digest("hex");
+    const duplicate = await prisma.fileObject.findFirst({
+      where: {
+        organizationId: user.organizationId,
+        workspaceId: scope.workspaceId,
+        accountId: scope.accountId,
+        marketplace: scope.marketplace,
+        contentHash,
+        size: buffer.byteLength,
+        // 失败任务允许用同一文件重试；只有排队中/处理中/已完成的才算重复。
+        jobs: { some: { status: { in: ["queued", "running", "done"] } } },
+      },
+      select: {
+        id: true,
+        originalName: true,
+        createdAt: true,
+        jobs: { orderBy: { createdAt: "desc" }, take: 1, select: { id: true, status: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    if (duplicate) {
+      const existingJob = duplicate.jobs[0];
+      return NextResponse.json({
+        error: `该文件已在本次导入中上传过（原文件：${duplicate.originalName}），已拦截重复导入。`,
+        duplicate: {
+          fileId: duplicate.id,
+          jobId: existingJob?.id ?? null,
+          jobStatus: existingJob?.status ?? null,
+          uploadedAt: duplicate.createdAt,
+        },
+      }, { status: 409 });
+    }
+
     const storage = getStorageDriver();
     const storageKey = createStorageKey(file.name);
-    const storedObject = await storage.putFile({ key: storageKey, file });
+    const storedObject = await storage.putBuffer({ key: storageKey, buffer, contentType: file.type || undefined });
 
     const fileObject = await prisma.fileObject.create({
       data: {
@@ -83,6 +118,7 @@ export async function POST(request: Request) {
         size: storedObject.size,
         storageKey: storedObject.key,
         storageType: getStorageType(),
+        contentHash,
       },
     });
     const job = await prisma.importJob.create({

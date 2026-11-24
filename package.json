@@ -57,6 +57,7 @@
     "test:sellfox:browser": "playwright test --config tests/browser/sellfox.config.ts",
     "test:operations:browser": "playwright test --config tests/browser/operations.config.ts",
     "check:fast": "npm run test && npm run lint && npm run typecheck && npm run ui:guard",
+    "perf:p2": "node scripts/performance/p2-performance-acceptance.mjs",
     "check:production": "node scripts/runtime/production-readiness.mjs",
     "check:deploy": "node scripts/runtime/production-readiness.mjs --gate deploy",
     "prod:env:init": "node scripts/runtime/production-env-init.mjs",

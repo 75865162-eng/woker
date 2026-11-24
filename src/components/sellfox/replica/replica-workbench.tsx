@@ -6,6 +6,8 @@ import { Dialog } from "@/components/ui/overlays";
 import { ColumnResizeHandle } from "@/components/ui/column-resize-handle";
 import { useSessionColumnWidths } from "@/lib/hooks/use-session-column-widths";
 import { useColumnPreferences } from "@/lib/hooks/use-column-preferences";
+import { useVirtualRows } from "@/lib/hooks/use-virtual-rows";
+import { estimateReplicaRowHeight, shouldVirtualizeRows } from "@/lib/sellfox/virtual-row-height";
 import { normalizeWorkspaceScope } from "@/lib/workspace/scope";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
 import { sellfoxSiteLabel } from "@/lib/sellfox/marketplace-site";
@@ -581,6 +583,16 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
     ...visible.map((key) => columnByKey.get(key)).filter((column): column is ReplicaColumn => Boolean(column)),
     ...days,
   ];
+  // 虚拟行：同一张表列结构固定 → 行高可预测；大页才窗口化，小页保持全量渲染。
+  const rowHeight = estimateReplicaRowHeight(columns);
+  const virtualEnabled = shouldVirtualizeRows(rows.length);
+  const virtualRows = useVirtualRows<HTMLDivElement>({
+    itemCount: rows.length,
+    rowHeight,
+    overscan: 8,
+    enabled: virtualEnabled && !loading,
+  });
+  const visibleRows = virtualEnabled ? rows.slice(virtualRows.startIndex, virtualRows.endIndex) : rows;
   // 左侧标识列成组冻结：按实际列顺序与会话宽度累加 left 偏移，滚动到最右日列仍能认出这一行。
   const freezeCount = matrix ? 3 : 0;
   function freezeCellStyle(index: number): { left: number } | undefined {
@@ -984,7 +996,7 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
           <button type="button" className="sf-btn" onClick={() => setRefreshNonce((value) => value + 1)}>重试</button>
         </div>
       ) : null}
-      <div className={matrix ? "sf-table-wrap sf-matrix" : "sf-table-wrap"}>
+      <div ref={virtualEnabled ? virtualRows.containerRef : undefined} data-virtual-total={virtualEnabled ? rows.length : undefined} data-virtual-window={virtualEnabled ? `${virtualRows.startIndex}-${virtualRows.endIndex}` : undefined} className={`${matrix ? "sf-table-wrap sf-matrix" : "sf-table-wrap"}${virtualEnabled ? " sf-virtual-scroll" : ""}`}>
         {loading ? <div className="sf-loading-mask" role="status" aria-live="polite"><span className="sf-loading-spinner" aria-hidden="true" />加载中…</div> : null}
         <table>
           <thead>
@@ -1011,8 +1023,11 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
                 </div>
               </td></tr>
             ) : null}
-            {!loading ? rows.map((row, index) => (
-              <tr key={String(row.id ?? index)}>
+            {virtualEnabled && virtualRows.beforeHeight > 0 ? (
+              <tr aria-hidden="true"><td colSpan={columns.length} style={{ height: `${virtualRows.beforeHeight}px`, padding: 0, border: 0 }} /></tr>
+            ) : null}
+            {!loading ? visibleRows.map((row, index) => (
+              <tr key={String(row.id ?? virtualRows.startIndex + index)}>
                 {columns.map((column, columnIndex) => (
                   <td key={column.key} style={{ ...colWidthStyle(getWidth(column.key)), ...freezeCellStyle(columnIndex) }} title={cellText(column, row, applied.metric, fx) || undefined} className={[column.key.startsWith("day:") ? "sf-day" : column.kind === "qty" || column.kind === "metric" ? "sf-num" : undefined, freezeCellStyle(columnIndex) ? "sf-freeze" : undefined].filter(Boolean).join(" ")}>
                     <Cell column={column} row={row} metric={applied.metric} drillParams={drillParams} onTrend={setTrendRow} fx={fx} />
@@ -1020,6 +1035,9 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
                 ))}
               </tr>
             )) : null}
+            {virtualEnabled && virtualRows.afterHeight > 0 ? (
+              <tr aria-hidden="true"><td colSpan={columns.length} style={{ height: `${virtualRows.afterHeight}px`, padding: 0, border: 0 }} /></tr>
+            ) : null}
           </tbody>
           {matrix && !loading && rows.length ? (
             <tfoot>

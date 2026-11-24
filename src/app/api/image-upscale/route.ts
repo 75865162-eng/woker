@@ -59,28 +59,41 @@ export async function POST(request: Request) {
     const { user } = permission;
     const storage = getStorageDriver();
     const batchId = randomUUID();
-    const jobs = [];
+    const staged = files.map((file) => {
+      const jobId = randomUUID();
+      const inputKey = `image-upscale/inputs/${new Date().toISOString().slice(0, 10)}/${jobId}${getExtension(file)}`;
+      return { file, inputKey, jobId };
+    });
     const storedKeys: string[] = [];
     try {
-      for (const file of files) {
-        const jobId = randomUUID();
-        const inputKey = `image-upscale/inputs/${new Date().toISOString().slice(0, 10)}/${jobId}${getExtension(file)}`;
+      // N+1 收口：文件存储并行写入，任务行一次性 createMany，不再逐张 await prisma.create。
+      const storedByJobId = new Map<string, number>();
+      await Promise.all(staged.map(async ({ file, inputKey, jobId }) => {
         const stored = await storage.putFile({ key: inputKey, file });
         storedKeys.push(stored.key);
-        jobs.push(await prisma.imageUpscaleJob.create({
-          data: {
-            id: jobId, organizationId: user.organizationId, userId: user.id, batchId,
-            originalName: file.name, mimeType: file.type, inputKey: stored.key, inputSize: stored.size,
-            scale: options.scale, imageKind: options.imageKind, noiseLevel: options.noiseLevel, model: options.model,
-          },
-        }));
-      }
+        storedByJobId.set(jobId, stored.size);
+      }));
+      await prisma.imageUpscaleJob.createMany({
+        data: staged.map(({ file, jobId, inputKey }) => ({
+          id: jobId, organizationId: user.organizationId, userId: user.id, batchId,
+          originalName: file.name, mimeType: file.type, inputKey, inputSize: storedByJobId.get(jobId) ?? file.size,
+          scale: options.scale, imageKind: options.imageKind, noiseLevel: options.noiseLevel, model: options.model,
+        })),
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "图片任务保存失败。";
       await prisma.imageUpscaleJob.updateMany({ where: { batchId, organizationId: user.organizationId }, data: { status: "failed", error: message } });
       await Promise.all(storedKeys.map((key) => storage.delete(key).catch(() => undefined)));
       return NextResponse.json({ error: message }, { status: 503 });
     }
+    const rows = await prisma.imageUpscaleJob.findMany({
+      where: { batchId, organizationId: user.organizationId },
+    });
+    // createMany 不保证返回顺序；按上传顺序重排，保持与逐条创建时一致的响应语义。
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    const jobs = staged
+      .map(({ jobId }) => byId.get(jobId))
+      .filter((job): job is NonNullable<typeof job> => Boolean(job));
     const dispatches = await Promise.all(jobs.map(job => dispatchPersistedJob(() => enqueueImageUpscaleJob(job.id))));
     return NextResponse.json({ batchId, jobs, dispatchDeferred: dispatches.some(result => result.dispatchDeferred) }, { status: 202 });
   } catch (error) {

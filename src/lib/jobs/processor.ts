@@ -19,7 +19,8 @@ import {
 } from "@/lib/products/product-export-job";
 import { productRecordPayloadToProduct } from "@/lib/products/product-projection";
 import { getStorageDriver } from "@/lib/storage";
-import type { AdjustmentDraft, CampaignGroup, DataBatch, LifecycleGroupId, PerformanceRow } from "@/lib/types";
+import { buildRowLevelIssues } from "@/lib/jobs/row-level-issues";
+import type { AdjustmentDraft, CampaignGroup, DataBatch, DraftValidationResult, LifecycleGroupId, PerformanceRow } from "@/lib/types";
 import type { CurrentUser } from "@/lib/auth/session";
 
 import { claimExecution, ExecutionLostError, type JobExecution } from "@/lib/runtime/job-execution";
@@ -499,6 +500,12 @@ async function processProductExportJob(
         fileName: job.file.originalName,
       });
 
+      // 行级错误：把校验未通过项映射为 { rowNo, sku, reason }[]，随 job.payload 回传给前端定位原始行。
+      const rowLevelIssues = buildRowLevelIssues(
+        drafts,
+        exportResult.validations as readonly DraftValidationResult[],
+      );
+
       if (exportResult.writableCount === 0) {
         throw new Error(
           `没有可写回的草稿。冲突 ${exportResult.conflictCount} 条，阻止 ${exportResult.blockedCount} 条。`,
@@ -522,6 +529,14 @@ async function processProductExportJob(
           progress: 100,
           resultKey,
           leaseExpiresAt: null,
+          payload: {
+            rowLevelIssues,
+            counts: {
+              writable: exportResult.writableCount,
+              blocked: exportResult.blockedCount,
+              conflict: exportResult.conflictCount,
+            },
+          } as unknown as Prisma.InputJsonValue,
           file: {
             update: {
               status: "done",

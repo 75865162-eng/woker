@@ -15,12 +15,35 @@
  * 由调用方用较短 TTL 或 bypassCache 跳过（对齐规划 §5.2）。
  */
 
+import { LruMap } from "@/lib/cache/lru-map";
+
 export type FetchLike = (input: string, init?: {
   method?: string;
   headers?: HeadersInit;
   signal?: AbortSignal;
   cache?: RequestCache;
 }) => Promise<Response>;
+
+/**
+ * 慢变只读接口白名单：调用方未显式给出 ttlMs 时，按前缀匹配这些接口启用短 TTL 读缓存。
+ * 只放“同一 scope 秒内不会变化、且非权限/运行态”的资源；写操作与强实时数据禁止入内。
+ * 新接口如需入名单，在此登记即可，键为 URL 前缀（最长匹配优先），值为毫秒 TTL。
+ */
+const SLOW_READ_TTL_BY_PREFIX: ReadonlyArray<{ prefix: string; ttlMs: number }> = [
+  { prefix: "/api/lili/call-quota", ttlMs: 10_000 },
+];
+
+/** 解析最终 TTL：调用方显式值（含 0）优先；否则查白名单前缀，未命中返回 0。 */
+export function resolveResourceTtlMs(url: string, explicit?: number): number {
+  if (explicit !== undefined) return Math.max(0, explicit);
+  let matched = 0;
+  for (const rule of SLOW_READ_TTL_BY_PREFIX) {
+    if (url === rule.prefix || url.startsWith(`${rule.prefix}?`) || url.startsWith(`${rule.prefix}/`)) {
+      matched = Math.max(matched, rule.ttlMs);
+    }
+  }
+  return matched;
+}
 
 export type ResourceCacheOptions = {
   /** 缓存有效期（毫秒）。默认 0 = 不缓存（仅并发合并）。 */
@@ -35,10 +58,11 @@ export type ResourceCacheOptions = {
   now?: () => number;
 };
 
-type CacheEntry = { value: unknown; expiresAt: number };
 type InflightEntry = { promise: Promise<unknown> };
 
-const store = new Map<string, CacheEntry>();
+/** 结果缓存上限：防止长期运行进程因 scope/query 组合膨胀而无界增长。 */
+const RESOURCE_CACHE_LIMIT = 500;
+const store = new LruMap<unknown>({ maxEntries: RESOURCE_CACHE_LIMIT });
 const inflight = new Map<string, InflightEntry>();
 
 /** 把 HeadersInit 归一化为稳定字符串（排序，忽略 content-type 等非 scope 头）。 */
@@ -98,16 +122,16 @@ export async function readApiResource<T>(key: string, url: string, init: {
   headers?: HeadersInit;
   signal?: AbortSignal;
 } = {}, options: ResourceCacheOptions = {}): Promise<ResourceResult<T>> {
-  const ttlMs = options.ttlMs ?? 0;
+  const ttlMs = resolveResourceTtlMs(url, options.ttlMs);
   const retries = Math.max(0, options.retries ?? 1);
   const backoff = options.backoffMs ?? ((attempt: number) => 200 * Math.pow(2, attempt));
   const now = options.now ?? Date.now;
   const fetcher = options.fetcher ?? ((input, i) => fetch(input, i as RequestInit));
 
-  // 1) 命中缓存且未过期 → 直接返回
-  const cached = store.get(key);
-  if (cached && cached.expiresAt > now()) {
-    return { ok: true, value: cached.value as T, fromCache: true, fromInflight: false };
+  // 1) 命中缓存且未过期 → 直接返回（LruMap 内部判过期并移到队尾）
+  const cached = store.get(key, now());
+  if (cached !== undefined) {
+    return { ok: true, value: cached as T, fromCache: true, fromInflight: false };
   }
 
   // 2) 同 key 已有在途请求 → 合并（注意：abort 只应由原始请求方控制）
@@ -142,7 +166,7 @@ export async function readApiResource<T>(key: string, url: string, init: {
           throw err;
         }
         const value = (await response.json()) as T;
-        if (ttlMs > 0) store.set(key, { value, expiresAt: now() + ttlMs });
+        if (ttlMs > 0) store.set(key, value, ttlMs, now());
         return value;
       } catch (cause) {
         const err = cause instanceof Error ? cause : new Error(String(cause));
@@ -185,4 +209,9 @@ export function __resetApiResourceCacheForTest(): void {
 /** 仅供测试/诊断：当前缓存条目数。 */
 export function __apiResourceCacheSize(): number {
   return store.size;
+}
+
+/** 仅供测试/诊断：主动清除所有过期条目，返回清理数量。 */
+export function __pruneApiResourceCache(now?: number): number {
+  return store.pruneExpired(now);
 }
