@@ -28,9 +28,25 @@ const input = "min-h-9 rounded border border-border bg-background px-2 text-sm";
 const control = "mt-1 h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground outline-none transition-colors focus:border-brand";
 const filterLabel = "min-w-0 text-xs font-semibold text-muted";
 
+/**
+ * 判定"最近一次增量窗口已完成"：游标仅在提交完成的瞬间为 SUCCEEDED，
+ * 随即被规划下一窗口置回 RUNNING，故不能只看瞬时 status。
+ * 只要本数据源曾成功提交过窗口（lastSuccessAt 有值且有效）或当前正处 SUCCEEDED，
+ * 即视为"最近窗口完整"。这不代表全历史完整——那由详情/历史补采指标单独表达。
+ */
+export function orderWindowRecentlyCompleted(cursor: { status?: string | null; lastSuccessAt?: string | null } | null | undefined): boolean {
+  if (!cursor) return false;
+  if (cursor.status === "SUCCEEDED") return true;
+  return !!cursor.lastSuccessAt && Number.isFinite(Date.parse(cursor.lastSuccessAt));
+}
+
+function windowCompleted(source: OrderSource): boolean {
+  return orderWindowRecentlyCompleted(source.resourceCursor);
+}
+
 function windowTone(source: OrderSource): { tone: StatusTone; label: string } {
   if (!source.enabled) return { tone: "neutral", label: "绑定已停用" };
-  if (source.resourceCursor?.status === "SUCCEEDED") return { tone: "success", label: "最近窗口完整" };
+  if (windowCompleted(source)) return { tone: "success", label: "最近窗口完整" };
   if (source.resourceCursor) return { tone: "warning", label: "窗口未完成" };
   return { tone: "neutral", label: "尚未同步" };
 }
@@ -86,7 +102,7 @@ export function OrdersWorkbench({ sellerAccountId = "", marketplaceId = "", getH
   const sources = result?.sources ?? [];
   const detailsEnabledCount = sources.filter((source) => source.detailsEnabled).length;
   const detailsCompleteCount = sources.filter((source) => source.detailsEnabled && source.detailsComplete).length;
-  const windowCompleteCount = sources.filter((source) => source.enabled && source.resourceCursor?.status === "SUCCEEDED").length;
+  const windowCompleteCount = sources.filter((source) => source.enabled && windowCompleted(source)).length;
 
   const columns: DataTableColumn<OrderRow>[] = [
     {
