@@ -67,7 +67,7 @@ test("native Next routes render, preserve old URLs and enforce ERP module permis
       await new Promise((resolve) => setTimeout(resolve, 150));
     }
     const anonymous = await get("/lili", "anonymous");
-    assert.equal(anonymous.status, 307); assert.match(anonymous.headers.get("location")!, /\/login\?next=/);
+    assert.equal(anonymous.status, 307); assert.match(anonymous.headers.get("location")!, /\/HKQ\?next=/);
     assert.equal((await get("/lili/api/health", "anonymous")).status, 401);
     assert.equal((await get("/api/lili/health", "anonymous")).status, 401);
     const pages = ["/lili", "/lili/v2/skills", "/lili/v2/skills/acos-reduction-plan", "/lili/v2/lab/skills/acos-reduction-plan", "/lili/v2/cases", "/lili/v2/cases/competitor-teardown", "/lili/v2/lab/cases/monday-review", "/lili/v2/workflows", "/lili/v2/workflows/monday-review", "/lili/v2/tools", "/lili/v2/tools/meta_search_skills", "/lili/v2/approvals", "/lili/v2/recharge", "/lili/v2/help", "/lili/v2/tool-config"];

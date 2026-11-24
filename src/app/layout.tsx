@@ -16,8 +16,11 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "条条tiaotiao",
-  description: "基于规则引擎并预留 AI Bid Optimization Engine 的 Amazon PPC 广告优化 SaaS。",
+  title: {
+    default: "AOOCY",
+    template: "%s | AOOCY",
+  },
+  description: "Thoughtful signs for everyday spaces. An independent brand dedicated to practical, well-made products.",
 };
 
 export default function RootLayout({
