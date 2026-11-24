@@ -81,6 +81,7 @@ export const navigationGroups: NavigationGroup[] = [
     { id: "amazon.salesTraffic", href: "/amazon/sales-traffic", label: "销售与流量", icon: ChartNoAxesCombined, moduleId: "operations" },
     { id: "amazon.brandAnalytics", href: "/amazon/brand-analytics", label: "品牌分析", icon: SearchCheck, moduleId: "operations" },
     { id: "amazon.dataDictionary", href: "/amazon/data-dictionary", label: "数据字典", icon: BookMarked, moduleId: "operations" },
+    { id: "amazon.fieldParity", href: "/amazon/wimoor-field-parity", label: "Wimoor 字段对标", icon: ListChecks, moduleId: "operations" },
     // 商品 / Listing
     { id: "amazon.catalog", href: "/amazon/catalog", label: "在线商品与库存", icon: Store, moduleId: "operations" },
     { id: "amazon.listing", href: "/amazon/listing", label: "Listing 信息", icon: ClipboardList, moduleId: "operations" },

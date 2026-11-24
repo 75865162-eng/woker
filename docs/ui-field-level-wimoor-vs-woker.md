@@ -273,3 +273,37 @@
   - host 广告产品页字段选择下拉 + 精确勾选渲染 ✅，字段选项随数据集派生（summary→实体ID/实体名称）✅
   - 选「实体ID + 精确」搜索，请求带 `searchField=id&exactMatch=1` ✅
 - **环境备注**：本地销量/广告快照表 0 行（真实数据在服务器），复制按钮的实际数据行与商品图渲染尺寸无法本地视觉验收；代码层已通过 typecheck/lint/单测，逻辑正确。
+
+---
+
+## 14. P0–P2 全量字段对标升级（2026-11-24）
+
+按用户提供的《Wimoor ↔ 本项目 ↔ SP-API 字段级映射核对表》（归档于 `docs/wimoor-sp-api-field-mapping-audit-2026-11-24.md`，基于 HEAD `af8f453a` / Wimoor `ec86736b`）做全量 P0–P2 升级。用户明确选择「全量 P0–P2」。
+
+### 14.1 架构决策：不照搬显式列+迁移灌数
+
+核对表要求「Wimoor 每列建显式列」，但本项目架构是**原始行 Json 保留 + 只读派生层即时计算**（已有 `order-period-summary`、`settlement-sku-pivot`、`profit-report` 三基座）。本地无业务数据、迁移需超管预建扩展、且会造出大量无法验证的空列——违背用户「按真实数据收尾、不臆造」红线。因此本轮落地形态为「统一字段对标派生层」，让全量差距**可见、可机读、可验证**，而非铺开空列。
+
+### 14.2 落地内容
+
+| 模块 | 文件 | 内容 |
+| --- | --- | --- |
+| 字段目录 + 五态覆盖状态机 | `wimoor-field-catalog.ts` | §3.1–§3.9 全部 10 组、158 个字段结构化（wimoor prop / 模型.字段 / SP-API 元素 / 状态 / 优先级 / 缺口动作）；五态=显式列/可提取/派生已实现/待数据/待拍板；`coverageSummary`/`prioritySummary`/`implementedRatio` 聚合。 |
+| Wimoor 实证派生公式 | `wimoor-derived-metrics.ts` | 广告 CTR/ACOS/ROAS/CSRT/avgcost（含 ACOS 哨兵 `1e10` 特殊分支）、利润 setincome/profit/profitrate/refundrate/avgprice（HALF_UP 2 位）、流量比率口径标注。公式全部取自 Wimoor 源码实证（Mapper.xml:211-221、ServiceImpl:1739-1762），带口径来源；分母为 0 返回 null 不臆造；利润未传的真实扣减项列入 `missingDeductions` 不静默补 0。 |
+| 源字段 Json 提取映射 | `wimoor-field-extract.ts` | 订单行税费/折扣/运费、退货退款金额/购买日期/留言/追踪号、流量比率、库存分站点、广告同跨SKU/分窗口——多别名+归一化匹配，空值不补零，返回来源键供审计。 |
+| 只读 API | `/api/operations/wimoor-field-parity` | 鉴权 + workspace scope；暴露字段目录、覆盖汇总、派生口径来源、提取规格；不读/不返业务数据。 |
+| 对标看板 | `(erp)/operations/wimoor-field-parity` + `wimoor-field-parity-workbench.tsx` | 覆盖统计（65.8%：显式43/可提取43/派生18/待数据31/待拍板23）、P0=36/P1=34/P2=15 缺口、字段矩阵（按页面/状态/优先级筛选）、派生口径与 Wimoor 源码出处展开。导航入口「亚马逊数据 → Wimoor 字段对标」。 |
+
+### 14.3 覆盖现状（158 字段）
+
+- 已覆盖 104（显式列 43 + 可提取 43 + 派生已实现 18）= **65.8%**。
+- 缺口 54：待数据/迁移 31、待拍板/本地 23。P0 36 / P1 34 / P2 15。
+- **待数据项**（周转/库龄桶/动销、规划快照、同跨SKU归因、分归因窗口、建议竞价等）：需迁移+真实数据后按核对表 §6 复核取值，不臆造。
+- **待拍板项**（VAT/所得税/关税含税口径、汇率来源、采购成本取数源、PII 范围、广告与自然销售混算、派生公式固化）：按核对表 §6.4，确认前仅标注激活条件不生成业务值。
+
+### 14.4 验证循环
+
+- **typecheck** ✅ / **lint** 0 error（新增 1 条 warning 已修，回到 12 条基线 warning）/ **ui:guard** 11 项零回退。
+- **单元测试**：新增 3 个测试文件共 29 条断言全绿——`wimoor-field-catalog`（6，目录完整性/状态一致性）、`wimoor-derived-metrics`（11，公式/哨兵分支/分母0/精度/诚实标注）、`wimoor-field-extract`（12，精确/别名/归一化/空值不补零）。
+- **浏览器 E2E**（localhost:3000，系统 chromium）14 项全 PASS：登录、API 200、158 字段、五态齐全、P0/P1/P2 缺口、Wimoor 源码出处、5 类提取规格、覆盖比例 65.8%、看板渲染、158 行矩阵、状态药丸、P0 筛选=36、口径出处展开。
+- **环境备注**：本地快照表 0 行（真实数据在服务器），看板展示的是静态字段目录与派生口径，不依赖业务数据；取值级一致性按核对表 §6 后置执行。

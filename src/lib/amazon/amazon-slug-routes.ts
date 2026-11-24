@@ -78,6 +78,7 @@ export const amazonSlugRoutes: Record<string, string> = {
   connections: "view:connections",
   "ads-accounts": "/amazon-ads/accounts",
   "data-dictionary": "/operations/data-dictionary",
+  "wimoor-field-parity": "/operations/wimoor-field-parity",
   // 独立路由页
   reviews: "/operations/reviews",
   "sales-plans": "/operations/sales-plans",
