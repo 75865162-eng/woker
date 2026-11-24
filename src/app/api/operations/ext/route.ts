@@ -12,6 +12,10 @@ import {
   saveExchangeOrder, saveOfferWatch, savePaymentRequest, saveQuotation, saveRepricingRule,
   saveReview, saveSalesPlan, saveTaxInvoice, selectQuotation, transitionChannelOrder,
   transitionExchangeOrder, transitionPaymentRequest,
+  // 系统管理 + 采购物流升级（2026-11-24）
+  saveDepartment, saveAnnouncement, savePersonalNote, deletePersonalNote, revokeSession,
+  saveQuoteChannel, saveQuoteRule, saveQuoteRequest, transitionQuoteRequest,
+  saveQuote, transitionQuote, savePurchaseReturn, transitionPurchaseReturn,
 } from '@/lib/ext/service';
 
 export const runtime = 'nodejs';
@@ -70,6 +74,21 @@ const writeActions: Record<string, { action: 'view' | 'edit' | 'create' | 'appro
   'save-dictionary-item': { action: 'edit', handler: saveDictionaryItem },
   'delete-dictionary-item': { action: 'edit', handler: deleteDictionaryItem },
   'save-custom-field': { action: 'edit', handler: saveCustomField },
+  // 系统管理升级
+  'save-department': { action: 'edit', handler: saveDepartment },
+  'save-announcement': { action: 'edit', handler: saveAnnouncement },
+  'save-personal-note': { action: 'edit', handler: savePersonalNote },
+  'delete-personal-note': { action: 'edit', handler: deletePersonalNote },
+  'revoke-session': { action: 'approve', handler: revokeSession },
+  // 采购物流升级
+  'save-quote-channel': { action: 'edit', handler: saveQuoteChannel },
+  'save-quote-rule': { action: 'edit', handler: saveQuoteRule },
+  'save-quote-request': { action: 'edit', handler: saveQuoteRequest },
+  'transition-quote-request': { action: 'edit', handler: transitionQuoteRequest },
+  'save-quote': { action: 'edit', handler: saveQuote },
+  'transition-quote': { action: 'approve', handler: transitionQuote },
+  'save-purchase-return': { action: 'edit', handler: savePurchaseReturn },
+  'transition-purchase-return': { action: 'approve', handler: transitionPurchaseReturn },
 };
 
 export async function GET(request: Request) {

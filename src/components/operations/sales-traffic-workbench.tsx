@@ -237,7 +237,7 @@ export function SalesTrafficWorkbench({ sources, canSync, canExport, taskId, onT
         getRowKey={(row) => row.id}
         columns={[
           { key: "asin", header: "商品身份", render: (row) => (<>{productDim === "SKU" ? (row.sellerSku ?? "—") : productDim === "父ASIN" ? (row.parentAsin ?? "—") : row.childAsin}{row.productTitle && <span className="block max-w-[220px] truncate text-muted" title={row.productTitle}>{row.productTitle}</span>}<span className="block text-muted">{formatSiteStore(row.marketplaceId, row.sellerName)}{productDim !== "SKU" && row.sellerSku ? ` · ${row.sellerSku}` : ""}{productDim === "SKU" && row.childAsin ? ` · ASIN ${row.childAsin}` : ""}</span></>) },
-          { key: "image", header: "主图", render: (row) => <AsinThumb sellerAccountId={row.sellerAccountId} marketplaceId={row.marketplaceId} asin={row.childAsin} images={mainImages} className="h-14 w-14" /> },
+          { key: "image", header: "主图", render: (row) => <AsinThumb sellerAccountId={row.sellerAccountId} marketplaceId={row.marketplaceId} asin={row.childAsin} src={row.imageUrl} images={mainImages} className="h-14 w-14" /> },
           { key: "date", header: "业务日", render: (row) => row.businessDate },
           { key: "sales", header: "销售额", numeric: true, render: (row) => row.metrics.orderedProductSales ? `${row.metrics.orderedProductSales.amount} ${row.metrics.orderedProductSales.currencyCode}` : "—" },
           { key: "units", header: "销量 / 订单商品项数", render: (row) => `${row.metrics.unitsOrdered ?? "—"} / ${row.metrics.totalOrderItems ?? "—"}` },

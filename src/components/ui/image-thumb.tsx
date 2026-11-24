@@ -2,10 +2,14 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { amazonThumbnailUrl } from "@/lib/amazon-sync/image-url";
 
 /**
  * 列表/卡片缩略图：固定尺寸容器防布局抖动，加载中显示骨架，
  * 失败或无图显示名称首字兜底。加载懒执行、异步解码。
+ *
+ * 亚马逊 CDN 源图会自动改写为缩略图尺寸后缀（默认 240px），不下载、不转码；
+ * 非亚马逊 URL（本地持久化缩略图、data URL 等）原样加载。缩略图状态随 src 变化重置。
  */
 export function ImageThumb({
   src,
@@ -14,6 +18,7 @@ export function ImageThumb({
   className,
   imgClassName,
   referrerPolicy,
+  thumbnailEdge,
 }: {
   src?: string | null;
   alt?: string;
@@ -22,9 +27,17 @@ export function ImageThumb({
   className?: string;
   imgClassName?: string;
   referrerPolicy?: React.ImgHTMLAttributes<HTMLImageElement>["referrerPolicy"];
+  /** 亚马逊 CDN 缩略图边长；传 0 关闭改写（如大图预览），默认 240 */
+  thumbnailEdge?: number;
 }) {
   const [status, setStatus] = useState<"loading" | "loaded" | "error">(src ? "loading" : "error");
+  const [lastSrc, setLastSrc] = useState(src ?? null);
+  if (lastSrc !== (src ?? null)) {
+    setLastSrc(src ?? null);
+    setStatus(src ? "loading" : "error");
+  }
 
+  const displaySrc = thumbnailEdge === 0 ? (src ?? null) : (amazonThumbnailUrl(src, thumbnailEdge) ?? src ?? null);
   const initial = (fallback || alt || "?").trim().charAt(0).toUpperCase() || "?";
 
   return (
@@ -42,7 +55,7 @@ export function ImageThumb({
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={src!}
+          src={displaySrc!}
           alt={alt || "商品主图"}
           loading="lazy"
           decoding="async"

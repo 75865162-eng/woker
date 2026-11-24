@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { amazonImageUrl, createAmazonImageThumbnail, extractAmazonMainImage } from "@/lib/amazon-sync/catalog-images";
+import { amazonImageUrl, amazonThumbnailUrl, createAmazonImageThumbnail, extractAmazonMainImage } from "@/lib/amazon-sync/catalog-images";
 import sharp from "sharp";
 
 test("Amazon image URLs accept only the HTTPS Amazon image CDN", () => {
@@ -45,6 +45,58 @@ test("catalog dimensions accept decimal projection strings and skip invalid imag
   assert.equal(result?.sourceUrl, "https://m.media-amazon.com/small.jpg");
   assert.equal(result?.width, 300);
   assert.equal(result?.height, 300);
+});
+
+test("thumbnail URL rewrites the size modifier without downloading or transcoding", () => {
+  // 原图（无尺寸后缀）→ 加缩略图后缀
+  assert.equal(
+    amazonThumbnailUrl("https://m.media-amazon.com/images/I/51abc.jpg"),
+    "https://m.media-amazon.com/images/I/51abc._SL240_.jpg",
+  );
+  // 大图（带 AC/SL 后缀）→ 统一改写为缩略图尺寸
+  assert.equal(
+    amazonThumbnailUrl("https://m.media-amazon.com/images/I/51abc._AC_SL1500_.jpg"),
+    "https://m.media-amazon.com/images/I/51abc._SL240_.jpg",
+  );
+  assert.equal(
+    amazonThumbnailUrl("https://m.media-amazon.com/images/I/51abc._SX679_.jpg"),
+    "https://m.media-amazon.com/images/I/51abc._SL240_.jpg",
+  );
+  // 逗号尺寸修饰（裁剪）同样归并为 SL
+  assert.equal(
+    amazonThumbnailUrl("https://m.media-amazon.com/images/I/51abc._CR0,0,300,300_.jpg"),
+    "https://m.media-amazon.com/images/I/51abc._SL240_.jpg",
+  );
+  // 自定义尺寸 + 幂等
+  assert.equal(
+    amazonThumbnailUrl("https://m.media-amazon.com/images/I/51abc._SL240_.jpg", 160),
+    "https://m.media-amazon.com/images/I/51abc._SL160_.jpg",
+  );
+  assert.equal(
+    amazonThumbnailUrl("https://m.media-amazon.com/images/I/51abc._SL160_.jpg", 160),
+    "https://m.media-amazon.com/images/I/51abc._SL160_.jpg",
+  );
+  // 老域名同样支持
+  assert.equal(
+    amazonThumbnailUrl("https://images-na.ssl-images-amazon.com/images/I/51abc.jpg"),
+    "https://images-na.ssl-images-amazon.com/images/I/51abc._SL240_.jpg",
+  );
+});
+
+test("thumbnail URL rejects non-Amazon and non-image inputs", () => {
+  assert.equal(amazonThumbnailUrl("https://example.com/image.jpg"), null);
+  assert.equal(amazonThumbnailUrl("http://m.media-amazon.com/image.jpg"), null);
+  assert.equal(amazonThumbnailUrl(null), null);
+  // 非商品图格式（gif 等）不改写，原样返回，避免生成 CDN 不支持的畸形的尺寸后缀
+  assert.equal(
+    amazonThumbnailUrl("https://m.media-amazon.com/images/I/icon.gif"),
+    "https://m.media-amazon.com/images/I/icon.gif",
+  );
+  // 非法尺寸回退到原始安全 URL，不生成畸形链接
+  assert.equal(
+    amazonThumbnailUrl("https://m.media-amazon.com/images/I/51abc.jpg", -1),
+    "https://m.media-amazon.com/images/I/51abc.jpg",
+  );
 });
 
 test("persistent image derivative is an exact 150 by 150 WebP", async () => {

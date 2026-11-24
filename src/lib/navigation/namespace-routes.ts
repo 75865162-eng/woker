@@ -45,6 +45,11 @@ export const namespaceEntries: NamespaceEntry[] = [
   { href: "/wms/transfers", moduleId: "wms", destination: "/logistics/warehouse?tab=transfers" },
   { href: "/wms/assembly", moduleId: "wms", destination: "/operations/assembly" },
   { href: "/wms/logistics", moduleId: "logistics", destination: "/logistics" },
+  // 采购物流升级（2026-11-24）：物流报价 / 采购报表
+  { href: "/purchase/logistics-quotes", moduleId: "logistics", destination: "/operations/logistics-quotes" },
+
+  // ── 系统管理 /settings（账号菜单入口）──
+  { href: "/settings/system-admin", moduleId: "settings", destination: "/operations/system-admin" },
 
   // ── 财务管理 /fin（结算报告、FBA 赔偿已归入亚马逊）──
   { href: "/fin", moduleId: "operations", destination: "/fin/transactions" }, // 一级落地

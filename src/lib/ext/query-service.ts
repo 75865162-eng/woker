@@ -300,6 +300,125 @@ export async function queryExt(scope: WmsScope, kind: string, params: URLSearchP
       }
       case 'custom-fields':
         return { items: await tx.customFieldDefinition.findMany({ where, orderBy: [{ entity: 'asc' }, { sortOrder: 'asc' }], take: 200 }) };
+
+      // ---- 系统管理升级（2026-11-24）----
+      case 'departments':
+        return { items: await tx.department.findMany({ where, orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }], take: listLimit }) };
+      case 'announcements': {
+        const status = params.get('status') ?? '';
+        return { items: await tx.announcement.findMany({ where: { ...where, ...(status ? { status } : {}) }, orderBy: [{ pinned: 'desc' }, { publishedAt: 'desc' }, { createdAt: 'desc' }], take: listLimit }) };
+      }
+      case 'personal-notes': {
+        const items = await tx.personalNote.findMany({
+          where: { ...where, userId: scope.actorUserId },
+          orderBy: [{ pinned: 'desc' }, { updatedAt: 'desc' }],
+          take: listLimit,
+        });
+        return { items };
+      }
+      case 'online-sessions': {
+        const members = await tx.organizationMember.findMany({
+          where: { organizationId: scope.organizationId },
+          select: { userId: true, role: true },
+        });
+        const userIds = members.map(row => row.userId);
+        const now = new Date();
+        const sessions = await tx.userSession.findMany({
+          where: { userId: { in: userIds }, expiresAt: { gt: now } },
+          include: { user: { select: { name: true, email: true } } },
+          orderBy: { createdAt: 'desc' },
+          take: listLimit,
+        });
+        const roleByUser = new Map(members.map(row => [row.userId, row.role]));
+        return {
+          items: sessions.map(row => ({
+            id: row.id,
+            userId: row.userId,
+            name: row.user.name,
+            email: row.user.email,
+            role: roleByUser.get(row.userId) ?? '',
+            expiresAt: row.expiresAt.toISOString(),
+            createdAt: row.createdAt.toISOString(),
+          })),
+          activeUsers: new Set(sessions.map(row => row.userId)).size,
+        };
+      }
+
+      // ---- 采购物流升级（2026-11-24）----
+      case 'quote-channels':
+        return { items: await tx.logisticsQuoteChannel.findMany({ where, orderBy: [{ mode: 'asc' }, { code: 'asc' }], take: listLimit }) };
+      case 'quote-rules': {
+        const channelId = params.get('channelId') ?? '';
+        return { items: await tx.logisticsQuoteRule.findMany({ where: { ...where, ...(channelId ? { channelId } : {}) }, orderBy: [{ priority: 'asc' }, { createdAt: 'desc' }], take: listLimit }) };
+      }
+      case 'quote-requests': {
+        const status = params.get('status') ?? '';
+        const items = await tx.logisticsQuoteRequest.findMany({
+          where: { ...where, ...(status ? { status } : {}) },
+          include: { quotes: { orderBy: [{ totalAmount: 'asc' }], take: 20 } },
+          orderBy: { createdAt: 'desc' },
+          take: listLimit,
+        });
+        return { items };
+      }
+      case 'quotes': {
+        const requestId = params.get('requestId') ?? '';
+        const items = await tx.logisticsQuote.findMany({
+          where: { ...where, ...(requestId ? { requestId } : {}) },
+          include: { channel: { select: { code: true, name: true, mode: true } } },
+          orderBy: { createdAt: 'desc' },
+          take: listLimit,
+        });
+        return { items };
+      }
+      case 'purchase-returns': {
+        const status = params.get('status') ?? '';
+        return { items: await tx.purchaseReturn.findMany({ where: { ...where, ...(status ? { status } : {}) }, orderBy: { createdAt: 'desc' }, take: listLimit }) };
+      }
+      case 'procurement-reports': {
+        // 采购 5 类只读报表：付款明细 / 统计 / 入库进度 / 时效。全部基于现有事实表，不造数。
+        const [orders, payments, invoices, plans, returns] = await Promise.all([
+          tx.purchaseOrder.findMany({ where, select: { id: true, number: true, status: true, supplierId: true, currency: true, expectedAt: true, createdAt: true } }),
+          tx.purchasePayment.findMany({ where, select: { id: true, amount: true, currency: true, createdAt: true } }),
+          tx.purchaseInvoice.findMany({ where, select: { id: true, totalAmount: true, matchStatus: true, createdAt: true } }),
+          tx.purchasePlan.findMany({ where, select: { id: true, number: true, status: true, periodStart: true, periodEnd: true, createdAt: true } }),
+          tx.purchaseReturn.findMany({ where, select: { id: true, number: true, amount: true, status: true, createdAt: true } }),
+        ]);
+        const byStatus = (rows: Array<{ status: string }>) => rows.reduce<Record<string, number>>((acc, row) => {
+          acc[row.status] = (acc[row.status] ?? 0) + 1;
+          return acc;
+        }, {});
+        const paidAmount = payments.reduce((sum, row) => sum + num(row.amount), 0);
+        const invoiceAmount = invoices.reduce((sum, row) => sum + num(row.totalAmount), 0);
+        const returnedAmount = returns.reduce((sum, row) => sum + num(row.amount), 0);
+        // 时效：期望到货 - 建单，仅对已有 expectedAt 的单据计算（天），缺失保留 null 不造数。
+        const leadTimes = orders
+          .filter(row => row.expectedAt)
+          .map(row => (row.expectedAt!.getTime() - row.createdAt.getTime()) / 86_400_000)
+          .filter(value => Number.isFinite(value) && value >= 0);
+        const avgLeadDays = leadTimes.length ? Math.round((leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length) * 10) / 10 : null;
+        return {
+          summary: {
+            orders: orders.length,
+            payments: payments.length,
+            invoices: invoices.length,
+            plans: plans.length,
+            returns: returns.length,
+            paidAmount: Math.round(paidAmount * 1_000_000) / 1_000_000,
+            invoiceAmount: Math.round(invoiceAmount * 1_000_000) / 1_000_000,
+            returnedAmount: Math.round(returnedAmount * 1_000_000) / 1_000_000,
+            avgLeadDays,
+          },
+          orderStatus: byStatus(orders),
+          planStatus: byStatus(plans),
+          paymentDetail: payments.map(row => ({ id: row.id, amount: num(row.amount), currency: row.currency, createdAt: dayKey(row.createdAt) })),
+          invoiceStatus: invoices.reduce<Record<string, number>>((acc, row) => {
+            const key = row.matchStatus || 'UNKNOWN';
+            acc[key] = (acc[key] ?? 0) + 1;
+            return acc;
+          }, {}),
+        };
+      }
       default:
         throw new WmsError('不支持的域查询类型。', 400);
     }

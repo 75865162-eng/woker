@@ -31,6 +31,7 @@ export const accountMenuItems: NavigationItem[] = [
   { id: "account.tasks", href: "/tasks", label: "任务中心", icon: ListChecks, moduleId: "tasks" },
   { id: "account.versions", href: "/versions", label: "版本审计", icon: History, moduleId: "versions" },
   { id: "account.accounts", href: "/accounts", label: "账号权限", icon: UsersRound, moduleId: "accounts" },
+  { id: "account.systemAdmin", href: "/settings/system-admin", label: "系统管理", icon: ListChecks, moduleId: "settings" },
   { id: "account.settings", href: "/settings", label: "系统设置", icon: Settings, moduleId: "settings" },
 ];
 
@@ -153,6 +154,7 @@ export const navigationGroups: NavigationGroup[] = [
     { id: "purchase.suppliers", href: "/purchase/suppliers", label: "供应商档案", icon: Store, moduleId: "operations" },
     { id: "purchase.collab", href: "/purchase/collab", label: "采购协同", icon: Handshake, moduleId: "operations" },
     { id: "purchase.opsExtensions", href: "/purchase/ops-extensions", label: "运营资料与滞销", icon: Boxes, moduleId: "operations" },
+    { id: "purchase.logisticsQuotes", href: "/purchase/logistics-quotes", label: "物流报价与采购报表", icon: Handshake, moduleId: "logistics" },
   ] },
 
   { id: "warehouse", label: "仓库管理", icon: Warehouse, href: "/wms/logistics", items: [

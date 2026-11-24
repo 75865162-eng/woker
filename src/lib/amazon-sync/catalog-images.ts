@@ -1,4 +1,8 @@
 import sharp from "sharp";
+// URL 纯函数集中在无 Node 依赖的模块，客户端组件（ImageThumb）可安全引用；
+// 此处 re-export 保持所有既有 import 路径不变。
+export { amazonImageUrl, amazonThumbnailUrl, AMAZON_THUMBNAIL_EDGE } from "./image-url";
+import { amazonImageUrl } from "./image-url";
 
 export type CatalogImageObservation = {
   asin: string | null;
@@ -23,15 +27,6 @@ function list(value: unknown): unknown[] { return Array.isArray(value) ? value :
 function positiveDimension(value: unknown): number | null {
   const dimension = typeof value === "string" && /^\d{1,5}$/.test(value) ? Number(value) : value;
   return typeof dimension === "number" && Number.isSafeInteger(dimension) && dimension > 0 && dimension <= 20_000 ? dimension : null;
-}
-
-export function amazonImageUrl(value: unknown): string | null {
-  if (typeof value !== "string" || value.length > 2048) return null;
-  try {
-    const url = new URL(value);
-    const allowedHost = url.hostname === "m.media-amazon.com" || /^images-(?:na|eu|fe)\.ssl-images-amazon\.com$/.test(url.hostname);
-    return url.protocol === "https:" && allowedHost && !url.username && !url.password && !url.port ? url.toString() : null;
-  } catch { return null; }
 }
 
 export function extractAmazonMainImage(

@@ -8,3 +8,9 @@ export { savePaymentRequest, transitionPaymentRequest, saveExchangeOrder, transi
 export { saveTaxInvoice, computeTaxPeriod, fileTaxPeriod } from './tax-service';
 export { saveChannelAccount, saveChannelOrder, transitionChannelOrder } from './channel-service';
 export { saveDictionary, saveDictionaryItem, deleteDictionaryItem, saveCustomField } from './dictionary-service';
+// 系统管理 + 采购物流升级（2026-11-24）
+export { saveDepartment, saveAnnouncement, savePersonalNote, deletePersonalNote, revokeSession } from './system-admin-service';
+export {
+  saveQuoteChannel, saveQuoteRule, saveQuoteRequest, transitionQuoteRequest,
+  saveQuote, transitionQuote, savePurchaseReturn, transitionPurchaseReturn,
+} from './logistics-quote-service';

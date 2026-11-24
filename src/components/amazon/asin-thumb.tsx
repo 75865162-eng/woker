@@ -66,10 +66,13 @@ export function useMainImages(products: ImageProduct[]): Map<string, string> {
   return result;
 }
 
-export function AsinThumb({ sellerAccountId, marketplaceId, asin, images, className = "h-14 w-14" }: {
-  sellerAccountId: string; marketplaceId: string; asin: string; images: Map<string, string>; className?: string;
+export function AsinThumb({ sellerAccountId, marketplaceId, asin, images, src: directSrc, className = "h-14 w-14" }: {
+  sellerAccountId: string; marketplaceId: string; asin: string; images: Map<string, string>;
+  /** 后端随行返回的已解析主图 URL（优先），缺失时回退到 observation 解析结果 */
+  src?: string | null;
+  className?: string;
 }) {
-  const src = images.get(imgKey({ sellerAccountId, marketplaceId, asin }));
+  const src = directSrc || images.get(imgKey({ sellerAccountId, marketplaceId, asin }));
   return <ImageThumb src={src} alt={asin || "商品主图"} fallback={asin || "—"} className={className} referrerPolicy="no-referrer" />;
 }
 
@@ -115,6 +118,8 @@ export function useMainImagesByAsin(asins: string[]): Map<string, string> {
   }, [asins, signature, tick]);
 }
 
-export function AsinThumbByAsin({ asin, images, className = "h-14 w-14" }: { asin: string; images: Map<string, string>; className?: string }) {
-  return <ImageThumb src={images.get(asin)} alt={asin || "商品主图"} fallback={asin || "—"} className={className} referrerPolicy="no-referrer" />;
+export function AsinThumbByAsin({ asin, images, src: directSrc, className = "h-14 w-14" }: {
+  asin: string; images: Map<string, string>; src?: string | null; className?: string;
+}) {
+  return <ImageThumb src={directSrc || images.get(asin)} alt={asin || "商品主图"} fallback={asin || "—"} className={className} referrerPolicy="no-referrer" />;
 }

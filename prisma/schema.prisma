@@ -80,6 +80,15 @@ model Organization {
   dataDictionaries               DataDictionary[]
   dataDictionaryItems            DataDictionaryItem[]
   customFieldDefinitions         CustomFieldDefinition[]
+  // 系统管理升级（2026-11-24）：部门/公告/记事本 + 物流报价 + 采购退货
+  departments                    Department[]
+  announcements                  Announcement[]
+  personalNotes                  PersonalNote[]
+  logisticsQuoteRequests         LogisticsQuoteRequest[]
+  logisticsQuotes                LogisticsQuote[]
+  logisticsQuoteChannels         LogisticsQuoteChannel[]
+  logisticsQuoteRules            LogisticsQuoteRule[]
+  purchaseReturns                PurchaseReturn[]
 }
 
 model User {
@@ -229,6 +238,15 @@ model WorkspaceScope {
   dataDictionaries               DataDictionary[]
   dataDictionaryItems            DataDictionaryItem[]
   customFieldDefinitions         CustomFieldDefinition[]
+  // 系统管理升级（2026-11-24）
+  departments                    Department[]
+  announcements                  Announcement[]
+  personalNotes                  PersonalNote[]
+  logisticsQuoteRequests         LogisticsQuoteRequest[]
+  logisticsQuotes                LogisticsQuote[]
+  logisticsQuoteChannels         LogisticsQuoteChannel[]
+  logisticsQuoteRules            LogisticsQuoteRule[]
+  purchaseReturns                PurchaseReturn[]
 
   @@id([organizationId, id])
 }
@@ -7983,4 +8001,225 @@ model AiChatToolCall {
 
   @@index([runId, seq])
   @@index([organizationId, workspaceId, userId, createdAt])
+}
+
+// ============================================================================
+// 系统管理升级（2026-11-24，对标 wimoor sys 域，排除亚马逊）
+// 部门 / 公告 / 个人记事本：均沿用组织+工作区双围栏、乐观锁、审计范式。
+// ============================================================================
+
+/// 部门：对标 wimoor /sys/dept。TeamRosterMember.department 仍为自由字符串，
+/// 本表提供树形部门主数据；成员侧按 name 软关联，不反向覆盖花名册。
+model Department {
+  id             String         @id @default(cuid())
+  organizationId String
+  workspaceId    String         @default("default")
+  code           String
+  name           String
+  parentId       String?
+  leader         String         @default("")
+  sortOrder      Int            @default(0)
+  enabled        Boolean        @default(true)
+  createdBy      String
+  revision       Int            @default(1)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, code], map: "Department_code_key")
+  @@index([organizationId, workspaceId, parentId, sortOrder])
+}
+
+/// 公告发布：对标 wimoor /sys/notify。发布后进入 UserNotification 投递，
+/// 这里只存公告本体与范围；接收与已读仍走通知中心。
+model Announcement {
+  id             String         @id @default(cuid())
+  organizationId String
+  workspaceId    String         @default("default")
+  title          String
+  body           String         @default("")
+  /// ALL / ROLE / DEPARTMENT
+  audience       String         @default("ALL")
+  audienceValue  String         @default("")
+  pinned         Boolean        @default(false)
+  /// DRAFT / PUBLISHED / ARCHIVED
+  status         String         @default("DRAFT")
+  publishedAt    DateTime?
+  createdBy      String
+  revision       Int            @default(1)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, id])
+  @@index([organizationId, workspaceId, status, publishedAt])
+}
+
+/// 个人记事本：对标 wimoor /sys/notepad。按用户隔离，不跨组织共享。
+model PersonalNote {
+  id             String         @id @default(cuid())
+  organizationId String
+  workspaceId    String         @default("default")
+  userId         String
+  title          String         @default("")
+  content        String         @default("")
+  pinned         Boolean        @default(false)
+  revision       Int            @default(1)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, id])
+  @@index([organizationId, workspaceId, userId, pinned, updatedAt])
+}
+
+// ============================================================================
+// 采购物流升级（2026-11-24，对标 wimoor 独立 wimoor-quote 模块）
+// 物流报价：询价单 → 报价单 → 选定；渠道 / 关联设置均为独立主数据。
+// 金额一律 Decimal(20,6)，序列化走 .toString()，与采购域一致。
+// ============================================================================
+
+/// 物流渠道：对标 wimoor quote/channel。头程方式、目的国、计费规则。
+model LogisticsQuoteChannel {
+  id             String         @id @default(cuid())
+  organizationId String
+  workspaceId    String         @default("default")
+  code           String
+  name           String
+  /// AIR / SEA / RAIL / EXPRESS / TRUCK
+  mode           String         @default("SEA")
+  destination    String         @default("")
+  /// 计费规则快照（首重/续重/体积重系数/附加费），只读证据，不自动改价
+  pricingRule    Json?
+  enabled        Boolean        @default(true)
+  createdBy      String
+  revision       Int            @default(1)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+  quotes         LogisticsQuote[]
+  rules          LogisticsQuoteRule[]
+
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, code], map: "LogisticsQuoteChannel_code_key")
+  @@index([organizationId, workspaceId, mode, enabled])
+}
+
+/// 关联设置：对标 wimoor quote/quote_set。SKU/仓库 → 渠道匹配优先级。
+model LogisticsQuoteRule {
+  id             String         @id @default(cuid())
+  organizationId String
+  workspaceId    String         @default("default")
+  channelId      String
+  /// SKU 前缀或仓库编码；空表示通配
+  matchKey       String         @default("")
+  /// SKU / WAREHOUSE / DESTINATION
+  matchType      String         @default("SKU")
+  priority       Int            @default(100)
+  enabled        Boolean        @default(true)
+  createdBy      String
+  revision       Int            @default(1)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+  channel        LogisticsQuoteChannel @relation(fields: [organizationId, workspaceId, channelId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, id])
+  @@index([organizationId, workspaceId, channelId, priority])
+}
+
+/// 集中询价单：对标 wimoor quote（集中询价）。货件维度+线路+重量体积。
+model LogisticsQuoteRequest {
+  id             String         @id @default(cuid())
+  organizationId String
+  workspaceId    String         @default("default")
+  number         String
+  /// DRAFT / SUBMITTED / QUOTED / ACCEPTED / CLOSED / CANCELLED
+  status         String         @default("DRAFT")
+  origin         String         @default("")
+  destination    String         @default("")
+  /// 期望头程方式（AIR/SEA/RAIL/EXPRESS/TRUCK），仅作偏好不强制
+  preferredMode  String         @default("")
+  pieces         Int            @default(0)
+  weightKg       Decimal        @default(0) @db.Decimal(20, 6)
+  volumeCbm      Decimal        @default(0) @db.Decimal(20, 6)
+  needBy         DateTime?      @db.Date
+  notes          String         @default("")
+  createdBy      String
+  revision       Int            @default(1)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+  quotes         LogisticsQuote[]
+
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, number], map: "LogisticsQuoteRequest_number_key")
+  @@index([organizationId, workspaceId, status, createdAt])
+}
+
+/// 报价单：对标 wimoor quote_order。一条询价可收多家承运商报价。
+model LogisticsQuote {
+  id             String         @id @default(cuid())
+  organizationId String
+  workspaceId    String         @default("default")
+  number         String
+  requestId      String
+  channelId      String?
+  carrier        String         @default("")
+  currency       String         @default("CNY")
+  /// 总价（人民币口径由 currency 标注，不在此换算）
+  totalAmount    Decimal        @default(0) @db.Decimal(20, 6)
+  transitDays    Int            @default(0)
+  validUntil     DateTime?      @db.Date
+  /// DRAFT / SUBMITTED / ACCEPTED / REJECTED
+  status         String         @default("DRAFT")
+  notes          String         @default("")
+  createdBy      String
+  revision       Int            @default(1)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+  request        LogisticsQuoteRequest @relation(fields: [organizationId, workspaceId, requestId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  channel        LogisticsQuoteChannel? @relation(fields: [organizationId, workspaceId, channelId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, number], map: "LogisticsQuote_number_key")
+  @@index([organizationId, workspaceId, requestId, status])
+}
+
+/// 采购退货单：对标 wimoor /erp/purchase/change（退货方向）。
+/// 复用采购域三段式审批，不自动冲减库存与应付，仅登记事实与审批状态。
+model PurchaseReturn {
+  id             String         @id @default(cuid())
+  organizationId String
+  workspaceId    String         @default("default")
+  number         String
+  supplierId     String         @default("")
+  purchaseOrderId String        @default("")
+  reason         String         @default("")
+  /// 明细快照：行 JSON（SKU/数量/单价），原始保真不臆造字段
+  lines          Json?
+  amount         Decimal        @default(0) @db.Decimal(20, 6)
+  currency       String         @default("CNY")
+  /// DRAFT / SUBMITTED / APPROVED / SHIPPED / CLOSED / CANCELLED
+  status         String         @default("DRAFT")
+  requestHash    String         @default("")
+  revision       Int            @default(1)
+  createdBy      String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, id])
+  @@unique([organizationId, workspaceId, number], map: "PurchaseReturn_number_key")
+  @@index([organizationId, workspaceId, status, createdAt])
 }
