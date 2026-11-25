@@ -76,6 +76,9 @@ export const namespaceEntries: NamespaceEntry[] = [
 
   // ── 亚马逊数据命名空间落地页 ─────────────────────
   { href: "/amz", moduleId: "operations" }, // 已有的真实 redirect
+
+  // ── WIMOOR 全功能迁移区（真实 page.tsx，无 rewrite；纳入 operations 权限归属）──
+  { href: "/wimoor", moduleId: "operations" },
 ];
 
 /** 生成 next.config.ts 需要的 rewrite 列表（仅带 destination 的条目）。 */

@@ -5,12 +5,12 @@ import { amazonSlugRoutes, amazonSlugView, amazonSlugRewrites } from "@/lib/amaz
 import { namespaceEntries, namespaceRewrites, namespacePathModules } from "@/lib/navigation/namespace-routes";
 import { getModuleIdForPath } from "@/lib/accounts/permissions";
 
-test("一级重组为 7 大板块，顺序与命名稳定", () => {
+test("一级重组为 7 大业务板块 + WIMOOR 全功能门户，顺序与命名稳定", () => {
   assert.deepEqual(navigationGroups.map(g => g.id), [
-    "products", "sellfox", "amazon", "purchase", "warehouse", "finance", "ai",
+    "products", "sellfox", "amazon", "purchase", "warehouse", "finance", "wimoor", "ai",
   ]);
   assert.deepEqual(navigationGroups.map(g => g.label), [
-    "商品管理", "赛狐数据", "亚马逊数据", "采购管理", "仓库管理", "财务管理", "AI 与工具",
+    "商品管理", "赛狐数据", "亚马逊数据", "采购管理", "仓库管理", "财务管理", "WIMOOR全功能", "AI 与工具",
   ]);
 });
 
@@ -22,6 +22,8 @@ test("每个一级板块都有可点击的落地链接", () => {
     purchase: "/purchase/plans",
     warehouse: "/wms/logistics",
     finance: "/fin/transactions",
+    // WIMOOR 全功能门户：128 个迁移页面的统一入口（真实 page.tsx）
+    wimoor: "/wimoor",
     // AI 一级走 /ai/lili 命名空间，由服务端 rewrite 直达 /lili（无 redirect 跳板）。
     ai: "/ai/lili",
   };

@@ -77,5 +77,16 @@ standalone-start.*.log
 
 /.next-run/
 
+# Next.js standalone build output copied to repo root by local runtime checks
+/*-build-manifest.json
+/build-manifest.json
+/prerender-manifest.json
+/routes-manifest.json
+/trace
+/cache/
+/server/
+/static/
+/types/
+
 # WorkBuddy local workspace data (memory, traceability copy, git backup)
 /.workbuddy/

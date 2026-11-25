@@ -1,4 +1,4 @@
-import { Activity, Banknote, BookMarked, Bot, Boxes, Calculator, ChartNoAxesCombined, CircleHelp, ClipboardList, Handshake, History, Landmark, ListChecks, MessageSquare, PackageSearch, ReceiptText, RefreshCw, SearchCheck, Settings, Sparkles, Star, Store, Tags, Target, Truck, UsersRound, Warehouse } from "lucide-react";
+import { Activity, Banknote, BookMarked, Bot, Boxes, Calculator, ChartNoAxesCombined, CircleHelp, ClipboardList, Handshake, History, Landmark, LayoutGrid, ListChecks, MessageSquare, PackageSearch, ReceiptText, RefreshCw, SearchCheck, Settings, Sparkles, Star, Store, Tags, Target, Truck, UsersRound, Warehouse } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 /**
@@ -177,6 +177,11 @@ export const navigationGroups: NavigationGroup[] = [
     { id: "finance.allocations", href: "/fin/allocations", label: "结算分配", icon: ReceiptText, moduleId: "operations" },
     { id: "finance.expenses", href: "/fin/expenses", label: "ERP 费用单", icon: ReceiptText, moduleId: "operations" },
     { id: "finance.tax", href: "/fin/tax", label: "税务与发票", icon: Landmark, moduleId: "operations" },
+  ] },
+
+  // WIMOOR 全功能门户：128 个迁移页面的统一入口，按 12 个一级模块分组
+  { id: "wimoor", label: "WIMOOR全功能", icon: LayoutGrid, href: "/wimoor", items: [
+    { id: "wimoor.portal", href: "/wimoor", label: "全功能门户", icon: LayoutGrid, moduleId: null },
   ] },
 
   // AI 板块入口使用本板块命名空间 /ai/lili，由 next.config rewrites 服务端直达 /lili

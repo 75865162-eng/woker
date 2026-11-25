@@ -8551,3 +8551,50 @@ model AdsAttributionCoverage {
   @@unique([organizationId, workspaceId, marketplaceId, reportType, businessDate, window], map: "AdsAttributionCoverage_key")
   @@index([organizationId, workspaceId, businessDate], map: "AdsAttributionCoverage_date_idx")
 }
+
+/// WIMOOR 页面功能迁移：通用主数据条目（标签/品牌/品类/辅料/包材/库位/凭证字等轻量主数据）。
+/// 以 (kind, code) 区分类型，避免为每类建独立表；租户隔离 + 用户显式创建才有数据（不造数）。
+model MasterDataEntry {
+  id             String    @id
+  organizationId String
+  workspaceId    String
+  kind           String    @db.VarChar(64)
+  code           String    @db.VarChar(128)
+  name           String    @db.VarChar(256)
+  parentCode     String?   @db.VarChar(128)
+  color          String?   @db.VarChar(32)
+  status         String    @db.VarChar(16) @default("ACTIVE")
+  sortOrder      Int       @default(0)
+  payload        Json?
+  createdBy      String?
+  updatedBy      String?
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@unique([organizationId, workspaceId, kind, code], map: "MasterDataEntry_key")
+  @@index([organizationId, workspaceId, kind, parentCode], map: "MasterDataEntry_kind_idx")
+}
+
+/// WIMOOR 页面功能迁移：通用业务单据（加工单/换货单/发货准备/盘点单/库存调整等流程单据）。
+/// 用户显式创建才有数据；status 表达流程状态；payload 承载各单据特有字段。
+model MasterDataDocument {
+  id             String    @id
+  organizationId String
+  workspaceId    String
+  kind           String    @db.VarChar(64)
+  docNo          String    @db.VarChar(128)
+  status         String    @db.VarChar(32) @default("DRAFT")
+  partnerCode    String?   @db.VarChar(128)
+  businessDate   String?   @db.VarChar(10)
+  amount         Decimal?  @db.Decimal(30, 6)
+  currency       String?   @db.VarChar(3)
+  remark         String?   @db.VarChar(1024)
+  payload        Json?
+  createdBy      String?
+  updatedBy      String?
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@unique([organizationId, workspaceId, kind, docNo], map: "MasterDataDocument_key")
+  @@index([organizationId, workspaceId, kind, status], map: "MasterDataDocument_kind_idx")
+}
