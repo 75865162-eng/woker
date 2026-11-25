@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Input } from '@/components/ui/form-controls';
+import { mapAmazonInventoryRows, AMAZON_INVENTORY_PAGE_BASIS, type AmazonInventoryRow } from '@/lib/wimoor-migration/amazon-inventory-adapter';
 
 /**
  * WIMOOR「发货 → 报表分析 → FBA库存」功能迁移（只读列表）。
@@ -29,15 +30,18 @@ export default function WimoorShipmentFbaInventoryPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [search, setSearch] = useState('');
 
+  const [snapshotStatus, setSnapshotStatus] = useState<string>('');
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const p = new URLSearchParams({ type: 'entry', kind: 'shipment.fbaInventory', pageSize: '100' });
-      if (search) p.set('search', search);
-      const response = await fetch(`/api/wimoor/master-data?${p}`, { headers: headersForScope(), cache: 'no-store' });
+      // 落地页直接读取亚马逊真实库存快照（已发布 run），不再读通用主数据空表。
+      const p = new URLSearchParams({ page: '1', pageSize: '100' });
+      if (search) p.set('sku', search);
+      const response = await fetch(`/api/operations/inventory/snapshots?${p}`, { headers: headersForScope(), cache: 'no-store' });
       const result = await response.json();
       if (!response.ok) throw Error(result.error ?? '读取失败。');
-      setRows((result.rows ?? []) as Row[]);
+      setSnapshotStatus(result.snapshot?.status ?? '');
+      setRows(mapAmazonInventoryRows((result.rows ?? []) as AmazonInventoryRow[]) as Row[]);
     } catch (cause) { setError(cause instanceof Error ? cause.message : '读取失败。'); }
     finally { setLoading(false); }
   }, [reloadKey, search]);
@@ -74,7 +78,7 @@ export default function WimoorShipmentFbaInventoryPage() {
 
   return (
     <div className="p-4">
-      <header className="flex flex-col gap-1 mb-4"><h1 className="text-lg font-semibold">FBA库存</h1><p className="text-xs text-muted">WIMOOR FBA库存功能迁移（只读）：SKU 搜索与全站点库存指标；完整库存工作台见 /amazon/inventory。</p></header>
+      <header className="flex flex-col gap-1 mb-4"><h1 className="text-lg font-semibold">FBA库存</h1><p className="text-xs text-muted">WIMOOR FBA库存功能迁移：SKU 搜索与全站点库存指标，数据自动匹配亚马逊已发布库存快照{snapshotStatus ? `（快照：${snapshotStatus}）` : ''}。{AMAZON_INVENTORY_PAGE_BASIS}</p></header>
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3">
           <div className="min-w-[220px] flex-1">
@@ -84,7 +88,7 @@ export default function WimoorShipmentFbaInventoryPage() {
         </div>
         <DataTable<Row> columns={columns} rows={rows} getRowKey={(row) => row.id} loading={loading}
           error={error ? { message: error, onRetry: () => setReloadKey(k => k + 1) } : undefined}
-          empty="暂无FBA库存记录。本页只读，系统不预置伪造库存。"
+          empty="暂无已发布的亚马逊FBA库存快照。系统不预置伪造库存；请先同步并发布库存数据。"
           ariaLabel="FBA库存" />
       </section>
     </div>
