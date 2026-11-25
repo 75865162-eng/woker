@@ -115,7 +115,7 @@ test("报告02 生产级：SalesDailyFact 净额列 schema / 迁移 / 写入 / �
   const modelBlock = schema.slice(schema.indexOf("model SalesDailyFact {"), schema.indexOf("model SalesDailyFact {") + 1400);
   assert.match(modelBlock, /netUnits\s+Int\?/, "schema 缺 netUnits 列");
   assert.match(modelBlock, /netSales\s+Decimal\?/, "schema 缺 netSales 列");
-  const migrations = read("prisma/migrations/20260101000000_sales_daily_fact_net/migration.sql");
+  const migrations = read("prisma/migrations/20270101000000_sales_daily_fact_net/migration.sql");
   assert.match(migrations, /ADD COLUMN IF NOT EXISTS "netUnits"/);
   assert.match(migrations, /ADD COLUMN IF NOT EXISTS "netSales"/);
   // 写入：create/update 两处都写净额（intOrNull 保 null 不补零；netSales 走 Decimal 保真）
