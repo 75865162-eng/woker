@@ -194,6 +194,59 @@ export function buildProfitMetrics(
   };
 }
 
+/** 支持的归因窗口（报告1 P2-1 / 报告2 广告归因缺口）。 */
+export type AttributionWindow = "1d" | "7d" | "14d" | "30d";
+
+/** 多窗口归因销售额；字段名与 wimoor-field-extract 的 ADS_ATTRIBUTION_SPECS 对应。 */
+export type MultiWindowSales = {
+  attributedSales1d?: number | string | null;
+  attributedSales7d?: number | string | null;
+  attributedSales14d?: number | string | null;
+  attributedSales30d?: number | string | null;
+};
+
+/**
+ * 可切换归因窗口的广告指标（ACOS/ROAS 随窗口变化，CTR/avgcost/CSRT 与窗口无关）。
+ * 报告1 阶段0：WIMOOR 仅 7d、本项目原 buildAdsMetrics 硬编码 7d，无法做归因窗口对比。
+ * 本函数：
+ * - 默认窗口 7d，行为与 buildAdsMetrics 一致（向后兼容）；
+ * - 指定窗口但该窗口销售缺失（null/undefined）→ ACOS/ROAS 返回 null，绝不臆造或用别的窗口顶替；
+ * - 口径来源标记随窗口动态生成，便于审计展示用的是哪个窗口。
+ */
+export function buildAdsMetricsForWindow(
+  a: AdsAggregate & MultiWindowSales,
+  window: AttributionWindow = "7d",
+): { metrics: AdsMetrics; basis: MetricBasis } {
+  const windowKey = `attributedSales${window}` as keyof MultiWindowSales;
+  const raw = a[windowKey];
+  const sales = raw === null || raw === undefined ? null : dec(raw);
+  const cost = dec(a.cost);
+  const clicks = dec(a.clicks);
+  const impressions = dec(a.impressions);
+  const conv = dec(a.attributedConversions7d);
+
+  let ACOS: string | null = null;
+  let acosSpecial = false;
+  if (sales !== null) {
+    if (cost > 0 && sales === 0) { ACOS = String(WIMOOR_ACOS_SENTINEL); acosSpecial = true; }
+    else if (sales !== 0) ACOS = fmt6(cost / sales);
+  }
+  const metrics: AdsMetrics = {
+    CTR: impressions !== 0 ? fmt6(clicks / impressions) : null,
+    avgcost: clicks !== 0 ? fmt6(cost / clicks) : null,
+    ACOS,
+    ROAS: sales !== null && sales !== 0 && cost !== 0 ? fmt6(sales / cost) : null,
+    CSRT: clicks !== 0 ? fmt6(conv / clicks) : null,
+    acosSpecial,
+  };
+  const basis: MetricBasis = {
+    formula: `ACOS/ROAS 使用 ${window} 归因销售额（sum(cost)/sum(attributedSales${window}) / 反向）；其余同 Wimoor 口径`,
+    source: `AmzAdvReportTargetQueryMapper.xml:211-221; window=${window}`,
+    ...(acosSpecial ? { specialCase: "Wimoor 哨兵值 10000000000" } : {}),
+  };
+  return { metrics, basis };
+}
+
 /** 流量比率字段口径：Wimoor 为报表直采，本项目从原始行 Json 提取（见 wimoor-field-extract）。 */
 export const TRAFFIC_RATE_BASIS: MetricBasis = {
   formula: "sessionPercentage/pageViewsPercentage/buyBoxPercentage/unitSessionPercentage 为 SP-API 报表直采，非派生",

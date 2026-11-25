@@ -24,9 +24,54 @@ export type AggRefreshInput = {
   startDate?: string;
   endDate?: string;
   runId: string;
+  /**
+   * 报告1 阶段0 P1：可选的「基准币种金额」投影。仅在调用方显式提供时，
+   * salesAggDailyStatement 才会写入 fxRate/amountBase；否则两列显式写 NULL。
+   * 架构红线：本模块绝不自行取汇率或臆造换算。
+   */
+  fx?: SalesFxProjection;
+};
+
+/**
+ * 一条已复核汇率。必须由调用方从 FinanceExchangeRate 查询并保证：
+ * status=ACTIVE、reviewedBy 非空、reference 非空（与 display-fx / fx-rates API 同口径）。
+ */
+export type ReviewedFxRateInput = {
+  sourceCurrency: string;
+  targetCurrency: string;
+  rate: number;
+  reference: string;
+};
+
+export type SalesFxProjection = {
+  /** 基准币种 code（如 CNY）；只接纳能换算到该币种的汇率条目。 */
+  baseCurrency: string;
+  rates: ReviewedFxRateInput[];
 };
 
 const ADS_RESOURCES = new Set(["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"]);
+
+/**
+ * 构造 sales 聚合的 fxRate SQL 片段（按原币 max(currency) 匹配已复核汇率 → 基准币汇率）。
+ * 纯函数、可测；过滤规则与 display-fx.buildFxMap 一致：source/target 有效且不同、
+ * reference 非空、rate 为有限正数、target 必须等于 baseCurrency。无可用条目返回 null。
+ */
+export function salesFxRateExpr(fx: SalesFxProjection | undefined): Prisma.Sql | null {
+  if (!fx?.baseCurrency || !Array.isArray(fx.rates) || fx.rates.length === 0) return null;
+  const base = fx.baseCurrency.toUpperCase();
+  const usable = fx.rates
+    .filter((r) => {
+      if (!r || typeof r.reference !== "string" || !r.reference.trim()) return false;
+      const source = String(r.sourceCurrency ?? "").toUpperCase();
+      const target = String(r.targetCurrency ?? "").toUpperCase();
+      const rate = Number(r.rate);
+      return source !== "" && source !== base && target === base && Number.isFinite(rate) && rate > 0;
+    })
+    .map((r) => ({ currency: String(r.sourceCurrency).toUpperCase(), rate: Number(r.rate) }));
+  if (!usable.length) return null;
+  const whens = usable.map((u) => Prisma.sql`WHEN ${u.currency} THEN ${u.rate}::decimal(20,8)`);
+  return Prisma.sql`CASE upper(t."currency") ${Prisma.join(whens, " ")} ELSE NULL END`;
+}
 
 /** Deterministic id so upserts are stable across re-runs. */
 export function aggId(...parts: Array<string | number | boolean | null | undefined>) {
@@ -39,16 +84,25 @@ export function salesAggDailyStatement(input: AggRefreshInput) {
   const from = input.reportDate ?? input.startDate;
   const to = input.reportDate ?? input.endDate;
   if (!from || !to) return null;
+  const fxRate = salesFxRateExpr(input.fx);
+  // 报告1 P1：fxRate/amountBase 仅在存在已复核汇率时填充；否则显式 NULL，绝不臆造。
+  // amountBase = revenueOriginal × fxRate，NULL-preserving：任一缺失则整列为 NULL。
+  const fxRateCol = fxRate ?? Prisma.sql`NULL::decimal(20,8)`;
+  const amountBaseCol = fxRate
+    ? Prisma.sql`CASE WHEN count(t."revenue")=count(*) THEN (SUM(t."revenue") * (${fxRate}))::decimal(20,4) END`
+    : Prisma.sql`NULL::decimal(20,4)`;
   return Prisma.sql`
     INSERT INTO "SellfoxSalesAggDaily"
       ("id","organizationId","workspaceId","storeId","msku","asin","reportDate",
-       "quantity","orders","revenueOriginal","currencyOriginal","complete","sourceCapturedAt","refreshedAt")
+       "quantity","orders","revenueOriginal","currencyOriginal","fxRate","amountBase","complete","sourceCapturedAt","refreshedAt")
     SELECT
       ${Prisma.sql`concat('salesagg|', t."storeId", '|', t."msku", '|', t."reportDate")::text`},
       t."organizationId", t."workspaceId", t."storeId", t."msku", max(t."asin"), t."reportDate",
       SUM(t."quantity")::int, SUM(t."orders")::int,
       CASE WHEN count(t."revenue")=count(*) THEN SUM(t."revenue") END,
       max(t."currency"),
+      ${fxRateCol},
+      ${amountBaseCol},
       CASE WHEN bool_and(t."complete") IS NULL THEN NULL ELSE bool_and(t."complete") END,
       max(t."syncedAt"), now()
     FROM "SellfoxSalesDailySnapshot" t
@@ -60,6 +114,7 @@ export function salesAggDailyStatement(input: AggRefreshInput) {
     ON CONFLICT ("organizationId","workspaceId","storeId","msku","reportDate") DO UPDATE SET
       "asin"=EXCLUDED."asin", "quantity"=EXCLUDED."quantity", "orders"=EXCLUDED."orders",
       "revenueOriginal"=EXCLUDED."revenueOriginal", "currencyOriginal"=EXCLUDED."currencyOriginal",
+      "fxRate"=EXCLUDED."fxRate", "amountBase"=EXCLUDED."amountBase",
       "complete"=EXCLUDED."complete", "sourceCapturedAt"=EXCLUDED."sourceCapturedAt", "refreshedAt"=now()
   `;
 }

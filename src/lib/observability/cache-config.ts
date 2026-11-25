@@ -10,6 +10,10 @@ export type CacheConfigSnapshot = {
   amazonResultCache: boolean;
   sellfoxAggregateRead: boolean;
   sellfoxListingProfileRead: boolean;
+  /** 报告1 P1：销售预聚合的基准币种金额投影是否启用（未启用则 fxRate/amountBase 写 NULL）。 */
+  sellfoxAggregateFxProjection: boolean;
+  /** 报告1 P1：当前聚合对账 schema 版本；bump 会使旧 verdict 失效并强制重新对账。 */
+  sellfoxAggSchemaVersion: string;
   allEnabled: boolean;
 };
 
@@ -22,11 +26,14 @@ export function readCacheConfig(env: Record<string, string | undefined> = proces
   const amazonResultCache = on(env.AMAZON_CACHE_ENABLED);
   const sellfoxAggregateRead = on(env.SELLFOX_AGG_READ_ENABLED);
   const sellfoxListingProfileRead = on(env.SELLFOX_LISTING_PROFILE_READ_ENABLED);
+  const sellfoxAggregateFxProjection = on(env.SELLFOX_AGG_FX_ENABLED);
   return {
     sellfoxResultCache,
     amazonResultCache,
     sellfoxAggregateRead,
     sellfoxListingProfileRead,
+    sellfoxAggregateFxProjection,
+    sellfoxAggSchemaVersion: (env.SELLFOX_AGG_SCHEMA_VERSION || "v1").trim() || "v1",
     allEnabled: sellfoxResultCache && amazonResultCache,
   };
 }

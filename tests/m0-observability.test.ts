@@ -117,13 +117,16 @@ test("cache config snapshot reads only boolean switches", async () => {
   const { readCacheConfig } = await import("../src/lib/observability/cache-config");
   assert.deepEqual(readCacheConfig({}), {
     sellfoxResultCache: false, amazonResultCache: false,
-    sellfoxAggregateRead: false, sellfoxListingProfileRead: false, allEnabled: false,
+    sellfoxAggregateRead: false, sellfoxListingProfileRead: false,
+    sellfoxAggregateFxProjection: false, sellfoxAggSchemaVersion: "v1", allEnabled: false,
   });
   assert.deepEqual(readCacheConfig({
     SELLFOX_CACHE_ENABLED: "true", AMAZON_CACHE_ENABLED: "1",
     SELLFOX_AGG_READ_ENABLED: "true", SELLFOX_LISTING_PROFILE_READ_ENABLED: "false",
+    SELLFOX_AGG_FX_ENABLED: "true", SELLFOX_AGG_SCHEMA_VERSION: "v2",
   }), {
     sellfoxResultCache: true, amazonResultCache: true,
-    sellfoxAggregateRead: true, sellfoxListingProfileRead: false, allEnabled: true,
+    sellfoxAggregateRead: true, sellfoxListingProfileRead: false,
+    sellfoxAggregateFxProjection: true, sellfoxAggSchemaVersion: "v2", allEnabled: true,
   });
 });

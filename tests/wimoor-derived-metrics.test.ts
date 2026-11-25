@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildAdsMetrics,
+  buildAdsMetricsForWindow,
   buildProfitMetrics,
   WIMOOR_ACOS_SENTINEL,
   ADS_METRIC_BASIS,
@@ -97,4 +98,35 @@ test("利润：HALF_UP 2 位精度（0.005 进位）", () => {
 test("利润：口径来源标注齐全", () => {
   assert.ok(PROFIT_METRIC_BASIS.formula.includes("setincome"));
   assert.ok(PROFIT_METRIC_BASIS.source.includes("handlerSettlementSKURowData"));
+});
+
+// ===== 可切换归因窗口（报告1 P2-1 / 报告2 广告归因缺口）=====
+
+test("buildAdsMetricsForWindow: 默认 7d 与 buildAdsMetrics 一致（向后兼容）", () => {
+  const base = { cost: 10, clicks: 5, impressions: 100, attributedSales7d: 50, attributedConversions7d: 2 };
+  const legacy = buildAdsMetrics(base);
+  const { metrics } = buildAdsMetricsForWindow(base);
+  assert.deepEqual(metrics, legacy);
+});
+
+test("buildAdsMetricsForWindow: 切换 14d 窗口用对应销售额，口径标注随窗口", () => {
+  const a = {
+    cost: 10, clicks: 5, impressions: 100, attributedSales7d: 50, attributedConversions7d: 2,
+    attributedSales1d: 10, attributedSales14d: 100, attributedSales30d: 200,
+  };
+  const r14 = buildAdsMetricsForWindow(a, "14d");
+  assert.equal(r14.metrics.ROAS, "10");   // 100/10
+  assert.equal(r14.metrics.ACOS, "0.1");  // 10/100
+  assert.match(r14.basis.source, /window=14d/);
+  assert.match(r14.basis.formula, /14d/);
+  const r1 = buildAdsMetricsForWindow(a, "1d");
+  assert.equal(r1.metrics.ROAS, "1");     // 10/10
+});
+
+test("buildAdsMetricsForWindow: 指定窗口无数据 → ACOS/ROAS null，绝不用别的窗口顶替", () => {
+  const a = { cost: 10, clicks: 5, impressions: 100, attributedSales7d: 50, attributedConversions7d: 2 };
+  const r30 = buildAdsMetricsForWindow(a, "30d");
+  assert.equal(r30.metrics.ROAS, null, "30d 未提供 → null，不用 7d 顶替");
+  assert.equal(r30.metrics.ACOS, null);
+  assert.equal(r30.metrics.CTR, "0.05", "与窗口无关的指标仍计算");
 });

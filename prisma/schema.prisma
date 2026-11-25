@@ -3682,6 +3682,14 @@ model AmazonOrderItemRecord {
   proceedsOriginal String?
   proceedsAmount   Decimal?          @db.Decimal(65, 30)
   currencyCode     String?
+  // 报告2 P0-3 订单行费用显式列：默认 null = 源报告未提供；值由 wimoor-field-extract 从原始行 Json 提取。
+  itemTax          Decimal?          @db.Decimal(65, 30)
+  shippingPrice    Decimal?          @db.Decimal(65, 30)
+  shippingTax      Decimal?          @db.Decimal(65, 30)
+  promotionDiscount Decimal?         @db.Decimal(65, 30)
+  giftWrapPrice    Decimal?          @db.Decimal(65, 30)
+  pointsGranted    Int?
+  conditionNote    String?
 
   @@id([orderRecordId, orderItemId])
   @@index([organizationId, workspaceId, sourceId, asin], map: "AmazonOrderItem_scope_asin_idx")
@@ -4937,6 +4945,9 @@ model FinanceSubject {
   normalSide     String
   enabled        Boolean                   @default(true)
   leaf           Boolean                   @default(true)
+  // 报告3 P0-5 数量金额式辅助核算：默认 false。
+  isQuantity     Boolean                   @default(false)
+  unitOfMeasure  String?
   revision       Int                       @default(1)
   createdAt      DateTime                  @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime                  @updatedAt @db.Timestamptz(3)
@@ -5076,6 +5087,13 @@ model FinanceVoucherLine {
   debit            Decimal                   @db.Decimal(30, 6)
   credit           Decimal                   @db.Decimal(30, 6)
   memo             String                    @default("")
+  // 报告3 P0-5 数量金额式辅助核算：默认 null = 普通分录。
+  quantity         Decimal?                  @db.Decimal(30, 6)
+  unitPrice        Decimal?                  @db.Decimal(30, 6)
+  // 报告3 P0-1 外币分录三栏：默认 null = 本位币分录（兼容存量），外币分录需三栏齐全并经 checkFxEntry 校验。
+  currency         String?
+  originalAmount   Decimal?                  @db.Decimal(30, 6)
+  exchangeRate     Decimal?                  @db.Decimal(24, 12)
   auxiliaries      FinanceVoucherAuxiliary[]
   voucher          FinanceVoucher            @relation(fields: [organizationId, workspaceId, bookId, voucherId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict)
   subject          FinanceSubject            @relation(fields: [organizationId, workspaceId, bookId, subjectId], references: [organizationId, workspaceId, bookId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -6812,6 +6830,11 @@ model PurchaseInvoice {
   matchedAt         DateTime?
   /// 差异放行理由：非空才允许在 EXCEPTION 状态下提交审批
   overrideReason    String                    @default("")
+  // 报告3 P0-3 发票增强：票种/电子票号/买卖方税号。默认空串，兼容存量；不臆造税号。
+  invoiceType       String                    @default("")
+  digitalInvoiceNo  String                    @default("")
+  sellerTaxNo       String                    @default("")
+  buyerTaxNo        String                    @default("")
   notes             String                    @default("")
   createdBy         String
   revision          Int                       @default(1)
@@ -6847,6 +6870,12 @@ model PurchaseInvoiceLine {
   taxAmount       Decimal         @default(0) @db.Decimal(20, 6)
   varianceQty     Int             @default(0)
   varianceAmount  Decimal         @default(0) @db.Decimal(20, 6)
+  // 报告3 P0-3 发票商品明细：品名/规格/单位/税率(bp)/税目编码。默认空或 null，兼容存量。
+  goodsName       String          @default("")
+  specModel       String          @default("")
+  unit            String          @default("")
+  taxRateBp       Int?
+  taxCategoryCode String?
   /// QTY_OVER_ORDER / QTY_OVER_RECEIPT / PRICE_VARIANCE / AMOUNT_MISMATCH / NO_RECEIPT / NO_ORDER_LINE
   exceptionCodes  String[]        @default([])
   notes           String          @default("")
@@ -8265,4 +8294,260 @@ model AmazonFxRate {
 
   @@unique([organizationId, workspaceId, fromCurrency, toCurrency], map: "AmazonFxRate_scope_pair_key")
   @@index([organizationId, workspaceId, updatedAt])
+}
+
+// ===== 差距审计 P0-P2 内核持久化表（全部 additive，租户隔离，唯一键防重） =====
+
+/// 报告3 P1-1 账本余额投影：由 POSTED 凭证增量重建，只读投影，禁止直接写入业务值。
+model FinanceBalanceProjection {
+  id                 String    @id
+  organizationId     String
+  workspaceId        String
+  bookId             String
+  periodId           String
+  subjectId          String
+  openingSigned      Decimal   @db.Decimal(30, 6)
+  debit              Decimal   @db.Decimal(30, 6)
+  credit             Decimal   @db.Decimal(30, 6)
+  closingSigned      Decimal   @db.Decimal(30, 6)
+  revision           Int
+  sourceHash         String
+  balanced           Boolean   @default(false)
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@unique([organizationId, workspaceId, bookId, periodId, revision, subjectId], map: "FinanceBalanceProjection_key")
+  @@index([organizationId, workspaceId, bookId, periodId, sourceHash], map: "FinanceBalanceProjection_hash_idx")
+}
+
+/// 报告2 P0-2 销售日汇总事实表：按 SKU/ASIN/业务日/币种聚合，唯一键防重，缺值不补零。
+model SalesDailyFact {
+  id                 String    @id
+  organizationId     String
+  workspaceId        String
+  sellerAccountId    String
+  marketplaceId      String
+  sellerSku          String
+  asin               String?
+  businessDate       String    @db.VarChar(10)
+  period             String?
+  unitsOrdered       Int?
+  orderCount         Int?
+  grossSales         Decimal?  @db.Decimal(30, 6)
+  refundUnits        Int?
+  refundAmount       Decimal?  @db.Decimal(30, 6)
+  currency           String    @db.VarChar(3)
+  sourceRunId        String?
+  formulaVersion     Int?
+  pendingSources     String[]  @default([])
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@unique([organizationId, workspaceId, sellerAccountId, marketplaceId, sellerSku, businessDate, currency], map: "SalesDailyFact_key")
+  @@index([organizationId, workspaceId, businessDate], map: "SalesDailyFact_date_idx")
+  @@index([organizationId, workspaceId, sellerSku, businessDate], map: "SalesDailyFact_sku_idx")
+}
+
+/// 报告2 P0-4 订单级财务事件：经济键幂等去重，可按订单号 1:1 对账 SP-API Financial Events。
+model OrderFinanceEvent {
+  id                 String    @id
+  organizationId     String
+  workspaceId        String
+  economicKey        String
+  amazonOrderId      String
+  orderItemId        String?
+  sku                String?
+  ftype              String
+  amount             Decimal   @db.Decimal(30, 6)
+  currency           String    @db.VarChar(3)
+  postedDate         String?   @db.VarChar(10)
+  sourceRunId        String?
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@unique([organizationId, workspaceId, economicKey], map: "OrderFinanceEvent_key")
+  @@index([organizationId, workspaceId, amazonOrderId], map: "OrderFinanceEvent_order_idx")
+  @@index([organizationId, workspaceId, ftype, postedDate], map: "OrderFinanceEvent_type_date_idx")
+}
+
+/// 报告2 P0-5 业务链路主键：下游单据（财务/退货/结算/广告）→ 订单行 → 原始报告行反查。
+model BusinessLink {
+  id                 String    @id
+  organizationId     String
+  workspaceId        String
+  linkKey            String
+  downstreamKind     String
+  downstreamId       String
+  amazonOrderId      String?
+  orderItemId        String?
+  marketplaceId      String?
+  sourceRunId        String?
+  reportType         String?
+  rowNumber          String?
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@unique([organizationId, workspaceId, linkKey], map: "BusinessLink_key")
+  @@index([organizationId, workspaceId, downstreamKind, downstreamId], map: "BusinessLink_downstream_idx")
+  @@index([organizationId, workspaceId, amazonOrderId], map: "BusinessLink_order_idx")
+}
+
+/// 报告3 P0-2 费用→科目映射主数据：替代内联 Json，带优先级/状态/版本/审批。
+model FinanceAccountMapping {
+  id                 String    @id
+  organizationId     String
+  workspaceId        String
+  bookId             String
+  mappingKind        String
+  feeType            String
+  accountId          String?
+  subjectId          String?
+  priority           Int       @default(0)
+  status             String    @default("ACTIVE")
+  version            Int       @default(1)
+  changeReference    String?
+  reviewedBy         String?
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@unique([organizationId, workspaceId, bookId, mappingKind, feeType, version], map: "FinanceAccountMapping_key")
+  @@index([organizationId, workspaceId, bookId, mappingKind, status], map: "FinanceAccountMapping_lookup_idx")
+}
+
+/// 报告3 P0-4 供应商月度对账汇总：由开放项+结算聚合生成。
+model FinanceSupplierReconcile {
+  id                 String    @id
+  organizationId     String
+  workspaceId        String
+  bookId             String
+  reconcileMonth     String    @db.VarChar(7)
+  supplierId         String
+  orderCount         Int?
+  totalOrderAmount   Decimal?  @db.Decimal(30, 6)
+  totalPaid          Decimal?  @db.Decimal(30, 6)
+  totalUnpaid        Decimal?  @db.Decimal(30, 6)
+  totalInvoiced      Decimal?  @db.Decimal(30, 6)
+  totalUninvoiced    Decimal?  @db.Decimal(30, 6)
+  currency           String    @db.VarChar(3)
+  sourceHash         String?
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@unique([organizationId, workspaceId, bookId, reconcileMonth, supplierId], map: "FinanceSupplierReconcile_key")
+  @@index([organizationId, workspaceId, reconcileMonth], map: "FinanceSupplierReconcile_month_idx")
+}
+
+/// 报告3 P0-4 承运商月度对账汇总。
+model FinanceCarrierReconcile {
+  id                 String    @id
+  organizationId     String
+  workspaceId        String
+  bookId             String
+  reconcileMonth     String    @db.VarChar(7)
+  carrierId          String
+  orderCount         Int?
+  totalOrderAmount   Decimal?  @db.Decimal(30, 6)
+  totalPaid          Decimal?  @db.Decimal(30, 6)
+  totalUnpaid        Decimal?  @db.Decimal(30, 6)
+  totalInvoiced      Decimal?  @db.Decimal(30, 6)
+  totalUninvoiced    Decimal?  @db.Decimal(30, 6)
+  currency           String    @db.VarChar(3)
+  sourceHash         String?
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@unique([organizationId, workspaceId, bookId, reconcileMonth, carrierId], map: "FinanceCarrierReconcile_key")
+  @@index([organizationId, workspaceId, reconcileMonth], map: "FinanceCarrierReconcile_month_idx")
+}
+
+/// 报告2 P1-3 / 报告3 P2-3 费用分类字典：结算 amountType/description → 费用类 → 目标列。
+model FeeCategoryDict {
+  id                 String    @id
+  organizationId     String
+  workspaceId        String
+  transactionType    String    @default("*")
+  amountType         String    @default("*")
+  amountDescription  String    @default("*")
+  feeCategory        String
+  targetColumn       String
+  feePoolKey         String?
+  priority           Int       @default(0)
+  status             String    @default("ACTIVE")
+  version            Int       @default(1)
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@unique([organizationId, workspaceId, transactionType, amountType, amountDescription, version], map: "FeeCategoryDict_key")
+  @@index([organizationId, workspaceId, feeCategory, status], map: "FeeCategoryDict_lookup_idx")
+}
+
+/// 报告2 P1-1 利润参数配置头：按店铺维度，可设默认。
+model ProfitConfig {
+  id                 String    @id
+  organizationId     String
+  workspaceId        String
+  shopId             String
+  isDefault          Boolean   @default(false)
+  version            Int
+  changeReference    String
+  changeKey          String
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@unique([organizationId, workspaceId, changeKey], map: "ProfitConfig_key")
+  @@index([organizationId, workspaceId, shopId, isDefault], map: "ProfitConfig_shop_idx")
+}
+
+/// 报告2 P1-1 利润参数配置国家明细：23 参数以 Json 保存，缺参为 null 不臆造。
+model ProfitConfigCountry {
+  id                 String    @id
+  organizationId     String
+  workspaceId        String
+  configId           String
+  country            String    @db.VarChar(3)
+  params             Json
+  configuredKeys     String[]  @default([])
+  missingKeys        String[]  @default([])
+  effectiveFrom      String?   @db.VarChar(10)
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@unique([organizationId, workspaceId, configId, country], map: "ProfitConfigCountry_key")
+  @@index([organizationId, workspaceId, country], map: "ProfitConfigCountry_country_idx")
+}
+
+/// 报告2 P2-2 库存规划快照：53 列规划报告解析结果，values 以 Json 保真，缺值为 null。
+model InventoryPlanningSnapshot {
+  id                 String    @id
+  organizationId     String
+  workspaceId        String
+  syncRunId          String?
+  sellerAccountId    String?
+  marketplaceId      String
+  sellerSku          String
+  asin               String?
+  businessDate       String?   @db.VarChar(10)
+  values             Json
+  coverage           Decimal   @db.Decimal(6, 5)
+  missing            String[]  @default([])
+  groupCoverage      Json
+  capturedAt         DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@unique([organizationId, workspaceId, marketplaceId, sellerSku, syncRunId], map: "InventoryPlanningSnapshot_key")
+  @@index([organizationId, workspaceId, marketplaceId, capturedAt], map: "InventoryPlanningSnapshot_sku_idx")
+}
+
+/// 报告1 P2 / 报告2 P2-1 广告归因覆盖率快照：分窗口，未覆盖行显式列出。
+model AdsAttributionCoverage {
+  id                 String    @id
+  organizationId     String
+  workspaceId        String
+  sellerAccountId    String?
+  marketplaceId      String
+  profileRecordId    String?
+  reportType         String?
+  businessDate       String    @db.VarChar(10)
+  window             String    @db.VarChar(4)
+  totalSpend         Decimal   @db.Decimal(30, 6)
+  coveredSpend       Decimal   @db.Decimal(30, 6)
+  uncoveredSpend     Decimal   @db.Decimal(30, 6)
+  coverageBp         Int?
+  meetsTarget        Boolean?
+  uncoveredRows      String[]  @default([])
+  coveredRowCount    Int
+  uncoveredRowCount  Int
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@unique([organizationId, workspaceId, marketplaceId, reportType, businessDate, window], map: "AdsAttributionCoverage_key")
+  @@index([organizationId, workspaceId, businessDate], map: "AdsAttributionCoverage_date_idx")
 }

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   publishAggregateVerdict, readAggregateVerdict, aggregateVerdictKey,
   parseVerdict, setAggregateVerdictRedisForTest, AGG_VERDICT_TTL_SECONDS,
+  AGG_SCHEMA_VERSION, invalidateAggregateVerdicts,
 } from "@/lib/sellfox/aggregate-read-state";
 import { resolveAggregateCutover } from "@/lib/sellfox/aggregate-read-gate";
 import { readSalesSummary } from "@/lib/sellfox/sales-summary";
@@ -14,11 +15,17 @@ function fakeRedis() {
     get: async (k: string) => store.get(k) ?? null,
     set: async (k: string, v: string, ...rest: unknown[]) => { void rest; store.set(k, v); return "OK"; },
     on: () => {},
+    scan: (cursor: string, _match: string, _count: number, cb: (e: Error | null, r: [string, string[]]) => void) => {
+      const keys = [...store.keys()];
+      cb(null, [cursor === "0" ? "0" : "0", cursor === "0" ? keys : []]);
+    },
+    del: async (...keys: string[]) => { let n = 0; for (const k of keys) if (store.delete(k)) n++; return n; },
   };
 }
 
-test("verdict key 带 org/ws/domain 隔离；TTL 为 7 天", () => {
-  assert.equal(aggregateVerdictKey("o1", "w1", "sales"), "sellfox:agg-verdict:o1:w1:sales");
+test("verdict key 带 org/ws/domain/schemaVersion 隔离；TTL 为 7 天", () => {
+  assert.equal(aggregateVerdictKey("o1", "w1", "sales"), `sellfox:agg-verdict:o1:w1:sales:${AGG_SCHEMA_VERSION}`);
+  assert.equal(aggregateVerdictKey("o1", "w1", "sales", "v0"), "sellfox:agg-verdict:o1:w1:sales:v0");
   assert.equal(AGG_VERDICT_TTL_SECONDS, 7 * 24 * 3600);
 });
 
@@ -26,7 +33,10 @@ test("verdict 发布/读取往返 + 解析容错 + fail-open", async () => {
   const r = fakeRedis();
   const verdict = { ok: true, at: "2026-11-21T00:00:00Z", sourceRows: 10, aggregateRows: 10 };
   assert.equal(await publishAggregateVerdict("o1", "w1", "sales", verdict, { redis: r }), true);
-  assert.deepEqual(await readAggregateVerdict("o1", "w1", "sales", { redis: r }), verdict);
+  const read = await readAggregateVerdict("o1", "w1", "sales", { redis: r });
+  assert.equal(read?.ok, true);
+  assert.equal(read?.schemaVersion, AGG_SCHEMA_VERSION);
+  assert.equal(read?.sourceRows, 10);
   // 跨域读不到（隔离）
   assert.equal(await readAggregateVerdict("o1", "w1", "profit", { redis: r }), null);
   // 解析容错
@@ -34,6 +44,27 @@ test("verdict 发布/读取往返 + 解析容错 + fail-open", async () => {
   assert.equal(parseVerdict('{"ok":"yes"}'), null);
   // Redis 不可用 → fail-open（null）
   assert.equal(await readAggregateVerdict("o1", "w1", "sales", { redis: null }), null);
+  setAggregateVerdictRedisForTest(undefined);
+});
+
+test("schema 版本不符的旧 verdict 一律视为未对账（fail-closed）", () => {
+  const old = JSON.stringify({ ok: true, at: "2026-11-01T00:00:00Z", sourceRows: 10, aggregateRows: 10, schemaVersion: "v0" });
+  assert.equal(parseVerdict(old, "v1"), null, "旧版本 verdict 必须失效");
+  assert.equal(parseVerdict(old, "v0")?.ok, true, "显式指定匹配版本时可读");
+  const missing = JSON.stringify({ ok: true, at: "2026-11-01T00:00:00Z", sourceRows: 1, aggregateRows: 1 });
+  assert.equal(parseVerdict(missing), null, "缺 schemaVersion 的历史记录必须失效");
+});
+
+test("invalidateAggregateVerdicts: 精确清理 org/ws 下所有版本 verdict，不误删其它租户", async () => {
+  const r = fakeRedis();
+  await publishAggregateVerdict("o1", "w1", "sales", { ok: true, at: "t", sourceRows: 1, aggregateRows: 1 }, { redis: r });
+  await publishAggregateVerdict("o1", "w1", "profit", { ok: true, at: "t", sourceRows: 1, aggregateRows: 1 }, { redis: r });
+  await publishAggregateVerdict("o2", "w1", "sales", { ok: true, at: "t", sourceRows: 1, aggregateRows: 1 }, { redis: r });
+  assert.equal(r.store.size, 3);
+  const removed = await invalidateAggregateVerdicts("o1", "w1", { redis: r });
+  assert.equal(removed, 2);
+  assert.equal(await readAggregateVerdict("o1", "w1", "sales", { redis: r }), null);
+  assert.equal((await readAggregateVerdict("o2", "w1", "sales", { redis: r }))?.ok, true, "其它租户不受影响");
   setAggregateVerdictRedisForTest(undefined);
 });
 

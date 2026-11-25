@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   aggregateStatementsFor, aggId, salesAggDailyStatement, profitAggDailyStatement,
   adsAggDailyStatement, overviewAggStatement, inventoryAggStatement, refreshSellfoxAggregates,
+  salesFxRateExpr,
 } from "../src/lib/sellfox/agg-refresh";
 import {
   compareAggregateRows, reconcileSalesAggDaily, assertReconciled, SALES_AGG_FIELDS, INVENTORY_AGG_FIELDS,
@@ -43,6 +44,55 @@ test("aggregate statement dispatch follows resource and keeps NULL-preserving SU
   assert.match(text, /CASE WHEN count\(t\."revenue"\)=count\(\*\) THEN SUM\(t\."revenue"\) END/);
   assert.match(text, /ON CONFLICT/);
   assert.match(text, /SellfoxSalesAggDaily/);
+});
+
+test("sales aggregate always writes fxRate/amountBase columns (NULL when no reviewed FX — never fabricated)", () => {
+  const noFx = String(salesAggDailyStatement(base)!.text);
+  assert.match(noFx, /"fxRate","amountBase"/);
+  assert.match(noFx, /"fxRate"=EXCLUDED\."fxRate", "amountBase"=EXCLUDED\."amountBase"/);
+  assert.match(noFx, /NULL::decimal\(20,8\)/, "no reviewed FX → fxRate must be NULL");
+  assert.match(noFx, /NULL::decimal\(20,4\)/, "no reviewed FX → amountBase must be NULL");
+
+  const withFx = salesAggDailyStatement({ ...base, fx: {
+    baseCurrency: "CNY",
+    rates: [{ sourceCurrency: "USD", targetCurrency: "CNY", rate: 7.12, reference: "rev-2026-11" }],
+  } })!;
+  const text = String(withFx.text);
+  assert.match(text, /CASE upper\(t\."currency"\)/);
+  assert.match(text, /SUM\(t\."revenue"\) \*/, "amountBase = revenue × fxRate");
+  assert.doesNotMatch(text, /NULL::decimal\(20,8\)/, "reviewed FX present → fxRate not null");
+  // 币种与汇率通过参数绑定（防注入），值在 sql.values 中
+  const values = (withFx as unknown as { values: unknown[] }).values;
+  assert.ok(values.includes("USD"), "source currency bound as parameter");
+  assert.ok(values.includes(7.12), "reviewed rate bound as parameter");
+});
+
+test("salesFxRateExpr filters out unreviewed/invalid/cross-target rates (no fabrication)", () => {
+  assert.equal(salesFxRateExpr(undefined), null);
+  assert.equal(salesFxRateExpr({ baseCurrency: "CNY", rates: [] }), null);
+  // no reference → rejected; rate<=0 → rejected; target≠base → rejected; source===base → rejected
+  const bad = { baseCurrency: "CNY", rates: [
+    { sourceCurrency: "USD", targetCurrency: "CNY", rate: 7.1, reference: "" },
+    { sourceCurrency: "EUR", targetCurrency: "CNY", rate: -1, reference: "r" },
+    { sourceCurrency: "JPY", targetCurrency: "USD", rate: 0.05, reference: "r" },
+    { sourceCurrency: "CNY", targetCurrency: "CNY", rate: 1, reference: "r" },
+  ] };
+  assert.equal(salesFxRateExpr(bad), null, "all invalid rates must be rejected");
+  const good = salesFxRateExpr({ baseCurrency: "CNY", rates: [
+    { sourceCurrency: "USD", targetCurrency: "CNY", rate: 7.12, reference: "rev-1" },
+  ] });
+  assert.ok(good);
+  const gv = (good as unknown as { values: unknown[] }).values;
+  assert.ok(gv.includes("USD") && gv.includes(7.12), "valid reviewed rate bound");
+  // 多币种：仅 target=base 有效条目进入 CASE
+  const multi = salesFxRateExpr({ baseCurrency: "CNY", rates: [
+    { sourceCurrency: "USD", targetCurrency: "CNY", rate: 7.1, reference: "r" },
+    { sourceCurrency: "EUR", targetCurrency: "CNY", rate: 7.8, reference: "r" },
+    { sourceCurrency: "JPY", targetCurrency: "USD", rate: 0.05, reference: "r" },
+  ] });
+  const mv = (multi as unknown as { values: unknown[] }).values;
+  assert.ok(mv.includes("USD") && mv.includes("EUR"), "only base-target currencies included");
+  assert.ok(!mv.includes("JPY"), "cross-target rate excluded");
 });
 
 test("statements require a date window and return null otherwise", () => {

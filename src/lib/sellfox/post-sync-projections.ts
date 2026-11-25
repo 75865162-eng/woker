@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { refreshSellfoxListingProfile } from "@/lib/sellfox/listing-profile-refresh";
 import { refreshSellfoxAggregates } from "@/lib/sellfox/agg-refresh";
+import { loadSalesFxProjection } from "@/lib/sellfox/sales-fx-projection";
 
 /**
  * Single post-sync projection hook. Every projection is:
@@ -56,6 +57,11 @@ export async function runPostSyncProjections(input: PostSyncProjectionInput) {
   // P2 L4: incrementally upsert the pre-aggregated tables for the synced domain.
   if (aggWriteEnabled()) {
     try {
+      // 报告1 P1：仅在显式开启 FX 投影且存在已复核汇率时，物化 fxRate/amountBase；
+      // 否则传 undefined → 两列写 NULL（绝不臆造）。加载失败也 fail-safe 为 undefined。
+      const fx = input.resource === "sales"
+        ? await loadSalesFxProjection({ organizationId: input.organizationId, workspaceId: input.workspaceId }, prisma)
+        : undefined;
       await refreshSellfoxAggregates({
         organizationId: input.organizationId,
         workspaceId: input.workspaceId,
@@ -65,6 +71,7 @@ export async function runPostSyncProjections(input: PostSyncProjectionInput) {
         startDate: input.startDate,
         endDate: input.endDate,
         runId: input.runId,
+        fx,
       });
     } catch (error) {
       console.error(JSON.stringify({ scope: "sellfox.projection.aggregates", resource: input.resource, runId: input.runId, message: error instanceof Error ? error.message : "unknown" }));
