@@ -18,8 +18,8 @@ const config: MasterDataWorkbenchConfig = {
       key: 'color', label: '标签颜色', width: 140,
       render: (row) => {
         const tone = String(row.color ?? 'info');
-        const tones: Record<string, string> = { info: 'bg-muted', blue: 'bg-blue-500', success: 'bg-green-500', warning: 'bg-amber-500', danger: 'bg-red-500' };
-        return <span className="inline-flex items-center gap-2"><span className={`inline-block h-3 w-3 rounded-full ${tones[tone] ?? 'bg-muted'}`} />{tone}</span>;
+        const tones: Record<string, string> = { info: 'bg-surface-muted', blue: 'bg-info', success: 'bg-success', warning: 'bg-warning', danger: 'bg-danger' };
+        return <span className="inline-flex items-center gap-2"><span className={`inline-block h-3 w-3 rounded-full ${tones[tone] ?? 'bg-surface-muted'}`} />{tone}</span>;
       },
     },
     { key: 'sortOrder', label: '排序', width: 80, numeric: true },

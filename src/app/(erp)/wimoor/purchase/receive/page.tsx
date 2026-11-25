@@ -32,7 +32,7 @@ export default function WimoorPurchaseReceivePage() {
       <section className="flex flex-col gap-2 border border-border bg-surface p-3">
         <h2 className="text-sm font-medium">源页面筛选项</h2>
         <div className="flex flex-wrap gap-2">{FILTERS.map((f) => <span key={f} className="inline-flex rounded border border-border px-2 py-1 text-xs">{f}</span>)}</div>
-        <div className="flex flex-wrap gap-2">{SELECTS.map((f) => <span key={f} className="inline-flex rounded bg-muted px-2 py-1 text-xs text-muted">搜索维度：{f}</span>)}</div>
+        <div className="flex flex-wrap gap-2">{SELECTS.map((f) => <span key={f} className="inline-flex rounded bg-surface-muted px-2 py-1 text-xs text-muted">搜索维度：{f}</span>)}</div>
       </section>
       <section className="border border-border bg-surface p-3">
         <h2 className="mb-2 text-sm font-medium">源页面表格列（只读对照）</h2>

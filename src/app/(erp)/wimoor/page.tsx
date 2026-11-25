@@ -75,12 +75,12 @@ export default function WimoorPortalPage() {
                         <span className="flex items-center justify-between font-medium group-hover:text-brand">
                           {e.name}<ExternalLink size={12} className="text-muted/50 group-hover:text-brand" />
                         </span>
-                        <span className="text-[11px] text-muted" title={e.comp}>WIMOOR: {e.wimoorHref}</span>
+                        <span className="text-xs text-muted" title={e.comp}>WIMOOR: {e.wimoorHref}</span>
                       </a>
                     ) : (
                       <div key={e.id} className="flex flex-col gap-1 bg-surface px-3 py-2 text-sm opacity-60" title="该页为分组/旧系统页或已由等价页承载">
-                        <span className="flex items-center justify-between font-medium text-muted">{e.name}<span className="text-[10px]">已映射</span></span>
-                        <span className="text-[11px] text-muted" title={e.comp}>WIMOOR: {e.wimoorHref}</span>
+                        <span className="flex items-center justify-between font-medium text-muted">{e.name}<span className="text-xs">已映射</span></span>
+                        <span className="text-xs text-muted" title={e.comp}>WIMOOR: {e.wimoorHref}</span>
                       </div>
                     )
                   ))}
