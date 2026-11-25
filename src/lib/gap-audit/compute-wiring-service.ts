@@ -309,12 +309,35 @@ export function recomputeSkuProfitWithKernel(
       agreesWithPage: result.netProfit === null ? r.netProfit === null : result.netProfit === r.netProfit,
     };
   });
+  // 报告03 生产级增强：8 项标准利润口径的「覆盖度审计」。
+  // 注意：权威净利仍只由上面 2 项（principal / procurementCost）表达式计算，
+  // 避免无真实来源的维度被补零后把全部行打成 INCOMPLETE（不回归）。
+  // 这里仅输出每维来源是否齐备，让"口径完整度"可见、可审计、可倒逼补数。
+  const dimensionSources: { key: string; label: string; hasSource: boolean }[] = [
+    { key: "principal", label: "结算净额", hasSource: true }, // settlementNet 恒有（=权威2项之一）
+    { key: "procurementCost", label: "采购/折算成本", hasSource: true }, // costTotalConverted（=权威2项之一）
+    { key: "freight", label: "头程运费", hasSource: rows.some((r) => r.freightCost !== null) },
+    { key: "otherCost", label: "其他成本", hasSource: rows.some((r) => r.otherCost !== null) },
+    { key: "fbaFee", label: "FBA 配送费", hasSource: false }, // 无真实来源，不臆造
+    { key: "adsCost", label: "广告费", hasSource: false },   // 广告表为空/fixture，不臆造
+    { key: "returns", label: "退货/退款损失", hasSource: false }, // 结算净额已含退款冲减，无独立维度
+    { key: "vat", label: "VAT/税费", hasSource: false },     // 无真实来源，不臆造
+  ];
+  const presentCount = dimensionSources.filter((d) => d.hasSource).length;
+  const formulaCoverage = {
+    standardDimensions: dimensionSources,
+    presentCount,
+    totalCount: dimensionSources.length,
+    coverage: `${presentCount}/${dimensionSources.length}`,
+    note: "覆盖度仅为口径审计，不参与权威净利计算。missing 维度表示当前无真实数据来源，按'不臆造'红线不得补零，待接入真实来源后再纳入表达式。",
+  };
   return {
-    basis: "SKU 权威净利润由 computeProfit 内核（BigInt 6 位定点）重算：principal=结算净额，procurementCost=折算成本；缺值 INCOMPLETE 不补零，跨币种拒绝。agreesWithPage 标记与旧口径是否一致。",
+    basis: "SKU 权威净利润由 computeProfit 内核（BigInt 6 位定点）重算：principal=结算净额，procurementCost=折算成本；缺值 INCOMPLETE 不补零，跨币种拒绝。agreesWithPage 标记与旧口径是否一致。formulaCoverage 为 8 维口径覆盖审计，不影响权威净利。",
     expression,
     rows: computed,
     incompletCount: computed.filter((c) => c.status === "INCOMPLETE").length,
     disagreementCount: computed.filter((c) => !c.agreesWithPage).length,
+    formulaCoverage,
   };
 }
 

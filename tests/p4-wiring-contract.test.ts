@@ -110,6 +110,25 @@ test("架构红线：接线 service 调用真实内核（防接线错位）", ()
   assert.match(computeService, /checkFxEntries\(input\.lines/);
 });
 
+test("报告02 生产级：SalesDailyFact 净额列 schema / 迁移 / 写入 / 回读 全链路落地", () => {
+  const schema = read("prisma/schema.prisma");
+  const modelBlock = schema.slice(schema.indexOf("model SalesDailyFact {"), schema.indexOf("model SalesDailyFact {") + 1400);
+  assert.match(modelBlock, /netUnits\s+Int\?/, "schema 缺 netUnits 列");
+  assert.match(modelBlock, /netSales\s+Decimal\?/, "schema 缺 netSales 列");
+  const migrations = read("prisma/migrations/20260101000000_sales_daily_fact_net/migration.sql");
+  assert.match(migrations, /ADD COLUMN IF NOT EXISTS "netUnits"/);
+  assert.match(migrations, /ADD COLUMN IF NOT EXISTS "netSales"/);
+  // 写入：create/update 两处都写净额（intOrNull 保 null 不补零；netSales 走 Decimal 保真）
+  const netWrites = factService.match(/netUnits:\s*intOrNull\(f\.netUnits\),\s*netSales:\s*new Prisma\.Decimal\(f\.netSales\)/g) ?? [];
+  assert.equal(netWrites.length, 2, "create/update 均须落库净额");
+  // 回读：query 返回净额且金额 toFixed 保真
+  assert.match(factService, /netUnits:\s*r\.netUnits\s*\?\?\s*null/);
+  assert.match(factService, /netSales:\s*r\.netSales\?\.toFixed\(6\)/);
+  // 纯函数内核确实算净额（net = 销售 - 退款）
+  const kernel = read("src/lib/amazon-sync/sales-daily-fact.ts");
+  assert.match(kernel, /netSales:\s*fmt\(b\.sales - b\.refundAmount\)/);
+});
+
 test("架构红线：租户隔离 + 幂等 upsert 在接线层落地", () => {
   assert.match(factService, /requireScope\(scope\)/);
   assert.match(computeService, /requireScope\(scope\)/);
@@ -157,4 +176,15 @@ test("B2 以内核修正页面：computeProfit 对 SKU 行重算，缺成本 INC
   assert.equal(b.netProfit, null); // 缺成本不补零
   assert.ok((b.pendingSources as string[]).includes("procurementCost"));
   assert.equal(result.incompletCount, 1);
+  // 报告03：8 维口径覆盖审计存在，且不改变权威净利表达式（不回归）
+  const cov = (result as { formulaCoverage: { standardDimensions: { key: string; hasSource: boolean }[]; totalCount: number; coverage: string } }).formulaCoverage;
+  assert.ok(cov, "应输出 formulaCoverage");
+  assert.equal(cov.totalCount, 8);
+  assert.equal(cov.standardDimensions.length, 8);
+  assert.equal(result.expression, "[principal]-[procurementCost]", "权威表达式保持 2 项不变");
+  // 不臆造红线：无真实来源的维度标 false，不得因增强而被补零纳入计算
+  for (const key of ["fbaFee", "adsCost", "returns", "vat"]) {
+    assert.equal(cov.standardDimensions.find((d) => d.key === key)!.hasSource, false, `${key} 无来源不得标 present`);
+  }
+  assert.equal(a.netProfit, "40.000000", "覆盖度增强后权威净利不回归");
 });

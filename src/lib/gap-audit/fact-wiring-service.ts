@@ -82,12 +82,14 @@ export async function materializeSalesDailyFacts(scope: WmsScope, input: Materia
           unitsOrdered: intOrNull(f.unitsOrdered), orderCount: f.orderCount,
           grossSales: new Prisma.Decimal(f.grossSales),
           refundUnits: intOrNull(f.refundUnits), refundAmount: new Prisma.Decimal(f.refundAmount),
+          netUnits: intOrNull(f.netUnits), netSales: new Prisma.Decimal(f.netSales),
           sourceRunId,
         },
         update: {
           asin: f.asin, unitsOrdered: intOrNull(f.unitsOrdered), orderCount: f.orderCount,
           grossSales: new Prisma.Decimal(f.grossSales),
           refundUnits: intOrNull(f.refundUnits), refundAmount: new Prisma.Decimal(f.refundAmount),
+          netUnits: intOrNull(f.netUnits), netSales: new Prisma.Decimal(f.netSales),
           sourceRunId,
         },
       });
@@ -116,6 +118,8 @@ export async function querySalesDailyFacts(scope: WmsScope, params: URLSearchPar
       ...r,
       grossSales: r.grossSales?.toFixed(6) ?? null,
       refundAmount: r.refundAmount?.toFixed(6) ?? null,
+      netUnits: r.netUnits ?? null,
+      netSales: r.netSales?.toFixed(6) ?? null,
     })),
     count: rows.length,
   };

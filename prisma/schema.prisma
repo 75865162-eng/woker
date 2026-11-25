@@ -8335,6 +8335,10 @@ model SalesDailyFact {
   grossSales         Decimal?  @db.Decimal(30, 6)
   refundUnits        Int?
   refundAmount       Decimal?  @db.Decimal(30, 6)
+  /// 报告02 生产级补齐：净销量 = unitsOrdered - refundUnits（分量缺失为 null，不补零）。
+  netUnits           Int?
+  /// 报告02 生产级补齐：净销售额 = grossSales - refundAmount（分币种，不跨币种相加）。
+  netSales           Decimal?  @db.Decimal(30, 6)
   currency           String    @db.VarChar(3)
   sourceRunId        String?
   formulaVersion     Int?
