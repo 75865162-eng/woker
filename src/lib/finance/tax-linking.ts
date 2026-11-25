@@ -49,7 +49,7 @@ export function linkTaxToLedger(input: {
   const profit = dec(input.profitAmount, 'profitAmount');
   const shares = input.entities.map((e, idx) => {
     const w = dec(e.weight, `weight:${e.entityId}`);
-    let amt = profit * w / S;
+    const amt = profit * w / S;
     return { entityId: e.entityId, weight: fmt(w), amount: fmt(amt) };
   });
   // 尾差归最后一主体（沿用水位尾差红线，保证合计精确）

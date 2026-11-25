@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- 测试内部字段断言与非法输入构造需要 any */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { aggregateMinuteBuckets, windowAggregate, type MinuteEvent } from '../src/lib/sellfox/minute-metric-bucket';

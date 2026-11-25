@@ -9,7 +9,8 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 
 function read(path: string) { return readFileSync(new URL(`../${path}`, import.meta.url), 'utf8'); }
 
@@ -82,7 +83,6 @@ test('页面框架：租户 header 从 localStorage 工作区作用域读取', (
 });
 
 test('迁移完整性：128 个菜单全部有登记，链接页文件真实存在', () => {
-  const { readFileSync, existsSync } = require('node:fs') as typeof import('node:fs');
   const registry = read('src/lib/wimoor-migration/page-registry.ts');
   const entryCount = (registry.match(/l1: '/g) ?? []).length;
   assert.equal(entryCount, 128, '登记册应含 128 个菜单');
@@ -97,8 +97,6 @@ test('迁移完整性：128 个菜单全部有登记，链接页文件真实存�
 });
 
 test('架构红线：所有页面为客户端组件并复用通用工作台', () => {
-  const { readdirSync, statSync } = require('node:fs') as typeof import('node:fs');
-  const { join } = require('node:path') as typeof import('node:path');
   const root = new URL('../src/app/(erp)/wimoor/', import.meta.url).pathname;
   let checked = 0;
   function walk(dir: string) {
