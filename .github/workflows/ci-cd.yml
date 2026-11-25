@@ -181,6 +181,10 @@ jobs:
 
       - name: Build
         if: steps.plan.outputs.release == 'true'
+        env:
+          # 页面规模扩大后 Next.js 构建峰值堆超过 Node 默认 4GB（CI 实测 OOM），
+          # 与本地 --max-old-space-size=6144 验证通过的配置保持一致。
+          NODE_OPTIONS: --max-old-space-size=6144
         run: npm run build
 
       - name: Package release artifact
