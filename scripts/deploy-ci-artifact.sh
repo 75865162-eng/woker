@@ -11,6 +11,21 @@ SSH_OPTS="${SSH_OPTS:--o StrictHostKeyChecking=yes}"
 if [ -n "$SERVER_KEY" ]; then
   SSH_OPTS="$SSH_OPTS -i $SERVER_KEY -o IdentitiesOnly=yes"
 fi
+
+# 部署加速：GitHub Actions 的 runner 在境外，到国内服务器的 SSH/TCP 握手常因跨境链路
+# 抖动反复重试——历史上一个仅 32MB 的 artifact 因为「scp 脚本 + scp 包 + ssh」三次
+# 独立连接累计卡了约 33 分钟（服务器端实际部署只用 ~70s）。
+# 用 ControlMaster 建立一条长连接，让后续所有 scp/ssh 复用它：跨境握手只做一次，
+# 三次往返缩成一次。连接在本脚本退出时统一关闭；不复用时行为与原来完全一致。
+CONTROL_SOCKET="/tmp/woker-deploy-$$-${RANDOM}.sock"
+SSH_OPTS="$SSH_OPTS -o ControlMaster=auto -o ControlPath=$CONTROL_SOCKET -o ControlPersist=600 -o ConnectionAttempts=2"
+cleanup_control_socket() {
+  ssh -o ControlPath="$CONTROL_SOCKET" -O exit "${SERVER_USER}@${SERVER_HOST}" >/dev/null 2>&1 || true
+  rm -f "$CONTROL_SOCKET"
+}
+trap cleanup_control_socket EXIT
+# 预热主连接：失败时快速报错，避免三个命令各自卡满超时。
+ssh ${SSH_OPTS} "${SERVER_USER}@${SERVER_HOST}" "true"
 SOURCE_BRANCH="${SOURCE_BRANCH:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)}"
 SOURCE_COMMIT="${SOURCE_COMMIT:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}"
 REMOTE_ARTIFACT="/tmp/amazon-ad-bulk-operation-${SOURCE_COMMIT}.tar.gz"

@@ -75,7 +75,17 @@ jobs:
           docker pull postgres:16-alpine
           docker pull redis:7
 
+      # 基准测的是固定 base commit 的性能；同一 BASE_SHA + 相同依赖/基准脚本的结果
+      # 是确定的，缓存后重复 run 直接命中，省去 ~196s 的基准实测。
+      - name: Cache base performance baseline
+        id: perf-baseline-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/erp-performance-baseline.json
+          key: erp-perf-baseline-${{ github.event.pull_request.base.sha || inputs.base_sha }}-${{ hashFiles('package-lock.json', 'scripts/performance/**') }}
+
       - name: Measure base revision
+        if: steps.perf-baseline-cache.outputs.cache-hit != 'true'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.base_sha }}
         run: |
