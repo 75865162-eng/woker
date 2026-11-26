@@ -14,7 +14,7 @@
 
 ## 服务器执行范围（执行前需核实并批准）
 
-仓库默认新服务器为 ubuntu@123.207.47.225，路径 /opt/amazon-ad-bulk-operation。旧服务器与 aecob.com 是另一数据集。必须确认真实 API 配置位于哪一台，以及真实组织/工作区，不能假定两台数据一致或迁移本地测试凭证/数据。
+仓库默认新服务器为 ubuntu@123.207.47.225，路径 /opt/amazon-ad-bulk-operation。旧服务器（旧域名）是另一数据集。必须确认真实 API 配置位于哪一台，以及真实组织/工作区，不能假定两台数据一致或迁移本地测试凭证/数据。
 
 先只读核对线上 RELEASE.json / RELEASE-RESULT.json、systemd is-enabled/is-active、Docker restart 策略、数据库和 Redis 可达、授权及来源的脱敏状态、scope 开关；不输出凭证或原始业务数据。
 

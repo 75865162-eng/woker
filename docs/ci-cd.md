@@ -67,7 +67,7 @@ artifact 不包含完整项目工作区、`node_modules/`、`.git/`、`coverage/
 - SSH 用户：`ubuntu`。
 - 默认服务器目录：`/opt/amazon-ad-bulk-operation`。
 - 新部署访问地址：`http://123.207.47.225`（HTTP 未加密；仅用于用户明确要求的 IP 临时入口）。
-- 旧服务器 `159.75.203.221` 与 `https://aecob.com` 仍在独立运行，保留原有数据库和 R2 数据；新服务器为空库，不自动迁移或同步旧主机数据。不要将两端误认为同一数据集，也不要未经明确要求关闭旧服务器或修改 DNS。
+- 旧服务器 `159.75.203.221`（旧域名）仍在独立运行，保留原有数据库和 R2 数据；新服务器为空库，不自动迁移或同步旧主机数据。不要将两端误认为同一数据集，也不要未经明确要求关闭旧服务器或修改 DNS。
 - 服务器系统：Ubuntu 24.04 LTS x64。
 - 生产架构：PostgreSQL 和 Redis 使用 Docker；Next web 和 worker 使用服务器本机 Node.js + systemd；Caddy 使用 Docker 反代到本机 web。
 - Docker Compose 只管理 infra：`postgres`、`redis`。不要再为普通代码更新执行 `docker compose up -d --build web worker`。

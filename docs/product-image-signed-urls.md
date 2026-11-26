@@ -6,4 +6,4 @@ Product list thumbnails and product-editor images use `POST /api/products/image-
 - `STORAGE_DRIVER=local` intentionally retains `/api/assets/*` as a development fallback because local files have no browser-reachable object host.
 - `/api/assets/*` is retained for legacy product image references and is marked deprecated for product assets. New R2/S3 product-image rendering must not proxy object bytes through Next.js.
 
-Before production rollout, configure the R2/S3 bucket CORS policy to allow `GET` and `HEAD` from `https://aecob.com` (and the intended staging origin). Do not make the bucket public: browser access is granted only through an expiring signed URL.
+Before production rollout, configure the R2/S3 bucket CORS policy to allow `GET` and `HEAD` from the production HTTPS origin (and the intended staging origin). Do not make the bucket public: browser access is granted only through an expiring signed URL.

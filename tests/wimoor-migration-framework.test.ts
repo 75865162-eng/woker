@@ -105,7 +105,9 @@ test('架构红线：所有页面为客户端组件并复用通用工作台', ()
       if (statSync(p).isDirectory()) walk(p);
       else if (name === 'page.tsx' && !p.endsWith('/wimoor/page.tsx')) {
         const txt = readFileSync(p, 'utf8');
-        if (txt.includes('MasterDataWorkbench')) {
+        // 两种通用工作台：主数据 CRUD（MasterDataWorkbench）与亚马逊真实数据只读（AmazonDatasetWorkbench）
+        const usesSharedWorkbench = txt.includes('MasterDataWorkbench') || txt.includes('AmazonDatasetWorkbench');
+        if (usesSharedWorkbench) {
           assert.match(txt, /'use client'/, `${p} 缺少 use client`);
           assert.match(txt, /源组件|源 Vue|WIMOOR/, `${p} 缺少源组件注释`);
           checked++;

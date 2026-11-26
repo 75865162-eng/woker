@@ -59,7 +59,7 @@
 | `amazon-sync-worker` | `npm run worker:amazon-sync` | `tsx scripts/amazon-sync-worker.ts` |
 | `amazon-sellfox-sync-worker` | `npm run worker:sellfox-sync` | `tsx scripts/sellfox-sync-worker.ts` |
 
-Caddy 由 `deploy/caddy/run-caddy.sh` 以容器反代到本机 web。公网只开 22/80/443。新机入口是 `http://123.207.47.225`；旧机 `159.75.203.221` / `https://aecob.com` 是另一套库，本文不把两边当成同一数据集。
+Caddy 由 `deploy/caddy/run-caddy.sh` 以容器反代到本机 web。公网只开 22/80/443。新机入口是 `http://123.207.47.225`；旧机 `159.75.203.221`（旧域名）是另一套库，本文不把两边当成同一数据集。
 
 发布链路已经存在，但是人工触发：
 

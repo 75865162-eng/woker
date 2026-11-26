@@ -331,11 +331,11 @@ COMMIT;
 
 生产计划必须在目标主机自己的组织/工作区启用。本地计划、其他服务器的 Worker 与数据库不作为生产验收。发布前核对当前 RELEASE.json commit；通过 CI/CD 的 target_host 显式选择旧主机 159.75.203.221 或新主机 123.207.47.225，base_sha 必须属于该主机。已有发布不使用 initial_deployment，不运行管理员 seed。涉及迁移/部署须审核并设置 deployment_reviewed；锁文件变更才授权 install_dependencies。
 
-旧主机升级 Compose 前检查 POSTGRES_DB/POSTGRES_USER/POSTGRES_PASSWORD 是否存在；缺失时只能从当前运行的 PostgreSQL 容器配置补入相同值，验证与 DATABASE_URL 一致，不重置密码、不输出值。Caddy 保留 aecob.com 和两个 IP 入口，不修改 DNS。生产 Worker 使用发布内的 systemd 单元与服务器 .env：systemctl enable --now amazon-sellfox-sync-worker。
+旧主机升级 Compose 前检查 POSTGRES_DB/POSTGRES_USER/POSTGRES_PASSWORD 是否存在；缺失时只能从当前运行的 PostgreSQL 容器配置补入相同值，验证与 DATABASE_URL 一致，不重置密码、不输出值。Caddy 保留旧域名和两个 IP 入口，不修改 DNS。生产 Worker 使用发布内的 systemd 单元与服务器 .env：systemctl enable --now amazon-sellfox-sync-worker。
 
 验收 schedules API 的 configured、queueEnabled、worker.online，以及 inventory/sales/performance/listings/ads_report 的 enabled/nextRunAt；stores/hourly 不启用，广告保留 SP。等原有30秒调度 tick，记录 trigger=schedule 的成功 run。销量默认从上一完整冬季11月1日起每天补7天，串行限流可能持续十几分钟以上。回滚先关闭五项计划，必要时停专用 Worker；应用失败沿 release 回滚，不 down migration、不清快照。
 
-### aecob.com 生产启用验收 · 2026-10-25
+### 旧域名生产启用验收 · 2026-10-25
 
 - 目标为旧主机 `159.75.203.221`，组织 `cmu16envk0000h8va9y84ukev` / 工作区 `default`；不涉及新主机数据库。CI run `40163449096` 成功，应用 commit `11f4f4dd4a89565b7fac03e221ad60f27a8ae723`，artifact SHA256 `7275a8bbeba92961b530d08e9209edf64d6e670417196a628eb6129e8a6767c8`。RELEASE-RESULT 显示 health/migration passed，服务 active，数据库未回滚。
 - 专用 Worker enabled/active，NRestarts=0；GET schedules 的 configured/queueEnabled/worker.online 均 true，设置→运维页面确认在线。五项计划通过正式 API 开启；stores/hourly 未启用，广告维持默认 SP，销量 backfillStart=2025-11-01。
