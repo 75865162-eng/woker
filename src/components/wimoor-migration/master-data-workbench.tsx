@@ -175,6 +175,29 @@ function withDefaults(raw: MasterDataWorkbenchConfig): MasterDataWorkbenchConfig
     if (!raw.quickFilters && exact.quickFilters) derived.quickFilters = exact.quickFilters as QuickFilterDef[];
     if (!raw.searchTypes && exact.searchTypes) derived.searchTypes = exact.searchTypes;
     if (!raw.statusTabs && exact.statusTabs) derived.statusTabs = exact.statusTabs as StatusTabDef[];
+  } else {
+    // 未命中 FEATURE_MAP 的「口径对照入口」页：把本页已声明的 extraFilters 提升为
+    // 常驻 searchTypes / quickFilters，复用现有筛选组件把原版筛选字段显性化。
+    // 选项来自 quickOptions 的真实数据去重；有 options 的 select 字段优先常驻。
+    const pool: FieldDef[] = [...(raw.extraFilters ?? []), ...(raw.fields ?? [])];
+    if (!raw.searchTypes) {
+      const searchCandidates = pool.filter(f => /sku|asin|name|编码|名称|订单|标题/i.test(f.key + f.label));
+      const picked = (searchCandidates.length ? searchCandidates : pool.slice(0, 1)).slice(0, 4);
+      if (picked.length) derived.searchTypes = picked.map(f => ({ value: f.key, label: f.label }));
+    }
+    if (!raw.quickFilters) {
+      const selectFields = pool.filter(f => f.kind === 'select' && (f.options?.length ?? 0) > 0);
+      const textFields = pool.filter(f => (f.kind ?? 'text') === 'text' && !/remark|备注|地址|说明|url|图片/i.test(f.key + f.label));
+      const picked = [...selectFields, ...textFields].slice(0, 3);
+      if (picked.length) {
+        derived.quickFilters = picked.map(f => ({
+          key: f.key,
+          label: f.label,
+          options: f.options ?? [],
+          placeholder: f.placeholder ?? f.label,
+        })) as QuickFilterDef[];
+      }
+    }
   }
   if (!raw.dropdownMenus && !derived.dropdownMenus) {
     if (['product', 'warehouse', 'purchase', 'shipment'].includes(mod)) {

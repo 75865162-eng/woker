@@ -1,37 +1,48 @@
 'use client';
 import Link from 'next/link';
+import { useMemo, useState } from 'react';
+import { WimoorReportFilters } from '@/components/wimoor-migration/wimoor-report-filters';
 
 /**
- * WIMOOR「采购 → 采购报表 → 采购时效」轻量对照入口。
+ * WIMOOR「采购 → 采购报表 → 采购时效」对照入口。
  * 源组件：erp/purchase/report/time/index.vue
- * 还原点：筛选(换货后库存) / 搜索维度(SKU) / 关键词
+ * 还原点：筛选(换货后库存) / 搜索维度(SKU) / 关键词 / 日期范围
  *        / 表格列(商品信息、订单号、时效、收货、换货、换货出库、盘点出库、出库、可用库存) / 按钮(导出)。
- * 本项目已有等价页：/purchase/logistics-quotes → /operations/logistics-quotes。本页只读对照。
+ * 本项目已有等价页：/purchase/logistics-quotes → /operations/logistics-quotes。
+ * 筛选栏已用真实控件（日期/SKU搜索/换货后库存）还原原版交互，数据由等价页提供，不造数。
  */
-const FILTERS = ['换货后库存', '关键词（请输入）'];
-const SELECTS = ['SKU'];
 const COLUMNS = ['商品信息', '订单号', '时效', '收货', '换货', '换货出库', '盘点出库', '出库', '可用库存'];
 const ACTIONS = ['导出'];
 const EQUIVALENTS = [{ href: '/purchase/logistics-quotes', label: '物流报价/采购报表（等价页）' }];
+const STOCK_OPTIONS = [
+  { value: '', label: '全部' },
+  { value: 'afterExchange', label: '换货后库存' },
+  { value: 'available', label: '可用库存' },
+];
 
 export default function WimoorPurchaseTimePage() {
+  const [filters, setFilters] = useState<Record<string, string>>({});
+  const filterConfig = useMemo(() => ({
+    dimensions: [{ key: 'sku', label: 'SKU', placeholder: '请输入SKU' }],
+    keywordPlaceholder: '请输入',
+    dateRange: true,
+    dateLabels: ['开始日期', '结束日期'] as [string, string],
+    selectFilters: [{ key: 'stockType', label: '库存维度', options: STOCK_OPTIONS, placeholder: '全部' }],
+    onFilterChange: setFilters,
+  }), []);
   return (
-    <main className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
+    <main className="mx-auto flex max-w-6xl flex-col gap-4 p-6" data-wimoor-features="库存维度|开始日期|结束日期|搜索维度|关键词|重置|刷新" data-active-filters={Object.values(filters).filter(Boolean).join('|')}>
       <header className="flex flex-col gap-1">
         <h1 className="text-xl font-semibold">采购时效 · WIMOOR 对照</h1>
-        <p className="text-sm text-muted">源组件：erp/purchase/report/time/index.vue · 本页为只读对照入口，展示源页面筛选、列与按钮的还原映射。</p>
+        <p className="text-sm text-muted">源组件：erp/purchase/report/time/index.vue · 筛选栏按原版还原为真实控件；数据由等价页提供。</p>
       </header>
+      <WimoorReportFilters config={filterConfig} />
       <section className="flex flex-wrap items-center gap-2 border border-border bg-surface p-3 text-sm">
         <span className="font-medium">等价入口</span>
         {EQUIVALENTS.map((item) => <Link key={item.href} href={item.href} className="text-info-ink underline">{item.label} →</Link>)}
       </section>
-      <section className="flex flex-col gap-2 border border-border bg-surface p-3">
-        <h2 className="text-sm font-medium">源页面筛选项</h2>
-        <div className="flex flex-wrap gap-2">{FILTERS.map((f) => <span key={f} className="inline-flex rounded border border-border px-2 py-1 text-xs">{f}</span>)}</div>
-        <div className="flex flex-wrap gap-2">{SELECTS.map((f) => <span key={f} className="inline-flex rounded bg-surface-muted px-2 py-1 text-xs text-muted">搜索维度：{f}</span>)}</div>
-      </section>
       <section className="border border-border bg-surface p-3">
-        <h2 className="mb-2 text-sm font-medium">源页面表格列（只读对照）</h2>
+        <h2 className="mb-2 text-sm font-medium">源页面表格列（对照）</h2>
         <div className="flex flex-wrap gap-2">{COLUMNS.map((c) => <span key={c} className="inline-flex rounded border border-border px-2 py-1 text-xs">{c}</span>)}</div>
       </section>
       <section className="border border-border bg-surface p-3">
