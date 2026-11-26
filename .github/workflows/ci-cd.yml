@@ -322,4 +322,29 @@ jobs:
           RUN_BOOTSTRAP_SEED: "false"
           SOURCE_BRANCH: ${{ github.ref_name }}
           SOURCE_COMMIT: ${{ github.sha }}
-        run: bash scripts/deploy-ci-artifact.sh dist/amazon-ad-bulk-operation-release.tar.gz
+        # tee 将完整发布日志落盘供自动报告解析；pipefail 保证 deploy 脚本失败时 step 仍失败，
+        # 不因管道末段 tee 成功而掩盖发布失败（可靠性不妥协）。
+        run: |
+          set -o pipefail
+          bash scripts/deploy-ci-artifact.sh dist/amazon-ad-bulk-operation-release.tar.gz 2>&1 | tee dist/deploy-console.log
+
+      - name: Collect CI job timings
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        # 有上限的 API 读取（单次 curl，失败写空对象兜底），不使用 sleep 盲等。
+        run: |
+          node - "$RUN_ID" "$GH_TOKEN" <<'NODE' > dist/ci-job-timings.json || echo '{"jobs":[]}' > dist/ci-job-timings.json
+          const [runId, token] = process.argv.slice(2);
+          const url = `https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/actions/runs/${runId}/jobs?per_page=100`;
+          fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" } })
+            .then(r => r.ok ? r.json() : Promise.reject(new Error("jobs api " + r.status)))
+            .then(d => process.stdout.write(JSON.stringify({ jobs: d.jobs || [] })))
+            .catch(() => process.stdout.write('{"jobs":[]}'));
+          NODE
+
+      - name: Generate deployment report
+        if: ${{ !cancelled() }}
+        # 自动汇总报告写入 job summary，无需人工拼装；报告脚本只读既有证据，不触碰发布契约。
+        run: node scripts/deployment-report.mjs --output "$GITHUB_STEP_SUMMARY"
