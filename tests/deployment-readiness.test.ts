@@ -141,6 +141,17 @@ test("部署入口在任何网络操作前拒绝失败、漂移或不完整的�
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test("部署脚本的读版本片段必须以分号结尾，避免发布命令被 echo 吞掉", () => {
+  // 回归守卫：read_current_release 末段若为 `echo '...'`（无分号），拼接到
+  // `... sudo -n env ... bash release.sh` 后整条命令会变成 echo 的参数被打印而不执行，
+  // 导致 CI 显示 success 但生产版本没有变化。此处断言末段带分号，保证发布命令真正执行。
+  const deployScript = read("scripts/deploy-ci-artifact.sh");
+  const line = deployScript.split("\n").find(l => /^read_current_release=/.test(l));
+  assert.ok(line, "未找到 read_current_release 定义");
+  assert.ok(line!.trimEnd().endsWith(';"'), `read_current_release 行内的字符串必须以分号结尾，实际为: ${line!.slice(-80)}`);
+  assert.match(line!, /开始原子发布与验收:';"\s*$/, "最后的 echo 后必须带分号，否则后续发布命令被 echo 吞掉");
+});
+
 test("费用单主导航入口跳转到现有正式工作台", () => {
   // 财务板块二级统一 /fin 前缀，/fin/expenses 经 rewrite 映射到原正式工作台。
   assert.match(read("src/components/app-shell/business-navigation.ts"), /href: "\/fin\/expenses", label: "ERP 费用单"/);

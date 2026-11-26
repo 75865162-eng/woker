@@ -123,7 +123,10 @@ run_scp ${SSH_OPTS} "$ARTIFACT_PATH" "${SERVER_USER}@${SERVER_HOST}:${REMOTE_ART
 
 # 读旧 release 与执行发布合并为一次 ssh：切换前打印当前 commit 便于从 CI 日志恢复 base_sha。
 # 这样把跨境往返从 4 次（scp+scp+ssh读+ssh执行）降到 3 次。
-read_current_release="echo '[deploy] 当前生产版本:'; sudo -n cat /opt/amazon-ad-bulk-current/RELEASE.json 2>/dev/null || cat /opt/amazon-ad-bulk-current/RELEASE.json 2>/dev/null || echo '{\"commit\":null,\"note\":\"no current RELEASE.json\"}'; echo '[deploy] 开始原子发布与验收:'"
+# 重要：read_current_release 必须以分号结尾。否则它与后面的 sudo/env/bash 发布命令
+# 拼接后会变成 `echo '...' sudo ... bash release.sh`，整条发布命令只被 echo 打印而不执行，
+# CI 退出码 0 显示成功但生产版本不变。tests/deployment-readiness.test.ts 有回归守卫。
+read_current_release="echo '[deploy] 当前生产版本:'; sudo -n cat /opt/amazon-ad-bulk-current/RELEASE.json 2>/dev/null || cat /opt/amazon-ad-bulk-current/RELEASE.json 2>/dev/null || echo '{\"commit\":null,\"note\":\"no current RELEASE.json\"}'; echo '[deploy] 开始原子发布与验收:';"
 
 remote_release_command="cd ${SERVER_DIR} && ${read_current_release} SOURCE_BRANCH=${quoted_source_branch} SOURCE_COMMIT=${quoted_source_commit} EXPECTED_ARTIFACT_SHA256=${quoted_artifact_sha256} INSTALL_DEPS_ON_SERVER=${quoted_install_deps} RUN_BOOTSTRAP_SEED=${quoted_run_bootstrap_seed} INITIAL_DEPLOYMENT=${quoted_initial_deployment} bash ${quoted_remote_release_script} ${quoted_remote_artifact}"
 
