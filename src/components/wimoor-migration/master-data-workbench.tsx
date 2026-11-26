@@ -691,12 +691,16 @@ export function MasterDataWorkbench({ config: rawConfig }: { config: MasterDataW
     // 7) 采购 / 同步 SKU：跳转系统内真实等价业务入口（不伪造后端）
     if (k === 'batch3' || k === 'batch-purchase' || label === '采购') { jumpToEquivalent('purchase', label); return; }
     if (k === 'batch-sync-sku' || label.includes('同步') && label.includes('SKU')) { jumpToEquivalent('catalog', label); return; }
-    // 8) 其余原版-derived 项：这些是字段/状态类快捷入口，落到对应的常驻筛选或导出，保持有真实行为
-    const asFilter = (config.quickFilters ?? []).find(f => f.key === k);
-    if (asFilter) { setQuickValues(v => ({ ...v, [k]: '' })); setNotice(`已在筛选区定位「${label}」条件。`); setMore(true); return; }
+    // 8) 其余原版-derived 项：多为字段/状态类快捷入口，映射到本页真实存在的筛选或列
+    const asQuick = (config.quickFilters ?? []).find(f => f.key === k);
+    if (asQuick) { setQuickValues(v => ({ ...v, [k]: '' })); setNotice(`已在筛选区定位「${label}」条件。`); setMore(true); return; }
+    const asField = (config.extraFilters ?? config.fields ?? []).find(f => f.key === k);
+    if (asField) { setNotice(`「${label}」对应本页「${asField.label}」字段，已在「更多条件」中展开。`); setMore(true); searchRef.current?.focus(); return; }
+    const asColumn = config.columns.find(c => c.key === k);
+    if (asColumn) { setNotice(`「${label}」对应表格列「${asColumn.label}」，已定位当前结果。`); return; }
     // 兜底：导出当前结果（真实行为），并明确告知该原版项在本页以等价能力呈现
     exportCsv();
-    setNotice(`「${label}」：本迁移页以「导出当前结果 / 条件筛选」等价呈现，未逐字段还原原版专用后端。`);
+    setNotice(`「${label}」：本迁移页以「导出当前结果」等价呈现，未逐字段还原原版专用后端。`);
   };
 
   const dropdownItems = (menu: DropdownMenuDef): DropdownItem[] => menu.items.map(item => ({
