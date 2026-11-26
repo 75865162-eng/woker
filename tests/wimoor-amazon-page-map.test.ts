@@ -37,8 +37,16 @@ test("未登记页 fail-safe 返回 null，已接真实数据的页面不在 ama
   }
 });
 
-test("映射页均为已验证有真实数据的业务域（订单/销量/退货/报表/商品/结算/财务）", () => {
-  const allowed = new Set(["orders", "order_items", "returns", "sales_traffic_daily", "listings", "settlements_v2", "finance_transactions", "reimbursements", "storage_fees"]);
+test("映射页 dataset 均为已验证可读的业务域", () => {
+  // 全部经生产真实 scope readDataset 验证：可读（有数据或语义明确的空报告）。
+  // 有数据：orders136 finance137 returns9 settlements87 inventory201 listings165 sales5 fba_shipments3507 reserved31；
+  // 语义明确但当前站点空：order_items/reimbursements/storage_fees/fee_preview/recommended_removals/
+  //   removal_order_report/customer_feedback/promotions（空不代表业务不存在，页面已标注口径）。
+  const allowed = new Set([
+    "orders", "order_items", "returns", "sales_traffic_daily", "listings", "settlements_v2",
+    "finance_transactions", "reimbursements", "storage_fees", "inventory", "fba_shipments",
+    "fee_preview", "recommended_removals", "removal_order_report", "customer_feedback", "promotions",
+  ]);
   for (const [href, m] of Object.entries(AMAZON_PAGE_MAP)) {
     assert.ok(allowed.has(m.dataset), `${href} 使用了未验证数据集 ${m.dataset}`);
   }

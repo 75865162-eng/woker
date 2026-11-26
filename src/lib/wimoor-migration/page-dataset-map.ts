@@ -208,6 +208,214 @@ export const AMAZON_PAGE_MAP: Record<string, AmazonPageMapping> = {
     basis: '已发布仓储费报告行；当前站点可能暂无数据。单份完整月报，不跨版本累加。',
     status: 'amazon',
   },
+
+  // ── 第二批：逐页语义匹配（2026-11-26 扩充，覆盖全部有对应亚马逊同步表的页） ──
+
+  // 账目 · 本地账目/平台账目
+  '/wimoor/account/inventory-value': {
+    comp: 'erp/finance/inventoryValue/index', name: '库存货值', dataset: 'inventory',
+    columns: [
+      { key: 'sellerSku', label: 'SKU', width: 150 },
+      { key: 'asin', label: 'ASIN', width: 130 },
+      { key: 'fulfillableQuantity', label: '可售', width: 90, numeric: true },
+      { key: 'reservedQuantity', label: '预留', width: 90, numeric: true },
+      { key: 'inboundWorkingQuantity', label: '在途', width: 90, numeric: true },
+      { key: 'unfulfillableQuantity', label: '不可售', width: 90, numeric: true },
+      { key: 'condition', label: '状态', width: 100 },
+    ],
+    basis: 'FBA 库存快照（已发布）可售/预留/在途/不可售数量，来自 Amazon FBA 库存报告；货值金额需本地成本参与计算，本页只呈现亚马逊返回的库存数量事实。',
+    status: 'amazon',
+  },
+  '/wimoor/account/open': {
+    comp: 'amazon/report/open/index', name: '账期未结算', dataset: 'finance_transactions',
+    columns: [
+      { key: 'postedAt', label: '过账时间', width: 170 },
+      { key: 'transactionType', label: '交易类型', width: 150 },
+      { key: 'orderId', label: '订单号', width: 150 },
+      { key: 'originalAmount', label: '原币金额', width: 110, numeric: true },
+      { key: 'currency', label: '币种', width: 70 },
+      { key: 'classification', label: '分类', width: 110 },
+    ],
+    basis: 'Finances API 交易流水（近30天），用于核对账期未结算项；原币金额不跨币种汇总，不代表最终结算。',
+    status: 'amazon',
+  },
+  '/wimoor/account/profit-report': {
+    comp: 'amazon/payment/profitReport/index', name: '利润报表', dataset: 'settlements_v2',
+    columns: [
+      { key: 'businessDate', label: '业务日期', width: 120 },
+      { key: 'sellerSku', label: 'SKU', width: 140 },
+      { key: 'asin', label: 'ASIN', width: 130 },
+      { key: 'orderId', label: '订单号', width: 160 },
+      { key: 'quantityOriginal', label: '数量', width: 80, numeric: true },
+      { key: 'amountOriginal', label: '金额', width: 110, numeric: true },
+      { key: 'currencyCode', label: '币种', width: 70 },
+    ],
+    basis: '利润=平台收入−成本；本页呈现亚马逊结算报告的收入侧真实数据（SKU/订单/金额）。采购成本、头程费用为本地数据，完整利润需在本地成本侧计算，本页不造利润数。',
+    status: 'amazon',
+  },
+  '/wimoor/account/shop-profit': {
+    comp: 'amazon/payment/profitReport/profitGroup/index', name: '店铺利润', dataset: 'settlements_v2',
+    columns: [
+      { key: 'businessDate', label: '业务日期', width: 120 },
+      { key: 'orderId', label: '订单号', width: 160 },
+      { key: 'sellerSku', label: 'SKU', width: 140 },
+      { key: 'amountOriginal', label: '金额', width: 110, numeric: true },
+      { key: 'currencyCode', label: '币种', width: 70 },
+    ],
+    basis: '按店铺维度的亚马逊结算收入侧真实数据；成本为本地数据，完整店铺利润需本地计算，本页不造利润数。',
+    status: 'amazon',
+  },
+  '/wimoor/account/job-costing': {
+    comp: 'amazon/payment/jobCosting/index', name: '批次成本', dataset: 'fba_shipments',
+    columns: [
+      { key: 'businessDate', label: '业务日期', width: 120 },
+      { key: 'orderId', label: '订单号', width: 160 },
+      { key: 'sellerSku', label: 'SKU', width: 140 },
+      { key: 'quantityOriginal', label: '数量', width: 80, numeric: true },
+      { key: 'amountOriginal', label: '金额', width: 110, numeric: true },
+      { key: 'currencyCode', label: '币种', width: 70 },
+    ],
+    basis: 'FBA 入库货件报告（已发布）对应的 SKU/数量/金额；批次成本中的采购/头程成本为本地数据，本页呈现亚马逊侧的货件事实。',
+    status: 'amazon',
+  },
+
+  // 产品 · 平台配对
+  '/wimoor/product/sku-relation': {
+    comp: 'amazon/listing/relation_msku/index', name: 'SKU配对', dataset: 'listings',
+    columns: [
+      { key: 'sellerSku', label: 'SKU', width: 160 },
+      { key: 'asin', label: 'ASIN', width: 140 },
+      { key: 'listingStatus', label: '状态', width: 110 },
+      { key: 'fulfillmentType', label: '履约方式', width: 110 },
+      { key: 'sourceUpdatedAt', label: '更新时间', width: 170 },
+    ],
+    basis: '展示亚马逊 Listing 快照的 SKU/ASIN 真实对应关系；MSKU 分组关系为本地业务数据，本页不改动本地配对。',
+    status: 'amazon',
+  },
+
+  // 销售 · 评论绩效/报表/FBA/预测/移除
+  '/wimoor/sales/chapin-guanli': {
+    comp: 'amazon/report/performance/orderfeedback/index', name: '差评管理', dataset: 'customer_feedback',
+    columns: [
+      { key: 'asin', label: 'ASIN', width: 140 },
+      { key: 'sellerSku', label: 'SKU', width: 140 },
+      { key: 'kind', label: '类型', width: 120 },
+      { key: 'capturedAt', label: '采集时间', width: 170 },
+    ],
+    basis: '客户反馈观察（已发布版本）；仅返回当前授权账号可见的反馈，当前站点暂无数据时为空。',
+    status: 'amazon',
+  },
+  '/wimoor/sales/cuxiao-baogao': {
+    comp: 'amazon/report/performance/index', name: '促销报告', dataset: 'promotions',
+    columns: [
+      { key: 'kind', label: '类型', width: 140 },
+      { key: 'asin', label: 'ASIN', width: 130 },
+      { key: 'sellerSku', label: 'SKU', width: 130 },
+      { key: 'capturedAt', label: '采集时间', width: 170 },
+    ],
+    basis: '促销观察（已发布版本）；feeSnapshot 为创建时费率快照非实际花费，当前站点暂无数据时为空。',
+    status: 'amazon',
+  },
+  '/wimoor/sales/dianpu-jixiao': {
+    comp: 'amazon/report/performance/seller/index', name: '店铺绩效', dataset: 'sales_traffic_daily',
+    columns: [
+      { key: 'businessDate', label: '业务日期', width: 120 },
+      { key: 'metrics.sessions', label: '会话数', width: 110, numeric: true },
+      { key: 'metrics.pageViews', label: '浏览量', width: 110, numeric: true },
+      { key: 'metrics.unitsOrdered', label: '订单量', width: 100, numeric: true },
+      { key: 'quality', label: '质量', width: 90 },
+    ],
+    basis: '店铺逐日销售流量快照（近7天）作为绩效参考；卖家绩效评级指标不在此数据集内，当前站点无数据时为空。',
+    status: 'amazon',
+  },
+  '/wimoor/sales/fba-feiyong': {
+    comp: 'amazon/report/fba_fee/index', name: 'FBA费用', dataset: 'fee_preview',
+    columns: [
+      { key: 'businessDate', label: '业务日期', width: 120 },
+      { key: 'sellerSku', label: 'SKU', width: 140 },
+      { key: 'fulfilledBy', label: '履约方式', width: 110 },
+      { key: 'estimatedTotalFeeOriginal', label: '预估总费用', width: 120, numeric: true },
+      { key: 'currencyCode', label: '币种', width: 70 },
+    ],
+    basis: 'FBA 费用预览快照（估算值，非实际扣款）；每 Seller 每日最多请求一次，当前站点暂无数据时为空。',
+    status: 'amazon',
+  },
+  '/wimoor/sales/fba-zhixiao': {
+    comp: 'amazon/inventory/planning/index', name: 'FBA滞销', dataset: 'recommended_removals',
+    columns: [
+      { key: 'businessDate', label: '快照日期', width: 120 },
+      { key: 'sellerSku', label: 'SKU', width: 140 },
+      { key: 'asin', label: 'ASIN', width: 130 },
+      { key: 'condition', label: '状态', width: 100 },
+      { key: 'quantities', label: '库龄数量', width: 160 },
+    ],
+    basis: '推荐移除（滞销）每日快照；按报告类型读取，不能跨快照累加，当前站点暂无数据时为空。',
+    status: 'amazon',
+  },
+  '/wimoor/sales/xiaoshou-jihua': {
+    comp: 'amazon/sales/forecast/index', name: '销售计划', dataset: 'sales_traffic_daily',
+    columns: [
+      { key: 'businessDate', label: '业务日期', width: 120 },
+      { key: 'metrics.unitsOrdered', label: '订单量', width: 100, numeric: true },
+      { key: 'metrics.orderedProductSales.amount', label: '销售额', width: 120, numeric: true },
+      { key: 'metrics.orderedProductSales.currencyCode', label: '币种', width: 70 },
+    ],
+    basis: '店铺逐日销售趋势（近7天）作为计划参考；预测目标为本地数据，本页呈现亚马逊实际销售事实。',
+    status: 'amazon',
+  },
+  '/wimoor/sales/yichu-dingdan': {
+    comp: 'amazon/order/remove/index', name: '移除订单', dataset: 'removal_order_report',
+    columns: [
+      { key: 'businessDate', label: '业务日期', width: 120 },
+      { key: 'orderId', label: '移除订单号', width: 160 },
+      { key: 'sellerSku', label: 'SKU', width: 140 },
+      { key: 'quantityOriginal', label: '数量', width: 80, numeric: true },
+      { key: 'amountOriginal', label: '费用', width: 110, numeric: true },
+    ],
+    basis: '移除订单报告（已发布）；仅含移除订单，当前站点暂无数据时为空。',
+    status: 'amazon',
+  },
+
+  // 发货 · FBA 货件
+  '/wimoor/shipment/handling': {
+    comp: 'erp/shipv2/shipment_handing/list/index', name: '货件处理', dataset: 'fba_shipments',
+    columns: [
+      { key: 'businessDate', label: '业务日期', width: 120 },
+      { key: 'orderId', label: '订单号', width: 160 },
+      { key: 'sellerSku', label: 'SKU', width: 140 },
+      { key: 'asin', label: 'ASIN', width: 130 },
+      { key: 'quantityOriginal', label: '数量', width: 80, numeric: true },
+      { key: 'amountOriginal', label: '金额', width: 110, numeric: true },
+      { key: 'currencyCode', label: '币种', width: 70 },
+    ],
+    basis: 'FBA 入库货件报告（已发布）中亚马逊侧真实货件/订单/数量；本地物流处理状态不变。',
+    status: 'amazon',
+  },
+  '/wimoor/shipment/track': {
+    comp: 'erp/ship/shipment_handing/list/index', name: '货件跟踪', dataset: 'fba_shipments',
+    columns: [
+      { key: 'businessDate', label: '业务日期', width: 120 },
+      { key: 'orderId', label: '订单号', width: 160 },
+      { key: 'sellerSku', label: 'SKU', width: 140 },
+      { key: 'quantityOriginal', label: '数量', width: 80, numeric: true },
+      { key: 'currencyCode', label: '币种', width: 70 },
+    ],
+    basis: 'FBA 入库货件报告（已发布）作为亚马逊侧货件跟踪事实；本地物流轨迹不变。',
+    status: 'amazon',
+  },
+  '/wimoor/shipment/ship-plan': {
+    comp: 'erp/ship/ship_plan/index', name: 'FBA发货规划', dataset: 'fba_shipments',
+    columns: [
+      { key: 'businessDate', label: '业务日期', width: 120 },
+      { key: 'sellerSku', label: 'SKU', width: 140 },
+      { key: 'asin', label: 'ASIN', width: 130 },
+      { key: 'quantityOriginal', label: '数量', width: 80, numeric: true },
+      { key: 'amountOriginal', label: '金额', width: 110, numeric: true },
+      { key: 'currencyCode', label: '币种', width: 70 },
+    ],
+    basis: 'FBA 入库货件报告（已发布）作为发货规划的亚马逊侧需求参考；本地补货计划数据不变。',
+    status: 'amazon',
+  },
 };
 
 /** 已通过其它真实 API 取数、无需改动的页面。 */
