@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Input, Select } from '@/components/ui/form-controls';
+import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
 
 /**
  * WIMOOR「仓库 → 基础信息 → 库位库存」功能迁移（只读列表）。
@@ -57,6 +58,7 @@ export default function WimoorWarehouseShelfInvPage() {
 
   return (
     <div className="p-4">
+      <WimoorFeaturePanel route="/wimoor/warehouse/shelf-inv" />
       <header className="flex flex-col gap-1 mb-4"><h1 className="text-lg font-semibold">库位库存</h1><p className="text-xs text-muted">WIMOOR 库位库存迁移（只读）：已上架/未上架、含子库位/含辅料、SKU 搜索与库位库存明细；上架下架请使用库存工作台。</p></header>
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3">

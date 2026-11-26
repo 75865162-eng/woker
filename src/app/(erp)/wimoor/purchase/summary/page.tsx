@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { WimoorReportFilters } from '@/components/wimoor-migration/wimoor-report-filters';
+import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
 
 /**
  * WIMOOR「采购 → 采购报表 → 采购统计」对照入口。
@@ -41,6 +42,7 @@ export default function WimoorPurchaseSummaryPage() {
   }), []);
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-4 p-6" data-wimoor-features="费用类型|汇总方式|搜索维度|关键词|重置|刷新" data-active-filters={Object.values(filters).filter(Boolean).join('|')}>
+      <WimoorFeaturePanel route="/wimoor/purchase/summary" />
       <header className="flex flex-col gap-1">
         <h1 className="text-xl font-semibold">采购统计 · WIMOOR 对照</h1>
         <p className="text-sm text-muted">源组件：erp/purchase/report/summary/index.vue · 筛选栏按原版还原为真实控件；数据由等价页提供。</p>

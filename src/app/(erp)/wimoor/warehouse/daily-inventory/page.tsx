@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Input, Select } from '@/components/ui/form-controls';
 import { mapAmazonInventoryRows, AMAZON_INVENTORY_PAGE_BASIS, type AmazonInventoryRow } from '@/lib/wimoor-migration/amazon-inventory-adapter';
+import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
 
 /**
  * WIMOOR「仓库 → 报表 → 每日库存」功能迁移（只读对照入口）。
@@ -54,6 +55,7 @@ export default function WimoorWarehouseDailyInventoryPage() {
   ];
   return (
     <div className="p-4">
+      <WimoorFeaturePanel route="/wimoor/warehouse/daily-inventory" />
       <header className="flex flex-col gap-1 mb-4"><h1 className="text-lg font-semibold">每日库存</h1><p className="text-xs text-muted">WIMOOR 每日库存：站点/SKU 筛选，数据自动匹配亚马逊已发布库存快照{snapshotStatus ? `（快照：${snapshotStatus}）` : ''}。{AMAZON_INVENTORY_PAGE_BASIS}</p></header>
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3">

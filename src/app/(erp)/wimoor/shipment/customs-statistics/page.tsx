@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Input, Select } from '@/components/ui/form-controls';
+import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
 
 /**
  * WIMOOR「发货 → 报表分析 → 海关申报统计」功能迁移（只读列表）。
@@ -69,6 +70,7 @@ export default function WimoorShipmentCustomsStatisticsPage() {
 
   return (
     <div className="p-4">
+      <WimoorFeaturePanel route="/wimoor/shipment/customs-statistics" />
       <header className="flex flex-col gap-1 mb-4"><h1 className="text-lg font-semibold">海关申报统计</h1><p className="text-xs text-muted">WIMOOR 海关申报统计功能迁移（只读）：申报日期类型、SKU 与重量/数量筛选；完整申报步骤见 /sellfox/shipments。</p></header>
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3">

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Input, Select } from '@/components/ui/form-controls';
+import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
 
 /**
  * WIMOOR「发货 → 物流海关 → 标签打印」功能迁移（只读对照入口）。
@@ -62,6 +63,7 @@ export default function WimoorShipmentLabelPage() {
 
   return (
     <div className="p-4">
+      <WimoorFeaturePanel route="/wimoor/shipment/label" />
       <header className="flex flex-col gap-1 mb-4"><h1 className="text-lg font-semibold">标签打印</h1><p className="text-xs text-muted">WIMOOR 标签打印功能迁移（只读对照）：FNSKU 搜索与产品标签打印交互；完整操作见 /sellfox/shipments。</p></header>
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3">

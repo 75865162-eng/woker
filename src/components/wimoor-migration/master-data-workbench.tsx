@@ -30,6 +30,7 @@ import { Button } from '@/components/ui/button';
 import { Field, Input, Select, Textarea, Checkbox } from '@/components/ui/form-controls';
 import { FEATURE_MAP } from '@/lib/wimoor-migration/feature-map.generated';
 import { MetricFilterPopover, type MetricCondition, type MetricOption, type FilterOperator } from '@/components/wimoor-migration/metric-filter-popover';
+import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
 
 function headersForScope(): Headers {
   const h = new Headers();
@@ -782,6 +783,9 @@ export function MasterDataWorkbench({ config: rawConfig }: { config: MasterDataW
         <h1 className="text-lg font-semibold">{config.title}</h1>
         <p className="text-xs text-muted">{config.subtitle}</p>
       </header>
+
+      {/* 原版完整功能对齐面板：按 kind 查契约，渲染原版全部功能项 */}
+      <WimoorFeaturePanel kind={config.kind} />
 
       {/* 状态页签 */}
       {config.statusTabs?.length ? (

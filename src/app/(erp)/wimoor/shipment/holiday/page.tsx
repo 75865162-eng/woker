@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Select } from '@/components/ui/form-controls';
+import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
 
 /**
  * WIMOOR「发货 → 发货管理 → 发货日历」功能迁移（只读对照入口）。
@@ -60,6 +61,7 @@ export default function WimoorShipmentHolidayPage() {
 
   return (
     <div className="p-4">
+      <WimoorFeaturePanel route="/wimoor/shipment/holiday" />
       <header className="flex flex-col gap-1 mb-4"><h1 className="text-lg font-semibold">发货日历</h1><p className="text-xs text-muted">WIMOOR 发货日历功能迁移（只读）：年份筛选与年度日历记录；原页面为日历视图，源交互“生成年度日历”为写入操作，本页不代用户生成。</p></header>
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3">

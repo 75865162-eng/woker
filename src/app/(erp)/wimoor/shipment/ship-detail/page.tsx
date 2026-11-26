@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Input, Select } from '@/components/ui/form-controls';
+import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
 
 /**
  * WIMOOR「发货 → 报表分析 → 发货详情(新)」功能迁移（只读列表）。
@@ -71,6 +72,7 @@ export default function WimoorShipmentShipDetailPage() {
 
   return (
     <div className="p-4">
+      <WimoorFeaturePanel route="/wimoor/shipment/ship-detail" />
       <header className="flex flex-col gap-1 mb-4"><h1 className="text-lg font-semibold">发货详情</h1><p className="text-xs text-muted">WIMOOR 发货详情功能迁移（只读）：货件编码、状态与日期/数量/重量筛选；完整货件工作台见 /sellfox/shipments。</p></header>
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3">

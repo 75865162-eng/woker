@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Input } from '@/components/ui/form-controls';
+import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
 
 /**
  * WIMOOR「仓库 → 报表 → 本地滞销」功能迁移（只读对照入口）。
@@ -57,6 +58,7 @@ export default function WimoorWarehouseUnsalablePage() {
   ];
   return (
     <div className="p-4">
+      <WimoorFeaturePanel route="/wimoor/warehouse/unsalable" />
       <header className="flex flex-col gap-1 mb-4"><h1 className="text-lg font-semibold">本地滞销</h1><p className="text-xs text-muted">WIMOOR 本地滞销迁移（只读对照）：SKU 筛选与库龄分段、出库分段、冗余库存；完整分析见 /wms 库龄工作台。</p></header>
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3">

@@ -8,6 +8,7 @@ import { useMemo, useState } from 'react';
 import { Search, ExternalLink, Boxes } from 'lucide-react';
 import { Input } from '@/components/ui/form-controls';
 import { WIMOOR_PAGE_ENTRIES } from '@/lib/wimoor-migration/page-registry';
+import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
 
 const MODULE_ICONS: Record<string, string> = {
   '产品': '📦', '销售': '📈', '采购': '🛒', '仓库': '🏭', '发货': '🚚',
@@ -39,6 +40,7 @@ export default function WimoorPortalPage() {
 
   return (
     <div className="flex flex-col gap-4 p-4">
+      <WimoorFeaturePanel route="/wimoor/page.tsx" />
       <header className="flex flex-col gap-1">
         <h1 className="text-lg font-semibold">WIMOOR 全功能门户</h1>
         <p className="text-xs text-muted">WIMOOR 菜单完整迁移：{WIMOOR_PAGE_ENTRIES.length} 个页面入口，按一级模块分组；含交互/下拉框/跳转逻辑</p>

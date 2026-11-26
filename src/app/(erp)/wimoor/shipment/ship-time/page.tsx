@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Input, Select } from '@/components/ui/form-controls';
+import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
 
 /**
  * WIMOOR「发货 → 报表分析 → 发货时效」功能迁移（只读列表）。
@@ -69,6 +70,7 @@ export default function WimoorShipmentShipTimePage() {
 
   return (
     <div className="p-4">
+      <WimoorFeaturePanel route="/wimoor/shipment/ship-time" />
       <header className="flex flex-col gap-1 mb-4"><h1 className="text-lg font-semibold">发货时效</h1><p className="text-xs text-muted">WIMOOR 发货时效功能迁移（只读）：货件/SKU/MSKU 搜索与各环节时效指标；完整货件工作台见 /sellfox/shipments。</p></header>
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3">

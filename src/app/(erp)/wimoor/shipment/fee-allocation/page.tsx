@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Select } from '@/components/ui/form-controls';
+import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
 
 /**
  * WIMOOR「发货 → 报表分析 → 费用分摊(新)」功能迁移（只读列表）。
@@ -66,6 +67,7 @@ export default function WimoorShipmentFeeAllocationPage() {
 
   return (
     <div className="p-4">
+      <WimoorFeaturePanel route="/wimoor/shipment/fee-allocation" />
       <header className="flex flex-col gap-1 mb-4"><h1 className="text-lg font-semibold">费用分摊</h1><p className="text-xs text-muted">WIMOOR 费用分摊功能迁移（只读）：发货人/状态、日期类型、承运商/渠道与材积筛选；完整分摊见 /operations/settlement-allocations。</p></header>
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3">

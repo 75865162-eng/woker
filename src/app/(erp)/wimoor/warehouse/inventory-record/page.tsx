@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Input, Select } from '@/components/ui/form-controls';
+import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
 
 /**
  * WIMOOR「仓库 → 报表 → 出入库明细」功能迁移（只读对照入口）。
@@ -63,6 +64,7 @@ export default function WimoorWarehouseInventoryRecordPage() {
   ];
   return (
     <div className="p-4">
+      <WimoorFeaturePanel route="/wimoor/warehouse/inventory-record" />
       <header className="flex flex-col gap-1 mb-4"><h1 className="text-lg font-semibold">出入库明细</h1><p className="text-xs text-muted">WIMOOR 出入库明细迁移（只读对照）：单据类型与 SKU/名称/单据编码 维度筛选，流水视图见 /wms 出入库工作台。</p></header>
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3">

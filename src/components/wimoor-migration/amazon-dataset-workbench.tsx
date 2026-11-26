@@ -18,6 +18,7 @@ import { Select } from '@/components/ui/form-controls';
 import { Button } from '@/components/ui/button';
 import { ListFilter } from 'lucide-react';
 import { MetricFilterPopover, type MetricCondition } from '@/components/wimoor-migration/metric-filter-popover';
+import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
 import { amazonMapForPage, type AmazonPageMapping } from '@/lib/wimoor-migration/page-dataset-map';
 
 type Row = Record<string, unknown> & { id: string };
@@ -157,6 +158,9 @@ export function AmazonDatasetWorkbench({ pageKey, fallbackTitle, enableMetricFil
         <h1 className="text-lg font-semibold">{fallbackTitle ?? mapping.name}</h1>
         <p className="text-xs text-muted">WIMOOR {mapping.name} · 只读展示 Amazon 同步真实数据（等价口径见 {mapping.comp}）</p>
       </header>
+
+      {/* 原版完整功能对齐面板：按路由查契约 */}
+      <WimoorFeaturePanel route={pageKey} />
 
       <section className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3">
         {scopes.length > 1 && (
