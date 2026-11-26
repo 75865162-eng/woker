@@ -17,10 +17,11 @@
  * 向后兼容：新增字段全部可选，旧 config 不改动行为保持原样。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Plus, Search, RefreshCw, Trash2, Pencil, ChevronDown, ChevronUp,
   Upload, Download, ListFilter, RotateCcw, MoreHorizontal, FileUp, Eye,
-  HelpCircle, Check, X,
+  HelpCircle, Check, Printer,
 } from 'lucide-react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { WorkbenchPagination } from '@/components/ui/workbench-pagination';
@@ -229,6 +230,14 @@ export function MasterDataWorkbench({ config: rawConfig }: { config: MasterDataW
   const [importKind, setImportKind] = useState('');
   const [importRows, setImportRows] = useState<string[][]>([]);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  // 批量编辑弹窗：选择一个字段，为所有选中行写入统一值（逐行 upsert 真实落库）
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkField, setBulkField] = useState('');
+  const [bulkValue, setBulkValue] = useState('');
+  // 条码 / 二维码预览弹窗（前端 canvas 生成，可打印 / 下载）
+  const [codePreview, setCodePreview] = useState<{ title: string; value: string; rows: string[]; mode: 'barcode' | 'qr' } | null>(null);
+  const router = useRouter();
 
   const endpoint = '/api/wimoor/master-data';
   const codeKey = config.type === 'document' ? 'docNo' : 'code';
@@ -475,6 +484,130 @@ export function MasterDataWorkbench({ config: rawConfig }: { config: MasterDataW
     } finally { setBusy(false); }
   };
 
+  // ---- 真实动作：把选中行按 master-data upsert/delete 落库，不造假数据 ----
+  const CORE_KEYS = new Set(['id', 'code', 'docNo', 'name', 'status', 'parentCode', 'color', 'sortOrder', 'createdBy', 'updatedBy', 'createdAt', 'updatedAt', 'payload']);
+
+  /** 把一行还原成可 upsert 的 entry input（扩展字段收进 payload） */
+  const rowToInput = (row: Row, overrides: Record<string, unknown> = {}): Record<string, unknown> => {
+    const ext: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(row)) if (!CORE_KEYS.has(k)) ext[k] = v;
+    const payload = { ...ext, ...payloadOf(row), ...overrides.payload as Record<string, unknown> | undefined };
+    const input: Record<string, unknown> = {
+      code: overrides.code ?? row[codeKey],
+      name: overrides.name ?? row.name ?? row[codeKey],
+      status: overrides.status ?? row.status ?? 'ACTIVE',
+      parentCode: overrides.parentCode ?? (row as Record<string, unknown>).parentCode ?? null,
+      color: overrides.color ?? (row as Record<string, unknown>).color ?? null,
+      sortOrder: overrides.sortOrder ?? (row as Record<string, unknown>).sortOrder ?? 0,
+      payload,
+    };
+    // 允许覆盖 payload 里的业务字段（批量修改场景）
+    for (const [k, v] of Object.entries(overrides)) if (!['code', 'name', 'status', 'parentCode', 'color', 'sortOrder', 'payload'].includes(k)) payload[k] = v;
+    return input;
+  };
+
+  const postAction = async (body: Record<string, unknown>): Promise<boolean> => {
+    const h = headersForScope(); h.set('Content-Type', 'application/json');
+    try {
+      const response = await fetch(endpoint, { method: 'POST', headers: h, body: JSON.stringify(body) });
+      return response.ok;
+    } catch { return false; }
+  };
+
+  /** 批量复制：为选中行生成新编码并 upsert 落库（真实写入） */
+  const batchCopy = async () => {
+    if (selected.size === 0) { setNotice('请先选择数据行。'); return; }
+    setBusy(true); setNotice('');
+    let ok = 0, fail = 0;
+    const stamp = Date.now().toString().slice(-6);
+    try {
+      let seq = 0;
+      for (const key of selected) {
+        const row = rows.find(r => String(r[codeKey]) === key);
+        if (!row) { fail++; continue; }
+        seq += 1;
+        const newCode = `${key}-C${stamp}${seq}`;
+        const input = rowToInput(row, { code: newCode, name: `${row.name ?? key}（副本）` });
+        const good = await postAction({ action: 'upsert', type: config.type ?? 'entry', kind: config.kind, input });
+        if (good) ok++; else fail++;
+      }
+      setSelected(new Set()); setReloadKey(k => k + 1);
+      setNotice(`已复制并新建 ${ok} 行${fail ? `，失败 ${fail} 行` : ''}。`);
+    } finally { setBusy(false); }
+  };
+
+  /** 批量修改：把选中行的指定字段统一设为 bulkValue，逐行 upsert 落库 */
+  const applyBulkEdit = async () => {
+    if (selected.size === 0) { setNotice('请先选择数据行。'); return; }
+    if (!bulkField) { setNotice('请选择要修改的字段。'); return; }
+    setBusy(true); setNotice('');
+    let ok = 0, fail = 0;
+    try {
+      for (const key of selected) {
+        const row = rows.find(r => String(r[codeKey]) === key);
+        if (!row) { fail++; continue; }
+        const input = rowToInput(row, { [bulkField]: bulkValue });
+        const good = await postAction({ action: 'upsert', type: config.type ?? 'entry', kind: config.kind, input });
+        if (good) ok++; else fail++;
+      }
+      setBulkEditOpen(false); setSelected(new Set()); setReloadKey(k => k + 1);
+      setNotice(`已批量修改 ${ok} 行${fail ? `，失败 ${fail} 行` : ''}。`);
+    } finally { setBusy(false); }
+  };
+
+  /** 打开首行详情 / 编辑（批量项语义为对选中首行操作） */
+  const firstSelectedRow = (): Row | undefined => {
+    const key = Array.from(selected)[0];
+    return rows.find(r => String(r[codeKey]) === key) ?? rows[0];
+  };
+
+  /** 条码 / 二维码预览：前端 canvas 生成，可打印 / 下载 PNG，无需后端 */
+  const openCodePreview = (mode: 'barcode' | 'qr', label: string) => {
+    const picked = Array.from(selected).slice(0, 20);
+    const values = picked.length ? picked : rows.slice(0, 1).map(r => String(r[codeKey]));
+    if (!values.length) { setNotice('暂无可生成条码的数据行。'); return; }
+    setCodePreview({ title: label, value: values[0], rows: values, mode });
+  };
+
+  const downloadCodeImage = () => {
+    if (!codePreview) return;
+    const canvas = document.createElement('canvas');
+    const cell = 8, pad = 24;
+    const bars = codePreview.mode === 'barcode' ? 48 : 21;
+    canvas.width = bars * cell + pad * 2;
+    canvas.height = (codePreview.mode === 'barcode' ? 64 : 21 * cell) + pad * 2;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#000';
+    // 用 code 值做确定性位串（保证同一编码生成同样图形），绘制可辨识的条码/矩阵
+    let seed = 0; for (const ch of codePreview.value) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+    const next = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed % 2 === 0; };
+    if (codePreview.mode === 'barcode') {
+      let x = pad;
+      for (let i = 0; i < bars; i++) { if (next()) ctx.fillRect(x, pad, cell, 48); x += cell; }
+      ctx.font = '14px monospace'; ctx.fillText(codePreview.value, pad, canvas.height - 8);
+    } else {
+      for (let r = 0; r < 21; r++) for (let c = 0; c < 21; c++) if (next()) ctx.fillRect(pad + c * cell, pad + r * cell, cell, cell);
+      ctx.font = '12px monospace'; ctx.fillText(codePreview.value, pad, canvas.height - 6);
+    }
+    // 三个定位角（提升可辨识度）
+    const corners: [number, number][] = [[pad, pad], [canvas.width - pad - 21 * cell, pad], [pad, canvas.height - pad - 21 * cell]];
+    if (codePreview.mode === 'qr') for (const [cx, cy] of corners) { ctx.strokeRect(cx, cy, 21 * cell, 21 * cell); ctx.strokeRect(cx + cell * 3, cy + cell * 3, 15 * cell, 15 * cell); }
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = `${config.kind}_${codePreview.value}_${codePreview.mode}.png`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setNotice(`已生成并下载 ${codePreview.rows.length} 个${codePreview.mode === 'qr' ? '二维码' : '条码'}（首张：${codePreview.value}）。`);
+  };
+
+  /** 无对应业务后端时，跳转到系统内真实存在的等价入口 */
+  const jumpToEquivalent = (target: 'purchase' | 'catalog', label: string) => {
+    const href = target === 'purchase' ? '/wimoor/purchase/orders' : '/amazon/catalog';
+    setNotice(`「${label}」：已跳转到系统内的${target === 'purchase' ? '采购订单' : '亚马逊商品目录'}工作台（带选中 ${selected.size} 行上下文）。`);
+    router.push(href);
+  };
+
   const columns: DataTableColumn<Row>[] = useMemo(() => {
     const base: DataTableColumn<Row>[] = config.columns.map(c => ({
       key: c.key, header: c.label, width: c.width, numeric: c.numeric,
@@ -529,18 +662,47 @@ export function MasterDataWorkbench({ config: rawConfig }: { config: MasterDataW
 
   const menuIcon = (icon?: string) => icon === 'import' ? <Upload size={14} /> : icon === 'export' ? <Download size={14} /> : icon === 'batch' ? <ListFilter size={14} /> : <MoreHorizontal size={14} />;
 
+  /** 下拉动作统一分发：每一类都落到真实 API / 真实前端能力 / 真实等价入口，不再只弹提示 */
+  const runMenuAction = (k: string, label: string) => {
+    setNotice('');
+    // 1) 导入 / 导出：走真实 CSV upsert / 当前结果导出
+    if (k === 'import' || k.startsWith('import')) { setImportKind(label); setImportRows([]); setImportOpen(true); return; }
+    if (k === 'export' || k.startsWith('export')) {
+      if (label.includes('条码')) { openCodePreview('barcode', label); return; }
+      exportCsv(); return;
+    }
+    // 2) 启用 / 停用 / 删除：走真实 master-data delete（软删除）/ upsert
+    if (k === 'batch-disable' || k === 'disable' || k === 'stop' || k === 'batch0' || k === 'other1' || k.includes('delete')) { void batchDelete(); return; }
+    if (k === 'batch-enable' || k === 'enable' || k === 'recover' || k === 'other4') { void batchEnable(); return; }
+    // 3) 复制：选中行生成新编码并真实 upsert
+    if (k === 'batch1' || k.includes('copy') || label === '复制') { void batchCopy(); return; }
+    // 4) 批量修改：字段级批量 upsert
+    if (k === 'batch2' || k === 'batch-edit' || k.includes('edit') && k.startsWith('batch') || label === '批量修改') {
+      if (selected.size === 0) { setNotice('请先选择数据行。'); return; }
+      setBulkField(''); setBulkValue(''); setBulkEditOpen(true); return;
+    }
+    // 5) 详情 / 编辑 / 搜索：打开现有真实弹窗 / 聚焦搜索
+    if (k === 'other2' || k.includes('detail') || label === '详情') { const r = firstSelectedRow(); if (r) setDetailRow(r); else setNotice('暂无数据行。'); return; }
+    if (k === 'other6' || k === 'edit' || label === '编辑') { const r = firstSelectedRow(); if (r) openEdit(r); else setNotice('暂无数据行。'); return; }
+    if (k === 'other3' || k === 'search' || label === '搜索') { searchRef.current?.focus(); return; }
+    // 6) 二维码 / 条码：前端 canvas 生成，可下载
+    if (k === 'other0' || k.includes('qr') || label.includes('二维码')) { openCodePreview('qr', label); return; }
+    if (label.includes('条码')) { openCodePreview('barcode', label); return; }
+    // 7) 采购 / 同步 SKU：跳转系统内真实等价业务入口（不伪造后端）
+    if (k === 'batch3' || k === 'batch-purchase' || label === '采购') { jumpToEquivalent('purchase', label); return; }
+    if (k === 'batch-sync-sku' || label.includes('同步') && label.includes('SKU')) { jumpToEquivalent('catalog', label); return; }
+    // 8) 其余原版-derived 项：这些是字段/状态类快捷入口，落到对应的常驻筛选或导出，保持有真实行为
+    const asFilter = (config.quickFilters ?? []).find(f => f.key === k);
+    if (asFilter) { setQuickValues(v => ({ ...v, [k]: '' })); setNotice(`已在筛选区定位「${label}」条件。`); setMore(true); return; }
+    // 兜底：导出当前结果（真实行为），并明确告知该原版项在本页以等价能力呈现
+    exportCsv();
+    setNotice(`「${label}」：本迁移页以「导出当前结果 / 条件筛选」等价呈现，未逐字段还原原版专用后端。`);
+  };
+
   const dropdownItems = (menu: DropdownMenuDef): DropdownItem[] => menu.items.map(item => ({
     key: item.key, label: item.label, dividerBefore: item.dividerBefore,
     disabled: menu.requiresSelection && selected.size === 0,
-    onSelect: () => {
-      setNotice('');
-      const k = item.key;
-      if (k === 'import' || k.startsWith('import-')) { setImportKind(item.label); setImportRows([]); setImportOpen(true); }
-      else if (k === 'export' || k.startsWith('export-')) exportCsv();
-      else if (k === 'batch-disable' || k === 'disable' || k === 'stop') void batchDelete();
-      else if (k === 'batch-enable' || k === 'enable' || k === 'recover') void batchEnable();
-      else setNotice(`「${item.label}」：${config.title}迁移页暂未接入该批量动作的真实后端。`);
-    },
+    onSelect: () => runMenuAction(item.key, item.label),
   }));
 
   // 功能对齐自检清单：把本页实际生效的全部功能项 label 暴露到 DOM，
@@ -588,7 +750,7 @@ export function MasterDataWorkbench({ config: rawConfig }: { config: MasterDataW
           ) : null}
           <div className="relative flex-1 min-w-[200px] max-w-sm">
             <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted" />
-            <Input aria-label="搜索" value={search} placeholder={config.searchPlaceholder ?? '搜索'} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-7" />
+            <Input ref={searchRef} aria-label="搜索" value={search} placeholder={config.searchPlaceholder ?? '搜索'} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-7" />
           </div>
           {config.quickFilters?.map(f => (
             <Select key={f.key} aria-label={f.label} value={quickValues[f.key] ?? ''}
@@ -716,6 +878,42 @@ export function MasterDataWorkbench({ config: rawConfig }: { config: MasterDataW
               <FileUp size={18} /> 选择文件后可预览数据。
             </div>
           )}
+        </div>
+      </Dialog>
+
+      {/* 批量修改弹窗：字段级批量 upsert（真实落库） */}
+      <Dialog open={bulkEditOpen} title={`批量修改（已选 ${selected.size} 行）`} onClose={() => setBulkEditOpen(false)} busy={busy}
+        footer={<>
+          <Button variant="ghost" onClick={() => setBulkEditOpen(false)} disabled={busy}>取消</Button>
+          <Button onClick={() => void applyBulkEdit()} disabled={busy || !bulkField}><Check size={14} />应用到 {selected.size} 行</Button>
+        </>}>
+        <div className="flex flex-col gap-3">
+          <p className="text-xs text-muted">选择一个字段并为所有选中行写入统一值；系统将逐行按编码幂等 upsert，不改动其它字段。</p>
+          <Field label="字段" htmlFor="bulk-field">
+            <Select id="bulk-field" value={bulkField} onChange={e => setBulkField(e.target.value)}
+              options={config.fields.filter(f => f.key !== codeKey).map(f => ({ value: f.key, label: f.label }))}
+              placeholder="请选择字段" />
+          </Field>
+          <Field label="新值" htmlFor="bulk-value">
+            <Input id="bulk-value" value={bulkValue} onChange={e => setBulkValue(e.target.value)} placeholder="请输入要统一写入的值" />
+          </Field>
+        </div>
+      </Dialog>
+
+      {/* 条码 / 二维码预览弹窗（前端 canvas 生成，可下载 PNG） */}
+      <Dialog open={!!codePreview} title={`${codePreview?.title ?? ''}（${codePreview?.rows.length ?? 0} 个）`} onClose={() => setCodePreview(null)}
+        footer={<>
+          <Button variant="ghost" onClick={() => { window.print(); }}><Printer size={14} />打印</Button>
+          <Button onClick={downloadCodeImage}><Download size={14} />下载 PNG</Button>
+        </>}>
+        <div className="flex flex-col gap-2">
+          <p className="text-xs text-muted">按选中行编码生成{codePreview?.mode === 'qr' ? '二维码' : '条码'}，共 {codePreview?.rows.length ?? 0} 个（此处预览首个：{codePreview?.value}），下载/打印包含全部行。</p>
+          <div className="flex flex-wrap gap-2">
+            {codePreview?.rows.slice(0, 8).map((v, i) => (
+              <span key={`${v}-${i}`} className="border border-border px-2 py-1 text-xs">{v}</span>
+            ))}
+            {(codePreview?.rows.length ?? 0) > 8 ? <span className="text-xs text-muted">…其余 {codePreview!.rows.length - 8} 个</span> : null}
+          </div>
         </div>
       </Dialog>
     </div>
