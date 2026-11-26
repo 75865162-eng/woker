@@ -84,6 +84,8 @@ const config: MasterDataWorkbenchConfig = {
     { to: 'ABANDONED', label: '放弃报价' },
     { to: 'CANCELLED', label: '关闭' },
   ],
+  // 原版指标筛选弹窗：多指标组合筛选
+  metricFilter: { storageKey: 'shipment.quote-order' },
 };
 
 export default function WimoorShipmentQuoteOrderPage() {

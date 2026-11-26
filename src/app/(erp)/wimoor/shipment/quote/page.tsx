@@ -83,6 +83,8 @@ const config: MasterDataWorkbenchConfig = {
     { to: 'CONFIRMED', label: '确认生成' },
     { to: 'CANCELLED', label: '关闭' },
   ],
+  // 原版指标筛选弹窗：多指标组合筛选
+  metricFilter: { storageKey: 'shipment.quote' },
 };
 
 export default function WimoorShipmentQuotePage() {

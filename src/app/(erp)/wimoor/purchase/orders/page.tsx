@@ -65,6 +65,8 @@ const config: MasterDataWorkbenchConfig = {
     { to: 'AUDITED', label: '审核' }, { to: 'ORDERED', label: '下单' },
     { to: 'PAID', label: '付款' }, { to: 'RECEIVED', label: '收货' },
   ],
+  // 原版指标筛选弹窗：多指标组合筛选
+  metricFilter: { storageKey: 'purchase.orders' },
 };
 
 export default function WimoorPurchaseOrdersPage() {

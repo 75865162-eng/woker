@@ -78,6 +78,8 @@ const config: MasterDataWorkbenchConfig = {
     { to: 'APPROVED', label: '审核通过' }, { to: 'REJECTED', label: '审核驳回' },
     { to: 'PAID', label: '付款' }, { to: 'VOID', label: '作废' },
   ],
+  // 原版指标筛选弹窗：多指标组合筛选
+  metricFilter: { storageKey: 'purchase.payment-request' },
 };
 
 export default function WimoorPurchasePaymentRequestPage() {

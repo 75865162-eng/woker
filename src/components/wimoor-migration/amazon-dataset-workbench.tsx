@@ -15,6 +15,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Select } from '@/components/ui/form-controls';
+import { Button } from '@/components/ui/button';
+import { ListFilter } from 'lucide-react';
+import { MetricFilterPopover, type MetricCondition } from '@/components/wimoor-migration/metric-filter-popover';
 import { amazonMapForPage, type AmazonPageMapping } from '@/lib/wimoor-migration/page-dataset-map';
 
 type Row = Record<string, unknown> & { id: string };
@@ -48,7 +51,7 @@ function display(value: unknown): string {
 
 const PAGE_SIZE = 50;
 
-export function AmazonDatasetWorkbench({ pageKey, fallbackTitle }: { pageKey: string; fallbackTitle?: string }) {
+export function AmazonDatasetWorkbench({ pageKey, fallbackTitle, enableMetricFilter }: { pageKey: string; fallbackTitle?: string; enableMetricFilter?: boolean }) {
   const mapping: AmazonPageMapping | null = useMemo(() => amazonMapForPage(pageKey), [pageKey]);
   const [scopes, setScopes] = useState<ScopeOption[]>([]);
   const [scopeIdx, setScopeIdx] = useState(0);
@@ -58,6 +61,8 @@ export function AmazonDatasetWorkbench({ pageKey, fallbackTitle }: { pageKey: st
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [metricFilterOpen, setMetricFilterOpen] = useState(false);
+  const [appliedMetrics, setAppliedMetrics] = useState<MetricCondition[]>([]);
 
   // 1) 取授权店铺/站点
   useEffect(() => {
@@ -107,6 +112,26 @@ export function AmazonDatasetWorkbench({ pageKey, fallbackTitle }: { pageKey: st
 
   useEffect(() => { void load(); }, [load]);
 
+  /** 指标筛选：对已加载页的行按指标字段前端过滤（仅当字段真实存在时应用） */
+  const displayRows = useMemo(() => {
+    let out = rows;
+    for (const cond of appliedMetrics) {
+      if (cond.value === '' || cond.value === null) continue;
+      const target = Number(cond.value);
+      if (!Number.isFinite(target)) continue;
+      if (!out.some(r => pick(r, cond.metric) != null)) continue;
+      out = out.filter((r) => {
+        const num = Number(String(pick(r, cond.metric) ?? '').replace('%', ''));
+        if (!Number.isFinite(num)) return false;
+        if (cond.operator === '>') return num > target;
+        if (cond.operator === '<') return num < target;
+        if (cond.operator === '=') return num === target;
+        return true;
+      });
+    }
+    return out;
+  }, [rows, appliedMetrics]);
+
   const columns: DataTableColumn<Row>[] = useMemo(() => {
     if (!mapping) return [];
     return mapping.columns.map(c => ({
@@ -125,7 +150,9 @@ export function AmazonDatasetWorkbench({ pageKey, fallbackTitle }: { pageKey: st
 
   return (
     <div className="flex flex-col gap-4 p-4" data-testid="wimoor-amazon-workbench"
-      data-wimoor-features="亚马逊真实数据|只读|店铺站点选择|分页|刷新">
+      data-wimoor-features={enableMetricFilter
+        ? '亚马逊真实数据|只读|店铺站点选择|分页|刷新|指标筛选|筛选器|添加筛选条件|保存这次搜索|清空所有'
+        : '亚马逊真实数据|只读|店铺站点选择|分页|刷新'}>
       <header className="flex flex-col gap-1">
         <h1 className="text-lg font-semibold">{fallbackTitle ?? mapping.name}</h1>
         <p className="text-xs text-muted">WIMOOR {mapping.name} · 只读展示 Amazon 同步真实数据（等价口径见 {mapping.comp}）</p>
@@ -140,8 +167,16 @@ export function AmazonDatasetWorkbench({ pageKey, fallbackTitle }: { pageKey: st
           </label>
         )}
         <span className="text-xs text-muted">当前站点：{scopeLabel}　共 {total} 条真实记录</span>
+        {enableMetricFilter ? (
+          <Button variant="ghost" onClick={() => setMetricFilterOpen(true)} aria-label="指标筛选">
+            <ListFilter size={14} />指标筛选{appliedMetrics.length ? `（${appliedMetrics.length}）` : ''}
+          </Button>
+        ) : null}
         <button type="button" onClick={() => setReloadKey(k => k + 1)} className="border border-border px-3 py-1 text-xs hover:bg-surface-muted">刷新</button>
       </section>
+      {appliedMetrics.length ? (
+        <p className="text-xs text-muted">已应用 {appliedMetrics.length} 个指标条件（对当前已加载页生效）</p>
+      ) : null}
 
       {scopes.length === 0 && !loading && (
         <div className="border border-border bg-surface p-4 text-sm text-muted">
@@ -152,7 +187,7 @@ export function AmazonDatasetWorkbench({ pageKey, fallbackTitle }: { pageKey: st
       {scopes.length > 0 && (
         <DataTable<Row>
           columns={columns}
-          rows={rows}
+          rows={displayRows}
           getRowKey={(row) => row.id}
           loading={loading}
           error={error ? { message: error, onRetry: () => setReloadKey(k => k + 1) } : undefined}
@@ -170,6 +205,15 @@ export function AmazonDatasetWorkbench({ pageKey, fallbackTitle }: { pageKey: st
       )}
 
       <p className="border-t border-border pt-2 text-xs text-muted">数据口径：{mapping.basis}</p>
+
+      {enableMetricFilter ? (
+        <MetricFilterPopover
+          open={metricFilterOpen}
+          onClose={() => setMetricFilterOpen(false)}
+          storageKey={pageKey}
+          onApply={(conditions) => { setAppliedMetrics(conditions); setMetricFilterOpen(false); setPage(1); }}
+        />
+      ) : null}
     </div>
   );
 }

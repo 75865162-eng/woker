@@ -29,6 +29,7 @@ import { Dialog, Dropdown, Popover, type DropdownItem } from '@/components/ui/ov
 import { Button } from '@/components/ui/button';
 import { Field, Input, Select, Textarea, Checkbox } from '@/components/ui/form-controls';
 import { FEATURE_MAP } from '@/lib/wimoor-migration/feature-map.generated';
+import { MetricFilterPopover, type MetricCondition, type MetricOption, type FilterOperator } from '@/components/wimoor-migration/metric-filter-popover';
 
 function headersForScope(): Headers {
   const h = new Headers();
@@ -123,6 +124,12 @@ export interface MasterDataWorkbenchConfig {
   rowLinks?: { label: string; icon?: 'eye' | 'link'; onClick: (row: Record<string, unknown>) => void }[];
   /** 帮助提示文本（右侧 ? 图标） */
   helpText?: string;
+  /** 指标筛选弹窗（原版 data_filter.vue）；仅声明后显示「筛选器」入口 */
+  metricFilter?: {
+    storageKey?: string;
+    metrics?: MetricOption[];
+    operators?: FilterOperator[];
+  };
 }
 
 type Row = Record<string, unknown> & { id: string; code?: string; docNo?: string; name?: string; status?: string; payload?: unknown };
@@ -235,6 +242,8 @@ export function MasterDataWorkbench({ config: rawConfig }: { config: MasterDataW
   const [page, setPage] = useState(1);
   const [pageSize] = useState(50);
   const [more, setMore] = useState(false);
+  const [metricFilterOpen, setMetricFilterOpen] = useState(false);
+  const [appliedMetrics, setAppliedMetrics] = useState<MetricCondition[]>([]);
   const [activeTab, setActiveTab] = useState(config.statusTabs?.[0]?.value ?? '');
   const [quickValues, setQuickValues] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
@@ -312,8 +321,28 @@ export function MasterDataWorkbench({ config: rawConfig }: { config: MasterDataW
       if (!value) continue;
       out = out.filter(r => String((r as Record<string, unknown>)[key] ?? payloadOf(r)[key] ?? '') === value);
     }
+    // 指标筛选：仅当行数据实际存在该指标字段时应用，避免误伤无指标的数据集。
+    for (const cond of appliedMetrics) {
+      if (cond.value === '' || cond.value === null) continue;
+      const target = Number(cond.value);
+      if (!Number.isFinite(target)) continue;
+      const hasField = (r: Row) => {
+        const v = (r as Record<string, unknown>)[cond.metric] ?? payloadOf(r)[cond.metric];
+        return v !== undefined && v !== null && v !== '';
+      };
+      if (!out.some(hasField)) continue;
+      out = out.filter((r) => {
+        const raw = (r as Record<string, unknown>)[cond.metric] ?? payloadOf(r)[cond.metric];
+        const num = Number(String(raw).replace('%', ''));
+        if (!Number.isFinite(num)) return false;
+        if (cond.operator === '>') return num > target;
+        if (cond.operator === '<') return num < target;
+        if (cond.operator === '=') return num === target;
+        return true;
+      });
+    }
     return out;
-  }, [rows, activeTab, quickValues, config.statusTabs]);
+  }, [rows, activeTab, quickValues, appliedMetrics, config.statusTabs]);
 
   const openAdd = () => {
     setEditing(null);
@@ -743,6 +772,7 @@ export function MasterDataWorkbench({ config: rawConfig }: { config: MasterDataW
     // 工作台常驻能力
     ['导入数据', '导出数据', '批量操作', '重置', '刷新', '更多条件', '详情', '编辑', '停用', '新增', '添加'].forEach(x => labels.add(x));
     if (config.addLabel) labels.add(config.addLabel);
+    if (config.metricFilter) ['指标筛选', '筛选器', '添加筛选条件', '保存这次搜索', '清空所有'].forEach(x => labels.add(x));
     return Array.from(labels).join('|');
   }, [config]);
 
@@ -793,6 +823,11 @@ export function MasterDataWorkbench({ config: rawConfig }: { config: MasterDataW
             for (const f of config.quickFilters ?? []) init[f.key] = f.defaultValue ?? '';
             setQuickValues(init); setActiveTab(config.statusTabs?.[0]?.value ?? ''); setPage(1);
           }} aria-label="重置"><RotateCcw size={14} />重置</Button>
+          {config.metricFilter ? (
+            <Button variant="ghost" onClick={() => setMetricFilterOpen(true)} aria-label="指标筛选">
+              <ListFilter size={14} />指标筛选{appliedMetrics.length ? `（${appliedMetrics.length}）` : ''}
+            </Button>
+          ) : null}
           <Button variant="ghost" onClick={() => setReloadKey(k => k + 1)} aria-label="刷新"><RefreshCw size={14} /></Button>
         </div>
 
@@ -943,6 +978,25 @@ export function MasterDataWorkbench({ config: rawConfig }: { config: MasterDataW
           </div>
         </div>
       </Dialog>
+
+      {/* 指标筛选弹窗：原版 data_filter.vue，18 个页面共用 */}
+      {config.metricFilter ? (
+        <MetricFilterPopover
+          open={metricFilterOpen}
+          onClose={() => setMetricFilterOpen(false)}
+          storageKey={config.metricFilter.storageKey ?? config.kind}
+          metrics={config.metricFilter.metrics}
+          operators={config.metricFilter.operators}
+          onApply={(conditions) => {
+            setAppliedMetrics(conditions);
+            setMetricFilterOpen(false);
+            setPage(1);
+            setNotice(conditions.length
+              ? `已应用 ${conditions.length} 个指标筛选条件。`
+              : '已清除指标筛选条件。');
+          }}
+        />
+      ) : null}
     </div>
   );
 }

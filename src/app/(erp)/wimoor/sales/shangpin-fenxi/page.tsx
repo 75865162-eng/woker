@@ -15,5 +15,5 @@ import { AmazonDatasetWorkbench } from '@/components/wimoor-migration/amazon-dat
  * 映射定义见 src/lib/wimoor-migration/page-dataset-map.ts（按 localHref 索引）。
  */
 export default function WimoorAmazonPage() {
-  return <AmazonDatasetWorkbench pageKey="/wimoor/sales/shangpin-fenxi" fallbackTitle="商品分析" />;
+  return <AmazonDatasetWorkbench pageKey="/wimoor/sales/shangpin-fenxi" fallbackTitle="商品分析" enableMetricFilter />;
 }

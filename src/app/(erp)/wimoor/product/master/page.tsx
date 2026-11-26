@@ -102,6 +102,8 @@ const config: MasterDataWorkbenchConfig = {
     { key: 'createdate', label: '生效日期', kind: 'date' },
     { key: 'remark', label: '备注', kind: 'textarea', placeholder: '请输入备注...' },
   ],
+  // 原版指标筛选弹窗：多指标组合筛选
+  metricFilter: { storageKey: 'product.master' },
 };
 
 export default function WimoorProductMasterPage() {

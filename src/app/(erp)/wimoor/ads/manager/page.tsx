@@ -65,8 +65,16 @@ const config: MasterDataWorkbenchConfig = {
         { value: 'adtarget', label: '商品投放' },
       ],
     },
+    { key: 'campaignType', label: '广告类型(SP/SB/SD)', kind: 'select',
+      options: [
+        { value: 'SP', label: '商品推广(SP)' }, { value: 'SB', label: '品牌推广(SB)' },
+        { value: 'SD', label: '展示推广(SD)' },
+      ],
+    },
     { key: 'groupid', label: '广告组ID', placeholder: '请输入广告组ID' },
   ],
+  // 原版 data_filter.vue「指标筛选」弹窗：转化率/ACOS/ROAS/花费/点击率/曝光量 多条件筛选
+  metricFilter: { storageKey: 'ads.manager' },
 };
 
 export default function WimoorAdsManagerPage() {

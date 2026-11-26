@@ -54,6 +54,8 @@ const config: MasterDataWorkbenchConfig = {
     { key: 'amount', label: '消耗量', kind: 'number', placeholder: '请输入消耗量' },
     { key: 'outbound', label: '待出库', kind: 'number', placeholder: '请输入待出库数量' },
   ],
+  // 原版指标筛选弹窗：多指标组合筛选
+  metricFilter: { storageKey: 'product.consumable' },
 };
 
 export default function WimoorConsumablePage() {

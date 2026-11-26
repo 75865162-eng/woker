@@ -66,6 +66,8 @@ const config: MasterDataWorkbenchConfig = {
     { key: 'symbol', label: '符号', placeholder: '请选择符号' },
     { key: 'value', label: '数值', placeholder: '请输入数值，用%时请输入小数' },
   ],
+  // 原版指标筛选弹窗：多指标组合筛选
+  metricFilter: { storageKey: 'shipment.customs' },
 };
 
 export default function WimoorShipmentCustomsPage() {

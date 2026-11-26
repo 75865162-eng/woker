@@ -48,6 +48,8 @@ const config: MasterDataWorkbenchConfig = {
   extraFilters: [
     { key: 'delivery_cycle', label: '供货周期', placeholder: '请输入供货周期' },
   ],
+  // 原版指标筛选弹窗：多指标组合筛选
+  metricFilter: { storageKey: 'product.package' },
 };
 
 export default function WimoorPackagePage() {
