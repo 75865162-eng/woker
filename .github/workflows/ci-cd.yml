@@ -146,6 +146,18 @@ jobs:
         if: steps.plan.outputs.release == 'true'
         run: npm ci
 
+      # Next.js 构建缓存：distDir 由 build 脚本指向 .next-build，缓存其 webpack/编译
+      # 中间产物。key 含 lockfile 与源码 hash，源码变更自然失效；restore-keys 兜底复用
+      # 同依赖版本的最近缓存，避免缓存污染（失效条件不依赖易变的运行期文件）。
+      - name: Cache Next.js build
+        if: steps.plan.outputs.release == 'true'
+        uses: actions/cache@v4
+        with:
+          path: .next-build/cache
+          key: ${{ runner.os }}-nextbuild-${{ hashFiles('package-lock.json', 'next.config.ts', 'tsconfig.json') }}-${{ hashFiles('src/**', 'prisma/schema.prisma') }}
+          restore-keys: |
+            ${{ runner.os }}-nextbuild-${{ hashFiles('package-lock.json', 'next.config.ts', 'tsconfig.json') }}-
+
       - name: Generate Prisma Client
         if: steps.plan.outputs.release == 'true'
         run: npm run db:generate
@@ -228,9 +240,11 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  # 运行时集成测试自行构建隔离产物（.next-dev-runtime-*），不依赖 build job 的
+  # release artifact，因此与 build / performance-regression 并行执行，避免串行等待。
+  # 它仍是全局基础门禁：deploy-production 显式 needs 本 job 成功。
   runtime-integration:
-    needs: build
-    if: needs.build.outputs.release == 'true'
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && (!inputs.initial_deployment || !inputs.deploy_production))
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -299,7 +313,10 @@ jobs:
           SERVER_HOST: ${{ inputs.target_host || secrets.PRODUCTION_SERVER_HOST }}
           SERVER_USER: ${{ secrets.PRODUCTION_SERVER_USER }}
           SERVER_DIR: ${{ secrets.PRODUCTION_SERVER_DIR }}
-          SSH_OPTS: -o StrictHostKeyChecking=yes -o ConnectTimeout=60 -o ServerAliveInterval=30 -o ServerAliveCountMax=6
+          # 连接建立上限 10s × 3 次 = 30s 内明确失败；已建立连接静默 15s×2=30s 判定挂死。
+          # BatchMode 禁止交互式口令提示，避免跨境链路抖动时无限等待。
+          # 连接复用/压缩由 deploy-ci-artifact.sh 追加（ControlMaster/scp -C）。
+          SSH_OPTS: -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=10 -o ConnectionAttempts=3 -o ServerAliveInterval=15 -o ServerAliveCountMax=2
           INSTALL_DEPS_ON_SERVER: ${{ inputs.install_dependencies && 'true' || 'false' }}
           INITIAL_DEPLOYMENT: ${{ inputs.initial_deployment && 'true' || 'false' }}
           RUN_BOOTSTRAP_SEED: "false"
