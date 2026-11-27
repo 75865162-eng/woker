@@ -92,8 +92,11 @@ export function AmazonDatasetWorkbench({ pageKey, fallbackTitle, enableMetricFil
       const p = new URLSearchParams({
         section: 'data', table: mapping.dataset,
         sellerAccountId: scope.sellerAccountId, marketplaceId: scope.marketplaceId,
-        page: String(page), pageSize: String(PAGE_SIZE), r: String(reloadKey),
+        page: String(page), pageSize: String(PAGE_SIZE),
       });
+      // 注意：不要把 reloadKey 作为 query 参数（如 r=）。数据集协议对未知 query key
+      // 严格拒绝（FIELD_NOT_MAPPED），会让所有只读数据页读不到真实数据。
+      // reloadKey 仅作为 useCallback 依赖触发重新请求；cache:'no-store' 已确保拿到最新数据。
       // pin 固定筛选（如 reportType），防止口径混淆
       for (const [k, v] of Object.entries(mapping.pin ?? {})) {
         if (k === 'fromOffsetDays') continue; // 日期偏移由下方处理

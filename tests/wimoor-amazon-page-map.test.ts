@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import { AMAZON_PAGE_MAP, amazonMapForPage, ALREADY_REAL_PAGES } from "../src/lib/wimoor-migration/page-dataset-map";
 import { mcpDatasets, datasetForTable, normalizeDatasetQuery } from "../src/lib/amazon-sync/mcp-datasets";
 
@@ -50,4 +51,14 @@ test("映射页 dataset 均为已验证可读的业务域", () => {
   for (const [href, m] of Object.entries(AMAZON_PAGE_MAP)) {
     assert.ok(allowed.has(m.dataset), `${href} 使用了未验证数据集 ${m.dataset}`);
   }
+});
+
+test("只读数据工作台不向数据集协议发送未知 query 参数（防 r= 导致全页读不到数据）", () => {
+  // 回归：曾把 reloadKey 作为 r= 放进 sync-center?section=data 的 query，
+  // 触发 normalizeDatasetQuery 的 FIELD_NOT_MAPPED，所有 Amazon 只读页都显示错误而非真实数据。
+  const src = readFileSync(new URL("../src/components/wimoor-migration/amazon-dataset-workbench.tsx", import.meta.url), "utf8");
+  const paramsBlock = src.slice(src.indexOf("new URLSearchParams({"), src.indexOf("new URLSearchParams({") + 400);
+  assert.doesNotMatch(paramsBlock, /\br\s*:/, "工作台不得把 r= 作为 query 参数发给数据集协议");
+  // reloadKey 仍保留为依赖（用于刷新），但通过 no-store 而非 query 参数
+  assert.match(src, /cache:\s*'no-store'/, "应使用 no-store 保证刷新拿到最新数据");
 });
