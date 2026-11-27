@@ -65,14 +65,42 @@ export function selectOptionsFor(hint: string): { value: string; label: string }
   ];
 }
 
+/**
+ * 桥接接口：有真实工作台（MasterDataWorkbench）传入时，面板里的原版功能项
+ * 直接驱动工作台的真实能力，而不是只弹 toast。所有回调均可选，缺省时面板
+ * 退回为只读交互演示（报表对照页 / 无工作台场景）。
+ */
+export interface WimoorFeatureBridge {
+  /** 搜索字段：把原版字段名+值交给工作台映射到真实筛选/查询 */
+  onSearch?: (field: string, value: string) => void;
+  /** 点击「搜索」：提交当前所有已填条件 */
+  onSubmitSearch?: (values: Record<string, string>) => void;
+  /** 点击「重置」 */
+  onResetSearch?: () => void;
+  /** 下拉动作项：label 交给工作台 runMenuAction 分发真实操作 */
+  onDropdown?: (label: string) => void;
+  /** 标签页：切到工作台真实 statusTab */
+  onTab?: (label: string) => void;
+  /** 选项（radio）：命中工作台真实筛选则写入 */
+  onOption?: (label: string) => void;
+  /** 操作按钮：交给工作台真实动作分发 */
+  onAction?: (label: string) => void;
+  /** 弹窗功能：交给工作台真实入口 */
+  onDialog?: (label: string) => void;
+}
+
 interface Props {
   route?: string;
   kind?: string;
   /** 默认折叠；设为 true 默认展开 */
   defaultOpen?: boolean;
+  /** 真实工作台桥接；传入后面板功能项驱动真实能力 */
+  bridge?: WimoorFeatureBridge;
+  /** 桥接模式下按钮文案（如「原版完整功能」），默认「原版功能完整对齐」 */
+  title?: string;
 }
 
-export function WimoorFeaturePanel({ route, kind, defaultOpen = false }: Props) {
+export function WimoorFeaturePanel({ route, kind, defaultOpen = false, bridge, title }: Props) {
   const [open, setOpen] = useState(defaultOpen);
   const [preview, setPreview] = useState<{ title: string; group: string; kind: 'write' | 'dialog' } | null>(null);
   const [toast, setToast] = useState('');
@@ -99,6 +127,8 @@ export function WimoorFeaturePanel({ route, kind, defaultOpen = false }: Props) 
   };
 
   const clickAction = (label: string, group: string) => {
+    // 桥接模式：操作按钮交给工作台真实分发（写入类仍由工作台侧保留红线）
+    if (bridge?.onAction && group === '操作按钮') { bridge.onAction(label); return; }
     const k = actionKind(label);
     if (k === 'write') {
       setPreview({ title: label, group, kind: 'write' });
@@ -125,7 +155,14 @@ export function WimoorFeaturePanel({ route, kind, defaultOpen = false }: Props) 
               <button
                 key={`${group}-${i}-${label}`}
                 type="button"
-                onClick={() => variant === 'dialog' ? setPreview({ title: label, group, kind: 'dialog' }) : clickAction(label, group)}
+                onClick={() => {
+                  if (variant === 'dialog') {
+                    if (bridge?.onDialog) { bridge.onDialog(label); return; }
+                    setPreview({ title: label, group, kind: 'dialog' });
+                    return;
+                  }
+                  clickAction(label, group);
+                }}
                 className={
                   'inline-flex items-center rounded border px-2 py-1 text-label transition-colors ' +
                   (w
@@ -143,12 +180,15 @@ export function WimoorFeaturePanel({ route, kind, defaultOpen = false }: Props) 
     );
   };
 
-  // 下拉动作：作为原版「操作」菜单的真实下拉项
+  // 下拉动作：桥接模式下交给工作台 runMenuAction 真实分发
   const dropdownItems: DropdownItem[] = contract.dropdowns.map((label) => ({
     key: label,
     label,
     danger: actionKind(label) === 'write',
-    onSelect: () => clickAction(label, '下拉动作'),
+    onSelect: () => {
+      if (bridge?.onDropdown) { bridge.onDropdown(label); return; }
+      clickAction(label, '下拉动作');
+    },
   }));
 
   // 搜索字段按语义分组
@@ -162,18 +202,23 @@ export function WimoorFeaturePanel({ route, kind, defaultOpen = false }: Props) 
       flash('未输入搜索条件（只读对照，不造数）');
       return;
     }
+    if (bridge?.onSubmitSearch) { bridge.onSubmitSearch({ ...searchValues }); return; }
     flash(`已按 ${filledConditions.length} 个条件搜索：${filledConditions.map(([k, v]) => `${k}=${v}`).join('，')}`);
   };
 
   const resetSearch = () => {
     setSearchValues({});
+    if (bridge?.onResetSearch) { bridge.onResetSearch(); return; }
     flash('已重置全部搜索条件');
   };
 
   const renderSearchControl = (hint: string) => {
     const kind = classifySearchField(hint);
     const value = searchValues[hint] ?? '';
-    const onChange = (v: string) => setSearchValues(prev => ({ ...prev, [hint]: v }));
+    const onChange = (v: string) => {
+      setSearchValues(prev => ({ ...prev, [hint]: v }));
+      if (bridge?.onSearch) bridge.onSearch(hint, v);
+    };
     if (kind === 'date') {
       return (
         <label key={hint} className="flex flex-col gap-1 text-label">
@@ -214,7 +259,7 @@ export function WimoorFeaturePanel({ route, kind, defaultOpen = false }: Props) 
       >
         <span className="flex items-center gap-2 text-body font-semibold">
           <ListFilter size={15} className="text-muted" />
-          原版功能完整对齐
+          {title ?? '原版功能完整对齐'}
           <span className="rounded bg-surface-muted px-1.5 py-0.5 text-label text-muted">{totalCount} 项</span>
           <span className="text-label text-muted">源：{contract.name}</span>
         </span>
@@ -266,7 +311,11 @@ export function WimoorFeaturePanel({ route, kind, defaultOpen = false }: Props) 
                   <button
                     key={`tab-${i}-${tab}`}
                     type="button"
-                    onClick={() => { setActiveTab(tab); flash(`已切换到标签页「${tab}」`); }}
+                    onClick={() => {
+                      setActiveTab(tab);
+                      if (bridge?.onTab) { bridge.onTab(tab); return; }
+                      flash(`已切换到标签页「${tab}」`);
+                    }}
                     className={
                       'border-b-2 px-2 py-1 text-label transition-colors ' +
                       (activeTab === tab ? 'border-brand text-brand' : 'border-transparent text-muted hover:text-foreground')
@@ -293,7 +342,11 @@ export function WimoorFeaturePanel({ route, kind, defaultOpen = false }: Props) 
                       type="radio"
                       name={`wimoor-radio-${contract.route ?? contract.name}`}
                       checked={activeRadio === radio}
-                      onChange={() => { setActiveRadio(radio); flash(`已选择「${radio}」`); }}
+                      onChange={() => {
+                        setActiveRadio(radio);
+                        if (bridge?.onOption) { bridge.onOption(radio); return; }
+                        flash(`已选择「${radio}」`);
+                      }}
                     />
                     {radio}
                   </label>

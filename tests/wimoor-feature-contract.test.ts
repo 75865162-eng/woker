@@ -82,7 +82,7 @@ test('全部迁移页都已接入功能面板（无遗漏）', () => {
   assert.ok(files.length >= 120, `迁移页数量偏低：${files.length}`);
 
   // 两类工作台组件层接入
-  assert.match(masterSrc, /<WimoorFeaturePanel kind=\{config\.kind\} \/>/);
+  assert.match(masterSrc, /<WimoorFeaturePanel kind=\{config\.kind\}[\s\S]*bridge=\{featureBridge\}/);
   assert.match(amazonSrc, /<WimoorFeaturePanel route=\{pageKey\} \/>/);
 
   // Report/Custom 页面需各自显式注入 route（首页无契约除外）

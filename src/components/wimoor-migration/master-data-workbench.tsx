@@ -277,6 +277,8 @@ export function MasterDataWorkbench({ config: rawConfig }: { config: MasterDataW
   const [importRows, setImportRows] = useState<string[][]>([]);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
+  /** 供 featureBridge 调用 runMenuAction（避免定义顺序前向引用） */
+  const runMenuActionRef = useRef<(k: string, label: string) => void>(() => {});
   // 批量编辑弹窗：选择一个字段，为所有选中行写入统一值（逐行 upsert 真实落库）
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkField, setBulkField] = useState('');
@@ -731,6 +733,96 @@ export function MasterDataWorkbench({ config: rawConfig }: { config: MasterDataW
 
   const menuIcon = (icon?: string) => icon === 'import' ? <Upload size={14} /> : icon === 'export' ? <Download size={14} /> : icon === 'batch' ? <ListFilter size={14} /> : <MoreHorizontal size={14} />;
 
+  /**
+   * 把原版功能标签映射到本页真实字段 key。
+   * 匹配优先级：字段 label 精确 > 字段 key 精确 > 去修饰词后包含匹配（如「全部仓库」→ 仓库字段）。
+   * 命中即可把原版面板里的搜索/选项写到本页真实筛选状态，驱动表格过滤。
+   */
+  const resolveFieldKey = (label: string): string | undefined => {
+    const norm = (s: string) => String(s ?? '').replace(/^(全部|请选择|选择|请输入|搜索|输入)/, '').replace(/[（(].*?[)）]/g, '').trim().toLowerCase();
+    const target = norm(label);
+    if (!target) return undefined;
+    const pool: FieldDef[] = [...(config.quickFilters ?? []).map(f => ({ key: f.key, label: f.label })), ...(config.extraFilters ?? []), ...(config.fields ?? [])];
+    // 1) label 去修饰后精确相等
+    const exact = pool.find(f => norm(f.label) === target || norm(f.key) === target);
+    if (exact) return exact.key;
+    // 2) 互相包含（≥2 字，避免单字误命中）
+    if (target.length >= 2) {
+      const contained = pool.find(f => {
+        const fl = norm(f.label), fk = norm(f.key);
+        return (fl.length >= 2 && (fl.includes(target) || target.includes(fl))) || (fk.length >= 2 && (fk.includes(target) || target.includes(fk)));
+      });
+      if (contained) return contained.key;
+    }
+    return undefined;
+  };
+
+  /** 原版面板 → 工作台真实能力桥接：面板里每个功能项都落到真实状态/API */
+  const featureBridge = useMemo(() => ({
+    onSearch: (field: string, value: string) => {
+      const key = resolveFieldKey(field);
+      if (!key) return;
+      // 命中本页真实字段：写入常驻/更多条件筛选，前端 filteredRows 立即生效
+      setQuickValues(v => ({ ...v, [key]: value }));
+      setMore(true);
+    },
+    onSubmitSearch: (values: Record<string, string>) => {
+      let mapped = 0;
+      for (const [field, value] of Object.entries(values)) {
+        if (value === '') continue;
+        const key = resolveFieldKey(field);
+        if (key) { setQuickValues(v => ({ ...v, [key]: value })); mapped++; }
+        else {
+          // 未命中字段：作为全文关键词走后端 search（真实查询）
+          setSearch(value);
+          mapped++;
+        }
+      }
+      setPage(1);
+      setNotice(mapped ? `已应用 ${mapped} 个原版筛选条件到当前结果。` : '未识别可筛选字段。');
+    },
+    onResetSearch: () => {
+      const init: Record<string, string> = {};
+      for (const f of config.quickFilters ?? []) init[f.key] = f.defaultValue ?? '';
+      setQuickValues(init); setSearch(''); setActiveTab(config.statusTabs?.[0]?.value ?? ''); setPage(1);
+      setNotice('已重置全部筛选条件。');
+    },
+    onDropdown: (label: string) => {
+      // 原版下拉项：按 label 关键字匹配真实菜单动作 key，再交给统一分发
+      const k = label.includes('导出') || label.includes('下载') ? 'export-base'
+        : label.includes('导入') || label.includes('上传') ? 'import-base'
+        : label.includes('删除') || label.includes('停用') ? 'batch-disable'
+        : label.includes('启用') || label.includes('恢复') ? 'batch-enable'
+        : label.includes('复制') ? 'batch1'
+        : label.includes('编辑') || label.includes('修改') ? 'batch-edit'
+        : label.includes('详情') || label.includes('查看') ? 'other2'
+        : label.includes('二维码') ? 'other0'
+        : label.includes('条码') ? 'barcode'
+        : label.includes('搜索') ? 'other3'
+        : label.includes('采购') ? 'batch3'
+        : label.includes('同步') ? 'batch-sync-sku'
+        : `field:${resolveFieldKey(label) ?? ''}`;
+      runMenuActionRef.current(k, label);
+    },
+    onTab: (label: string) => {
+      const tab = (config.statusTabs ?? []).find(t => t.label === label || t.value === label);
+      if (tab) { setActiveTab(tab.value); setPage(1); setNotice(`已切换到「${tab.label}」。`); }
+      else setNotice(`本页暂无「${label}」对应页签，已保留当前结果。`);
+    },
+    onOption: (label: string) => {
+      const key = resolveFieldKey(label);
+      if (key) { setQuickValues(v => ({ ...v, [key]: label })); setNotice(`已按「${label}」筛选。`); }
+      else setNotice(`「${label}」在本页无对应筛选字段。`);
+    },
+    onAction: (label: string) => {
+      const k = label.includes('导出') ? 'export-base' : label.includes('导入') ? 'import-base'
+        : label.includes('搜索') || label.includes('查询') ? 'other3' : `field:${resolveFieldKey(label) ?? ''}`;
+      runMenuActionRef.current(k, label);
+    },
+    onDialog: (label: string) => setNotice(`「${label}」：本页以等价工作台表单承载编辑能力。`),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [config, resolveFieldKey, setQuickValues, setSearch, setPage, setActiveTab, setNotice, setMore]);
+
   /** 下拉动作统一分发：每一类都落到真实 API / 真实前端能力 / 真实等价入口，不再只弹提示 */
   const runMenuAction = (k: string, label: string) => {
     setNotice('');
@@ -771,6 +863,7 @@ export function MasterDataWorkbench({ config: rawConfig }: { config: MasterDataW
     exportCsv();
     setNotice(`「${label}」：本迁移页以「导出当前结果」等价呈现，未逐字段还原原版专用后端。`);
   };
+  runMenuActionRef.current = runMenuAction;
 
   const dropdownItems = (menu: DropdownMenuDef): DropdownItem[] => menu.items.map(item => ({
     key: item.key, label: item.label, dividerBefore: item.dividerBefore,
@@ -799,22 +892,6 @@ export function MasterDataWorkbench({ config: rawConfig }: { config: MasterDataW
         <h1 className="text-lg font-semibold">{config.title}</h1>
         <p className="text-xs text-muted">{config.subtitle}</p>
       </header>
-
-      {/* 原版完整功能对齐面板：按 kind 查契约，渲染原版全部功能项 */}
-      <WimoorFeaturePanel kind={config.kind} />
-
-      {/* 状态页签 */}
-      {config.statusTabs?.length ? (
-        <div className="flex flex-wrap items-center gap-1 border-b border-border" role="tablist">
-          {config.statusTabs.map(t => (
-            <button key={t.value} type="button" role="tab" aria-selected={activeTab === t.value}
-              onClick={() => { setActiveTab(t.value); setPage(1); }}
-              className={`px-3 py-2 text-body ${activeTab === t.value ? 'border-b-2 border-brand text-brand' : 'text-muted hover:text-foreground'}`}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
 
       <section className="flex flex-col gap-3">
         {notice ? <div className="border border-danger bg-danger/5 px-3 py-2 text-sm text-danger-ink">{notice}</div> : null}
@@ -884,6 +961,19 @@ export function MasterDataWorkbench({ config: rawConfig }: { config: MasterDataW
           ) : null}
         </div>
 
+        {/* 状态页签：原版布局位于功能行之后、表格之前 */}
+        {config.statusTabs?.length ? (
+          <div className="flex flex-wrap items-center gap-1 border-b border-border" role="tablist">
+            {config.statusTabs.map(t => (
+              <button key={t.value} type="button" role="tab" aria-selected={activeTab === t.value}
+                onClick={() => { setActiveTab(t.value); setPage(1); }}
+                className={`px-3 py-2 text-body ${activeTab === t.value ? 'border-b-2 border-brand text-brand' : 'text-muted hover:text-foreground'}`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         <DataTable<Row>
           columns={columns}
           rows={filteredRows}
@@ -900,6 +990,9 @@ export function MasterDataWorkbench({ config: rawConfig }: { config: MasterDataW
         />
         {filteredRows.length > 0 ? <WorkbenchPagination total={filteredRows.length} page={page} pageSize={pageSize} onPage={setPage} /> : null}
       </section>
+
+      {/* 原版完整功能对齐面板：置于主功能区之后、默认折叠；内嵌功能项通过 bridge 驱动上方真实工作台 */}
+      <WimoorFeaturePanel kind={config.kind} bridge={featureBridge} title="原版完整功能（点击展开 · 可直接筛选本页）" />
 
       {/* 新增 / 编辑弹窗 */}
       <Dialog open={dialogOpen} title={editing ? `编辑${config.title}` : `新增${config.title}`}
