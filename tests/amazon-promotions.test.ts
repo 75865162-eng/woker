@@ -51,6 +51,24 @@ test("incremental reuse only unchanged old terminal revisions with weekly full d
   assert.equal(reusablePromotionSummary(old, { ...old, lastUpdatedDate: "2026-11-09T00:00:00Z" }, new Date("2026-11-09"), now), false);
 });
 
+test("volatile selection pagination in VERIFY re-fetch does not block publish; real edits still fail closed", () => {
+  // DETAIL stage: promotion with ITEMS selection requires a selection page before VERIFY.
+  const value = detail({ selection: { type: "ITEMS", selectionId: "sel", revisionId: 1, selectionDetails: { items: [{ asin: "B0TEST0001" }], pagination: { nextToken: "detail-stage-token" } } } });
+  const parsed = advancePromotions(JSON.stringify(value), discovered(), site);
+  assert.equal(parsed.state.selections.length, 1);
+  const page = advancePromotions('{"selection":{"type":"ITEMS","selectionId":"sel","revisionId":1,"selectionDetails":{"items":[{"asin":"B0TEST0001"}]}}}', parsed.state, site);
+  assert.equal(page.state.selectionIndex, 1);
+  assert.equal(page.state.stage, "VERIFY");
+  // VERIFY re-fetch returns the same promotion but its included selection carries a
+  // different page slice and a fresh pagination token (both are volatile output).
+  const churned = { ...value, selection: { type: "ITEMS", selectionId: "sel", revisionId: 1, selectionDetails: { items: [{ asin: "B0TEST0999" }], pagination: { nextToken: "a-completely-different-token" } } } };
+  const done = advancePromotions(JSON.stringify(churned), page.state, site);
+  assert.equal(done.state.stage, "COMPLETE");
+  // A genuine business edit between DETAIL and VERIFY must still be refused.
+  const edited = { ...churned, lastUpdatedDate: "2026-10-02T00:00:00Z" };
+  assert.throws(() => advancePromotions(JSON.stringify(edited), page.state, site));
+});
+
 test("search/detail drift cannot publish and official unconstrained title strings survive", () => {
   assertPromotionSummaryMatchesDetail(detail(), detail({ issues: [] }));
   assert.throws(() => assertPromotionSummaryMatchesDetail(detail(), detail({ status: "EXPIRED" })));

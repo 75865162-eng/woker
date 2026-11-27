@@ -38,6 +38,28 @@ export function promotionSignature(value: unknown): string {
   const stable = (v: unknown): unknown => Array.isArray(v) ? v.map(stable) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)).map(([key, child]) => [key, stable(child)])) : v;
   return createHash("sha256").update(JSON.stringify(stable(value))).digest("hex");
 }
+// The VERIFY stage re-fetches getPromotion and must confirm the promotion did not
+// change mid-flight. However selection.selectionDetails is volatile pagination
+// output: items are a moving page slice and pagination.nextToken is a fresh
+// encrypted token on every call. Signing those made DETAIL and VERIFY signatures
+// never match, so every promotion stalled in VERIFY and nothing was published.
+// Strip pagination artifacts before signing, while keeping every business field
+// (including lastUpdatedDate/status) so a genuine mid-flight edit still fails closed.
+function stripVolatilePagination(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripVolatilePagination);
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      if (key === "nextToken" || key === "paginationToken" || key === "items") continue;
+      out[key] = stripVolatilePagination(child);
+    }
+    return out;
+  }
+  return value;
+}
+export function promotionIdentitySignature(value: unknown): string {
+  return promotionSignature(stripVolatilePagination(value));
+}
 export function assertPromotionSummaryMatchesDetail(summary: unknown, detail: unknown): void {
   const a = promotionObject(summary), b = promotionObject(detail);
   const keys = ["promotionId", "marketplaceId", "promotionType", "status", "promotionTitle", "trackingId", "createdDate", "lastUpdatedDate", "schedule"];
@@ -128,12 +150,12 @@ export function advancePromotions(raw: string, current: PromotionsState, marketp
     const p = verifyPromotion(root, id, marketplaceId);
     if (!(promotionStatuses as readonly unknown[]).includes(p.status)) return invalid();
     if (s.stage === "VERIFY") {
-      if (s.signature !== promotionSignature(p)) return invalid("促销在商品分页期间发生修改；保留旧版本，需重新发现。");
+      if (s.signature !== promotionIdentitySignature(p)) return invalid("促销在商品分页期间发生修改；保留旧版本，需重新发现。");
       s.index++; s.selections = []; s.selectionIndex = 0; delete s.signature; delete s.context;
       s.stage = s.index === s.ids.length ? "COMPLETE" : "DETAIL";
       return { state: s, rows };
     }
-    s.signature = promotionSignature(p); s.selections = []; s.selectionIndex = 0;
+    s.signature = promotionIdentitySignature(p); s.selections = []; s.selectionIndex = 0;
     s.context = { ...Object.fromEntries(["status", "promotionType", "trackingId", "schedule", "lastUpdatedDate"].map(key => [key, p[key]])), queryDates: promotionQueryDates(p) };
     for (const revision of ["PUBLISHED", "LATEST"] as const) {
       const detail = revision === "PUBLISHED" ? p : p.latestRevision === undefined || p.latestRevision === null ? null : verifyPromotion(p.latestRevision, id, marketplaceId);
