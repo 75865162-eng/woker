@@ -90,6 +90,9 @@
     "mcp:roles": "node scripts/mcp-isolation/apply-roles.mjs",
     "verify:points": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/smoke-points.ts",
     "verify:points:usage": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/smoke-points-usage.ts",
+    "landing:scan": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/landing-data-assurance.ts",
+    "landing:reconcile": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/landing-data-assurance.ts --reconcile",
+    "landing:reconcile:apply": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/landing-data-assurance.ts --reconcile --apply",
     "ui:guard": "node scripts/runtime/ui-guard.mjs",
     "ui:guard:update": "node scripts/runtime/ui-guard.mjs --update",
     "test:settlement-allocation:integration": "node scripts/test-three-core-offline.mjs --settlement-allocation"

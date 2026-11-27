@@ -40,25 +40,22 @@ export function promotionSignature(value: unknown): string {
 }
 // The VERIFY stage re-fetches getPromotion and must confirm the promotion did not
 // change mid-flight. However selection.selectionDetails is volatile pagination
-// output: items are a moving page slice and pagination.nextToken is a fresh
-// encrypted token on every call. Signing those made DETAIL and VERIFY signatures
-// never match, so every promotion stalled in VERIFY and nothing was published.
-// Strip pagination artifacts before signing, while keeping every business field
-// (including lastUpdatedDate/status) so a genuine mid-flight edit still fails closed.
-function stripVolatilePagination(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(stripVolatilePagination);
-  if (value && typeof value === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-      if (key === "nextToken" || key === "paginationToken" || key === "items") continue;
-      out[key] = stripVolatilePagination(child);
-    }
-    return out;
-  }
-  return value;
-}
+// output: items/issues are a moving page slice and pagination.nextToken is a fresh
+// encrypted token on every call. Signing that container made DETAIL and VERIFY
+// signatures never match, so every promotion stalled in VERIFY and nothing was
+// published. Exclude the whole selectionDetails container before signing, while
+// keeping every business/identity field (including lastUpdatedDate/status and the
+// stable selection type/id/revision) so a genuine mid-flight edit still fails closed.
 export function promotionIdentitySignature(value: unknown): string {
-  return promotionSignature(stripVolatilePagination(value));
+  const p = promotionObject(value);
+  const selection = promotionObject(p.selection);
+  const identity: Record<string, unknown> = { ...p };
+  if (selection.selectionDetails !== undefined) {
+    const stripped = { ...selection };
+    delete stripped.selectionDetails;
+    identity.selection = stripped;
+  }
+  return promotionSignature(identity);
 }
 export function assertPromotionSummaryMatchesDetail(summary: unknown, detail: unknown): void {
   const a = promotionObject(summary), b = promotionObject(detail);

@@ -20,6 +20,7 @@ import { assertAmazonAction, assertAmazonScopeAdmin } from "./data-access";
 import { recoverFinanceParserFailures } from "./finance-parser-recovery";
 import { recoverAutomaticFailures, automaticTransientFailureCodes } from "./automatic-recovery";
 import { recoverRenewedAuthorizations } from "./authorization-recovery";
+import { tickLandingAssurance } from "./landing-auto-tick";
 
 export function enabledSyncScopes(value = process.env.AMAZON_SYNC_CENTER_SCOPES): SyncScope[] {
   return configuredSyncScopes(value) ?? [];
@@ -65,6 +66,9 @@ export async function tickSyncCenter(now = new Date(), only?: { taskIds: string[
   if (!process.env.DATABASE_URL || process.env.QUEUE_DRIVER !== "redis") return;
   const scopes = await resolveEnabledSyncScopes();
   if (!scopes.length) return;
+  // 落地页数据保障巡检（可选，LANDING_ASSURANCE_AUTO=1 开启）：扫描迁移页数据健康度，
+  // 对"有源未发布"的站点经受控审批链自动补采。带冷却/限量，内部自行兜底，不阻塞也不影响主调度。
+  void tickLandingAssurance(scopes, now).catch(() => undefined);
   // Durable recovery must run even when discovery, maintenance or exports fail.
   const recovery = { scopeCount: scopes.length, examined: 0, dispatched: 0, dispatchFailures: 0, expiredLeases: 0, automaticRecoveries: 0, authorizationRecoveries: 0, maintenanceFailures: 0 };
   if (!amazonCloudExecutionEnabled()) {
