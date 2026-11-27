@@ -166,6 +166,19 @@ function csvEscape(v: unknown): string {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+/** 状态页签里表示「不过滤」的哨兵值（原版第一个页签常写「全部」）。 */
+export const TAB_NO_FILTER_VALUES = new Set(['全部', '所有', 'all', 'ALL']);
+
+/** 按状态页签过滤行；「全部/所有/all」返回原数组，不做字面量匹配。 */
+export function filterRowsByTab<T>(
+  rows: T[],
+  activeTab: string,
+  resolveField: (row: T) => unknown,
+): T[] {
+  if (!activeTab || TAB_NO_FILTER_VALUES.has(activeTab)) return rows;
+  return rows.filter(r => String(resolveField(r) ?? '') === activeTab);
+}
+
 /**
  * 按模块派生默认功能集：让每个迁移页即使未显式声明，也具备与原版对齐的
  * 搜索 / 导入 / 导出 / 批量 / 多选 / 详情 入口。页面 config 里显式声明的字段优先。
@@ -313,10 +326,13 @@ export function MasterDataWorkbench({ config: rawConfig }: { config: MasterDataW
   /** 前端二次过滤（状态页签 + 常驻下拉筛选），后端只做 search，避免与 kind 语义冲突 */
   const filteredRows = useMemo(() => {
     let out = rows;
+    // 原版「全部 / 所有 / all」页签表示不过滤，而非按字面量匹配 status 字段。
+    // FEATURE_MAP 中 18 个页把首个页签写成 value="全部"，若按字面量过滤会让
+    // 这些页默认显示空列表（没有任何行的 status 等于「全部」）。
     if (activeTab) {
       const tab = config.statusTabs?.find(t => t.value === activeTab);
       const field = tab?.field ?? 'status';
-      out = out.filter(r => String((r as Record<string, unknown>)[field] ?? payloadOf(r)[field] ?? '') === activeTab);
+      out = filterRowsByTab(out, activeTab, r => (r as Record<string, unknown>)[field] ?? payloadOf(r)[field]);
     }
     for (const [key, value] of Object.entries(quickValues)) {
       if (!value) continue;
