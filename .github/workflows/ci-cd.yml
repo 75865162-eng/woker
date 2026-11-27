@@ -68,7 +68,7 @@ jobs:
           key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ hashFiles('package-lock.json') }}
 
       - name: Install browser
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium || { echo "--with-deps failed (apt source blocked), fallback to cached browser binary"; npx playwright install chromium; }
 
       - name: Prepare disposable database image
         run: |
@@ -183,7 +183,7 @@ jobs:
 
       - name: Install test browser
         if: steps.plan.outputs.release == 'true' && steps.tier.outputs.tier == 'full'
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium || { echo "--with-deps failed (apt source blocked), fallback to cached browser binary"; npx playwright install chromium; }
 
       - name: Test (full suite)
         if: steps.plan.outputs.release == 'true' && steps.tier.outputs.tier == 'full'
@@ -272,7 +272,7 @@ jobs:
           key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ hashFiles('package-lock.json') }}
 
       - name: Install fixture browser
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium || { echo "--with-deps failed (apt source blocked), fallback to cached browser binary"; npx playwright install chromium; }
 
       - name: Prepare disposable images
         run: |
