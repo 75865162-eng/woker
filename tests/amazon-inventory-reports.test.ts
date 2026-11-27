@@ -81,6 +81,17 @@ test("FBA fee preview retains exact estimates and enforces estimate-only semanti
   assert.equal(datasetForTable("fee_preview").publicationPolicy, "latest_published_report_or_explicit_report_version");
   assert.throws(() => parseDomainReport("fee_preview", fixtures.fee_preview.replace("12345678901234567890.123400", "NaN")));
   assert.throws(() => parseDomainReport("fee_preview", fixtures.fee_preview + "\n" + fixtures.fee_preview.split("\n")[1]));
+  // Amazon emits "--" for fee components not applicable to a fulfillment method.
+  // They are not-applicable blanks, not invalid numbers: the report must still parse.
+  const withNotApplicable = fixtures.fee_preview.replace("\textra", "\testimated-order-handling-fee-per-order\textra").replace("Large Standard-Size\tunknown", "Large Standard-Size\t--\tunknown");
+  const parsedNa = parseDomainReport("fee_preview", withNotApplicable);
+  assert.equal(parsedNa.rows.length, 1);
+  assert.equal(parsedNa.rows[0].fields["estimated-order-handling-fee-per-order"], "--");
+  assert.throws(() => parseDomainReport("fee_preview", withNotApplicable.replace("\t--\t", "\tNOT_A_NUMBER\t")));
+  // Merchant-fulfilled rows have no FNSKU; SKU + ASIN + store remain the identity.
+  const noFnsku = fixtures.fee_preview.replace("FNSKU-1", "");
+  assert.equal(parseDomainReport("fee_preview", noFnsku).rows.length, 1);
+  assert.throws(() => parseDomainReport("fee_preview", noFnsku.replace("SKU-1\t", "\t")));
   assert.doesNotThrow(() => assertDomainReportRoles("fee_preview", { approvedRoles: ["Pricing"], rolesAttestedAt: new Date() }));
   assert.doesNotThrow(() => assertDomainReportRoles("fee_preview", { approvedRoles: ["Finance and Accounting"], rolesAttestedAt: new Date() }));
 });
@@ -177,6 +188,14 @@ for (const resource of inventoryReportResources) {
       const annotatedFields = parseDomainReport(resource, annotated).rows[0].fields;
       assert.equal((reportBusinessFields(resource, annotatedFields).quantities as Record<string, string>)["sellable-365+-days"], "3");
       assert.equal(annotatedFields["sellable-365+-days (available in the US, JP, and EU stores)"], "3");
+      // Real Amazon reports carry multiple rows for the same SKU/date with
+      // different age-bucket distributions. Only byte-identical rows are dupes.
+      const header = fixtures.recommended_removals.split("\n")[0];
+      const rowA = fixtures.recommended_removals.split("\n")[1];
+      const rowB = rowA.replace("\t9007199254740993123\t2\t", "\t42\t5\t");
+      const twoRows = `${header}\n${rowA}\n${rowB}`;
+      assert.equal(parseDomainReport(resource, twoRows).rows.length, 2);
+      assert.throws(() => parseDomainReport(resource, `${header}\n${rowA}\n${rowA}`));
     }
     assert.throws(() => parseDomainReport(resource, fixtures[resource] + "\n" + fixtures[resource].split("\n")[1]));
     const invalidIdentity = resource === "storage_fees" || resource === "fee_preview" ? fixtures[resource].replace("B012345678", "") : resource === "fba_fulfilled_inventory" || resource === "fba_inventory_by_country" ? fixtures[resource].replace("merchant-sku", "") : resource === "fba_overage_fees" ? fixtures[resource].replace("\tUS\t", "\t\t") : fixtures[resource].replace("sku1", "");

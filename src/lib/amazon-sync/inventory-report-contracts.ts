@@ -68,10 +68,16 @@ export function parseInventoryReport(resource: InventoryReportResource, iterator
     for (const cells of iterator) {
       if (++rowCount > 50000 || cells.length !== headers.length) return invalid();
       const fields = Object.fromEntries(headers.map((h, i) => [h, cells[i]]));
-      if (!["estimated-fee-total", "estimated-referral-fee-per-unit"].some(name => fields[name] === "" || /^-?\d+(?:\.\d+)?$/.test(fields[name]))) return invalid();
+      // Amazon emits "--" for fee components that are not applicable to a given
+      // fulfillment method (e.g. order-handling fee for FBA). Treat it exactly
+      // like an empty cell: not-applicable, never a numeric zero or a real charge.
+      const isBlankFee = (v: string) => v === "" || v === "--";
+      if (!["estimated-fee-total", "estimated-referral-fee-per-unit"].some(name => isBlankFee(fields[name]) || /^-?\d+(?:\.\d+)?$/.test(fields[name]))) return invalid();
       const key = JSON.stringify([fields.sku, fields.fnsku, fields.asin, fields["amazon-store"]]);
-      if ([fields.sku, fields.fnsku, fields.asin, fields["amazon-store"]].some(value => !value.trim()) || seen.has(key) || !/^[A-Z]{3}$/.test(fields.currency)) return invalid();
-      for (const [name, value] of Object.entries(fields)) if (/fee|price/i.test(name) && value !== "" && !/^-?\d+(?:\.\d+)?$/.test(value)) return invalid();
+      // FNSKU is absent for some non-FBA / merchant-fulfilled fee rows. SKU +
+      // ASIN + store are the stable identity; FNSKU is optional when blank.
+      if ([fields.sku, fields.asin, fields["amazon-store"]].some(value => !value?.trim()) || seen.has(key) || !/^[A-Z]{3}$/.test(fields.currency)) return invalid();
+      for (const [name, value] of Object.entries(fields)) if (/fee|price/i.test(name) && !isBlankFee(value) && !/^-?\d+(?:\.\d+)?$/.test(value)) return invalid();
       seen.add(key);
       const rowHash = createHash("sha256").update(JSON.stringify(headers.map(h => [h, fields[h]]))).digest("hex");
       if (rowCount <= (options.offset ?? 0) || options.limit !== undefined && rows.length >= options.limit) continue;
@@ -105,8 +111,14 @@ export function parseInventoryReport(resource: InventoryReportResource, iterator
     if (resource === "storage_fees" && (!/^\d{4}-\d{2}$/.test(fields.month_of_charge) || !/^[A-Z]{3}$/.test(fields.currency))) return invalid();
     const hash = createHash("sha256").update(JSON.stringify(headers.map(h => [h, fields[h]]))).digest("hex");
     const key = JSON.stringify([sku, fnsku, fields.asin, fields.condition ?? fields["condition-type"] ?? null, fields.program ?? null, fields.store ?? fields.country_code ?? fields.country ?? null, fields.month_of_charge ?? null]);
-    if (seen.has(key)) return invalid(); // duplicate snapshot identities cannot be added twice
-    seen.set(key, hash);
+    // A recommendation report may legitimately carry several rows for the same
+    // SKU on the same snapshot date with different age-bucket distributions
+    // (e.g. distinct fulfillment centers). Treat the identity key as a composite
+    // of identity + row content so only truly identical rows are rejected.
+    // Other inventory snapshots keep the strict one-row-per-identity rule.
+    const dedupeKey = resource === "recommended_removals" ? `${key}|${hash}` : key;
+    if (seen.has(dedupeKey)) return invalid(); // duplicate snapshot identities cannot be added twice
+    seen.set(dedupeKey, hash);
     if (rowCount <= (options.offset ?? 0) || options.limit !== undefined && rows.length >= options.limit) continue;
     rows.push({ rowNumber: rowCount, rowHash: hash, businessDateRaw: null, businessDate: null,
       orderId: null, sellerSku: sku, asin: fields.asin, transactionType: null,
