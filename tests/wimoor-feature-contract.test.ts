@@ -99,6 +99,28 @@ test('全部迁移页都已接入功能面板（无遗漏）', () => {
   assert.ok(injected >= 20, `显式注入页面数偏低：${injected}`);
 });
 
+test('设置模块别名 kind 能查到原版功能契约（防面板空白回归）', () => {
+  // settings.user / settings.role 是设置模块的别名 kind，对应原版 system.admin / system.role。
+  // 若 KIND_TO_ROUTE 缺别名，这两个页面的通用功能面板会查不到契约而空白。
+  assert.match(contractSrc, /'settings\.user': '\/wimoor\/system\/admins'/, '缺少 settings.user 别名映射');
+  assert.match(contractSrc, /'settings\.role': '\/wimoor\/system\/roles'/, '缺少 settings.role 别名映射');
+  // 目标契约页确实存在且含功能项
+  for (const route of ['/wimoor/system/admins', '/wimoor/system/roles']) {
+    const c = contracts.find(x => x.route === route);
+    assert.ok(c, `缺少目标契约页 ${route}`);
+    assert.match(c!.body, /actions: \[[^\]]+/, `${route} 无功能项`);
+  }
+});
+
+test('代码生成页递归提取覆盖无后缀 import 子组件（防漏提回归）', () => {
+  const codegen = contracts.find(c => c.route === '/wimoor/system/codegen');
+  assert.ok(codegen, '缺少代码生成页契约');
+  assert.match(codegen!.body, /sourceComponents: 2/, '代码生成页未扫描到 importTable 子组件');
+  for (const label of ['确 定', '取 消', '导入表']) {
+    assert.match(codegen!.body, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `代码生成页漏提「${label}」`);
+  }
+});
+
 test('写操作红线：写入动作走 preview 预览，真实 HTTP 闸门保留', () => {
   assert.match(panelSrc, /WRITE_HINTS/);
   assert.match(panelSrc, /setPreview/);

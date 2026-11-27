@@ -1034,10 +1034,10 @@ export const PAGE_FEATURE_CONTRACTS: Record<string, WimoorFeatureContract> = {
   },
   '/wimoor/system/codegen': {
     route: '/wimoor/system/codegen', name: '代码生成', comp: 'sys/gen/index',
-    sourceFile: 'sys/gen/index.vue', sourceComponents: 1, kind: 'system.codegen',
-    actions: ['修改', '删除', '导入', '搜索', '生成', '重置', '同步', '生成代码', '编辑', '预览'],
+    sourceFile: 'sys/gen/index.vue', sourceComponents: 2, kind: 'system.codegen',
+    actions: ['修改', '删除', '取 消', '导入', '搜索', '生成', '确 定', '重置', '同步', '生成代码', '编辑', '预览'],
     dropdowns: [],
-    dialogs: ['preview.title'],
+    dialogs: ['preview.title', '导入表'],
     tabs: [],
     radios: [],
     searchHints: ['开始日期', '结束日期', '请输入表名称', '请输入表描述', '创建时间', '实体', '序号', '操作', '更新时间', '表名称', '表描述'],
@@ -1400,6 +1400,8 @@ export const KIND_TO_ROUTE: Record<string, string> = {
   'warehouse.transfer': '/wimoor/warehouse/transfer',
   'warehouse.turns-report': '/wimoor/warehouse/turns-report',
   'warehouse.unsalable': '/wimoor/warehouse/unsalable',
+  'settings.role': '/wimoor/system/roles',  // alias -> 原版功能契约
+  'settings.user': '/wimoor/system/admins',  // alias -> 原版功能契约
 };
 
 export function contractForRoute(route: string): WimoorFeatureContract | undefined {
