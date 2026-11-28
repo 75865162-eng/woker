@@ -27,12 +27,19 @@ const plan = {
   deploymentChanged, applicationReleaseRequired: runtimeChanged, requiresBuild: runtimeChanged,
   requiresInstall: lockfileChanged, requiresMigration: prismaMigrationChanged,
   requiresPrismaGenerate: prismaSchemaChanged || prismaMigrationChanged || lockfileChanged,
+  // Every application release MUST restart every registered service. Do not gate
+  // worker restarts on which files changed: a worker left on an old release can
+  // look healthy at the systemd level (is-active) while writing no heartbeat.
+  // Only a documentation-only change skips deployment entirely.
   requiresWebRestart: runtimeChanged,
   requiresWorkerRestart: runtimeChanged,
   requiresImageWorkerRestart: runtimeChanged,
   requiresAmazonSyncWorkerRestart: runtimeChanged,
   requiresSellfoxSyncWorkerRestart: runtimeChanged,
   requiresForecastWorkerRestart: runtimeChanged,
+  // A deployed release is only successful once every registered worker has a
+  // fresh heartbeat on the current code. The release script enforces this.
+  requiresWorkerHeartbeatVerification: runtimeChanged,
   requiresRuntimeConfig: matches(/^deploy\/systemd\//),
   requiresCaddyReload: matches(/^deploy\/caddy\//),
   requiresInfraUpdate: matches(/^docker-compose\.yml$/),

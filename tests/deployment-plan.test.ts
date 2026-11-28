@@ -38,13 +38,15 @@ function generate(changes: Record<string, string>, invalidBase = false) {
 
 test("documentation does not build, migrate or restart services", () => {
   const plan = generate({ "AGENTS.md": "policy" });
-  for (const key of ["requiresBuild", "requiresDeploy", "requiresMigration", "requiresWorkerRestart", "requiresWebRestart", "requiresSellfoxSyncWorkerRestart", "requiresCaddyReload"]) assert.equal(plan[key], false, key);
+  for (const key of ["requiresBuild", "requiresDeploy", "requiresMigration", "requiresWorkerRestart", "requiresWebRestart", "requiresSellfoxSyncWorkerRestart", "requiresCaddyReload", "requiresWorkerHeartbeatVerification"]) assert.equal(plan[key], false, key);
 });
 
 test("every application release moves all Workers to the current code", () => {
   const plan = generate({ "src/components/example.tsx": "component" });
   assert.equal(plan.requiresWebRestart, true);
   for (const key of ["requiresWorkerRestart", "requiresImageWorkerRestart", "requiresAmazonSyncWorkerRestart", "requiresSellfoxSyncWorkerRestart", "requiresForecastWorkerRestart"]) assert.equal(plan[key], true, key);
+  // 心跳+版本双校验随每个应用发布强制开启，杜绝只看 is-active 的假成功部署。
+  assert.equal(plan.requiresWorkerHeartbeatVerification, true);
   for (const key of ["requiresMigration", "requiresPrismaGenerate", "requiresRuntimeConfig", "requiresCaddyReload", "requiresInfraUpdate"]) assert.equal(plan[key], false, key);
 });
 

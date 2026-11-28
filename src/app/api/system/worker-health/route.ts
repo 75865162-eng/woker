@@ -66,8 +66,25 @@ export async function GET(request: Request) {
 
     const heartbeats = allHeartbeats.filter(h => h.queueName === importJobQueueName);
     const imageWorkers = allHeartbeats.filter(h => h.queueName === imageUpscaleJobQueueName);
+    const registeredWorkers = registeredWorkerHealth(allHeartbeats);
+    const expectedVersion = process.env.ERP_RUNTIME_VERSION ?? null;
+    const offlineWorkers = registeredWorkers.filter(w => !w.online).map(w => w.id);
+    const staleVersionWorkers = expectedVersion
+      ? registeredWorkers.filter(w => w.online && !w.versionMatches).map(w => w.id)
+      : [];
+    const allHealthy = offlineWorkers.length === 0 && staleVersionWorkers.length === 0;
     return NextResponse.json({
-      registeredWorkers: registeredWorkerHealth(allHeartbeats),
+      // 顶层巡检汇总：一次请求即可判断全部注册 worker 是否健康，供运维面板与门禁消费。
+      summary: {
+        allHealthy,
+        total: registeredWorkers.length,
+        online: registeredWorkers.filter(w => w.online).length,
+        offlineWorkers,
+        staleVersionWorkers,
+        expectedVersion,
+        checkedAt: new Date().toISOString(),
+      },
+      registeredWorkers,
       driver,
       queueName: importJobQueueName,
       queueCounts: importQueueHealth.counts,

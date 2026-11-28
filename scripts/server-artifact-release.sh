@@ -216,6 +216,25 @@ assert_service_release() {
   return 1
 }
 
+# 部署后心跳+版本双校验：systemd is-active 只能证明进程被拉起，不能证明它
+# 真在写心跳/跑的是新代码。这里读取数据库心跳表，确认每个注册 worker 在
+# 最近 90 秒内报告 online，且 metadata.version 等于本次发布的 commit。
+# 带重试因为 worker 重启后需要数秒才写第一条心跳。失败即回滚，杜绝假成功。
+assert_worker_heartbeats() {
+  local expected_commit="$1" attempt
+  for ((attempt = 1; attempt <= 10; attempt += 1)); do
+    if (cd "$extract_dir" && node --env-file="$APP_DIR/.env" scripts/runtime/worker-watchdog.mjs \
+        --json --expected-version "$expected_commit" --dry-run > "$extract_dir/tmp/heartbeat-verify.json" 2>/dev/null); then
+      local bad
+      bad="$(node -e 'const fs=require("fs");const d=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const bad=(d.decisions||[]).filter(x=>x.reason).map(x=>x.id+":"+x.reason);process.stdout.write(bad.join(","))' "$extract_dir/tmp/heartbeat-verify.json")"
+      if [ -z "$bad" ]; then return 0; fi
+    fi
+    if [ "$attempt" -lt 10 ]; then sleep 3; fi
+  done
+  echo "Worker heartbeat verification failed (expected version $expected_commit): ${bad:-no heartbeat data}" >&2
+  return 1
+}
+
 restart_runtime_service() {
   local service="$1" runtime_release="$2"
   # 检查合并 drop-in 后的身份，防止旧 unit/root 覆盖绕过账号切换。
@@ -250,6 +269,16 @@ install_runtime_from_release() {
       rm -f /etc/systemd/system/amazon-forecast-worker.service
       restart_forecast_worker=false
     fi
+    # Worker watchdog: independent root-owned timer that detects stale/missing
+    # heartbeats and restarts offline workers. Install on every runtime config
+    # change and keep the timer enabled so protection survives all releases.
+    if [ -f "$runtime_release/deploy/systemd/amazon-worker-watchdog.service" ] && [ -f "$runtime_release/deploy/systemd/amazon-worker-watchdog.timer" ]; then
+      install -m 0644 "$runtime_release/deploy/systemd/amazon-worker-watchdog.service" /etc/systemd/system/amazon-worker-watchdog.service || return 1
+      install -m 0644 "$runtime_release/deploy/systemd/amazon-worker-watchdog.timer" /etc/systemd/system/amazon-worker-watchdog.timer || return 1
+      watchdog_available=true
+    else
+      watchdog_available=false
+    fi
     systemctl daemon-reload || return 1
   fi
   if [ "$restart_web" = "true" ]; then restart_runtime_service amazon-web "$runtime_release" || return 1; fi
@@ -263,6 +292,11 @@ install_runtime_from_release() {
   fi
   if [ "$restart_forecast_worker" = "true" ]; then
     restart_runtime_service amazon-forecast-worker "$runtime_release" || return 1
+  fi
+  # Enable the watchdog timer whenever it is available (idempotent). It is the
+  # runtime safety net independent of any single deploy's restart decisions.
+  if [ "${watchdog_available:-false}" = "true" ]; then
+    systemctl enable --now amazon-worker-watchdog.timer || return 1
   fi
   if [ "$caddy_reload" = "true" ] || [ "$INITIAL_DEPLOYMENT" = "true" ]; then sh "$runtime_release/deploy/caddy/run-caddy.sh"; fi
 }
@@ -394,10 +428,12 @@ if (previousPath && fs.existsSync(previousPath)) {
 }
 const keys = ['requiresMigration', 'requiresPrismaGenerate', 'requiresWebRestart', 'requiresWorkerRestart', 'requiresImageWorkerRestart', 'requiresAmazonSyncWorkerRestart', 'requiresSellfoxSyncWorkerRestart', 'requiresForecastWorkerRestart', 'requiresRuntimeConfig', 'requiresCaddyReload', 'requiresInfraUpdate'];
 for (const key of keys) if (typeof plan[key] !== 'boolean') throw new Error(`Missing plan flag: ${key}`);
-console.log(keys.map(key => String(plan[key])).join(' '));
+// Optional for backward compatibility with pre-existing plans; default follows requiresDeploy.
+const heartbeatVerify = typeof plan.requiresWorkerHeartbeatVerification === 'boolean' ? plan.requiresWorkerHeartbeatVerification : plan.requiresDeploy;
+console.log([...keys.map(key => String(plan[key])), String(heartbeatVerify)].join(' '));
 NODE
 )"
-read -r requires_migration requires_generate restart_web restart_worker restart_image_worker restart_amazon_sync_worker restart_sellfox_sync_worker restart_forecast_worker runtime_config caddy_reload infra_update <<< "$plan_flags"
+read -r requires_migration requires_generate restart_web restart_worker restart_image_worker restart_amazon_sync_worker restart_sellfox_sync_worker restart_forecast_worker runtime_config caddy_reload infra_update verify_worker_heartbeats <<< "$plan_flags"
 
 package_lock_checksum="$(sha256sum "$extract_dir/package-lock.json" | awk '{print $1}')"
 dependency_source="${previous_release_dir:-$APP_DIR}/node_modules"
@@ -468,6 +504,16 @@ install_runtime_from_release "$release_dir"
 
 if [ "$INITIAL_DEPLOYMENT" = "true" ]; then
   systemctl enable --now amazon-web amazon-worker amazon-image-upscale-worker amazon-sync-worker amazon-sellfox-sync-worker amazon-forecast-worker
+fi
+
+# 第一层防护：部署成功后必须确认所有注册 worker 都写回新版本心跳。
+# 只看 systemd is-active 会漏掉「进程活着但没在干活」的假成功。
+if [ "${verify_worker_heartbeats:-false}" = "true" ]; then
+  if ! assert_worker_heartbeats "$SOURCE_COMMIT"; then
+    trap - ERR
+    rollback_application_release "worker_heartbeat" "workers did not report healthy heartbeats on $SOURCE_COMMIT"
+    exit 1
+  fi
 fi
 
 if ! wait_for_health; then

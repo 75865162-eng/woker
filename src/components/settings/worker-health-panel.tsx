@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type WorkerHealthPayload = {
+  summary?: { allHealthy: boolean; total: number; online: number; offlineWorkers: string[]; staleVersionWorkers: string[]; expectedVersion: string | null; checkedAt: string };
   registeredWorkers?: Array<{ id: string; label: string; online: boolean; instances: number; queueReady: boolean | null; version: string | null; versionMatches: boolean; mismatchedInstances?: number; connectionMatches?: boolean | null; lastSeenAt: string | null; recoveryReady?: boolean | null; recovery?: { lastSuccessAt: string | null; dispatchFailures: number | null; maintenanceFailures: number | null } | null }>;
   driver: string;
   queueName: string;
@@ -157,6 +158,26 @@ export function WorkerHealthPanel() {
           </div>
         ) : null}
 
+        {data?.summary && (
+          <div role="status" className={`rounded-md border px-3 py-2 ${data.summary.allHealthy ? "border-success/25 bg-success-soft text-success-ink" : "border-danger/25 bg-danger-soft text-danger-ink"}`}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <strong className="text-sm">
+                {data.summary.allHealthy ? "全部 Worker 巡检正常" : "Worker 巡检异常"}
+              </strong>
+              <Badge tone={data.summary.allHealthy ? "green" : "red"}>
+                {data.summary.online}/{data.summary.total} 在线
+              </Badge>
+            </div>
+            {!data.summary.allHealthy && (
+              <p className="mt-1 text-xs font-medium">
+                {data.summary.offlineWorkers.length ? `离线：${data.summary.offlineWorkers.join("、")}` : ""}
+                {data.summary.offlineWorkers.length && data.summary.staleVersionWorkers.length ? " · " : ""}
+                {data.summary.staleVersionWorkers.length ? `版本陈旧：${data.summary.staleVersionWorkers.join("、")}` : ""}
+                {" · 看门狗每 2 分钟自动尝试拉起，若持续离线请检查服务与数据库连通性。"}
+              </p>
+            )}
+          </div>
+        )}
         {data?.queueAvailable === false ? <p role="status" className="text-xs text-danger-ink">Redis 队列不可用，任务数量暂不可确认；下方显示数据库中最近的 Worker 心跳。</p> : null}
         <div className="grid gap-2 sm:grid-cols-2">
           {data?.registeredWorkers?.map(worker => <div key={worker.id} className="rounded-md border border-border p-3 text-xs">
