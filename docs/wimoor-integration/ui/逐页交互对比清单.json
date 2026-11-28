@@ -1,0 +1,728 @@
+[
+  {
+    "route": "/wimoor/account/account",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/account/inventory-value",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/account/job-costing",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/account/open",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/account/other-expenses",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/account/performance",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/account/profit-report",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/account/reimbursements",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/account/settlement-sku",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/account/settlements",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/account/shop-profit",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/account/storage-fees",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/ads/download",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/ads/manager",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/ads/operation-record",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/ads/rules",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/ads/summary",
+    "component": "WimoorFeaturePanel",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/finance/currency",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/finance/report-item",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/finance/report-template",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/finance/subjects",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/finance/voucher-type",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/finance/voucher",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor",
+    "component": "Portal/Other",
+    "bridged": false,
+    "contract": false
+  },
+  {
+    "route": "/wimoor/product/brand",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/product/category",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/product/consumable",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/product/file-resources",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/product/master",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/product/notices",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/product/package",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/product/sku-relation",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/product/tags",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/purchase/change",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/purchase/consumable",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/purchase/detail",
+    "component": "WimoorFeaturePanel",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/purchase/orders",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/purchase/payment-detail",
+    "component": "WimoorFeaturePanel",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/purchase/payment-request",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/purchase/plan",
+    "component": "WimoorFeaturePanel",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/purchase/process",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/purchase/quote",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/purchase/receive",
+    "component": "WimoorFeaturePanel",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/purchase/summary",
+    "component": "WimoorFeaturePanel",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/purchase/supplier",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/purchase/time",
+    "component": "WimoorFeaturePanel",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/sales/chapin-guanli",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/sales/cuxiao-baogao",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/sales/dianpu-jixiao",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/sales/dingdan-liebiao",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/sales/fba-feiyong",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/sales/fba-zhixiao",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/sales/jinri-dingdan",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/sales/liuliang-baobiao",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/sales/qushi-fenxi",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/sales/shangpin-fenxi",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/sales/shangpin-sousuo",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/sales/shoudong-dingdan",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/sales/tuihuo-dingdan",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/sales/xiaoliang-xiangqing",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/sales/xiaoshou-baobiao",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/sales/xiaoshou-jihua",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/sales/yichu-dingdan",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/settings/ali1688-bind",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/settings/departments",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/settings/feishu",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/settings/logistics-bind",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/settings/roles",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": false
+  },
+  {
+    "route": "/wimoor/settings/stores",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/settings/transparency",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/settings/users",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": false
+  },
+  {
+    "route": "/wimoor/shipment/address",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/shipment/channel",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/shipment/customs-statistics",
+    "component": "WimoorFeaturePanel",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/shipment/customs",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/shipment/fba-daily-inventory",
+    "component": "WimoorFeaturePanel",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/shipment/fba-inventory",
+    "component": "WimoorFeaturePanel",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/shipment/fee-allocation",
+    "component": "WimoorFeaturePanel",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/shipment/handling",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/shipment/holiday",
+    "component": "WimoorFeaturePanel",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/shipment/label",
+    "component": "WimoorFeaturePanel",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/shipment/quote-order",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/shipment/quote-setting",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/shipment/quote",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/shipment/ship-detail",
+    "component": "WimoorFeaturePanel",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/shipment/ship-plan",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/shipment/ship-statistics",
+    "component": "WimoorFeaturePanel",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/shipment/ship-time",
+    "component": "WimoorFeaturePanel",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/shipment/shipment",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/shipment/track",
+    "component": "AmazonDatasetWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/shipment/transportation",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/system/admins",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/system/announcements",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/system/client-orders",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/system/clients",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/system/codegen",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/system/dictionaries",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/system/docs",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/system/fba-centers",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/system/fba-fees",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/system/menus",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/system/migration",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/system/online",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/system/packages",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/system/roles",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/system/tasks",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/warehouse/address",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/warehouse/base",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/warehouse/daily-inventory",
+    "component": "WimoorFeaturePanel",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/warehouse/exchange",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/warehouse/inbound",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/warehouse/inventory-record",
+    "component": "WimoorFeaturePanel",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/warehouse/inventory-report",
+    "component": "WimoorFeaturePanel",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/warehouse/outbound",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/warehouse/shelf-inv",
+    "component": "WimoorFeaturePanel",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/warehouse/shelf-operator",
+    "component": "WimoorFeaturePanel",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/warehouse/shelf",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/warehouse/stocktake",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/warehouse/transfer",
+    "component": "MasterDataWorkbench",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/warehouse/turns-report",
+    "component": "WimoorFeaturePanel",
+    "bridged": true,
+    "contract": true
+  },
+  {
+    "route": "/wimoor/warehouse/unsalable",
+    "component": "WimoorFeaturePanel",
+    "bridged": true,
+    "contract": true
+  }
+]

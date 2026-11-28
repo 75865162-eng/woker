@@ -85,12 +85,16 @@ test('全部迁移页都已接入功能面板（无遗漏）', () => {
   assert.match(masterSrc, /<WimoorFeaturePanel kind=\{config\.kind\}[\s\S]*bridge=\{featureBridge\}/);
   assert.match(amazonSrc, /<WimoorFeaturePanel route=\{pageKey\} \/>/);
 
-  // Report/Custom 页面需各自显式注入 route（首页无契约除外）
+  // Report/Custom 页面需各自显式注入 route。
+  // 门户页 /wimoor 是导航页：已复刻原版树形菜单（左侧模块→右侧抽屉子菜单→搜索实时过滤），
+  // 它的 route '/wimoor/page.tsx' 本无功能契约、原面板调用不渲染，故以 data-wimoor-portal 树形导航替代，属合理例外。
   let injected = 0;
   for (const f of files) {
     const src = readFileSync(f, 'utf8');
     const isMaster = src.includes('MasterDataWorkbench');
     const isAmazon = src.includes('AmazonDatasetWorkbench');
+    const isPortal = src.includes('data-wimoor-portal');
+    if (isPortal) continue;
     if (!isMaster && !isAmazon) {
       assert.match(src, /<WimoorFeaturePanel route="\/wimoor/, `页面未接入功能面板：${f}`);
       injected++;
