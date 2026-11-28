@@ -82,14 +82,17 @@ test('页面框架：租户 header 从 localStorage 工作区作用域读取', (
   assert.match(workbench, /x-workspace-id/);
 });
 
-test('迁移完整性：128 个菜单全部有登记，链接页文件真实存在', () => {
+test('迁移完整性：128 个菜单全部可点击，目标页文件真实存在', () => {
   const registry = read('src/lib/wimoor-migration/page-registry.ts');
   const entryCount = (registry.match(/l1: '/g) ?? []).length;
   assert.equal(entryCount, 128, '登记册应含 128 个菜单');
+  // 红线：不允许 localHref: null —— 每个入口都必须可点击跳转
+  assert.doesNotMatch(registry, /localHref: null/, '存在不可点击的灰色入口');
   const linkedCount = (registry.match(/localHref: '\//g) ?? []).length;
-  assert.ok(linkedCount >= 115, `链接页过少：${linkedCount}`);
-  // 抽查每个链接的页面文件存在
-  const hrefs = [...registry.matchAll(/localHref: '(\/wimoor\/[^']+)'/g)].map(m => m[1]);
+  assert.equal(linkedCount, 128, `全部 128 个入口应可点击，实际 ${linkedCount}`);
+  // 核对每个链接的页面文件存在（含 wimoor 业务页与等价承接页 ai/operations/amazon）
+  const hrefs = [...registry.matchAll(/localHref: '(\/[^']+)'/g)].map(m => m[1]);
+  assert.equal(hrefs.length, 128, 'href 数量应为 128');
   for (const href of hrefs) {
     const file = `src/app/(erp)${href}/page.tsx`;
     assert.ok(existsSync(new URL(`../${file}`, import.meta.url)), `页面文件缺失：${file}`);
