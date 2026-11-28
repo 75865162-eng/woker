@@ -831,7 +831,6 @@ export function MasterDataWorkbench({ config: rawConfig }: { config: MasterDataW
       runMenuActionRef.current(k, label);
     },
     onDialog: (label: string) => setNotice(`「${label}」：本页以等价工作台表单承载编辑能力。`),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [config, resolveFieldKey, setQuickValues, setSearch, setPage, setActiveTab, setNotice, setMore, rows]);
 
   /** 下拉动作统一分发：每一类都落到真实 API / 真实前端能力 / 真实等价入口，不再只弹提示 */

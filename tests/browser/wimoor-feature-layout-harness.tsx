@@ -14,7 +14,11 @@ function Harness() {
     { id: '3', sku: 'SKU-GAMMA', warehouse: '美国西部仓', status: '可用', name: '商品丙' },
   ]);
   const { bridge, applyFeatureFilters, featureFilters } = useReadOnlyListFeatureBridge(rows);
-  const cell = (key: string) => (row: Row) => <span>{String(row[key] ?? '—')}</span>;
+  const cell = (key: string) => {
+    const Cell = (row: Row) => <span>{String(row[key] ?? '—')}</span>;
+    Cell.displayName = `Cell_${key}`;
+    return Cell;
+  };
   const columns: DataTableColumn<Row>[] = [
     { key: 'sku', header: 'SKU', width: 160, render: cell('sku') },
     { key: 'warehouse', header: '仓库', width: 160, render: cell('warehouse') },
