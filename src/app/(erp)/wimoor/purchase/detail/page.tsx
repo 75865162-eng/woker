@@ -19,6 +19,11 @@ const EQUIVALENTS = [{ href: '/purchase/orders', label: '采购单（等价页�
 
 export default function WimoorPurchaseDetailPage() {
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const featurePanelBridge = useMemo(() => ({
+    onSearch: (field: string, value: string) => setFilters(prev => ({ ...prev, [field]: value })),
+    onSubmitSearch: (values: Record<string, string>) => setFilters(prev => ({ ...prev, ...values })),
+    onResetSearch: () => setFilters({}),
+  }), [setFilters]);
   const filterConfig = useMemo(() => ({
     dimensions: [
       { key: 'sku', label: 'SKU', placeholder: '请输入SKU' },
@@ -32,7 +37,7 @@ export default function WimoorPurchaseDetailPage() {
   }), []);
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-4 p-6" data-wimoor-features="下单日期起|下单日期止|搜索维度|关键词|重置|刷新" data-active-filters={Object.values(filters).filter(Boolean).join('|')}>
-      <WimoorFeaturePanel route="/wimoor/purchase/detail" />
+      <WimoorFeaturePanel route="/wimoor/purchase/detail" bridge={featurePanelBridge} />
       <header className="flex flex-col gap-1">
         <h1 className="text-xl font-semibold">采购详情 · WIMOOR 对照</h1>
         <p className="text-sm text-muted">源组件：erp/purchase/report/detail/index.vue · 筛选栏按原版还原为真实控件；数据由等价页提供。</p>

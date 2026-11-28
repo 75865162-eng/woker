@@ -4,6 +4,7 @@ import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Input } from '@/components/ui/form-controls';
 import { mapAmazonInventoryRows, AMAZON_INVENTORY_PAGE_BASIS, type AmazonInventoryRow } from '@/lib/wimoor-migration/amazon-inventory-adapter';
 import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
+import { useReadOnlyListFeatureBridge } from '@/components/wimoor-migration/use-readonly-list-feature-bridge';
 
 /**
  * WIMOOR「发货 → 报表分析 → FBA库存」功能迁移（只读列表）。
@@ -26,6 +27,7 @@ function headersForScope(): Headers {
 
 export default function WimoorShipmentFbaInventoryPage() {
   const [rows, setRows] = useState<Row[]>([]);
+  const { bridge, applyFeatureFilters } = useReadOnlyListFeatureBridge(rows);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -79,7 +81,7 @@ export default function WimoorShipmentFbaInventoryPage() {
 
   return (
     <div className="p-4">
-      <WimoorFeaturePanel route="/wimoor/shipment/fba-inventory" />
+      <WimoorFeaturePanel route="/wimoor/shipment/fba-inventory" bridge={bridge} />
       <header className="flex flex-col gap-1 mb-4"><h1 className="text-lg font-semibold">FBA库存</h1><p className="text-xs text-muted">WIMOOR FBA库存功能迁移：SKU 搜索与全站点库存指标，数据自动匹配亚马逊已发布库存快照{snapshotStatus ? `（快照：${snapshotStatus}）` : ''}。{AMAZON_INVENTORY_PAGE_BASIS}</p></header>
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3">
@@ -88,7 +90,7 @@ export default function WimoorShipmentFbaInventoryPage() {
           </div>
           <span className="text-sm text-muted">导出 · 头程费用导入（原页面按钮，本页只读不触发）</span>
         </div>
-        <DataTable<Row> columns={columns} rows={rows} getRowKey={(row) => row.id} loading={loading}
+        <DataTable<Row> columns={columns} rows={applyFeatureFilters(rows)} getRowKey={(row) => row.id} loading={loading}
           error={error ? { message: error, onRetry: () => setReloadKey(k => k + 1) } : undefined}
           empty="暂无已发布的亚马逊FBA库存快照。系统不预置伪造库存；请先同步并发布库存数据。"
           ariaLabel="FBA库存" />

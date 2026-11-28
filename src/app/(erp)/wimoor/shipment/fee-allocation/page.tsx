@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Select } from '@/components/ui/form-controls';
 import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
+import { useReadOnlyListFeatureBridge } from '@/components/wimoor-migration/use-readonly-list-feature-bridge';
 
 /**
  * WIMOOR「发货 → 报表分析 → 费用分摊(新)」功能迁移（只读列表）。
@@ -25,6 +26,7 @@ function headersForScope(): Headers {
 
 export default function WimoorShipmentFeeAllocationPage() {
   const [rows, setRows] = useState<Row[]>([]);
+  const { bridge, applyFeatureFilters } = useReadOnlyListFeatureBridge(rows);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -67,7 +69,7 @@ export default function WimoorShipmentFeeAllocationPage() {
 
   return (
     <div className="p-4">
-      <WimoorFeaturePanel route="/wimoor/shipment/fee-allocation" />
+      <WimoorFeaturePanel route="/wimoor/shipment/fee-allocation" bridge={bridge} />
       <header className="flex flex-col gap-1 mb-4"><h1 className="text-lg font-semibold">费用分摊</h1><p className="text-xs text-muted">WIMOOR 费用分摊功能迁移（只读）：发货人/状态、日期类型、承运商/渠道与材积筛选；完整分摊见 /operations/settlement-allocations。</p></header>
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3">
@@ -77,7 +79,7 @@ export default function WimoorShipmentFeeAllocationPage() {
           </label>
           <span className="text-sm text-muted">发货人 · 状态 · 选择承运商 · 选择物流渠道 · SKU材积 · 历史详情 · 导出（原页面筛选与按钮）</span>
         </div>
-        <DataTable<Row> columns={columns} rows={rows} getRowKey={(row) => row.id} loading={loading}
+        <DataTable<Row> columns={columns} rows={applyFeatureFilters(rows)} getRowKey={(row) => row.id} loading={loading}
           error={error ? { message: error, onRetry: () => setReloadKey(k => k + 1) } : undefined}
           empty="暂无费用分摊记录。本页只读，系统不预置伪造费用。"
           ariaLabel="费用分摊" />

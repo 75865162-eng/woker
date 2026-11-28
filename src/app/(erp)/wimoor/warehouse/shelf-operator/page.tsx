@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Input, Select } from '@/components/ui/form-controls';
 import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
+import { useReadOnlyListFeatureBridge } from '@/components/wimoor-migration/use-readonly-list-feature-bridge';
 
 /**
  * WIMOOR「仓库 → 报表 → 上下架明细」功能迁移（只读对照入口）。
@@ -23,6 +24,7 @@ function headersForScope(): Headers {
 }
 export default function WimoorWarehouseShelfOperatorPage() {
   const [rows, setRows] = useState<Row[]>([]);
+  const { bridge, applyFeatureFilters } = useReadOnlyListFeatureBridge(rows);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -57,7 +59,7 @@ export default function WimoorWarehouseShelfOperatorPage() {
   ];
   return (
     <div className="p-4">
-      <WimoorFeaturePanel route="/wimoor/warehouse/shelf-operator" />
+      <WimoorFeaturePanel route="/wimoor/warehouse/shelf-operator" bridge={bridge} />
       <header className="flex flex-col gap-1 mb-4"><h1 className="text-lg font-semibold">上下架明细</h1><p className="text-xs text-muted">WIMOOR 上下架明细迁移（只读对照）：全部仓库/SKU 筛选与上架下架流水；完整流水见 /wms 上下架工作台。</p></header>
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3">
@@ -66,7 +68,7 @@ export default function WimoorWarehouseShelfOperatorPage() {
           </label>
           <Input aria-label="请输入SKU" value={sku} placeholder="请输入SKU" onChange={(e) => setSku(e.target.value)} />
         </div>
-        <DataTable<Row> columns={columns} rows={visibleRows} getRowKey={(row) => row.id} loading={loading}
+        <DataTable<Row> columns={columns} rows={applyFeatureFilters(visibleRows)} getRowKey={(row) => row.id} loading={loading}
           error={error ? { message: error, onRetry: () => setReloadKey(k => k + 1) } : undefined}
           empty="暂无上下架明细。本页只读，不预置伪造流水。"
           ariaLabel="上下架明细" />

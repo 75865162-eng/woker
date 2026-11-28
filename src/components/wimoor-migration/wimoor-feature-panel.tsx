@@ -1,25 +1,26 @@
 'use client';
 
 /**
- * WIMOOR 原版功能完整对齐面板（数据驱动 + 真实交互）。
+ * WIMOOR 原版功能完整对齐面板（数据驱动 + 真实交互 + 原版分区布局）。
  *
  * 从 page-feature-contracts.generated.ts 读取当前页原版功能清单（递归解析
- * 原版 805 个 Vue 子组件提取），把原版每个子功能渲染为「与原版同构」的真实
- * 可交互控件，而不再是一排平铺的静态 chip：
- *  - 下拉动作：真实 Dropdown，点击触发器展开菜单，点选项触发对应语义；
- *  - 搜索字段：按语义渲染为文本输入框 / 下拉选择 / 日期控件，可输入、可搜索、可重置；
- *  - 标签页：可点击切换的 tab；选项：真实单选；
- *  - 操作按钮 / 弹窗功能：按钮 / 点击弹预览。
- * 确保「原版有的功能，迁移页都能找到、可点、能交互」。
+ * 原版 805 个 Vue 子组件提取），按「被移植页的真实布局范式」分区渲染，而
+ * 不是把功能平铺成一大片 chip：
+ *   - 顶部标签页：原版 el-tabs，点击切换真实 statusTab；
+ *   - 工具栏：操作按钮 + 下拉动作（点击即展开的真实 Dropdown）+ 弹窗入口；
+ *   - 筛选区：原版 el-form :inline 范式——每个字段「label + 控件」横向排列，
+ *     下拉字段的选项来自工作台真实数据去重（bridge.optionsFor），不再伪造「指定XX」；
+ *   - 列字段：折叠为摘要，不抢主视觉（原版这些是表格列头，不是交互控件）。
+ *
+ * 有工作台桥接（bridge）时默认展开，让原版功能真实可用；无桥接的对照页
+ * 默认折叠，仅作功能清单参考。所有功能项都可通过 bridge 驱动真实筛选/
+ * 查询/操作状态；无 bridge 时退回只读交互演示。
  *
  * 写操作红线：新建/调整/批量/删除等写入动作点击后只打开「操作预览」对话框，
- * 说明目标语义与执行前提，不产生真实 HTTP 写入、不造数（真实广告写闸门保留，
- * 由 /api/integrations/amazon/ads/changes 的 preview→审批→apply 框架承载，
- * 且 execution.enabled=false / WRITE_OPERATION_CONTRACT_NOT_VERIFIED）。
- * 搜索为纯前端交互反馈：汇总当前条件并提示，不发请求、不改数据。
+ * 说明目标语义与执行前提，不产生真实 HTTP 写入、不造数。搜索为前端筛选反馈。
  */
 import { useMemo, useState } from 'react';
-import { ChevronDown, ChevronUp, ListFilter, Search, RotateCcw } from 'lucide-react';
+import { ChevronDown, ChevronUp, ListFilter, Search, RotateCcw, Table2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, Dropdown, type DropdownItem } from '@/components/ui/overlays';
 import { Input, Select, DatePicker } from '@/components/ui/form-controls';
@@ -77,6 +78,8 @@ export interface WimoorFeatureBridge {
   onSubmitSearch?: (values: Record<string, string>) => void;
   /** 点击「重置」 */
   onResetSearch?: () => void;
+  /** 下拉筛选字段的真实选项（由工作台按字段从当前数据去重生成） */
+  optionsFor?: (field: string) => { value: string; label: string }[];
   /** 下拉动作项：label 交给工作台 runMenuAction 分发真实操作 */
   onDropdown?: (label: string) => void;
   /** 标签页：切到工作台真实 statusTab */
@@ -92,7 +95,7 @@ export interface WimoorFeatureBridge {
 interface Props {
   route?: string;
   kind?: string;
-  /** 默认折叠；设为 true 默认展开 */
+  /** 默认折叠；设为 true 默认展开。有 bridge 时自动展开 */
   defaultOpen?: boolean;
   /** 真实工作台桥接；传入后面板功能项驱动真实能力 */
   bridge?: WimoorFeatureBridge;
@@ -101,12 +104,14 @@ interface Props {
 }
 
 export function WimoorFeaturePanel({ route, kind, defaultOpen = false, bridge, title }: Props) {
-  const [open, setOpen] = useState(defaultOpen);
+  // 有真实工作台桥接时默认展开，让原版功能可见可用；对照页保持折叠。
+  const [open, setOpen] = useState(defaultOpen || !!bridge);
   const [preview, setPreview] = useState<{ title: string; group: string; kind: 'write' | 'dialog' } | null>(null);
   const [toast, setToast] = useState('');
   const [searchValues, setSearchValues] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState('');
   const [activeRadio, setActiveRadio] = useState('');
+  const [columnsOpen, setColumnsOpen] = useState(false);
 
   const contract: WimoorFeatureContract | undefined = useMemo(
     () => (kind ? contractForKind(kind) : undefined) ?? (route ? contractForRoute(route) : undefined),
@@ -212,6 +217,13 @@ export function WimoorFeaturePanel({ route, kind, defaultOpen = false, bridge, t
     flash('已重置全部搜索条件');
   };
 
+  /** 下拉字段的真实选项：优先取工作台按当前数据去重的选项，回退到中性选项 */
+  const optionsFor = (hint: string): { value: string; label: string }[] => {
+    const real = bridge?.optionsFor?.(hint) ?? [];
+    if (real.length) return [{ value: '', label: hint }, ...real];
+    return selectOptionsFor(hint);
+  };
+
   const renderSearchControl = (hint: string) => {
     const kind = classifySearchField(hint);
     const value = searchValues[hint] ?? '';
@@ -221,7 +233,7 @@ export function WimoorFeaturePanel({ route, kind, defaultOpen = false, bridge, t
     };
     if (kind === 'date') {
       return (
-        <label key={hint} className="flex flex-col gap-1 text-label">
+        <label key={hint} className="flex min-w-[180px] flex-col gap-1 text-label">
           <span className="text-muted">{hint}</span>
           <DatePicker aria-label={hint} value={value} onChange={e => onChange(e.target.value)} />
         </label>
@@ -229,14 +241,14 @@ export function WimoorFeaturePanel({ route, kind, defaultOpen = false, bridge, t
     }
     if (kind === 'select') {
       return (
-        <label key={hint} className="flex flex-col gap-1 text-label">
+        <label key={hint} className="flex min-w-[160px] flex-col gap-1 text-label">
           <span className="text-muted">{hint}</span>
-          <Select aria-label={hint} value={value} options={selectOptionsFor(hint)} onChange={e => onChange(e.target.value)} />
+          <Select aria-label={hint} value={value} options={optionsFor(hint)} onChange={e => onChange(e.target.value)} />
         </label>
       );
     }
     return (
-      <label key={hint} className="flex flex-col gap-1 text-label">
+      <label key={hint} className="flex min-w-[180px] flex-col gap-1 text-label">
         <span className="text-muted">{hint}</span>
         <Input aria-label={hint} value={value} placeholder={hint} onChange={e => onChange(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') doSearch(); }} />
       </label>
@@ -250,6 +262,7 @@ export function WimoorFeaturePanel({ route, kind, defaultOpen = false, bridge, t
       data-contract-route={contract.route}
       data-contract-count={String(totalCount)}
       data-wimoor-feature-panel="1"
+      data-wimoor-layout="original"
     >
       <button
         type="button"
@@ -262,6 +275,7 @@ export function WimoorFeaturePanel({ route, kind, defaultOpen = false, bridge, t
           {title ?? '原版功能完整对齐'}
           <span className="rounded bg-surface-muted px-1.5 py-0.5 text-label text-muted">{totalCount} 项</span>
           <span className="text-label text-muted">源：{contract.name}</span>
+          {bridge ? <span className="rounded bg-success-soft px-1.5 py-0.5 text-label text-success-ink">原版布局 · 可交互</span> : null}
         </span>
         <span className="flex items-center gap-2 text-label text-muted">
           {toast && <span className="text-info-ink">{toast}</span>}
@@ -270,43 +284,15 @@ export function WimoorFeaturePanel({ route, kind, defaultOpen = false, bridge, t
       </button>
 
       {open && (
-        <div className="grid gap-4 border-t border-border px-3 py-3 md:grid-cols-2">
-          {/* 操作按钮：真实按钮 */}
-          {renderChips(contract.actions, '操作按钮', 'action')}
-
-          {/* 下拉动作：真实 Dropdown，点击触发器展开菜单 */}
-          {dropdownItems.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center gap-1.5 text-label font-semibold text-muted">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-info-ink" />
-                下拉动作 <span className="text-muted">({dropdownItems.length})</span>
-              </div>
-              <div>
-                <Dropdown
-                  align="start"
-                  header="原版下拉菜单"
-                  trigger={
-                    <Button type="button" variant="secondary" size="sm" aria-label="展开下拉动作">
-                      操作菜单 <ChevronDown size={13} className="ml-1" />
-                    </Button>
-                  }
-                  items={dropdownItems}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* 弹窗功能：点击弹预览 */}
-          {renderChips(contract.dialogs, '弹窗功能', 'dialog')}
-
-          {/* 标签页：真实可切换 */}
+        <div className="flex flex-col gap-3 border-t border-border px-3 py-3">
+          {/* ① 顶部标签页：原版 el-tabs 位于页面顶部，点击切真实 statusTab */}
           {contract.tabs.length > 0 && (
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-1.5 text-label font-semibold text-muted">
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-info-ink" />
-                标签页 <span className="text-muted">({contract.tabs.length})</span>
+                页面标签 <span className="text-muted">({contract.tabs.length})</span>
               </div>
-              <div className="flex flex-wrap gap-1.5 border-b border-border">
+              <div className="flex flex-wrap gap-1 border-b border-border">
                 {contract.tabs.map((tab, i) => (
                   <button
                     key={`tab-${i}-${tab}`}
@@ -328,7 +314,54 @@ export function WimoorFeaturePanel({ route, kind, defaultOpen = false, bridge, t
             </div>
           )}
 
-          {/* 选项：真实单选 */}
+          {/* ② 工具栏：操作按钮 + 下拉动作（点击即展开）+ 弹窗入口 */}
+          <div className="flex flex-wrap items-start gap-4 rounded border border-border bg-surface-muted/40 p-2">
+            {contract.actions.length > 0 ? renderChips(contract.actions, '操作按钮', 'action') : null}
+            {dropdownItems.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-1.5 text-label font-semibold text-muted">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-info-ink" />
+                  下拉动作 <span className="text-muted">({dropdownItems.length})</span>
+                </div>
+                <Dropdown
+                  align="start"
+                  header="原版下拉菜单"
+                  trigger={
+                    <Button type="button" variant="secondary" size="sm" aria-label="展开下拉动作">
+                      操作菜单 <ChevronDown size={13} className="ml-1" />
+                    </Button>
+                  }
+                  items={dropdownItems}
+                />
+              </div>
+            )}
+            {contract.dialogs.length > 0 ? renderChips(contract.dialogs, '弹窗功能', 'dialog') : null}
+          </div>
+
+          {/* ③ 筛选区：原版 el-form :inline 范式——字段 label + 控件横向排列 */}
+          {searchFields.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-1.5 text-label font-semibold text-muted">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-border-strong" />
+                筛选字段 <span className="text-muted">({searchFields.length})</span>
+                <span className="font-normal text-muted">· 按原版语义还原（选项来自本页真实数据，只读不造数）</span>
+              </div>
+              <div className="flex flex-wrap items-end gap-2" data-testid="wimoor-feature-search-bar">
+                {searchFields.map(renderSearchControl)}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button type="button" size="sm" variant="primary" onClick={doSearch}>
+                  <Search size={13} className="mr-1" />搜索
+                </Button>
+                <Button type="button" size="sm" variant="secondary" onClick={resetSearch}>
+                  <RotateCcw size={13} className="mr-1" />重置
+                </Button>
+                {filledConditions.length > 0 && <span className="text-label text-muted">已填 {filledConditions.length} 项 · 搜索后即时筛选当前结果</span>}
+              </div>
+            </div>
+          )}
+
+          {/* ④ 选项：原版单选筛选 */}
           {contract.radios.length > 0 && (
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-1.5 text-label font-semibold text-muted">
@@ -355,45 +388,24 @@ export function WimoorFeaturePanel({ route, kind, defaultOpen = false, bridge, t
             </div>
           )}
 
-          {/* 搜索字段：真实可输入的搜索栏 */}
-          {searchFields.length > 0 && (
-            <div className="flex flex-col gap-2 md:col-span-2">
-              <div className="flex items-center gap-1.5 text-label font-semibold text-muted">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-border-strong" />
-                搜索字段 <span className="text-muted">({searchFields.length})</span>
-                <span className="font-normal text-muted">· 按原版语义还原为可输入控件（只读对照，不造数）</span>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" data-testid="wimoor-feature-search-bar">
-                {searchFields.map(renderSearchControl)}
-              </div>
-              <div className="flex items-center gap-2">
-                <Button type="button" size="sm" variant="primary" onClick={doSearch}>
-                  <Search size={13} className="mr-1" />搜索
-                </Button>
-                <Button type="button" size="sm" variant="secondary" onClick={resetSearch}>
-                  <RotateCcw size={13} className="mr-1" />重置
-                </Button>
-                {filledConditions.length > 0 && <span className="text-label text-muted">已填 {filledConditions.length} 项</span>}
-              </div>
-            </div>
-          )}
-
-          {/* 列字段标签：原版表格列，保留可见（非搜索条件） */}
+          {/* ⑤ 列字段：原版这些是表格列头，折叠为摘要不抢主视觉 */}
           {columnLabels.length > 0 && (
-            <div className="flex flex-col gap-1.5 md:col-span-2">
-              <div className="flex items-center gap-1.5 text-label font-semibold text-muted">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-border-strong" />
-                列字段 <span className="text-muted">({columnLabels.length})</span>
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {columnLabels.map((label, i) => (
-                  <span key={`col-${i}-${label}`} className="rounded border border-border bg-surface-muted px-1.5 py-0.5 text-label text-muted">{label}</span>
-                ))}
-              </div>
+            <div className="flex flex-col gap-1.5">
+              <button type="button" onClick={() => setColumnsOpen(o => !o)}
+                className="flex items-center gap-1.5 text-label font-semibold text-muted hover:text-foreground">
+                <Table2 size={13} />
+                表格列字段 <span className="text-muted">({columnLabels.length})</span>
+                {columnsOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+              </button>
+              {columnsOpen ? (
+                <div className="flex flex-wrap gap-1">
+                  {columnLabels.map((label, i) => (
+                    <span key={`col-${i}-${label}`} className="rounded border border-border bg-surface-muted px-1.5 py-0.5 text-label text-muted">{label}</span>
+                  ))}
+                </div>
+              ) : null}
             </div>
           )}
-
-          {totalCount === 0 && <p className="text-meta text-muted">该页原版无额外交互功能项。</p>}
         </div>
       )}
 

@@ -4,6 +4,7 @@ import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Input, Select } from '@/components/ui/form-controls';
 import { mapAmazonInventoryRows, AMAZON_INVENTORY_PAGE_BASIS, type AmazonInventoryRow } from '@/lib/wimoor-migration/amazon-inventory-adapter';
 import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
+import { useReadOnlyListFeatureBridge } from '@/components/wimoor-migration/use-readonly-list-feature-bridge';
 
 /**
  * WIMOOR「仓库 → 报表 → 每日库存」功能迁移（只读对照入口）。
@@ -23,6 +24,7 @@ function headersForScope(): Headers {
 }
 export default function WimoorWarehouseDailyInventoryPage() {
   const [rows, setRows] = useState<Row[]>([]);
+  const { bridge, applyFeatureFilters } = useReadOnlyListFeatureBridge(rows);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -55,7 +57,7 @@ export default function WimoorWarehouseDailyInventoryPage() {
   ];
   return (
     <div className="p-4">
-      <WimoorFeaturePanel route="/wimoor/warehouse/daily-inventory" />
+      <WimoorFeaturePanel route="/wimoor/warehouse/daily-inventory" bridge={bridge} />
       <header className="flex flex-col gap-1 mb-4"><h1 className="text-lg font-semibold">每日库存</h1><p className="text-xs text-muted">WIMOOR 每日库存：站点/SKU 筛选，数据自动匹配亚马逊已发布库存快照{snapshotStatus ? `（快照：${snapshotStatus}）` : ''}。{AMAZON_INVENTORY_PAGE_BASIS}</p></header>
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3">
@@ -64,7 +66,7 @@ export default function WimoorWarehouseDailyInventoryPage() {
           </label>
           <Input aria-label="请输入SKU" value={sku} placeholder="请输入SKU" onChange={(e) => setSku(e.target.value)} />
         </div>
-        <DataTable<Row> columns={columns} rows={visibleRows} getRowKey={(row) => row.id} loading={loading}
+        <DataTable<Row> columns={columns} rows={applyFeatureFilters(visibleRows)} getRowKey={(row) => row.id} loading={loading}
           error={error ? { message: error, onRetry: () => setReloadKey(k => k + 1) } : undefined}
           empty="暂无已发布的亚马逊库存快照。系统不预置伪造库存；请先同步并发布库存数据。"
           ariaLabel="每日库存" />

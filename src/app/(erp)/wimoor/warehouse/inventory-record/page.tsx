@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Input, Select } from '@/components/ui/form-controls';
 import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
+import { useReadOnlyListFeatureBridge } from '@/components/wimoor-migration/use-readonly-list-feature-bridge';
 
 /**
  * WIMOOR「仓库 → 报表 → 出入库明细」功能迁移（只读对照入口）。
@@ -28,6 +29,7 @@ function headersForScope(): Headers {
 }
 export default function WimoorWarehouseInventoryRecordPage() {
   const [rows, setRows] = useState<Row[]>([]);
+  const { bridge, applyFeatureFilters } = useReadOnlyListFeatureBridge(rows);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -64,7 +66,7 @@ export default function WimoorWarehouseInventoryRecordPage() {
   ];
   return (
     <div className="p-4">
-      <WimoorFeaturePanel route="/wimoor/warehouse/inventory-record" />
+      <WimoorFeaturePanel route="/wimoor/warehouse/inventory-record" bridge={bridge} />
       <header className="flex flex-col gap-1 mb-4"><h1 className="text-lg font-semibold">出入库明细</h1><p className="text-xs text-muted">WIMOOR 出入库明细迁移（只读对照）：单据类型与 SKU/名称/单据编码 维度筛选，流水视图见 /wms 出入库工作台。</p></header>
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3">
@@ -74,7 +76,7 @@ export default function WimoorWarehouseInventoryRecordPage() {
           <Select aria-label="搜索字段" value={field} onChange={(e) => setField(e.target.value)} options={searchFields} />
           <Input aria-label="请输入" value={keyword} placeholder="请输入" onChange={(e) => setKeyword(e.target.value)} />
         </div>
-        <DataTable<Row> columns={columns} rows={visibleRows} getRowKey={(row) => row.id} loading={loading}
+        <DataTable<Row> columns={columns} rows={applyFeatureFilters(visibleRows)} getRowKey={(row) => row.id} loading={loading}
           error={error ? { message: error, onRetry: () => setReloadKey(k => k + 1) } : undefined}
           empty="暂无出入库明细。本页只读，不预置伪造流水。"
           ariaLabel="出入库明细" />

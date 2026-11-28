@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Input, Select } from '@/components/ui/form-controls';
 import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
+import { useReadOnlyListFeatureBridge } from '@/components/wimoor-migration/use-readonly-list-feature-bridge';
 
 /**
  * WIMOOR「发货 → 报表分析 → 发货详情(新)」功能迁移（只读列表）。
@@ -25,6 +26,7 @@ function headersForScope(): Headers {
 
 export default function WimoorShipmentShipDetailPage() {
   const [rows, setRows] = useState<Row[]>([]);
+  const { bridge, applyFeatureFilters } = useReadOnlyListFeatureBridge(rows);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -72,7 +74,7 @@ export default function WimoorShipmentShipDetailPage() {
 
   return (
     <div className="p-4">
-      <WimoorFeaturePanel route="/wimoor/shipment/ship-detail" />
+      <WimoorFeaturePanel route="/wimoor/shipment/ship-detail" bridge={bridge} />
       <header className="flex flex-col gap-1 mb-4"><h1 className="text-lg font-semibold">发货详情</h1><p className="text-xs text-muted">WIMOOR 发货详情功能迁移（只读）：货件编码、状态与日期/数量/重量筛选；完整货件工作台见 /sellfox/shipments。</p></header>
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3">
@@ -85,7 +87,7 @@ export default function WimoorShipmentShipDetailPage() {
           </label>
           <span className="text-sm text-muted">创建日期 · 发货日期 · 开始接收日期 · 完成日期 · 配送中心 · 预计到货 · 运输重量/单价 · 其它费用</span>
         </div>
-        <DataTable<Row> columns={columns} rows={visibleRows} getRowKey={(row) => row.id} loading={loading}
+        <DataTable<Row> columns={columns} rows={applyFeatureFilters(visibleRows)} getRowKey={(row) => row.id} loading={loading}
           error={error ? { message: error, onRetry: () => setReloadKey(k => k + 1) } : undefined}
           empty="暂无发货详情记录。本页只读，系统不预置伪造货件。"
           ariaLabel="发货详情" />

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Input } from '@/components/ui/form-controls';
 import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
+import { useReadOnlyListFeatureBridge } from '@/components/wimoor-migration/use-readonly-list-feature-bridge';
 
 /**
  * WIMOOR「仓库 → 报表 → 周转报告」功能迁移（只读对照入口）。
@@ -23,6 +24,7 @@ function headersForScope(): Headers {
 }
 export default function WimoorWarehouseTurnsReportPage() {
   const [rows, setRows] = useState<Row[]>([]);
+  const { bridge, applyFeatureFilters } = useReadOnlyListFeatureBridge(rows);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -60,7 +62,7 @@ export default function WimoorWarehouseTurnsReportPage() {
   ];
   return (
     <div className="p-4">
-      <WimoorFeaturePanel route="/wimoor/warehouse/turns-report" />
+      <WimoorFeaturePanel route="/wimoor/warehouse/turns-report" bridge={bridge} />
       <header className="flex flex-col gap-1 mb-4"><h1 className="text-lg font-semibold">周转报告</h1><p className="text-xs text-muted">WIMOOR 周转报告迁移（只读对照）：日期/SKU 筛选与期初期末、出入库、周转指标；完整报表见 /wms 库存周转。</p></header>
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3">
@@ -69,7 +71,7 @@ export default function WimoorWarehouseTurnsReportPage() {
           </label>
           <Input aria-label="请输入SKU" value={sku} placeholder="请输入SKU" onChange={(e) => setSku(e.target.value)} />
         </div>
-        <DataTable<Row> columns={columns} rows={visibleRows} getRowKey={(row) => row.id} loading={loading}
+        <DataTable<Row> columns={columns} rows={applyFeatureFilters(visibleRows)} getRowKey={(row) => row.id} loading={loading}
           error={error ? { message: error, onRetry: () => setReloadKey(k => k + 1) } : undefined}
           empty="暂无周转报告记录。本页只读，不预置伪造周转指标。"
           ariaLabel="周转报告" />

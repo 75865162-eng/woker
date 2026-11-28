@@ -95,6 +95,29 @@ test('工作台把面板功能映射到真实筛选/查询/操作状态', () => 
   assert.match(workbenchSrc, /onTab: \(label: string\)[\s\S]*setActiveTab\(tab\.value\)/, '页签未驱动真实状态');
 });
 
+test('原版分区布局：页签→工具栏→inline筛选→折叠列字段，不再平铺', () => {
+  // 面板按被移植页布局范式分区，而非 116 项堆成一排 chip
+  assert.match(panelSrc, /data-wimoor-layout="original"/, '缺少原版布局标识');
+  const tabIdx = panelSrc.indexOf('① 顶部标签页');
+  const toolbarIdx = panelSrc.indexOf('② 工具栏');
+  const filterIdx = panelSrc.indexOf('③ 筛选区');
+  const colIdx = panelSrc.indexOf('⑤ 列字段');
+  assert.ok(tabIdx > 0 && toolbarIdx > tabIdx && filterIdx > toolbarIdx && colIdx > filterIdx,
+    `原版分区顺序错误：tab=${tabIdx} toolbar=${toolbarIdx} filter=${filterIdx} col=${colIdx}`);
+  // 列字段折叠，不抢主视觉
+  assert.match(panelSrc, /columnsOpen/, '列字段未做折叠');
+  // 有桥接时默认展开，让原版功能真实可见可用
+  assert.match(panelSrc, /useState\(defaultOpen \|\| !!bridge\)/, '桥接页未默认展开面板');
+});
+
+test('下拉筛选字段用工作台真实数据选项，不再伪造「指定XX」', () => {
+  assert.match(panelSrc, /optionsFor\?: \(field: string\)/, 'bridge 缺少 optionsFor 接口');
+  assert.match(panelSrc, /const real = bridge\?\.optionsFor\?\.\(hint\)/, '面板未取真实选项');
+  assert.match(panelSrc, /options=\{optionsFor\(hint\)\}/, 'Select 未使用真实选项');
+  assert.match(workbenchSrc, /optionsFor: \(field: string\) =>/, '工作台未实现 optionsFor');
+  assert.match(workbenchSrc, /from the current data|从本页已加载数据按映射字段去重/, '工作台未从真实数据去重生成选项');
+});
+
 test('布局对齐原版：页签在功能行之后、表格之前，面板折叠置底', () => {
   // 功能行之后紧跟状态页签，再是 DataTable
   const funcRowIdx = workbenchSrc.indexOf('{/* 功能行 */}');

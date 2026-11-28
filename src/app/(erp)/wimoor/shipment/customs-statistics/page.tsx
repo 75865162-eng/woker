@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Input, Select } from '@/components/ui/form-controls';
 import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
+import { useReadOnlyListFeatureBridge } from '@/components/wimoor-migration/use-readonly-list-feature-bridge';
 
 /**
  * WIMOOR「发货 → 报表分析 → 海关申报统计」功能迁移（只读列表）。
@@ -25,6 +26,7 @@ function headersForScope(): Headers {
 
 export default function WimoorShipmentCustomsStatisticsPage() {
   const [rows, setRows] = useState<Row[]>([]);
+  const { bridge, applyFeatureFilters } = useReadOnlyListFeatureBridge(rows);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -70,7 +72,7 @@ export default function WimoorShipmentCustomsStatisticsPage() {
 
   return (
     <div className="p-4">
-      <WimoorFeaturePanel route="/wimoor/shipment/customs-statistics" />
+      <WimoorFeaturePanel route="/wimoor/shipment/customs-statistics" bridge={bridge} />
       <header className="flex flex-col gap-1 mb-4"><h1 className="text-lg font-semibold">海关申报统计</h1><p className="text-xs text-muted">WIMOOR 海关申报统计功能迁移（只读）：申报日期类型、SKU 与重量/数量筛选；完整申报步骤见 /sellfox/shipments。</p></header>
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3">
@@ -83,7 +85,7 @@ export default function WimoorShipmentCustomsStatisticsPage() {
           </div>
           <span className="text-sm text-muted">金额 · 数量 · 净重 · 毛重 · 物流重量 · 装箱重量 · 单据/箱子/货件个数 · 导出 · 导入发送状态 · 上传XML（原页面筛选与按钮）</span>
         </div>
-        <DataTable<Row> columns={columns} rows={rows} getRowKey={(row) => row.id} loading={loading}
+        <DataTable<Row> columns={columns} rows={applyFeatureFilters(rows)} getRowKey={(row) => row.id} loading={loading}
           error={error ? { message: error, onRetry: () => setReloadKey(k => k + 1) } : undefined}
           empty="暂无海关申报记录。本页只读，系统不预置伪造申报数据。"
           ariaLabel="海关申报统计" />

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Select } from '@/components/ui/form-controls';
 import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
+import { useReadOnlyListFeatureBridge } from '@/components/wimoor-migration/use-readonly-list-feature-bridge';
 
 /**
  * WIMOOR「广告 → 广告报表 → 广告统计」功能迁移（只读列表）。
@@ -28,6 +29,7 @@ const WARNING_LABELS: Record<string, string> = {
 
 export default function WimoorAdsSummaryPage() {
   const [rows, setRows] = useState<Row[]>([]);
+  const { bridge, applyFeatureFilters } = useReadOnlyListFeatureBridge(rows);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -70,7 +72,7 @@ export default function WimoorAdsSummaryPage() {
 
   return (
     <div className="p-4">
-      <WimoorFeaturePanel route="/wimoor/ads/summary" />
+      <WimoorFeaturePanel route="/wimoor/ads/summary" bridge={bridge} />
       <header className="flex flex-col gap-1 mb-4"><h1 className="text-lg font-semibold">广告统计</h1><p className="text-xs text-muted">WIMOOR 广告统计功能迁移（只读）：商品广告/关键词维度与昨日/连续/同期预警指标；完整仪表盘见 /amazon-ads 等价页。</p></header>
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3">
@@ -88,7 +90,7 @@ export default function WimoorAdsSummaryPage() {
         </div>
         <DataTable<Row>
           columns={columns}
-          rows={visibleRows}
+          rows={applyFeatureFilters(visibleRows)}
           getRowKey={(row) => row.id}
           loading={loading}
           error={error ? { message: error, onRetry: () => setReloadKey(k => k + 1) } : undefined}

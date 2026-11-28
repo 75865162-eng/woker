@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Input, Select } from '@/components/ui/form-controls';
 import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
+import { useReadOnlyListFeatureBridge } from '@/components/wimoor-migration/use-readonly-list-feature-bridge';
 
 /**
  * WIMOOR「发货 → 物流海关 → 标签打印」功能迁移（只读对照入口）。
@@ -25,6 +26,7 @@ function headersForScope(): Headers {
 
 export default function WimoorShipmentLabelPage() {
   const [rows, setRows] = useState<Row[]>([]);
+  const { bridge, applyFeatureFilters } = useReadOnlyListFeatureBridge(rows);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -63,7 +65,7 @@ export default function WimoorShipmentLabelPage() {
 
   return (
     <div className="p-4">
-      <WimoorFeaturePanel route="/wimoor/shipment/label" />
+      <WimoorFeaturePanel route="/wimoor/shipment/label" bridge={bridge} />
       <header className="flex flex-col gap-1 mb-4"><h1 className="text-lg font-semibold">标签打印</h1><p className="text-xs text-muted">WIMOOR 标签打印功能迁移（只读对照）：FNSKU 搜索与产品标签打印交互；完整操作见 /sellfox/shipments。</p></header>
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3">
@@ -76,7 +78,7 @@ export default function WimoorShipmentLabelPage() {
           </label>
           <span className="text-sm text-muted">批量添加 · 导入添加 · 全部清空 · 下载模板 · 上传文件</span>
         </div>
-        <DataTable<Row> columns={columns} rows={visibleRows} getRowKey={(row) => row.id} loading={loading}
+        <DataTable<Row> columns={columns} rows={applyFeatureFilters(visibleRows)} getRowKey={(row) => row.id} loading={loading}
           error={error ? { message: error, onRetry: () => setReloadKey(k => k + 1) } : undefined}
           empty="暂无产品标签记录。本页只读，系统不预置伪造数据。"
           ariaLabel="标签打印" />

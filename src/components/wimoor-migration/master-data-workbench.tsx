@@ -787,6 +787,17 @@ export function MasterDataWorkbench({ config: rawConfig }: { config: MasterDataW
       setQuickValues(init); setSearch(''); setActiveTab(config.statusTabs?.[0]?.value ?? ''); setPage(1);
       setNotice('已重置全部筛选条件。');
     },
+    optionsFor: (field: string) => {
+      // 原版下拉字段的真实候选值：从本页已加载数据按映射字段去重，而非伪造「指定XX」。
+      const key = resolveFieldKey(field);
+      if (!key) return [];
+      const seen = new Map<string, string>();
+      for (const r of rows) {
+        const v = (r as Record<string, unknown>)[key] ?? payloadOf(r)[key];
+        if (v !== null && v !== undefined && v !== '') seen.set(String(v), String(v));
+      }
+      return Array.from(seen.entries()).map(([value, label]) => ({ value, label }));
+    },
     onDropdown: (label: string) => {
       // 原版下拉项：按 label 关键字匹配真实菜单动作 key，再交给统一分发
       const k = label.includes('导出') || label.includes('下载') ? 'export-base'
@@ -821,7 +832,7 @@ export function MasterDataWorkbench({ config: rawConfig }: { config: MasterDataW
     },
     onDialog: (label: string) => setNotice(`「${label}」：本页以等价工作台表单承载编辑能力。`),
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [config, resolveFieldKey, setQuickValues, setSearch, setPage, setActiveTab, setNotice, setMore]);
+  }), [config, resolveFieldKey, setQuickValues, setSearch, setPage, setActiveTab, setNotice, setMore, rows]);
 
   /** 下拉动作统一分发：每一类都落到真实 API / 真实前端能力 / 真实等价入口，不再只弹提示 */
   const runMenuAction = (k: string, label: string) => {

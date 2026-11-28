@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Select } from '@/components/ui/form-controls';
 import { WimoorFeaturePanel } from '@/components/wimoor-migration/wimoor-feature-panel';
+import { useReadOnlyListFeatureBridge } from '@/components/wimoor-migration/use-readonly-list-feature-bridge';
 
 /**
  * WIMOOR「发货 → 发货管理 → 发货日历」功能迁移（只读对照入口）。
@@ -28,6 +29,7 @@ const YEAR_OPTIONS = [
 
 export default function WimoorShipmentHolidayPage() {
   const [rows, setRows] = useState<Row[]>([]);
+  const { bridge, applyFeatureFilters } = useReadOnlyListFeatureBridge(rows);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -61,7 +63,7 @@ export default function WimoorShipmentHolidayPage() {
 
   return (
     <div className="p-4">
-      <WimoorFeaturePanel route="/wimoor/shipment/holiday" />
+      <WimoorFeaturePanel route="/wimoor/shipment/holiday" bridge={bridge} />
       <header className="flex flex-col gap-1 mb-4"><h1 className="text-lg font-semibold">发货日历</h1><p className="text-xs text-muted">WIMOOR 发货日历功能迁移（只读）：年份筛选与年度日历记录；原页面为日历视图，源交互“生成年度日历”为写入操作，本页不代用户生成。</p></header>
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3">
@@ -70,7 +72,7 @@ export default function WimoorShipmentHolidayPage() {
           </label>
           <span className="text-sm text-muted">生成年度日历（原页面按钮，本页只读不触发）</span>
         </div>
-        <DataTable<Row> columns={columns} rows={visibleRows} getRowKey={(row) => row.id} loading={loading}
+        <DataTable<Row> columns={columns} rows={applyFeatureFilters(visibleRows)} getRowKey={(row) => row.id} loading={loading}
           error={error ? { message: error, onRetry: () => setReloadKey(k => k + 1) } : undefined}
           empty="暂无该年度日历记录。本页只读，系统不预置伪造节假日。"
           ariaLabel="发货日历" />
