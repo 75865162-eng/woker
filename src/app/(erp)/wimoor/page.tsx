@@ -75,7 +75,7 @@ export default function WimoorPortalPage() {
         <p className="text-xs text-muted">WIMOOR 菜单完整迁移：{WIMOOR_PAGE_ENTRIES.length} 个页面入口 · 按原版树形菜单交互（点击模块展开 · 点击分组折叠 · 搜索实时过滤）</p>
       </header>
 
-      <div className="flex min-h-[600px] border border-border bg-surface">
+      <div className="flex min-h-full border border-border bg-surface">
         {/* 左侧一级模块栏：对应原版 AsideMenu 的 el-menu（点击展开抽屉） */}
         <aside className={`flex shrink-0 flex-col border-r border-border bg-surface-muted transition-all ${railCollapsed ? 'w-12' : 'w-44'}`} aria-label="一级模块菜单">
           <button
@@ -101,7 +101,7 @@ export default function WimoorPortalPage() {
                   <span className="w-5 text-center">{MODULE_ICONS[mod] ?? '▫️'}</span>
                   {!railCollapsed && <>
                     <span className="flex-1 truncate">{mod}</span>
-                    <span className="text-[10px] text-muted/70">{activeCount(mod)}</span>
+                    <span className="text-xs text-muted/70">{activeCount(mod)}</span>
                     <ChevronRight size={12} className={selected ? 'rotate-90 text-brand transition-transform' : 'text-muted/50 transition-transform'} />
                   </>}
                 </button>
